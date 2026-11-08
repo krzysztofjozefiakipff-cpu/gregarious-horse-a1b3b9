@@ -78,14 +78,12 @@ def _predict(image: Image.Image, prompts: tuple[str, ...]) -> np.ndarray:
 
 
 def _components(binary: np.ndarray) -> list[np.ndarray]:
-    import cv2
-    count, connected, stats, _ = cv2.connectedComponentsWithStats(
-        binary.astype("uint8"), 8
-    )
+    from scipy import ndimage
+    connected, count = ndimage.label(binary)
     min_area = max(120, round(binary.size * .006))
     components: list[np.ndarray] = []
-    for label in range(1, count):
-        area = int(stats[label, cv2.CC_STAT_AREA])
+    for label in range(1, count + 1):
+        area = int(np.count_nonzero(connected == label))
         if area < min_area:
             continue
         if area > binary.size * 0.26:
@@ -137,16 +135,18 @@ def compose_windows(
     candidate[:, -pad:] = False
     # Clip bottom image: photo through windscreen can include dashboard edge.
     candidate[round(original.height * .88):, :] = False
-    import cv2
-    kernel = np.ones((max(3, pad // 4), max(3, pad // 4)), np.uint8)
-    candidate = cv2.morphologyEx(candidate.astype("uint8"), cv2.MORPH_OPEN, kernel)
+    from scipy import ndimage
+    kernel = np.ones((max(3, pad // 4), max(3, pad // 4)), dtype=bool)
+    candidate = ndimage.binary_opening(candidate, structure=kernel)
     components = _components(candidate)
     if not components:
         return WindowsResult(original, False, 0.0, "window_mask_low_confidence")
     safe = np.any(np.stack(components, axis=0), axis=0).astype("uint8")
     # Erode the mask by ~1.3% to keep seals, pillars and glass edging original.
     erosion = max(5, round(min(original.size) * .013))
-    safe = cv2.erode(safe, np.ones((erosion, erosion), "uint8"))
+    safe = ndimage.binary_erosion(
+        safe.astype(bool), structure=np.ones((erosion, erosion), dtype=bool)
+    ).astype("uint8")
     selected = safe.astype(bool)
     coverage = float(selected.mean())
     if coverage < MIN_VIEW_COVERAGE or coverage > MAX_VIEW_COVERAGE:
@@ -160,9 +160,7 @@ def compose_windows(
         return WindowsResult(original, False, confidence, "window_mask_low_confidence")
 
     # A fixed, brand-approved showroom, never a generated replacement interior.
-    scene = Image.Image.resize(
-        showroom.convert("RGB"), original.size, Image.Resampling.LANCZOS
-    )
+    scene = showroom.convert("RGB").resize(original.size, Image.Resampling.LANCZOS)
     # Conservative opacity mimics existing tint/reflections; retains much of
     # original glass appearance. The mask is deliberately not feathered across
     # unselected pixels: outside the mask all pixels remain bit-for-bit equal.
