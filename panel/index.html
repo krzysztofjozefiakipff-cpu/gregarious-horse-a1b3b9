@@ -24,7 +24,16 @@
     footer{padding:30px 22px;text-align:center;background:#081522;color:#afc0ce;font-size:12px}
     @media(max-width:760px){main{padding:26px 13px 60px}.surface{padding:24px;margin:16px auto}.top{padding:13px 15px}.logo{font-size:24px}.security{display:none}.cards{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.col-full{grid-column:auto}.block{padding:20px}.heading h1{font-size:28px}.table{min-width:670px}.form-buttons{justify-content:stretch}.form-buttons button{flex:1}}
   </style>
-<style id="carvelo-canonical-logo">.logo img{display:block;width:169px;height:auto;max-width:44vw}.logo{display:inline-flex;align-items:center;text-decoration:none}</style></head>
+<style id="carvelo-canonical-logo">.logo img{display:block;width:169px;height:auto;max-width:44vw}.logo{display:inline-flex;align-items:center;text-decoration:none}</style><style id="carvelo-photo-panel-style">
+.photo-upload-part{background:#f3f7fa;border:1px solid #dfe7ed;padding:20px;border-radius:15px;margin:20px 0}
+.photo-upload-part h3{font-size:19px;margin:0 0 12px}.photo-required{display:inline-block;font-size:11px;border-radius:99px;background:#102c43;color:white;padding:5px 9px;margin-left:10px;vertical-align:middle}
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin:16px 0}
+.photo-card{background:#f7f9fa;border:1px solid #e0e8ed;border-radius:15px;overflow:hidden}
+.photo-preview{aspect-ratio:4/3;background:#17283a;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px}.photo-preview img{width:100%;height:100%;object-fit:contain}
+.photo-desc{padding:13px;display:flex;gap:7px;flex-direction:column}.photo-desc small{color:#5c7180}.photo-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.photo-actions button{font-size:11px;padding:8px}
+#photoStatus{background:#e9f2f5;border-radius:8px;padding:10px}
+@media(max-width:650px){.photo-upload-part{padding:15px}.photo-required{display:block;max-width:max-content;margin:8px 0}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.photo-actions button{flex:1}}
+</style></head>
 <body>
   <header class="top">
     <a class="logo" href="../" aria-label="CARVELO — strona główna"><img src="../assets/brand/carvelo-wordmark-on-dark.svg" alt="CARVELO" width="169" height="30"></a>
@@ -70,8 +79,24 @@
             <label class="field" id="offerStatusField">Status<select id="offerStatus"><option value="pending">Do zatwierdzenia</option><option value="draft">Szkic</option><option value="published">Opublikowana</option><option value="rejected">Odrzucona</option></select></label>
             <label class="check"><input id="offerSpecial" type="checkbox"> Oferta specjalna</label>
           </div>
+          <div class="photo-upload-part">
+            <h3>Zdjęcia samochodu <span class="photo-required">Logo CARVELO na każdym zdjęciu</span></h3>
+            <p class="muted">Wybierz zdjęcia już przy dodawaniu oferty. Po zapisaniu samochodu zostaną automatycznie przesłane i otrzymają logo CARVELO. Maks. 4 MB na plik: JPG, PNG, WebP.</p>
+            <div class="grid">
+              <label class="field">Wgraj zdjęcia samochodu<input id="photoFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+              <label class="field">Rodzaj zdjęć<select id="photoType"><option value="unknown">Automatycznie / do weryfikacji</option><option value="exterior">Z zewnątrz</option><option value="interior">Wnętrze — bez zmiany tła</option><option value="detail">Detal — bez zmiany tła</option></select></label>
+            </div>
+            <p class="muted" id="photoSelection">Możesz wybrać kilka zdjęć jednocześnie.</p>
+            <p class="muted">Na tym etapie system dodaje logo. Automatyczne zastępowanie tła salonem CARVELO będzie dostępne po ukończeniu modułu segmentacji — samochód i wnętrze nie będą modyfikowane.</p>
+          </div>
           <div class="form-buttons"><button type="reset" class="secondary" id="resetFormBtn">Wyczyść</button><button type="submit" class="primary" id="saveOfferBtn">Dodaj ofertę →</button></div>
         </form>
+      </section>
+      <section class="block" id="photoBlock" hidden>
+        <div class="bar"><div><span class="eyebrow">GALERIA CARVELO</span><h2>Zdjęcia oferty</h2><p class="muted" id="photoOfferLabel"></p></div><button id="uploadPhotoBtn" class="primary" type="button">Prześlij wybrane zdjęcia →</button></div>
+        <p class="muted" id="photoStatus">Wszystkie fotografie są znakowane logo CARVELO.</p>
+        <div id="photoList" class="photo-grid"></div>
+        <p class="muted">Akceptacja zdjęcia przez CARVELO jest wymagana przed publikacją. Zdjęcia wnętrza i detali zachowują oryginalne tło.</p>
       </section>
       <section class="block">
         <div class="bar"><div><span class="eyebrow">INWENTARZ</span><h2>Oferty samochodów</h2></div><span class="muted">Widoczność zależy od uprawnień konta</span></div>
