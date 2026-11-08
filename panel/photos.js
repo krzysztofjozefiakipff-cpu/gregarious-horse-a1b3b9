@@ -58,9 +58,17 @@ export async function refreshPhotos(){
           && !["queued","processing"].includes(p.ai_job?.state)
           ?btn("request_ai",p.photo_type==="interior"?"Zmień widok za szybami (BETA)":"Przetwórz w salonie AI (BETA)","secondary"):"")+
        (p.photo_type==="interior"&&!windowsEnabled?'<small>AI szyb: testy przed aktywacją — wnętrze bez zmian.</small>':"")+
-       (staff && p.ai_candidate?.url?'<div class="photo-ai-candidate"><small>Nowe tło CARVELO — podgląd do decyzji</small>'+
-           '<p class="muted">Porównaj z oryginałem. Wnętrze i wyposażenie muszą być nienaruszone.</p>'+
-           '<img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI zdjęcia samochodu z logo CARVELO">'+
+       (staff && p.ai_candidate?.url?'<div class="photo-ai-candidate"><strong>Porównanie przed / po</strong>'+
+           '<p class="muted">'+esc(p.ai_candidate.mode==="showroom_windows"?
+             (p.ai_candidate.window_view_changed===false?
+              "Fallback: automatycznie nie zmieniono widoku za szybami. Zachowano oryginał oraz logo CARVELO.":
+              "Obróbka wnętrza: kontroluj kierownicę, fotele, uszczelki i słupki."): 
+             "Porównaj oryginalny samochód z tłem CARVELO.")+'</p>'+
+           (p.ai_candidate.review_required_reason?'<small>Powód dodatkowej kontroli: '+esc(p.ai_candidate.review_required_reason)+'</small>':"")+
+           (p.ai_candidate.mask_confidence!=null?'<small>Wskaźnik maski AI: '+esc(Math.round(Number(p.ai_candidate.mask_confidence)*100))+'%</small>':"")+
+           '<div class="photo-before-after">'+
+           (p.original_preview_url?'<figure><figcaption>PRZED — oryginał</figcaption><img loading="lazy" src="'+esc(p.original_preview_url)+'" alt="Oryginał zdjęcia wnętrza, bez obróbki"></figure>':"")+
+           '<figure><figcaption>PO — kandydat z logo CARVELO</figcaption><img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI CARVELO do akceptacji"></figure></div>'+
            '<button type="button" class="secondary" data-photo-action="accept_ai" data-photo-id="'+esc(p.id)+
            '" data-version-id="'+esc(p.ai_candidate.id)+'">Zastosuj wersję AI do moderacji</button></div>':"");
    const manualMask=staff&&!isPublished&&p.photo_type==="interior"&&p.preview_url?
