@@ -1,4 +1,5 @@
 name: CARVELO AI – zdjęcia zewnętrzne i widok przez szyby
+# Uruchomienie diagnostyczne kolejki Studio v5 (2026-11-08).
 on:
   workflow_dispatch:
   push:
