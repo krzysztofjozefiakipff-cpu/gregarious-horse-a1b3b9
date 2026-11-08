@@ -56,6 +56,9 @@ set search_path = ''
 as $$
   select p.role::text from public.cv_profiles p
   where p.id = (select auth.uid()) and p.enabled = true
+    and (p.role <> 'dealer' or exists (
+      select 1 from public.cv_dealers d where d.id = p.dealer_id and d.active = true
+    ))
   limit 1
 $$;
 create function carvelo_private.current_dealer()
@@ -64,6 +67,7 @@ set search_path = ''
 as $$
   select p.dealer_id from public.cv_profiles p
   where p.id = (select auth.uid()) and p.enabled = true and p.role = 'dealer'
+    and exists (select 1 from public.cv_dealers d where d.id = p.dealer_id and d.active = true)
   limit 1
 $$;
 revoke all on function carvelo_private.current_role() from public;
@@ -136,7 +140,10 @@ grant select on public.cv_dealers to anon, authenticated;
 grant insert, update on public.cv_dealers to authenticated;
 grant select on public.cv_profiles to authenticated;
 grant update (role, dealer_id, enabled, display_name) on public.cv_profiles to authenticated;
-grant select on public.cv_offers to anon, authenticated;
+-- Anonymous visitors can only request non-sensitive catalog columns.
+grant select (id, brand, model, body, fuel, gross_price, dealer_id, status, special, source, created_at)
+  on public.cv_offers to anon;
+grant select on public.cv_offers to authenticated;
 grant insert, update, delete on public.cv_offers to authenticated;
 
 create policy cv_dealers_read_anon on public.cv_dealers
