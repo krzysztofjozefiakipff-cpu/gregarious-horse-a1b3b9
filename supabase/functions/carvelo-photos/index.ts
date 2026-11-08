@@ -33,6 +33,21 @@ function fail(req:Request,status:number,message:string) {
 }
 function errText(e:unknown) { return e instanceof Error ? e.message : String(e); }
 
+async function aiIsEnabled(admin:any):Promise<boolean> {
+  const r=await admin.from("cv_photo_styles").select("is_active").eq("code","showroom-v1").maybeSingle();
+  return !r.error&&r.data?.is_active===true;
+}
+async function enqueueForExterior(admin:any,photoId:string,requesterId:string) {
+  const active=await admin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
+    .in("state",["queued","processing"]).limit(1);
+  if(active.error)throw active.error;
+  if(active.data?.length)return {queued:false,duplicate:true};
+  const job=await admin.from("cv_photo_jobs").insert({photo_id:photoId,requested_by:requesterId,
+    target_mode:"showroom_exterior",state:"queued"}).select("id").single();
+  if(job.error)throw job.error;
+  return {queued:true,job_id:job.data.id};
+}
+
 const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
  try{
   if(req.method!=="POST")return fail(req,405,"Dozwolony tylko POST");
@@ -85,7 +100,7 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
         }
       }
     }
-    return json(req,{photos:items,ai_worker_enabled:Deno.env.get("CARVELO_AI_WORKER_ENABLED")==="true"});
+    return json(req,{photos:items,ai_worker_enabled:await aiIsEnabled(supabaseAdmin)});
   }
 
   if(action==="upload") {
@@ -157,9 +172,14 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
         state:"review",sort_order:(count.count??0)+1
       }).select("id").single();
       if(insert.error)throw insert.error;
+      let autoJob=null;
+      if(declaredType==="exterior"&&await aiIsEnabled(supabaseAdmin)){
+        try{autoJob=await enqueueForExterior(supabaseAdmin,photoId,uid)}
+        catch(e){console.error("CARVELO AI autoqueue failed",errText(e))}
+      }
       return json(req,{ok:true,photo_id:photoId,state:"review",
-        message:"Zapisano zdjęcie z logo CARVELO. Oczekuje na akceptację.",
-        background_mode:"original"});
+        message:autoJob?.queued?"Zdjęcie z logo dodane. Automatyczna obróbka tła w kolejce.":"Zapisano zdjęcie z logo CARVELO. Oczekuje na akceptację.",
+        ai_job_queued:!!autoJob?.queued,background_mode:"original"});
     }catch(e){
       if(savedMarked)await supabaseAdmin.storage.from(BUCKET_MARKED).remove([markedPath]);
       if(savedRaw)await supabaseAdmin.storage.from(BUCKET_RAW).remove([originalPath]);
@@ -181,23 +201,25 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     const changed=await supabaseAdmin.from("cv_offer_photos").update({photo_type:category})
       .eq("id",photoId).eq("offer_id",offerId);
     if(changed.error)throw changed.error;
-    return json(req,{ok:true,photo_type:category});
+    let queued=false;
+    if(category==="exterior"&&await aiIsEnabled(supabaseAdmin)){
+      try{queued=(await enqueueForExterior(supabaseAdmin,photoId,uid)).queued}
+      catch(e){console.error("CARVELO AI classify enqueue error",errText(e))}
+    }
+    return json(req,{ok:true,photo_type:category,ai_job_queued:queued});
   }
   if(action==="request_ai"){
     if(offer.status==="published")return fail(req,409,"Najpierw zdejmij ofertę z publikacji");
     if(photo.photo_type!=="exterior")
       return fail(req,400,"Automatyczne studio dotyczy na razie tylko ujęć zewnętrznych");
-    if(Deno.env.get("CARVELO_AI_WORKER_ENABLED")!=="true")
+    if(!(await aiIsEnabled(supabaseAdmin)))
       return fail(req,503,"Silnik AI nie jest jeszcze aktywny. Oryginalne zdjęcie z logo pozostaje bez zmian.");
     const existing=await supabaseAdmin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
       .in("state",["queued","processing"]).limit(1);
     if(existing.error)throw existing.error;
     if(existing.data?.length)return fail(req,409,"Obróbka tego zdjęcia jest już w kolejce");
-    const job=await supabaseAdmin.from("cv_photo_jobs").insert({
-      photo_id:photoId,requested_by:uid,target_mode:"showroom_exterior",state:"queued"
-    }).select("id").single();
-    if(job.error)throw job.error;
-    return json(req,{ok:true,job_id:job.data?.id,status:"queued"});
+    const result=await enqueueForExterior(supabaseAdmin,photoId,uid);
+    return json(req,{ok:true,job_id:result.job_id??null,status:result.queued?"queued":"already_queued"});
   }
   if(action==="accept_ai"){
     if(!staff)return fail(req,403,"Tylko CARVELO może zatwierdzić wersję AI");
