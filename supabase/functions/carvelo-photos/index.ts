@@ -72,7 +72,8 @@ async function enqueueForType(admin:any,photoId:string,requesterId:string,kind:s
   const job=await admin.from("cv_photo_jobs").insert({photo_id:photoId,requested_by:requesterId,
     target_mode:target,state:"queued",window_polygons:polygons}).select("id").single();
   if(job.error)throw job.error;
-  void wakeWorker();
+  // Supabase keeps this background task alive after the response.
+  EdgeRuntime.waitUntil(wakeWorker());
   return {queued:true,job_id:job.data.id};
 }
 
