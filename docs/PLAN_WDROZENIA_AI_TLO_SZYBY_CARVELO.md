@@ -150,3 +150,11 @@ W sekcji zdjęć przy dodawaniu oferty:
 **Dopiero kolejny etap:** rozpoznawanie i modyfikacja otoczenia widocznego przez szyby wnętrza. Obecny worker działa wyłącznie na ujęciach exterior. Nie włączono żadnego płatnego dostawcy AI.
 
 **Akceptacja:** kandydata AI ogląda administrator, potem ręcznie włącza wariant do moderacji i zatwierdza zdjęcie. Oryginały pozostają prywatne i nietknięte; watermark CARVELO jest obowiązkowy.
+
+## Aktualizacja — GitHub Actions worker aktywowany 8 listopada 2026
+
+Worker zdjęć zewnętrznych (BETA) jest uruchomiony na darmowym standardowym GitHub-hosted runnerze w publicznym repo CARVELO. Odczytuje prywatną kolejkę Supabase przez broker z weryfikacją GitHub OIDC, bez przechowywania kluczy administracyjnych w GitHub. Harmonogram: 17 i 47 minuta każdej godziny UTC, oraz ręczne uruchomienie i testowe uruchomienie przy zmianach kodu. Wykonuje najwyżej jedno zdjęcie na uruchomienie. Model U2Net, logo ze wzorcowego CARVELO SVG, obraz wynikowy wymaga dwuetapowej akceptacji w panelu.
+
+Testy potwierdzone: OIDC ↔ Supabase SUCCESS; instalacja zależności CPU SUCCESS; segmentacja publicznego obrazu testowego, kompozycja z salonem i logo SUCCESS (GitHub Actions run 42492815138). Funkcja carvelo-photos v3 zleca zadania automatycznie dla zdjęć oznaczonych jako exterior. Flaga showroom-v1 is_active=true w cv_photo_styles. Przed testem na prawdziwym obrazie: w bazie są 4 zdjęcia typu unknown, 0 zadań. Nie uruchomiono jeszcze obróbki zdjęcia rzeczywistego klienta end-to-end.
+
+Ograniczenia: testowy zasób salonu zapisany na razie w skompresowanej wersji podglądowej w repo, do wymiany na pełną rozdzielczość przed profesjonalną publikacją rezultatów. Typ zdjęcia jest wybierany przez użytkownika; autonomiczna klasyfikacja i obróbka widoku za szybami będą kolejnym krokiem. Klucze Supabase nie są wysyłane do GitHub Actions. Po sprawdzeniu jakości administrator ręcznie akceptuje każdą wersję AI.
