@@ -158,3 +158,17 @@ Worker zdjęć zewnętrznych (BETA) jest uruchomiony na darmowym standardowym Gi
 Testy potwierdzone: OIDC ↔ Supabase SUCCESS; instalacja zależności CPU SUCCESS; segmentacja publicznego obrazu testowego, kompozycja z salonem i logo SUCCESS (GitHub Actions run 42492815138). Funkcja carvelo-photos v3 zleca zadania automatycznie dla zdjęć oznaczonych jako exterior. Flaga showroom-v1 is_active=true w cv_photo_styles. Przed testem na prawdziwym obrazie: w bazie są 4 zdjęcia typu unknown, 0 zadań. Nie uruchomiono jeszcze obróbki zdjęcia rzeczywistego klienta end-to-end.
 
 Ograniczenia: testowy zasób salonu zapisany na razie w skompresowanej wersji podglądowej w repo, do wymiany na pełną rozdzielczość przed profesjonalną publikacją rezultatów. Typ zdjęcia jest wybierany przez użytkownika; autonomiczna klasyfikacja i obróbka widoku za szybami będą kolejnym krokiem. Klucze Supabase nie są wysyłane do GitHub Actions. Po sprawdzeniu jakości administrator ręcznie akceptuje każdą wersję AI.
+
+
+## Wdrożone 8 listopada 2026 — zdjęcia wnętrza (BETA)
+
+- Przetwarzanie wnętrza jest odrębnym zadaniem `showroom_windows`, wykonywanym przez istniejący GitHub Actions worker przez podpisany GitHub OIDC.
+- Segmentacja automatyczna: `tools/carvelo-photo-ai/interior_windows.py`, model CLIPSeg, podwójna maska (widok przez szyby oraz ochrona wyposażenia), ostrzejsze maskowanie krawędzi, zakaz zmian pikseli poza maską. Model został uruchomiony w GitHub Actions na publicznym obrazie testowym; nie oznacza to jeszcze potwierdzenia jakości na wielu prawdziwych kokpitach.
+- Dodatkowo: pracownik CARVELO może w panelu **ręcznie zaznaczyć widok za szybami**; worker przyjmuje `window_polygons` z walidacją współrzędnych i krawędzi. Nie jest to tryb edycji dowolnej części wnętrza.
+- Przy zbyt małej pewności maski worker **nie zmienia otoczenia**. Zapisuje zdjęcie z oficjalnym logo, ustawia `window_view_changed=false` oraz `review_required_reason=window_mask_low_confidence`; rezultat nadal wymaga decyzji zespołu.
+- Kandydat AI powstaje w prywatnym magazynie `carvelo-photo-branded`, jest powiązany z `cv_photo_versions` i widoczny administratorowi **przed/po**. Można go zaakceptować lub odrzucić, bez usuwania oryginału. Auto-publikacja pozostaje zabroniona.
+- Można zlecić **prywatny podgląd** także dla opublikowanej oferty, ale zamiana aktywnego zdjęcia jest zablokowana do momentu wycofania oferty z publikacji.
+- Tryb `windows-v1` jest aktywny BETA. Test jednostkowy maski i test kompatybilności CLIPSeg na CPU przeszły; weryfikacja wizualna na zdjęciach dealerów pozostaje wymagana. Test pilotażowy istniejącego zdjęcia wnętrza Omoda 5 został umieszczony w kolejce.
+- Publikowany obraz ma tylko zatwierdzony kanoniczny logotyp CARVELO (biały napis z czerwonym V); oryginały nie są nadpisywane, a klucze Supabase nigdy nie trafiają do publicznego GitHuba.
+
+**Akceptacja biznesowa:** przed masową obróbką weryfikować ręcznie minimalnie 30-50 różnych ujęć wnętrz (różne szyby, odbicia, dachy panoramiczne i pora dnia), zwłaszcza granice słupków, kierownicę i ekran. Żaden test na obrazie przykładowym nie zastępuje tej kontroli.
