@@ -1,6 +1,11 @@
 name: CARVELO AI – obróbka zdjęć zewnętrznych
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/carvelo-photo-worker.yml'
+      - 'tools/carvelo-photo-ai/**'
   schedule:
     - cron: '17,47 * * * *'
 permissions:
