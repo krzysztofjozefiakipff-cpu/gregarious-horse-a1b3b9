@@ -127,6 +127,8 @@ function renderOffers() {
         '<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="withdraw">Wycofaj do edycji</button>':"",
       canChangeStatus()&&o.status!=="rejected"?
         '<button type="button" class="danger" data-offer="'+esc(o.id)+'" data-action="reject">Odrzuć</button>':"",
+      profile?.role==="admin"?
+        '<button type="button" class="danger" data-offer="'+esc(o.id)+'" data-action="delete">Usuń trwale</button>':"",
     ].filter(Boolean).join("");
     return '<tr><td><strong>'+esc(o.brand)+' '+esc(o.model)+'</strong><small>'+esc(o.body)+
       ' · '+esc(o.fuel)+(o.special?' · Specjalna':'')+'</small></td>'+
@@ -240,6 +242,38 @@ async function changeOfferStatus(id, status){
     await refreshData();
   }catch(error){notify(error.message||String(error),true);}
 }
+async function deleteOffer(id){
+  if(profile?.role!=="admin"||!client)return;
+  const offer=offers.find(o=>o.id===id);
+  if(!offer)return;
+  const answer=window.prompt("Trwale usunąć "+offer.brand+" "+offer.model+"?\n"+
+    "Operacja usunie ofertę, jej zdjęcia i wersje AI. Nie można jej cofnąć.\n\n"+
+    'Aby potwierdzić, wpisz dokładnie: USUŃ');
+  if(answer!=="USUŃ")return;
+  try{
+    const {data,error}=await client.functions.invoke("carvelo-photos",{
+      body:{action:"delete_offer",offer_id:id,confirm:"USUŃ"}
+    });
+    if(error){
+      let reason=error.message||"Nie udało się usunąć oferty.";
+      try{
+        const response=error.context;
+        const details=await response?.json?.();
+        if(details?.error)reason=details.error;
+      }catch{}
+      throw new Error(reason);
+    }
+    if(!data?.deleted)throw new Error("Serwer nie potwierdził usunięcia oferty.");
+    if(editingId===id)clearOfferForm();
+    notify(data.cleanup_pending?
+      "Oferta usunięta z katalogu. Niektóre pliki oczekują na ponowne czyszczenie.":
+      "Oferta oraz jej zdjęcia zostały trwale usunięte.");
+    await refreshData();
+  }catch(error){
+    notify("Nie usunięto oferty: "+(error.message||String(error)),true);
+  }
+}
+
 async function addDealer(event){
   event.preventDefault();
   if(profile?.role!=="admin")return;
@@ -318,6 +352,7 @@ function attach(){
     }
     if(action==="publish")await changeOfferStatus(id,"published");
     if(action==="reject")await changeOfferStatus(id,"rejected");
+    if(action==="delete")await deleteOffer(id);
     if(action==="withdraw"&&window.confirm("Wycofać ofertę z katalogu do edycji? Zdjęcia i dane pozostaną zachowane."))await changeOfferStatus(id,"draft");
   });
   $("accountsBody").addEventListener("click",async (event)=>{
