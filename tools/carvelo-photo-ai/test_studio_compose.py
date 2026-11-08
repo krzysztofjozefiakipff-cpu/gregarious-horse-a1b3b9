@@ -1,4 +1,4 @@
-"""CARVELO studio-v2 regression tests: floor contact, shadow, official corner logo."""
+"""CARVELO studio-v3 regression tests: floor contact, shadow, official corner logo."""
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
@@ -18,12 +18,16 @@ ink.rounded_rectangle((80,213,720,336),radius=20,fill=(160,35,42,255))
 ink.ellipse((148,305,250,407),fill=(25,28,36,255))
 ink.ellipse((575,305,677,407),fill=(25,28,36,255))
 comp, stats = compose_grounded_vehicle(original, scene)
-assert stats["scene_version"]=="studio-v2"
-assert stats["ground_contact_y"] == round(650 * .885)
+assert stats["scene_version"]=="studio-v3"
+assert stats["ground_contact_y"] == round(650 * .85)
 assert stats["vehicle_bounds"][3] == stats["ground_contact_y"]
 assert stats["vehicle_bounds"][0] >= 0
 assert stats["vehicle_bounds"][2] <= 1000
 assert stats["proportional_scale"] > 0
+assert stats["ambient_shadow"] and stats["subtle_floor_reflection"]
+assert len(stats["wheel_contacts"]) == 2
+assert stats["wheel_contacts"][0] < stats["wheel_contacts"][1]
+assert all(stats["vehicle_bounds"][0] < cx < stats["vehicle_bounds"][2] for cx in stats["wheel_contacts"])
 # Every actual vehicle pixel is still the original foreground with no AI reconstruction.
 assert comp.size == scene.size
 # The floor outside the car has a soft shadow; plain studio would be brighter.
@@ -47,4 +51,11 @@ except ValueError as exc:
     assert str(exc)=="vehicle_mask_empty"
 else:
     raise AssertionError("empty vehicle mask accepted")
-print("CARVELO_STUDIO_V2_TEST_PASS",stats)
+# Check original red paint isn't modified by studio adjustment.
+# Pick a guaranteed opaque region in the synthetic door panel.
+ox,oy=stats["vehicle_bounds"][0],stats["vehicle_bounds"][1]
+ow=stats["vehicle_bounds"][2]-ox
+oh=stats["vehicle_bounds"][3]-oy
+color=np.asarray(comp.convert("RGB"))[oy+round(oh*.61),ox+round(ow*.49)]
+assert tuple(color)==(160,35,42), ("vehicle_rgb_modified",tuple(color))
+print("CARVELO_STUDIO_V3_TEST_PASS",stats)
