@@ -60,10 +60,10 @@ export async function refreshPhotos(){
           && !["queued","processing"].includes(p.ai_job?.state)
           ?btn("request_ai",p.photo_type==="interior"?"Zmień widok za szybami (BETA)":"Przetwórz w salonie AI (BETA)","secondary"):"")+
        (p.photo_type==="interior"&&!windowsEnabled?'<small>AI szyb: testy przed aktywacją — wnętrze bez zmian.</small>':"")+
-       (staff && p.ai_candidate?.url?'<div class="photo-ai-candidate"><strong>Porównanie przed / po</strong>'+
+       (staff && p.ai_candidate?.url?'<div class="photo-ai-candidate"><strong>Wersja AI gotowa do akceptacji — porównaj przed / po</strong>'+
            '<p class="muted">'+esc(p.ai_candidate.mode==="showroom_windows"?
              (p.ai_candidate.window_view_changed===false?
-              "Fallback: automatycznie nie zmieniono widoku za szybami. Zachowano oryginał oraz logo CARVELO.":
+              "Nie rozpoznano bezpiecznie widoku za szybą — oryginał pozostaje bez zmian. Aby wymienić tło, wybierz Zaznacz widok za szybą.":
               "Obróbka wnętrza: kontroluj kierownicę, fotele, uszczelki i słupki."): 
              "Porównaj oryginalny samochód z tłem CARVELO.")+'</p>'+
            (p.ai_candidate.review_required_reason?'<small>Powód dodatkowej kontroli: '+esc(p.ai_candidate.review_required_reason)+'</small>':"")+

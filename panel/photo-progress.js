@@ -1,6 +1,6 @@
 // CARVELO — live photo-processing progress. Percent reflects completed milestones, not ETA.
 const stages={
- queued:"W kolejce — oczekiwanie na uruchomienie obróbki",preparing:"Przygotowanie zdjęcia",
+ queued:"W kolejce — oczekiwanie na wolnego workera",preparing:"Przygotowanie zdjęcia",
  installing:"Instalowanie narzędzi AI",loading_model:"Ładowanie modelu AI",
  downloading:"Pobieranie zdjęcia",segmenting:"Analiza samochodu i szyb",
  compositing:"Montaż tła, realistycznych cieni i odbicia",

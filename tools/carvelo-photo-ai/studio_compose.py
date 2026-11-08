@@ -1,4 +1,4 @@
-"""CARVELO photographic studio v3: grounded car, authentic contact and subtle reflection.
+"""CARVELO photographic studio v4.1: grounded car, authentic contact and subtle reflection.
 
 Source car pixels are composited from its segmentation matte. No AI reconstructs
 body panels, wheel shapes, paint, badging or the interior. Shadows and reflection
@@ -155,7 +155,39 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     if x < 0 or y < 0 or x + vw > w or ground_y + round(h * .09) > h:
         raise ValueError("vehicle_placement_overflows")
     wheel_fractions = _contact_centers(car.getchannel("A"))
-    contact_xs = [x + round(vw * frac) for frac in wheel_fractions]
+    local_centers = [round(vw * frac) for frac in wheel_fractions]
+    # The lowest pixel of the *whole silhouette* may be a bumper or shadow,
+    # not an actual tire. Detect both tire foot-points independently.
+    alpha_map = car.getchannel("A")
+    footpoints = []
+    for cx in local_centers:
+        radius = max(3, round(vw * .029))
+        deepest = -1
+        for sy in range(max(0, round(vh * .66)), vh):
+            # Require several opaque pixels around wheel center; anti-aliased
+            # wisps and detached segmentation fragments do not qualify.
+            left = max(0, cx-radius)
+            right = min(vw-1, cx+radius)
+            hits = sum(alpha_map.getpixel((sx,sy)) >= 190
+                       for sx in range(left,right+1,max(1,radius//5)))
+            if hits >= 3:
+                deepest = sy
+        if deepest < round(vh * .88):
+            raise ValueError("wheel_contact_uncertain")
+        footpoints.append((cx,deepest))
+    # Align the wheel contact plane, not the overall alpha bounding box.
+    contact_plane = round(sum(fp[1] for fp in footpoints) / len(footpoints))
+    if abs(footpoints[0][1]-footpoints[1][1]) > round(h*.07):
+        raise ValueError("wheel_contact_misaligned")
+    corrected_y = ground_y-contact_plane
+    if corrected_y < 0 or corrected_y+vh > h:
+        raise ValueError("vehicle_placement_overflows")
+    y = corrected_y
+    contact_xs = [x+cx for cx,_ in footpoints]
+    contact_points = [(x+cx, y+cy) for cx,cy in footpoints]
+    # Reject views with a bumper or matte artifact extending far below tires.
+    if y+vh > ground_y + round(h*.07):
+        raise ValueError("silhouette_below_floor")
     # Each wheel can end at a different height in a three-quarter perspective.
     # Anchor each local tire shadow to the actual bottom opaque pixel rather
     # than an imaginary shared horizontal axle/ground line.
@@ -227,7 +259,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     return canvas, {
         "scene_version": SCENE_VERSION,
         "ground_contact_y": ground_y,
-        "vehicle_bounds": [x, y, x + vw, ground_y],
+        "vehicle_bounds": [x, y, x + vw, y + vh],
+        "wheel_contact_points": contact_points,
+        "wheel_grounded": all(abs(pt_y-ground_y) <= round(h*.07) for _,pt_y in contact_points),
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
