@@ -71,7 +71,9 @@ export async function refreshPhotos(){
            '<figure><figcaption>PO — kandydat z logo CARVELO</figcaption><img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI CARVELO do akceptacji"></figure></div>'+
            (isPublished?'<small>Oferta jest opublikowana. Aby zastosować tę wersję, najpierw wycofaj ofertę z publikacji.</small>':
             '<button type="button" class="secondary" data-photo-action="accept_ai" data-photo-id="'+esc(p.id)+
-            '" data-version-id="'+esc(p.ai_candidate.id)+'">Zastosuj wersję AI do moderacji</button>')+'</div>':"");
+            '" data-version-id="'+esc(p.ai_candidate.id)+'">Zastosuj wersję AI do moderacji</button>')+
+           '<button type="button" class="danger" data-photo-action="reject_ai" data-photo-id="'+esc(p.id)+
+           '" data-version-id="'+esc(p.ai_candidate.id)+'">Odrzuć wersję AI</button></div>':"");
    const manualMask=staff&&p.photo_type==="interior"&&p.preview_url?
        '<button type="button" class="secondary" data-photo-action="mark_windows" data-photo-id="'+esc(p.id)+
        '" data-photo-preview="'+esc(p.preview_url)+'">🎯 Zaznacz widok za szybą</button>':"";
@@ -107,14 +109,15 @@ export async function uploadOfferPhotos(){
 async function act(action,id,extra={}){
  if(busy||!activeId)return;
  if(action==="delete"&&!window.confirm("Usunąć to zdjęcie?"))return;
+ if(action==="reject_ai"&&!window.confirm("Odrzucić wyłącznie wersję AI? Oryginalne zdjęcie pozostanie bez zmian."))return;
  const offerId=activeId;
  loading(true);
  try{
    const payload={action,offer_id:offerId,photo_id:id};
    if(action==="classify")payload.photo_type=extra.photo_type;
-   if(action==="accept_ai")payload.version_id=extra.version_id;
+   if(action==="accept_ai"||action==="reject_ai")payload.version_id=extra.version_id;
    await callFunction(payload);
-   notify(({approve:"Zaakceptowano zdjęcie.",reject:"Odrzucono zdjęcie.",cover:"Ustawiono zdjęcie główne.",delete:"Usunięto zdjęcie."})[action]||"Zapisano.");
+   notify(({approve:"Zaakceptowano zdjęcie.",reject:"Odrzucono zdjęcie.",cover:"Ustawiono zdjęcie główne.",delete:"Usunięto zdjęcie.",reject_ai:"Odrzucono wersję AI. Oryginał pozostaje bez zmian."})[action]||"Zapisano.");
  }catch(e){notify(e.message,true)}
  finally{loading(false);await refreshPhotos().catch(e=>notify(e.message,true))}
 }
