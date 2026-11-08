@@ -27,8 +27,11 @@ def render():
   if img.width*img.height>12000000:raise ValueError("source_pixel_limit")
   img=img.convert("RGBA")
   img.thumbnail((1400,1400),Image.Resampling.LANCZOS)
+ window_changed=None
+ mask_confidence=None
+ review_reason=None
  if JOB["mode"]=="showroom_windows":
-  # Interior: only a conservative scene mask through glass is eligible; preserve cabin pixels.
+  # Mask only the exterior view seen through glazing. Never repaint the cabin.
   from interior_windows import process_interior_windows,compose_staff_window_mask,UnsafeWindowMask
   with Image.open(SCENE) as base:
    try:
@@ -36,8 +39,14 @@ def render():
      background,coverage=compose_staff_window_mask(img,base,JOB["window_polygons"])
     else:
      background,coverage=process_interior_windows(img,base)
-   except UnsafeWindowMask as e:raise ValueError(str(e)) from e
-  print("CARVELO interior safe window area",round(coverage,3))
+    window_changed=True
+    print("CARVELO protected glass view updated, area",round(coverage,3))
+   except UnsafeWindowMask as err:
+    # Non-destructive fallback: original pixels remain unchanged except watermark.
+    background=img.copy()
+    window_changed=False
+    review_reason="window_mask_low_confidence"
+    print("CARVELO windows: original retained for review;",str(err)[:70])
  else:
   # Exterior: original vehicle pixels remain intact; AI only computes alpha matte.
   inp=io.BytesIO();img.convert("RGB").save(inp,format="PNG")
@@ -66,9 +75,14 @@ def render():
  body=result.getvalue()
  if len(body)>6_500_000:raise ValueError("output_too_large")
  h={"Authorization":"Bearer "+oidc()}
- res=requests.post(URL,data={
-   "action":"complete","job_id":JOB["id"],"photo_id":JOB["photo_id"],"offer_id":JOB["offer_id"]
- },files={"file":("carvelo-branded.png",body,"image/png")},headers=h,timeout=100)
+ data={"action":"complete","job_id":JOB["id"],"photo_id":JOB["photo_id"],
+        "offer_id":JOB["offer_id"]}
+ if JOB["mode"]=="showroom_windows":
+  data.update(window_view_changed=str(window_changed).lower(),
+              mask_confidence="" if mask_confidence is None else str(mask_confidence),
+              review_required_reason=review_reason or "")
+ res=requests.post(URL,data=data,files={"file":("carvelo-branded.png",body,"image/png")},
+                   headers=h,timeout=100)
  if not res.ok:raise RuntimeError("broker_complete_"+str(res.status_code))
  print("CARVELO AI candidate created for moderation.",JOB["mode"],"official CARVELO logo embedded.")
 if __name__=="__main__":
