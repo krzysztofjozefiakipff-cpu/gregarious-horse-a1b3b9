@@ -183,7 +183,7 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
       '<svg xmlns="http://www.w3.org/2000/svg" width="'+badgeW+'" height="'+badgeH+
       '"><rect width="100%" height="100%" rx="10" fill="#081827" fill-opacity=".75"/></svg>');
     const bx=Math.max(0,image.width-badgeW-padding);
-    const by=Math.max(0,image.height-badgeH-padding);
+    const by=Math.max(0,Math.round(image.height*.03)); // CARVELO identity: upper-right corner
     image.composite(badge,{x:bx,y:by});
     image.composite(logo,{x:bx+padX,y:by+padY,opacity:.98});
     const branded=new Uint8Array(await image.encode({compression:4}));
