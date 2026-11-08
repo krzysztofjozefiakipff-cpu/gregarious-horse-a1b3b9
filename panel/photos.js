@@ -26,7 +26,7 @@ export async function refreshPhotos(){
  const data=await callFunction({action:"list",offer_id:id});
  if(activeId!==id)return;
  const rows=data.photos||[];
- $("photoStatus").textContent=(rows.length?"Liczba zdjęć: "+rows.length+" • każde z logo CARVELO":"Brak zdjęć. Dodaj pierwszą fotografię.") + (data.ai_worker_enabled?" • AI gotowe do zlecania":" • Zmiana tła AI: silnik przetwarzania jeszcze nieaktywny.");
+ $("photoStatus").textContent=(rows.length?"Liczba zdjęć: "+rows.length+" • każde z logo CARVELO":"Brak zdjęć. Dodaj pierwszą fotografię.") + (data.ai_worker_enabled?" • Studio AI BETA aktywne — wyniki wymagają akceptacji":" • Zmiana tła AI: silnik przetwarzania jeszcze nieaktywny.");
  const staff=["admin","staff"].includes(getRole());
  const aiEnabled=!!data.ai_worker_enabled;
  $("photoList").innerHTML=rows.map(p=>{
@@ -39,7 +39,7 @@ export async function refreshPhotos(){
    const ai=(p.ai_job?'<small>AI: '+esc(({queued:"W kolejce",processing:"Przetwarzanie",review:"Do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowane"})[p.ai_job.state]||p.ai_job.state)+
        (p.ai_job.error_code?' — '+esc(p.ai_job.error_code):'')+'</small>':"")+
        (aiEnabled && p.photo_type==="exterior" && !["queued","processing"].includes(p.ai_job?.state)
-          ?btn("request_ai","Przygotuj salon AI","secondary"):"")+
+          ?btn("request_ai","Przetwórz w salonie AI (BETA)","secondary"):"")+
        (staff && p.ai_candidate?.url?'<div class="photo-ai-candidate"><small>Nowe tło CARVELO — podgląd do decyzji</small>'+
            '<img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI zdjęcia samochodu z logo CARVELO">'+
            '<button type="button" class="secondary" data-photo-action="accept_ai" data-photo-id="'+esc(p.id)+
