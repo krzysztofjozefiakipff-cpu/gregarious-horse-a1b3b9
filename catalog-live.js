@@ -43,6 +43,47 @@ function validateOffer(row,dealerMap){
   };
 }
 
+async function requestPhotoRows(offerIds){
+  if(!offerIds.length)return [];
+  const ids=offerIds.filter(id=>UUID_RE.test(String(id)));
+  if(!ids.length)return [];
+  return requestPublic("cv_offer_photos?select=offer_id,processed_path,is_cover,sort_order,state,logo_applied&state=eq.approved&logo_applied=eq.true&offer_id=in.("+ids.join(",")+")&order=sort_order.asc&limit=1000");
+}
+async function signPhotoUrl(path){
+  if(!path || !/^[0-9a-f-]+\/[0-9a-f-]+\/(?:carvelo-v1[.]png|ai\/[0-9a-f-]+[.]png)$/i.test(path))return null;
+  const response=await fetch(SUPABASE_URL.replace(/\/$/,"")+"/storage/v1/object/sign/carvelo-photo-branded/"+path,{
+    method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({expiresIn:3600}),credentials:"omit",cache:"no-store"
+  });
+  if(!response.ok)return null;
+  const data=await response.json();
+  const signed=data?.signedURL??data?.signedUrl;
+  if(typeof signed!=="string" || !signed.startsWith("/"))return null;
+  return SUPABASE_URL.replace(/\/$/,"")+"/storage/v1"+signed;
+}
+async function loadPhotoGalleries(offers){
+  if(!offers.length)return offers;
+  const rows=await requestPhotoRows(offers.map(o=>o.id));
+  const grouped=new Map();
+  for(const row of rows){
+    if(!row?.processed_path||!UUID_RE.test(String(row.offer_id)))continue;
+    if(!grouped.has(row.offer_id))grouped.set(row.offer_id,[]);
+    grouped.get(row.offer_id).push(row);
+  }
+  await Promise.all([...new Set(rows.map(r=>r.processed_path))].map(async path=>{
+    const signed=await signPhotoUrl(path);
+    if(signed)for(const offer of offers){
+      const photo=(grouped.get(offer.id)||[]).find(p=>p.processed_path===path);
+      if(photo)(offer.photos??=[]).push({url:signed,is_cover:photo.is_cover===true,sort_order:photo.sort_order??0});
+    }
+  }));
+  for(const offer of offers){
+    offer.photos=(offer.photos||[]).sort((a,b)=>Number(b.is_cover)-Number(a.is_cover)||a.sort_order-b.sort_order);
+    offer.image=offer.photos[0]?.url??null;
+  }
+  return offers;
+}
+
 export async function refreshLiveCatalog(){
   const generation=++refreshGeneration;
   if(!SUPABASE_URL||!SUPABASE_PUBLISHABLE_KEY){
@@ -57,6 +98,8 @@ export async function refreshLiveCatalog(){
     const dealers=new Map(activeDealers.filter(d=>d&&UUID_RE.test(String(d.id)))
       .map(d=>[String(d.id),String(d.name||"Dealer CARVELO").slice(0,160)]));
     const offers=remoteOffers.map(r=>validateOffer(r,dealers)).filter(Boolean);
+    try { await loadPhotoGalleries(offers); }
+    catch(error){console.warn("CARVELO photos:",error?.message||error);}
     if(generation===refreshGeneration)window.carveloReceiveLiveOffers?.(offers,"ready");
   }catch(error){
     if(generation===refreshGeneration){
