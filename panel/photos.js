@@ -26,7 +26,7 @@ export async function refreshPhotos(){
  const data=await callFunction({action:"list",offer_id:id});
  if(activeId!==id)return;
  const rows=data.photos||[];
- $("photoStatus").textContent=rows.length?"Liczba zdjęć: "+rows.length+" • każde z logo CARVELO":"Brak zdjęć. Dodaj pierwszą fotografię.";
+ $("photoStatus").textContent=(rows.length?"Liczba zdjęć: "+rows.length+" • każde z logo CARVELO":"Brak zdjęć. Dodaj pierwszą fotografię.") + (data.ai_worker_enabled?" • AI gotowe do zlecania":" • Zmiana tła AI: silnik przetwarzania jeszcze nieaktywny.");
  const staff=["admin","staff"].includes(getRole());
  const aiEnabled=!!data.ai_worker_enabled;
  $("photoList").innerHTML=rows.map(p=>{
