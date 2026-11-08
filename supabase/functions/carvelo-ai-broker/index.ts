@@ -43,6 +43,43 @@ Deno.serve(async(req:Request)=>{
    const ct=req.headers.get("content-type")||"";
    if(ct.startsWith("application/json")){
      const payload=await req.json();
+     if(payload.action==="seed_e2e_photo"){
+       // One fixed smoke-test placeholder, never a dealer's actual image.
+       const photoId="92379820-a063-4919-9bc0-62fb70820cbd";
+       const row=await admin.from("cv_offer_photos")
+         .select("id,offer_id,original_path,uploaded_by,photo_type,state,logo_applied")
+         .eq("id",photoId).maybeSingle();
+       if(row.error)throw row.error;
+       const photo=row.data;
+       if(!photo || photo.original_path!=="8e5ff6cb-8490-4849-82c1-5ffd7e0754bb/"+photoId+"/e2e-original.webp"
+          ||photo.photo_type!=="exterior"||photo.logo_applied!==false||photo.state!=="review")
+         return reply({error:"Test placeholder not available"},409);
+       const offer=await admin.from("cv_offers").select("status").eq("id",photo.offer_id).maybeSingle();
+       if(offer.error||offer.data?.status==="published")return reply({error:"Test offer is published"},409);
+       const existing=await admin.from("cv_photo_jobs").select("id").eq("photo_id",photoId).limit(1);
+       if(existing.error)throw existing.error;
+       if(existing.data?.length)return reply({error:"E2E job already exists"},409);
+       const path="https://raw.githubusercontent.com/"+EXPECTED_REPO+"/main/assets/carvelo-hero-v3.webp";
+       const res=await fetch(path,{signal:AbortSignal.timeout(20000)});
+       if(!res.ok)return reply({error:"Sample unavailable"},503);
+       const bytes=new Uint8Array(await res.arrayBuffer());
+       if(bytes.byteLength<10000||bytes.byteLength>4000000||
+          String.fromCharCode(...bytes.subarray(0,4))!=="RIFF"||
+          String.fromCharCode(...bytes.subarray(8,12))!=="WEBP")
+         return reply({error:"Invalid public sample"},415);
+       const uploaded=await admin.storage.from("carvelo-photo-originals").upload(
+          photo.original_path,bytes,{contentType:"image/webp",upsert:false});
+       if(uploaded.error)throw uploaded.error;
+       const job=await admin.from("cv_photo_jobs").insert({
+          photo_id:photoId,requested_by:photo.uploaded_by,
+          target_mode:"showroom_exterior",state:"queued"
+       }).select("id").single();
+       if(job.error){
+         await admin.storage.from("carvelo-photo-originals").remove([photo.original_path]);
+         throw job.error;
+       }
+       return reply({ok:true,test_job_created:true,job_id:job.data.id});
+     }
      if(payload.action==="claim"){
        const r=await admin.rpc("cv_ai_claim",{p_run_id:runId});
        if(r.error)throw r.error;
