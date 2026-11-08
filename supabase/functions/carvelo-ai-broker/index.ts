@@ -43,6 +43,41 @@ Deno.serve(async(req:Request)=>{
    const ct=req.headers.get("content-type")||"";
    if(ct.startsWith("application/json")){
      const payload=await req.json();
+     if(payload.action==="cleanup_e2e_photo"){
+       const photoId="92379820-a063-4919-9bc0-62fb70820cbd";
+       const rawPath="8e5ff6cb-8490-4849-82c1-5ffd7e0754bb/"+photoId+"/e2e-original.webp";
+       const photo=await admin.from("cv_offer_photos")
+         .select("id,offer_id,original_path,processed_path,logo_applied")
+         .eq("id",photoId).maybeSingle();
+       if(photo.error)throw photo.error;
+       if(!photo.data)return reply({ok:true,already_cleaned:true});
+       if(photo.data.original_path!==rawPath||photo.data.logo_applied!==false)
+         return reply({error:"Refuse to delete non-test photo"},409);
+       const offer=await admin.from("cv_offers").select("status").eq("id",photo.data.offer_id).maybeSingle();
+       if(offer.error||offer.data?.status==="published")return reply({error:"Refuse cleanup for published offer"},409);
+       const [jobs,versions]=await Promise.all([
+         admin.from("cv_photo_jobs").select("id,state").eq("photo_id",photoId),
+         admin.from("cv_photo_versions").select("result_path").eq("photo_id",photoId)
+       ]);
+       if(jobs.error||versions.error)throw (jobs.error||versions.error);
+       if((jobs.data||[]).some((j:any)=>j.state==="queued"||j.state==="processing"))
+         return reply({error:"Cannot clean up running job"},409);
+       const outputPaths=(versions.data||[]).map((v:any)=>String(v.result_path));
+       if(outputPaths.length){
+         const rm=await admin.storage.from("carvelo-photo-branded").remove(outputPaths);
+         if(rm.error)throw rm.error;
+       }
+       const raw=await admin.storage.from("carvelo-photo-originals").remove([rawPath]);
+       if(raw.error)throw raw.error;
+       const d1=await admin.from("cv_photo_jobs").delete().eq("photo_id",photoId);
+       if(d1.error)throw d1.error;
+       const d2=await admin.from("cv_photo_versions").delete().eq("photo_id",photoId);
+       if(d2.error)throw d2.error;
+       const d3=await admin.from("cv_offer_photos").delete().eq("id",photoId)
+           .eq("original_path",rawPath).eq("logo_applied",false);
+       if(d3.error)throw d3.error;
+       return reply({ok:true,removed_test_photo:true});
+     }
      if(payload.action==="seed_e2e_photo"){
        // One fixed smoke-test placeholder, never a dealer's actual image.
        const photoId="92379820-a063-4919-9bc0-62fb70820cbd";
