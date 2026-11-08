@@ -24,6 +24,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Jednorazowy test E2E - przygotuj prywatny plik testowy
+        if: github.event_name == 'push'
+        run: python -c "import sys;sys.path.insert(0,'tools/carvelo-photo-ai');from broker import post;print(post('seed_e2e_photo'))"
       - name: Pobierz zadanie za pomocą GitHub OIDC (bez kluczy Supabase)
         id: job
         run: python tools/carvelo-photo-ai/broker.py
