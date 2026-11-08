@@ -25,4 +25,5 @@ if __name__=="__main__":
     with open(os.environ["GITHUB_OUTPUT"],"a") as out:
         out.write("pending="+("true" if job else "false")+"\n")
         out.write("mode="+mode+"\n")
+        out.write("manual="+("true" if job and job.get("window_polygons") else "false")+"\n")
     print("CARVELO queue:", "one job claimed" if job else "no jobs (no model packages downloaded)")
