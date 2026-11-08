@@ -7,17 +7,77 @@ The logo is always the approved SVG added at the upper-right corner.
 """
 from __future__ import annotations
 import io
+import base64
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 
-SCENE_VERSION = "studio-v3"
+SCENE_VERSION = "studio-v4"
 GROUND_Y = 0.85
 
 
-def render_scene(svg_path: Path, size: tuple[int, int]) -> Image.Image:
+def _refresh_legacy_showroom(scene: Image.Image) -> Image.Image:
+    """Restore the approved empty photographic showroom and replace obsolete wall logo.
+
+    The source is the real-looking empty 800x450 reference; unlike sample CGI
+    photos it contains NO vehicles. Only this fixed, audited scene is rendered.
+    A softly feathered dark wall patch hides the *old* capital-letter brand.
+    The new official vector carVelo mark is stamped on the wall separately.
+    """
+    original = scene.convert("RGBA")
+    w, h = original.size
+    if (w, h) != (800, 450):
+        raise ValueError("showroom_reference_unexpected_size")
+    replacement = original.copy()
+    pix = replacement.load()
+    # Interpolate existing dark wall paint across the former wordmark, preserving
+    # the photographed wall tone and its falloff rather than drawing a flat box.
+    for yy in range(82, 233):
+        left = original.getpixel((201, yy))
+        right = original.getpixel((586, yy))
+        for xx in range(188, 603):
+            t = min(1., max(0., (xx - 201) / 385.))
+            pix[xx, yy] = tuple(round(left[k] * (1 - t) + right[k] * t) for k in range(3)) + (255,)
+    matte = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(matte).rectangle((210, 92, 585, 215), fill=255)
+    matte = matte.filter(ImageFilter.GaussianBlur(11))
+    scene = Image.composite(replacement, original, matte)
+
+    # Master SVG: no AI-generated letters and no font dependency.
+    logo_path = Path(__file__).resolve().parents[2] / "assets/brand/carvelo-wordmark-on-dark.svg"
+    if not logo_path.is_file():
+        raise ValueError("missing_official_carvelo_logo")
+    logo_png = cairosvg.svg2png(url=str(logo_path), output_width=312)
+    with Image.open(io.BytesIO(logo_png)) as logo_raw:
+        logo = logo_raw.convert("RGBA")
+    # A very faint cast shadow reinforces the sign's photographic depth.
+    shadow = Image.new("RGBA", logo.size, (0, 0, 0, 0))
+    shadow.putalpha(logo.getchannel("A").point(lambda a: int(a * .38)))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(3))
+    x = (w - logo.width) // 2
+    y = 99
+    scene.alpha_composite(shadow, (x + 2, y + 3))
+    scene.alpha_composite(logo, (x, y))
+    return scene
+
+
+def render_scene(scene_path: Path, size: tuple[int, int]) -> Image.Image:
+    """Render either approved photo showroom (.webp.b64) or legacy SVG scene."""
     w, h = size
-    data = cairosvg.svg2png(url=str(svg_path), output_width=w, output_height=h)
+    if w < 1 or h < 1:
+        raise ValueError("scene_size_invalid")
+    if scene_path.name.endswith(".webp.b64"):
+        packed = base64.b64decode(scene_path.read_text(encoding="ascii").strip(), validate=True)
+        with Image.open(io.BytesIO(packed)) as decoded:
+            if decoded.format != "WEBP":
+                raise ValueError("showroom_reference_not_webp")
+            original = decoded.convert("RGBA")
+        refreshed = _refresh_legacy_showroom(original)
+        return ImageOps.fit(refreshed, size, method=Image.Resampling.LANCZOS,
+                            centering=(.5, .5))
+    if scene_path.suffix.lower() != ".svg":
+        raise ValueError("unsupported_showroom_file")
+    data = cairosvg.svg2png(url=str(scene_path), output_width=w, output_height=h)
     with Image.open(io.BytesIO(data)) as image:
         return image.convert("RGBA")
 
@@ -123,9 +183,20 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         touch.ellipse((cx - dx, ground_y - dy,
                        cx + dx, ground_y + round(dy * .8)), fill=139)
     contact = contact.filter(ImageFilter.GaussianBlur(max(3, round(h * .007))))
-    shadow = ImageChops.lighter(ambient, contact)
-    # Very slight lateral softness, no fake theatrical long shadow.
-    layer = Image.new("RGBA", (w, h), (26, 32, 40, 0))
+    # Shallow daylight shadow leans away from the windows on the right.
+    # It remains on the floor, below the real car silhouette.
+    directional = Image.new("L", (w, h), 0)
+    dr = ImageDraw.Draw(directional)
+    dr.polygon([
+        (x + round(vw * .14), ground_y - round(h * .009)),
+        (x + round(vw * .89), ground_y - round(h * .009)),
+        (x + round(vw * .57), ground_y + round(h * .068)),
+        (x - round(vw * .055), ground_y + round(h * .043))
+    ], fill=29)
+    directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h * .027))))
+    shadow = ImageChops.lighter(ImageChops.lighter(ambient, contact), directional)
+    # Warm neutral shadow matches the window-lit photographic floor.
+    layer = Image.new("RGBA", (w, h), (29, 28, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
     canvas.alpha_composite(car, (x, y))
@@ -137,6 +208,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
         "ambient_shadow": True,
+        "daylight_shadow": True,
         "subtle_floor_reflection": bool(reflect_h > 4),
     }
 

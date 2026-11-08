@@ -125,7 +125,7 @@ Deno.serve(async(req:Request)=>{
      }
      const reason=String(form.get("review_required_reason")??"").slice(0,120);
      const scene=String(form.get("scene_version")||"");
-     if(scene!=="studio-v2"&&scene!=="studio-v3"&&scene!=="showroom-v1"){
+     if(scene!=="studio-v2"&&scene!=="studio-v3"&&scene!=="studio-v4"&&scene!=="showroom-v1"){
        await admin.storage.from(BUCKET).remove([path]);
        return reply({error:"Unsupported scene"},400);
      }
@@ -135,7 +135,7 @@ Deno.serve(async(req:Request)=>{
        p_mask_confidence:isWindow?confidence:null,
        p_review_reason:isWindow?(reason||null):null
      };
-     const completed=scene==="studio-v2"||scene==="studio-v3"
+     const completed=scene==="studio-v2"||scene==="studio-v3"||scene==="studio-v4"
        ?await admin.rpc("cv_ai_complete_v3",{...args,p_scene_version:scene})
        :await admin.rpc("cv_ai_complete_v2",args);
      if(completed.error){

@@ -1,4 +1,4 @@
-"""CARVELO studio-v3 regression tests: floor contact, shadow, official corner logo."""
+"""CARVELO studio-v4 regression: photographic showroom, shadows and official logo."""
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
@@ -7,9 +7,14 @@ from studio_compose import (
 )
 
 root = Path(__file__).resolve().parents[2]
-scene_path = root/"assets/brand/carvelo-studio-v2.svg"
+scene_path = root/"assets/brand/carvelo-showroom-v1.webp.b64"
 logo_path = root/"assets/brand/carvelo-wordmark-on-dark.svg"
 scene = render_scene(scene_path, (1000, 650))
+assert scene.size == (1000,650)
+# The new background must be a real showroom, not the old plain grey SVG.
+assert len(set(scene.convert("RGB").resize((32, 20)).getdata())) > 200
+# Wide and portrait frames stay valid, protecting the actual car from geometric distortion.
+assert render_scene(scene_path, (600, 800)).size == (600, 800)
 original = Image.new("RGBA", (800, 460), (0, 0, 0, 0))
 ink = ImageDraw.Draw(original)
 # Simplified original car mask: roof, body and two wheels; no AI hallucination.
@@ -18,13 +23,13 @@ ink.rounded_rectangle((80,213,720,336),radius=20,fill=(160,35,42,255))
 ink.ellipse((148,305,250,407),fill=(25,28,36,255))
 ink.ellipse((575,305,677,407),fill=(25,28,36,255))
 comp, stats = compose_grounded_vehicle(original, scene)
-assert stats["scene_version"]=="studio-v3"
+assert stats["scene_version"]=="studio-v4"
 assert stats["ground_contact_y"] == round(650 * .85)
 assert stats["vehicle_bounds"][3] == stats["ground_contact_y"]
 assert stats["vehicle_bounds"][0] >= 0
 assert stats["vehicle_bounds"][2] <= 1000
 assert stats["proportional_scale"] > 0
-assert stats["ambient_shadow"] and stats["subtle_floor_reflection"]
+assert stats["ambient_shadow"] and stats["daylight_shadow"] and stats["subtle_floor_reflection"]
 assert len(stats["wheel_contacts"]) == 2
 assert stats["wheel_contacts"][0] < stats["wheel_contacts"][1]
 assert all(stats["vehicle_bounds"][0] < cx < stats["vehicle_bounds"][2] for cx in stats["wheel_contacts"])
@@ -44,7 +49,7 @@ assert np.array_equal(logo_np[575,950],comp_np[575,950])
 # No centered wall branding.
 assert np.array_equal(logo_np[100,500],comp_np[100,500])
 # Check logo SVG contains master brand red V.
-assert "#D7192D" in logo_path.read_text()
+assert "#D7192D" in logo_path.read_text() and "carVelo" in logo_path.read_text()
 try:
     compose_grounded_vehicle(Image.new("RGBA",(800,460)),scene)
 except ValueError as exc:

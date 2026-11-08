@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/carvelo-photo-worker.yml'
       - 'tools/carvelo-photo-ai/**'
+      - 'assets/brand/carvelo-showroom-v1.webp.b64'
+      - 'assets/brand/carvelo-wordmark-on-dark.svg'
   schedule:
     - cron: '4,19,34,49 * * * *'
 permissions:
