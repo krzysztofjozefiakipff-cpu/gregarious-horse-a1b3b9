@@ -7,10 +7,11 @@ from PIL import Image,ImageOps,ImageDraw
 import cairosvg
 from rembg import remove,new_session
 from broker import oidc,URL,post
+from studio_compose import render_scene,compose_grounded_vehicle,add_official_logo
 
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 JOB=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"carvelo-job.json").read_text())
-SCENE=ROOT/"assets/brand/carvelo-showroom-v1.webp"
+SCENE=ROOT/"assets/brand/carvelo-studio-v2.svg"
 LOGO=ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
 
 def render():
@@ -33,7 +34,7 @@ def render():
  if JOB["mode"]=="showroom_windows":
   # Mask only the exterior view seen through glazing. Never repaint the cabin.
   from interior_windows import process_interior_windows,compose_staff_window_mask,UnsafeWindowMask
-  with Image.open(SCENE) as base:
+  with render_scene(SCENE,img.size) as base:
    try:
     if JOB.get("window_polygons"):
      background,coverage=compose_staff_window_mask(img,base,JOB["window_polygons"])
@@ -59,17 +60,10 @@ def render():
   coverage=float((matte>48).mean())
   opaque=float((matte>238).mean())
   if coverage<.12 or coverage>.86 or opaque<.08:raise ValueError("mask_quality_unreliable")
-  with Image.open(SCENE) as base:
-   background=ImageOps.fit(base.convert("RGB"),img.size,method=Image.Resampling.LANCZOS).convert("RGBA")
-  background.alpha_composite(foreground)
- logo_data=cairosvg.svg2png(url=str(LOGO),output_width=max(110,min(280,round(background.width*.18))))
- with Image.open(io.BytesIO(logo_data)) as lm: logo=lm.convert("RGBA")
- safe=max(12,round(background.width*.03))
- x=background.width-logo.width-safe-14
- y=background.height-logo.height-safe-11
- ImageDraw.Draw(background,"RGBA").rounded_rectangle((x-12,y-9,x+logo.width+12,y+logo.height+9),
-    radius=10,fill=(8,24,40,224))
- background.alpha_composite(logo,(x,y))
+  with render_scene(SCENE,img.size) as base:
+   background,placement=compose_grounded_vehicle(foreground,base)
+  print("CARVELO studio grounding",placement)
+ background=add_official_logo(background,LOGO)
  result=io.BytesIO()
  background.convert("RGB").save(result,format="PNG",optimize=True)
  body=result.getvalue()
@@ -84,7 +78,7 @@ def render():
  res=requests.post(URL,data=data,files={"file":("carvelo-branded.png",body,"image/png")},
                    headers=h,timeout=100)
  if not res.ok:raise RuntimeError("broker_complete_"+str(res.status_code))
- print("CARVELO AI candidate created for moderation.",JOB["mode"],"official CARVELO logo embedded.")
+ print("CARVELO AI candidate created for moderation.",JOB["mode"],"studio-v2, official top-right brand embedded.")
 if __name__=="__main__":
  try:render()
  except Exception as exc:
