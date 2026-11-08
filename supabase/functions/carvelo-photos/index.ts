@@ -33,12 +33,36 @@ function fail(req:Request,status:number,message:string) {
 }
 function errText(e:unknown) { return e instanceof Error ? e.message : String(e); }
 
+function validatedWindowPolygons(input:unknown):number[][][]|null {
+ if(!Array.isArray(input)||input.length<1||input.length>6)return null;
+ let total=0;const output:number[][][]=[];
+ for(const polygon of input){
+   if(!Array.isArray(polygon)||polygon.length<3||polygon.length>20)return null;
+   const points:number[][]=[];
+   for(const point of polygon){
+     if(!Array.isArray(point)||point.length!==2||point.some((v:unknown)=>
+          typeof v!=="number"||!Number.isFinite(v)||v<0||v>1))return null;
+     if(point[1]>.79)return null;
+     points.push([point[0],point[1]]);
+   }
+   let area=0;
+   for(let k=0;k<points.length;k++){
+      const a=points[k],b=points[(k+1)%points.length];
+      area+=a[0]*b[1]-b[0]*a[1];
+   }
+   const safeArea=Math.abs(area)*.5;
+   if(safeArea<.002||safeArea>.25)return null;
+   total+=safeArea;output.push(points);
+ }
+ return total<=.35?output:null;
+}
+
 async function aiIsEnabled(admin:any,mode:"exterior"|"interior"="exterior"):Promise<boolean> {
   const style=mode==="interior"?"windows-v1":"showroom-v1";
   const r=await admin.from("cv_photo_styles").select("is_active").eq("code",style).maybeSingle();
   return !r.error&&r.data?.is_active===true;
 }
-async function enqueueForType(admin:any,photoId:string,requesterId:string,kind:string) {
+async function enqueueForType(admin:any,photoId:string,requesterId:string,kind:string,polygons:number[][][]|null=null) {
   if(kind!=="exterior"&&kind!=="interior")return {queued:false};
   const active=await admin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
     .in("state",["queued","processing"]).limit(1);
@@ -46,7 +70,7 @@ async function enqueueForType(admin:any,photoId:string,requesterId:string,kind:s
   if(active.data?.length)return {queued:false,duplicate:true};
   const target=kind==="interior"?"showroom_windows":"showroom_exterior";
   const job=await admin.from("cv_photo_jobs").insert({photo_id:photoId,requested_by:requesterId,
-    target_mode:target,state:"queued"}).select("id").single();
+    target_mode:target,state:"queued",window_polygons:polygons}).select("id").single();
   if(job.error)throw job.error;
   return {queued:true,job_id:job.data.id};
 }
@@ -218,13 +242,21 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     if(offer.status==="published")return fail(req,409,"Najpierw zdejmij ofertę z publikacji");
     if(photo.photo_type!=="exterior"&&photo.photo_type!=="interior")
       return fail(req,400,"AI obsługuje ujęcia zewnętrzne oraz widok przez szyby na zdjęciach wnętrza");
-    if(!(await aiIsEnabled(supabaseAdmin,photo.photo_type)))
-      return fail(req,503,"Tryb AI dla tego typu zdjęcia nie jest jeszcze aktywny. Zdjęcie z logo pozostaje bez zmian.");
+    const manual=Object.prototype.hasOwnProperty.call(data,"window_polygons");
+    let polygons:number[][][]|null=null;
+    if(manual){
+      if(!staff||photo.photo_type!=="interior")
+        return fail(req,403,"Zaznaczenie szyb może wykonać tylko CARVELO dla zdjęcia wnętrza");
+      polygons=validatedWindowPolygons(data.window_polygons);
+      if(!polygons)return fail(req,400,"Nieprawidłowy obszar szyby: zaznacz tylko widok na zewnątrz, maksymalnie 6 wielokątów");
+    }
+    if(!manual&&!(await aiIsEnabled(supabaseAdmin,photo.photo_type)))
+      return fail(req,503,"Tryb automatyczny dla tego zdjęcia nie jest jeszcze aktywny. Możesz ręcznie zaznaczyć szybę.");
     const existing=await supabaseAdmin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
       .in("state",["queued","processing"]).limit(1);
     if(existing.error)throw existing.error;
     if(existing.data?.length)return fail(req,409,"Obróbka tego zdjęcia jest już w kolejce");
-    const result=await enqueueForType(supabaseAdmin,photoId,uid,photo.photo_type);
+    const result=await enqueueForType(supabaseAdmin,photoId,uid,photo.photo_type,polygons);
     return json(req,{ok:true,job_id:result.job_id??null,status:result.queued?"queued":"already_queued"});
   }
   if(action==="accept_ai"){
