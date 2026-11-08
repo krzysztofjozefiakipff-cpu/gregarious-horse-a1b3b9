@@ -66,7 +66,26 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
       const signed=await supabaseAdmin.storage.from(BUCKET_MARKED).createSignedUrl(photo.processed_path,180);
       return {...photo,preview_url:signed.data?.signedUrl??null,processed_path:undefined};
     }));
-    return json(req,{photos:items});
+    const ids=items.map((x)=>x.id);
+    if(ids.length){
+      const [jr,vr]=await Promise.all([
+        supabase.from("cv_photo_jobs").select("id,photo_id,state,target_mode,error_code,created_at").in("photo_id",ids).order("created_at",{ascending:false}).limit(250),
+        supabase.from("cv_photo_versions").select("id,photo_id,result_path,qa_status,mode,logo_applied").in("photo_id",ids).eq("qa_status","review").limit(250)
+      ]);
+      if(jr.error||vr.error)throw (jr.error||vr.error);
+      const jobs=new Map(),versions=new Map();
+      for(const j of jr.data||[])if(!jobs.has(j.photo_id))jobs.set(j.photo_id,j);
+      for(const v of vr.data||[])if(!versions.has(v.photo_id))versions.set(v.photo_id,v);
+      for(const item of items){
+        const job=jobs.get(item.id),version=versions.get(item.id);
+        if(job)item.ai_job={state:job.state,mode:job.target_mode,error_code:job.error_code};
+        if(version && (profile.role==="admin"||profile.role==="staff")){
+          const signed=await supabaseAdmin.storage.from(BUCKET_MARKED).createSignedUrl(version.result_path,180);
+          item.ai_candidate={id:version.id,url:signed.data?.signedUrl||null,logo_applied:version.logo_applied};
+        }
+      }
+    }
+    return json(req,{photos:items,ai_worker_enabled:Deno.env.get("CARVELO_AI_WORKER_ENABLED")==="true"});
   }
 
   if(action==="upload") {
@@ -154,6 +173,44 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     .eq("id",photoId).eq("offer_id",offerId).maybeSingle();
   if(p.error||!p.data)return fail(req,404,"Zdjęcie nie istnieje");
   const photo=p.data;
+
+  if(action==="classify"){
+    if(offer.status==="published")return fail(req,409,"Wycofaj opublikowaną ofertę przed zmianami");
+    const category=String(data.photo_type||"unknown");
+    if(!allowedTypes.has(category))return fail(req,400,"Nieprawidłowa kategoria");
+    const changed=await supabaseAdmin.from("cv_offer_photos").update({photo_type:category})
+      .eq("id",photoId).eq("offer_id",offerId);
+    if(changed.error)throw changed.error;
+    return json(req,{ok:true,photo_type:category});
+  }
+  if(action==="request_ai"){
+    if(offer.status==="published")return fail(req,409,"Najpierw zdejmij ofertę z publikacji");
+    if(photo.photo_type!=="exterior")
+      return fail(req,400,"Automatyczne studio dotyczy na razie tylko ujęć zewnętrznych");
+    if(Deno.env.get("CARVELO_AI_WORKER_ENABLED")!=="true")
+      return fail(req,503,"Silnik AI nie jest jeszcze aktywny. Oryginalne zdjęcie z logo pozostaje bez zmian.");
+    const existing=await supabaseAdmin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
+      .in("state",["queued","processing"]).limit(1);
+    if(existing.error)throw existing.error;
+    if(existing.data?.length)return fail(req,409,"Obróbka tego zdjęcia jest już w kolejce");
+    const job=await supabaseAdmin.from("cv_photo_jobs").insert({
+      photo_id:photoId,requested_by:uid,target_mode:"showroom_exterior",state:"queued"
+    }).select("id").single();
+    if(job.error)throw job.error;
+    return json(req,{ok:true,job_id:job.data?.id,status:"queued"});
+  }
+  if(action==="accept_ai"){
+    if(!staff)return fail(req,403,"Tylko CARVELO może zatwierdzić wersję AI");
+    const versionId=String(data.version_id??"");
+    if(!UUID.test(versionId))return fail(req,400,"Nieprawidłowa wersja zdjęcia");
+    const version=await supabase.from("cv_photo_versions")
+      .select("id,photo_id,qa_status").eq("id",versionId).eq("photo_id",photoId).maybeSingle();
+    if(version.error||!version.data||version.data.qa_status!=="review")
+      return fail(req,409,"Brak kandydatu AI oczekującego na zatwierdzenie");
+    const res=await supabaseAdmin.rpc("cv_photo_accept_ai_version",{p_version_id:versionId,p_reviewer_id:uid});
+    if(res.error)throw res.error;
+    return json(req,{ok:true,result:res.data});
+  }
 
   if(action==="approve"){
     if(!staff)return fail(req,403,"Zatwierdzać zdjęcia może tylko CARVELO");
