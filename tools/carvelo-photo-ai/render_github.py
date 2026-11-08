@@ -7,6 +7,7 @@ from PIL import Image,ImageOps,ImageDraw
 import cairosvg
 from rembg import remove,new_session
 from broker import oidc,URL,post
+from progress import report
 from studio_compose import render_scene,compose_grounded_vehicle,add_official_logo
 
 ROOT=pathlib.Path(__file__).resolve().parents[2]
@@ -19,6 +20,7 @@ def render():
     ("exterior","showroom_exterior"),("interior","showroom_windows")):
     raise ValueError("photo_type_or_mode_not_supported")
  if not SCENE.is_file() or not LOGO.is_file():raise RuntimeError("missing_official_scene_or_logo")
+ report(46,"downloading",JOB["id"])
  original_url=JOB["original_url"]
  source=requests.get(original_url,timeout=55)
  source.raise_for_status()
@@ -28,6 +30,7 @@ def render():
   if img.width*img.height>12000000:raise ValueError("source_pixel_limit")
   img=img.convert("RGBA")
   img.thumbnail((1400,1400),Image.Resampling.LANCZOS)
+ report(56,"segmenting",JOB["id"])
  window_changed=None
  mask_confidence=None
  review_reason=None
@@ -40,6 +43,7 @@ def render():
      background,coverage=compose_staff_window_mask(img,base,JOB["window_polygons"])
     else:
      background,coverage=process_interior_windows(img,base)
+    report(76,"compositing",JOB["id"])
     window_changed=True
     print("CARVELO protected glass view updated, area",round(coverage,3))
    except UnsafeWindowMask as err:
@@ -60,14 +64,17 @@ def render():
   coverage=float((matte>48).mean())
   opaque=float((matte>238).mean())
   if coverage<.12 or coverage>.86 or opaque<.08:raise ValueError("mask_quality_unreliable")
+  report(74,"compositing",JOB["id"])
   with render_scene(SCENE,img.size) as base:
    background,placement=compose_grounded_vehicle(foreground,base)
   print("CARVELO studio grounding",placement)
+ report(85,"branding",JOB["id"])
  background=add_official_logo(background,LOGO)
  result=io.BytesIO()
  background.convert("RGB").save(result,format="PNG",optimize=True)
  body=result.getvalue()
  if len(body)>6_500_000:raise ValueError("output_too_large")
+ report(94,"uploading",JOB["id"])
  h={"Authorization":"Bearer "+oidc()}
  data={"action":"complete","job_id":JOB["id"],"photo_id":JOB["photo_id"],
         "offer_id":JOB["offer_id"],"scene_version":"studio-v3"}
