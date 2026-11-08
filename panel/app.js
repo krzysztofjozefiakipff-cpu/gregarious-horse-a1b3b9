@@ -90,6 +90,7 @@ async function refreshData() {
 }
 
 function fillDealerOptions() {
+  if(!profile) return;
   const filtered=profile.role==="dealer"
     ? dealers.filter((d)=>d.id===profile.dealer_id)
     : dealers.filter((d)=>d.active);
