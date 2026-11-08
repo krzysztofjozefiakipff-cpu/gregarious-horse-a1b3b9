@@ -31,6 +31,9 @@ assert stats["vehicle_bounds"][2] <= 1000
 assert stats["proportional_scale"] > 0
 assert stats["ambient_shadow"] and stats["daylight_shadow"] and stats["subtle_floor_reflection"]
 assert len(stats["wheel_contacts"]) == 2
+assert len(stats["wheel_contact_points"]) == 2
+assert stats["wheel_grounded"]
+assert all(stats["vehicle_bounds"][1] < cy <= stats["ground_contact_y"] for cx,cy in stats["wheel_contact_points"])
 assert stats["wheel_contacts"][0] < stats["wheel_contacts"][1]
 assert all(stats["vehicle_bounds"][0] < cx < stats["vehicle_bounds"][2] for cx in stats["wheel_contacts"])
 # Every actual vehicle pixel is still the original foreground with no AI reconstruction.
@@ -63,4 +66,4 @@ ow=stats["vehicle_bounds"][2]-ox
 oh=stats["vehicle_bounds"][3]-oy
 color=np.asarray(comp.convert("RGB"))[oy+round(oh*.61),ox+round(ow*.49)]
 assert tuple(color)==(160,35,42), ("vehicle_rgb_modified",tuple(color))
-print("CARVELO_STUDIO_V3_TEST_PASS",stats)
+print("CARVELO_STUDIO_V4_GROUNDING_TEST_PASS",stats)

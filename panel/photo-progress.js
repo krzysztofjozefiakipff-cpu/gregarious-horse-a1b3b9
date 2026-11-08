@@ -1,17 +1,18 @@
 // CARVELO — live photo-processing progress. Percent reflects completed milestones, not ETA.
 const stages={
- queued:"Oczekiwanie na wolnego workera",preparing:"Przygotowanie zdjęcia",
+ queued:"W kolejce — oczekiwanie na uruchomienie obróbki",preparing:"Przygotowanie zdjęcia",
  installing:"Instalowanie narzędzi AI",loading_model:"Ładowanie modelu AI",
  downloading:"Pobieranie zdjęcia",segmenting:"Analiza samochodu i szyb",
  compositing:"Montaż tła, realistycznych cieni i odbicia",
  branding:"Nakładanie logo CARVELO",uploading:"Zapisywanie zdjęcia",
- review:"Gotowe do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowano"
+ review:"Gotowe do akceptacji",completed:"Zatwierdzone / zakończone",failed:"Błąd",cancelled:"Anulowano"
 };
 let pollTimer=null,tickTimer=null,pending=false;
 const escape=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const isActive=j=>j&&["queued","processing"].includes(j.state);
 const percent=j=>j?.state==="queued"?0:Math.max(0,Math.min(100,Number(j?.progress_percent)||0));
-const stage=j=>stages[j?.state==="queued"?"queued":j?.progress_stage]||stages[j?.state]||"Przetwarzanie";
+const stage=j=>j?.state==="review"?stages.review:j?.state==="queued"?stages.queued:
+ (stages[j?.progress_stage]||stages[j?.state]||"Przetwarzanie");
 function duration(iso,finishedAt){
  const t=Date.parse(iso||"");
  if(!Number.isFinite(t))return "—";
@@ -29,7 +30,7 @@ export function progressMarkup(photoId,job){
  '<span class="cv-ai-fill" style="width:'+pc+'%"></span></div>'+
  '<small data-ai-elapsed data-job-state="'+escape(job.state)+'" data-start="'+escape(started)+'" data-finished="'+escape(job.finished_at||"")+'">'+
  (job.state==="queued"?"Czas oczekiwania: ":"Czas obróbki: ")+duration(started,job.finished_at)+'</small>'+
- '<small class="cv-ai-disclaimer">Procent oznacza zakończone etapy, nie przewidywany czas.</small></div>';
+ '<small class="cv-ai-disclaimer">Procent oznacza zakończone etapy, nie przewidywany czas. Zatwierdzenie wersji AI jest osobnym krokiem.</small></div>';
 }
 export function stopPhotoProgress(){
  if(pollTimer!==null)clearInterval(pollTimer);
