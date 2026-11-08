@@ -4,6 +4,7 @@ mask, not a guaranteed glass/window detector; every candidate requires review.
 No generative drawing of cabin, seats, steering wheel, or vehicle parts.
 """
 import io
+from functools import lru_cache
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps, ImageDraw
 
@@ -23,13 +24,21 @@ class UnsafeWindowMask(Exception):
     """No trustworthy region to modify; keep original with CARVELO logo."""
 
 
-def infer_window_probability(photo):
-    """Text-guided zero-shot foreground proposals, not a trained automotive glass model."""
+@lru_cache(maxsize=1)
+def _load_window_model():
+    """One model instance per worker process, not one download/load per photo."""
     import torch
     from transformers import CLIPSegProcessor, CLIPSegForImageSegmentation
     torch.set_num_threads(2)
     processor = CLIPSegProcessor.from_pretrained(MODEL_ID)
     model = CLIPSegForImageSegmentation.from_pretrained(MODEL_ID, use_safetensors=True).eval()
+    return processor, model
+
+
+def infer_window_probability(photo):
+    """Text-guided zero-shot proposals, cached model; never edits protected car pixels."""
+    import torch
+    processor, model = _load_window_model()
     prompts = list(WINDOW_PROMPTS + KEEP_PROMPTS)
     inputs = processor(text=prompts, images=[photo.convert("RGB")] * len(prompts),
                        padding=True, return_tensors="pt")

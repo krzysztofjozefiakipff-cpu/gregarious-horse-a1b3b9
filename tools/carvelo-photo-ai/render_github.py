@@ -3,6 +3,7 @@ Exterior uses conservative vehicle matting. Interior uses conservative window-on
 Output is review-only: no automatic publishing.
 """
 import os,io,json,hashlib,pathlib,requests,sys
+from functools import lru_cache
 from PIL import Image,ImageOps,ImageDraw
 import cairosvg
 from rembg import remove,new_session
@@ -14,6 +15,10 @@ ROOT=pathlib.Path(__file__).resolve().parents[2]
 JOB=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"carvelo-job.json").read_text())
 SCENE=ROOT/"assets/brand/carvelo-showroom-v1.webp.b64"
 LOGO=ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
+
+@lru_cache(maxsize=1)
+def u2net_session():
+ return new_session("u2net")
 
 def render():
  if not JOB or (JOB.get("type"),JOB.get("mode")) not in (
@@ -55,7 +60,7 @@ def render():
  else:
   # Exterior: original vehicle pixels remain intact; AI only computes alpha matte.
   inp=io.BytesIO();img.convert("RGB").save(inp,format="PNG")
-  cut=remove(inp.getvalue(),session=new_session("u2net"))
+  cut=remove(inp.getvalue(),session=u2net_session())
   with Image.open(io.BytesIO(cut)) as fg: foreground=fg.convert("RGBA")
   if foreground.size!=img.size:foreground=foreground.resize(img.size,Image.Resampling.BILINEAR)
   alpha=foreground.getchannel("A")
