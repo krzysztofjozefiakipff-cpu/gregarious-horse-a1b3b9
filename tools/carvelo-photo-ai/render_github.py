@@ -70,7 +70,7 @@ def render():
  if len(body)>6_500_000:raise ValueError("output_too_large")
  h={"Authorization":"Bearer "+oidc()}
  data={"action":"complete","job_id":JOB["id"],"photo_id":JOB["photo_id"],
-        "offer_id":JOB["offer_id"]}
+        "offer_id":JOB["offer_id"],"scene_version":"studio-v2"}
  if JOB["mode"]=="showroom_windows":
   data.update(window_view_changed=str(window_changed).lower(),
               mask_confidence="" if mask_confidence is None else str(mask_confidence),
