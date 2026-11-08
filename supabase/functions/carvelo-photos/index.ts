@@ -33,17 +33,20 @@ function fail(req:Request,status:number,message:string) {
 }
 function errText(e:unknown) { return e instanceof Error ? e.message : String(e); }
 
-async function aiIsEnabled(admin:any):Promise<boolean> {
-  const r=await admin.from("cv_photo_styles").select("is_active").eq("code","showroom-v1").maybeSingle();
+async function aiIsEnabled(admin:any,mode:"exterior"|"interior"="exterior"):Promise<boolean> {
+  const style=mode==="interior"?"windows-v1":"showroom-v1";
+  const r=await admin.from("cv_photo_styles").select("is_active").eq("code",style).maybeSingle();
   return !r.error&&r.data?.is_active===true;
 }
-async function enqueueForExterior(admin:any,photoId:string,requesterId:string) {
+async function enqueueForType(admin:any,photoId:string,requesterId:string,kind:string) {
+  if(kind!=="exterior"&&kind!=="interior")return {queued:false};
   const active=await admin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
     .in("state",["queued","processing"]).limit(1);
   if(active.error)throw active.error;
   if(active.data?.length)return {queued:false,duplicate:true};
+  const target=kind==="interior"?"showroom_windows":"showroom_exterior";
   const job=await admin.from("cv_photo_jobs").insert({photo_id:photoId,requested_by:requesterId,
-    target_mode:"showroom_exterior",state:"queued"}).select("id").single();
+    target_mode:target,state:"queued"}).select("id").single();
   if(job.error)throw job.error;
   return {queued:true,job_id:job.data.id};
 }
@@ -100,7 +103,7 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
         }
       }
     }
-    return json(req,{photos:items,ai_worker_enabled:await aiIsEnabled(supabaseAdmin)});
+    return json(req,{photos:items,ai_worker_enabled:await aiIsEnabled(supabaseAdmin),ai_windows_enabled:await aiIsEnabled(supabaseAdmin,"interior")});
   }
 
   if(action==="upload") {
@@ -173,8 +176,10 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
       }).select("id").single();
       if(insert.error)throw insert.error;
       let autoJob=null;
-      if(declaredType==="exterior"&&await aiIsEnabled(supabaseAdmin)){
-        try{autoJob=await enqueueForExterior(supabaseAdmin,photoId,uid)}
+      if(offer.status!=="published" &&
+         (declaredType==="exterior"||declaredType==="interior") &&
+         await aiIsEnabled(supabaseAdmin,declaredType)){
+        try{autoJob=await enqueueForType(supabaseAdmin,photoId,uid,declaredType)}
         catch(e){console.error("CARVELO AI autoqueue failed",errText(e))}
       }
       return json(req,{ok:true,photo_id:photoId,state:"review",
@@ -202,23 +207,24 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
       .eq("id",photoId).eq("offer_id",offerId);
     if(changed.error)throw changed.error;
     let queued=false;
-    if(category==="exterior"&&await aiIsEnabled(supabaseAdmin)){
-      try{queued=(await enqueueForExterior(supabaseAdmin,photoId,uid)).queued}
+    if((category==="exterior"||category==="interior") &&
+       await aiIsEnabled(supabaseAdmin,category)){
+      try{queued=(await enqueueForType(supabaseAdmin,photoId,uid,category)).queued}
       catch(e){console.error("CARVELO AI classify enqueue error",errText(e))}
     }
     return json(req,{ok:true,photo_type:category,ai_job_queued:queued});
   }
   if(action==="request_ai"){
     if(offer.status==="published")return fail(req,409,"Najpierw zdejmij ofertę z publikacji");
-    if(photo.photo_type!=="exterior")
-      return fail(req,400,"Automatyczne studio dotyczy na razie tylko ujęć zewnętrznych");
-    if(!(await aiIsEnabled(supabaseAdmin)))
-      return fail(req,503,"Silnik AI nie jest jeszcze aktywny. Oryginalne zdjęcie z logo pozostaje bez zmian.");
+    if(photo.photo_type!=="exterior"&&photo.photo_type!=="interior")
+      return fail(req,400,"AI obsługuje ujęcia zewnętrzne oraz widok przez szyby na zdjęciach wnętrza");
+    if(!(await aiIsEnabled(supabaseAdmin,photo.photo_type)))
+      return fail(req,503,"Tryb AI dla tego typu zdjęcia nie jest jeszcze aktywny. Zdjęcie z logo pozostaje bez zmian.");
     const existing=await supabaseAdmin.from("cv_photo_jobs").select("id").eq("photo_id",photoId)
       .in("state",["queued","processing"]).limit(1);
     if(existing.error)throw existing.error;
     if(existing.data?.length)return fail(req,409,"Obróbka tego zdjęcia jest już w kolejce");
-    const result=await enqueueForExterior(supabaseAdmin,photoId,uid);
+    const result=await enqueueForType(supabaseAdmin,photoId,uid,photo.photo_type);
     return json(req,{ok:true,job_id:result.job_id??null,status:result.queued?"queued":"already_queued"});
   }
   if(action==="accept_ai"){
