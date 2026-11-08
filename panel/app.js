@@ -123,6 +123,8 @@ function renderOffers() {
       (canEdit(o)||internal())?'<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="photos">📷 Zdjęcia</button>':"",
       canChangeStatus()&&o.status!=="published"?
         '<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="publish">Publikuj</button>':"",
+      canChangeStatus()&&o.status==="published"?
+        '<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="withdraw">Wycofaj do edycji</button>':"",
       canChangeStatus()&&o.status!=="rejected"?
         '<button type="button" class="danger" data-offer="'+esc(o.id)+'" data-action="reject">Odrzuć</button>':"",
     ].filter(Boolean).join("");
@@ -230,11 +232,11 @@ function editOffer(id){
   $("offerFormBlock").scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function changeOfferStatus(id, status){
-  if(!canChangeStatus()||!["published","rejected"].includes(status))return;
+  if(!canChangeStatus()||!["published","rejected","draft"].includes(status))return;
   try{
     const r=await client.from("cv_offers").update({status}).eq("id",id).select("id").maybeSingle();
     if(!must(r,"Zmiana statusu"))throw new Error("Nie zmieniono statusu.");
-    notify(status==="published"?"Oferta opublikowana.":"Oferta odrzucona.");
+    notify(status==="published"?"Oferta opublikowana.":status==="draft"?"Oferta wycofana do szkicu — można edytować zdjęcia.":"Oferta odrzucona.");
     await refreshData();
   }catch(error){notify(error.message||String(error),true);}
 }
@@ -316,6 +318,7 @@ function attach(){
     }
     if(action==="publish")await changeOfferStatus(id,"published");
     if(action==="reject")await changeOfferStatus(id,"rejected");
+    if(action==="withdraw"&&window.confirm("Wycofać ofertę z katalogu do edycji? Zdjęcia i dane pozostaną zachowane."))await changeOfferStatus(id,"draft");
   });
   $("accountsBody").addEventListener("click",async (event)=>{
     const btn=event.target.closest("button[data-save-account]");
