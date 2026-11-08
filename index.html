@@ -47,6 +47,94 @@ body.vehicle-mode .hero,body.vehicle-mode .search-stage,body.vehicle-mode .trust
 .buyer-faq{background:#fff;border:1px solid #e2e8ed;border-radius:18px;margin:42px 0 25px;padding:34px}.buyer-faq>span{color:#bc1624;font-size:11px;font-weight:800;letter-spacing:1.5px}.buyer-faq h2{margin:10px 0 20px;font-size:clamp(25px,3vw,34px)}.faq-items{display:grid;gap:10px}.faq-items details{border:1px solid #e2e8ed;border-radius:10px}.faq-items summary{cursor:pointer;font-weight:750;font-size:14px;padding:17px 18px}.faq-items details p{font-size:13px;color:#607181;line-height:1.65;padding:0 18px 16px;margin:0}
 @media(max-width:850px){.vehicle-layout{grid-template-columns:1fr}.vehicle-panel{position:static}.vehicle-image{height:300px}}
 @media(max-width:550px){.vehicle-image{height:230px}.vehicle-image>span{font-size:9px;max-width:72%;text-align:right}.vehicle-spec,.vehicle-panel{padding:21px}.vehicle-spec dl{grid-template-columns:1fr}.vehicle-head h1{font-size:35px}.buyer-faq{padding:23px 17px}}
+</style><style id="carvelo-benefit-strip-layout-fix-2026">
+/* Prevent clipped headings and inherited dividers in the benefits bar. */
+.trust-strip{
+  position:relative;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  align-items:stretch;
+  gap:0;
+  padding:30px max(4%,calc((100% - 1600px)/2));
+  overflow:visible;
+  height:auto;
+}
+.trust-strip>div{
+  display:flex;
+  align-items:flex-start;
+  align-self:stretch;
+  gap:14px;
+  padding:12px 18px;
+  margin:0;
+  min-width:0;
+  min-height:84px;
+  height:auto;
+  border:0;
+  border-right:1px solid #ffffff27;
+  overflow:visible;
+}
+.trust-strip>div:first-child{padding-left:0}
+.trust-strip>div:last-child{border-right:0}
+.trust-strip .benefit-copy{
+  min-width:0;
+  flex:1 1 auto;
+  display:block;
+  overflow:visible;
+}
+.trust-strip .benefit-copy strong{
+  display:block;
+  margin:0 0 6px;
+  padding:0;
+  font-size:15px;
+  font-weight:750;
+  line-height:1.35;
+  letter-spacing:0;
+  overflow:visible;
+  height:auto;
+  color:#fff;
+  overflow-wrap:break-word;
+}
+.trust-strip .benefit-copy small{
+  display:block;
+  margin:0;
+  padding:0;
+  font-size:12px;
+  font-weight:400;
+  line-height:1.5;
+  color:#cbd2de;
+  overflow-wrap:break-word;
+}
+.trust-strip .benefit-icon{
+  display:block;
+  flex:0 0 29px;
+  width:29px;
+  font-size:27px;
+  line-height:1.35;
+  margin:0;
+  color:#e9eff4;
+}
+@media(max-width:1050px){
+  .trust-strip{grid-template-columns:repeat(2,minmax(0,1fr));padding:28px 4%;gap:0}
+  .trust-strip>div{padding:17px 16px;min-height:90px;border:0!important}
+  .trust-strip>div:nth-child(odd){border-right:1px solid #ffffff27!important}
+  .trust-strip>div:nth-child(n+3){border-top:1px solid #ffffff27!important}
+  .trust-strip>div:nth-child(odd){padding-left:5px}
+}
+@media(max-width:560px){
+  .trust-strip{grid-template-columns:repeat(2,minmax(0,1fr));padding:30px 4% 28px;gap:0}
+  .trust-strip>div{min-height:116px;padding:17px 12px!important;gap:9px;align-items:flex-start}
+  .trust-strip>div:nth-child(odd){padding-left:0!important}
+  .trust-strip .benefit-icon{flex-basis:22px;width:22px;font-size:23px;line-height:1.4}
+  .trust-strip .benefit-copy strong{font-size:13px;line-height:1.4;margin:0 0 6px}
+  .trust-strip .benefit-copy small{font-size:11px;line-height:1.5}
+}
+@media(max-width:360px){
+  .trust-strip{grid-template-columns:1fr}
+  .trust-strip>div{min-height:0;padding:17px 0!important;border-right:0!important;border-top:1px solid #ffffff27!important}
+  .trust-strip>div:first-child{border-top:0!important}
+  .trust-strip .benefit-copy strong{font-size:15px}
+  .trust-strip .benefit-copy small{font-size:12px}
+}
 </style></head><body><header class="site-head">
   <div class="nav-wrap">
     <a href="#" class="brand-logo" onclick="show('catalog');return false" aria-label="CARVELO — strona główna">CAR<span>V</span>ELO</a>
@@ -95,10 +183,10 @@ body.vehicle-mode .hero,body.vehicle-mode .search-stage,body.vehicle-mode .trust
     <p class="payment-disclaimer" id="paymentInfo">Orientacyjna rata kredytu: 20% wpłaty, 60 miesięcy, 8% oprocentowania nominalnego rocznie; bez prowizji i innych kosztów. To symulacja, nie oferta finansowania.</p>
   </div>
 </div><div class="trust-strip" aria-label="Zalety CARVELO">
-  <div><span class="benefit-icon">✧</span><span><strong>Partnerzy dealerscy</strong><small>Oferty w jednym miejscu</small></span></div>
-  <div><span class="benefit-icon">▤</span><span><strong>Atrakcyjne finansowanie</strong><small>Leasing, kredyt, wynajem</small></span></div>
-  <div><span class="benefit-icon">♢</span><span><strong>Przejrzysty zakup</strong><small>Warunki do potwierdzenia u dealera</small></span></div>
-  <div><span class="benefit-icon">♧</span><span><strong>CARVELO po Twojej stronie</strong><small>Wsparcie na każdym etapie</small></span></div>
+  <div><span class="benefit-icon">✧</span><span class="benefit-copy"><strong>Partnerzy dealerscy</strong><small>Oferty w jednym miejscu</small></span></div>
+  <div><span class="benefit-icon">▤</span><span class="benefit-copy"><strong>Atrakcyjne finansowanie</strong><small>Leasing, kredyt, wynajem</small></span></div>
+  <div><span class="benefit-icon">♢</span><span class="benefit-copy"><strong>Przejrzysty zakup</strong><small>Warunki do potwierdzenia u dealera</small></span></div>
+  <div><span class="benefit-icon">♧</span><span class="benefit-copy"><strong>CARVELO po Twojej stronie</strong><small>Wsparcie na każdym etapie</small></span></div>
 </div>
 <div class="brand-strip" aria-label="Marki w katalogu i planowane">
   <div class="brand-logos"><span class="brand-lexus">LEXUS</span><span class="brand-toyota">TOYOTA</span><span class="brand-omoda">OMODA</span><span class="brand-jaecoo">JAECOO</span><span class="brand-maxus">MAXUS</span><span class="brand-mitsu">MITSUBISHI</span><span class="brand-foton">FOTON</span></div>
