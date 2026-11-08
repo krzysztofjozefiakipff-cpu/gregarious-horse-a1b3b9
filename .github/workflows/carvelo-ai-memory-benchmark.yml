@@ -1,0 +1,42 @@
+name: CARVELO – pomiar RAM i czasu modeli AI (bez zdjęć klientów)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/carvelo-ai-memory-benchmark.yml'
+      - 'tools/carvelo-photo-ai/memory_benchmark.py'
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HOME: ${{ runner.temp }}/carvelo-hf-benchmark
+      U2NET_HOME: ${{ runner.temp }}/carvelo-u2net-benchmark
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            tools/carvelo-photo-ai/requirements-gh.txt
+            tools/carvelo-photo-ai/requirements-interior.txt
+      - name: Instalacja modeli i bibliotek CPU
+        run: |
+          python -m pip install -r tools/carvelo-photo-ai/requirements-gh.txt
+          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r tools/carvelo-photo-ai/requirements-interior.txt
+      - name: Test 1 — U2Net (nadwozie)
+        run: python tools/carvelo-photo-ai/memory_benchmark.py exterior
+      - name: Test 2 — CLIPSeg (szyby) w oddzielnym procesie
+        run: python tools/carvelo-photo-ai/memory_benchmark.py interior
+      - name: Kontrola budżetu RAM 2 GB i raport
+        run: |
+          echo "Sprawdź dwa wpisy CARVELO_MEMORY_BENCHMARK w logach."
+          echo "Oddzielne procesy pozwalają zwolnić pamięć U2Net przed CLIPSeg."
+          echo "Próg zalecany dla Standard 2 GB: <= 1638 MB peak RSS na model."
