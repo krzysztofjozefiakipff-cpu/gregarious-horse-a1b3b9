@@ -137,3 +137,16 @@ W sekcji zdjęć przy dodawaniu oferty:
 - Supabase Edge Functions: https://supabase.com/docs/guides/functions
 - Supabase Storage RLS: https://supabase.com/docs/guides/storage/security/access-control
 - Obowiązująca baza projektu: \`docs/SPECYFIKACJA_MODULU_ZDJEC_CARVELO.md\`
+
+
+## Stan prac — 8 listopada 2026
+
+**Uruchomiono w Supabase:** prywatną kolejkę pgmq carvelo_photo_ai, tabele cv_photo_jobs, cv_photo_versions i cv_photo_styles, reguły RLS, serwerowy trigger tworzenia komunikatów i atomową akceptację wariantu AI wyłącznie przez rolę service_role. Wdrożona Edge Function carvelo-photos (v2) obsługuje klasyfikację i zapytania o status AI. Panel pokazuje kategorie zdjęć, pracę kolejki i kandydatów do akceptacji.
+
+**Kod przygotowany, ale worker nie działa produkcyjnie:** tools/carvelo-photo-ai/worker.py segmentuje pojazd modelem u2net i zapisuje prywatną wersję z oficjalnym logo CARVELO do zatwierdzenia. Nie podłączono serwera, który wykonywałby przetwarzanie.
+
+**Pozostałe warunki aktywacji:** umieścić zatwierdzony obraz salonu na serwerze workera, uruchomić Python + model i prywatne sekrety Supabase, przeprowadzić testy 30+ zdjęć, następnie ustawić CARVELO_AI_WORKER_ENABLED=true w środowisku Edge Function. Dopóki silnik nie działa, request_ai zwraca HTTP 503 i nie tworzy zadań oczekujących bez wykonawcy.
+
+**Dopiero kolejny etap:** rozpoznawanie i modyfikacja otoczenia widocznego przez szyby wnętrza. Obecny worker działa wyłącznie na ujęciach exterior. Nie włączono żadnego płatnego dostawcy AI.
+
+**Akceptacja:** kandydata AI ogląda administrator, potem ręcznie włącza wariant do moderacji i zatwierdza zdjęcie. Oryginały pozostają prywatne i nietknięte; watermark CARVELO jest obowiązkowy.
