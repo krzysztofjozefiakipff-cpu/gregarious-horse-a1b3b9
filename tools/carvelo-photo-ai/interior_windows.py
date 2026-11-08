@@ -63,7 +63,9 @@ def conservative_window_mask(positive, protected, size):
     allowed = (positive >= .68) & (positive - protected >= .13) & top_zone
     coverage = float(np.mean(allowed))
     if not (.015 <= coverage <= .39):
-        raise UnsafeWindowMask("window_mask_uncertain")
+        raise UnsafeWindowMask("window_mask_uncertain:c"+format(coverage,".3f")+
+            ",p"+format(float(np.mean(positive>=.50)),".3f")+
+            ",k"+format(float(np.mean(protected>=.50)),".3f"))
     # Avoid cutting through pillars, rubber seals, dashboard or reflections.
     raw = Image.fromarray((allowed.astype("uint8")*255),"L")
     radius = max(7, min(23, int(width*.015)//2*2+1))
@@ -71,7 +73,7 @@ def conservative_window_mask(positive, protected, size):
     core = np.array(eroded,dtype=np.uint8)>127
     core_count = float(np.mean(core))
     if core_count < .008 or core_count > .31:
-        raise UnsafeWindowMask("window_core_not_safe")
+        raise UnsafeWindowMask("window_core_not_safe:c"+format(core_count,".3f"))
     # Disallow bottom of picture and implausible whole-frame masks.
     if bool(np.mean(core[int(height*.65):])) > .001:
         raise UnsafeWindowMask("window_mask_reaches_interior")
