@@ -39,10 +39,12 @@ export async function refreshPhotos(){
  const rows=data.photos||[];
  $("photoStatus").textContent=(rows.length?"Liczba zdjęć: "+rows.length+" • każde z logo CARVELO":"Brak zdjęć. Dodaj pierwszą fotografię.") +
  (data.ai_worker_enabled?" • Studio AI aktywne":" • AI salonu wyłączone")+
- (data.ai_windows_enabled?" • Widok za szybami: BETA do akceptacji":" • Widok za szybami: testy") ;
+ (data.ai_windows_enabled?" • Widok za szybami: BETA do akceptacji":" • Widok za szybami: tryb precyzyjny do zaznaczenia")+
+ (data.offer_status==="published"?" • Zmiana zdjęć wymaga wycofania oferty z publikacji":"");
  const staff=["admin","staff"].includes(getRole());
  const aiEnabled=!!data.ai_worker_enabled;
  const windowsEnabled=!!data.ai_windows_enabled;
+ const isPublished=data.offer_status==="published";
  $("photoList").innerHTML=rows.map(p=>{
    const category={exterior:"Zewnętrzne",interior:"Wnętrze",detail:"Detal",unknown:"Do oceny"}[p.photo_type]||"Do oceny";
    const btn=(action,label,cl)=>'<button type="button" class="'+cl+'" data-photo-action="'+action+'" data-photo-id="'+esc(p.id)+'">'+label+'</button>';
@@ -52,7 +54,7 @@ export async function refreshPhotos(){
        '</select></label>'+btn("classify","Zapisz typ","secondary")+'</div>':"";
    const ai=(p.ai_job?'<small>AI: '+esc(({queued:"W kolejce",processing:"Przetwarzanie",review:"Do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowane"})[p.ai_job.state]||p.ai_job.state)+
        (p.ai_job.error_code?' — '+esc(aiErrorLabel(p.ai_job.error_code)):'')+'</small>':"")+
-       (((aiEnabled&&p.photo_type==="exterior")||(windowsEnabled&&p.photo_type==="interior"))
+       (!isPublished && ((aiEnabled&&p.photo_type==="exterior")||(windowsEnabled&&p.photo_type==="interior"))
           && !["queued","processing"].includes(p.ai_job?.state)
           ?btn("request_ai",p.photo_type==="interior"?"Zmień widok za szybami (BETA)":"Przetwórz w salonie AI (BETA)","secondary"):"")+
        (p.photo_type==="interior"&&!windowsEnabled?'<small>AI szyb: testy przed aktywacją — wnętrze bez zmian.</small>':"")+
@@ -61,7 +63,7 @@ export async function refreshPhotos(){
            '<img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI zdjęcia samochodu z logo CARVELO">'+
            '<button type="button" class="secondary" data-photo-action="accept_ai" data-photo-id="'+esc(p.id)+
            '" data-version-id="'+esc(p.ai_candidate.id)+'">Zastosuj wersję AI do moderacji</button></div>':"");
-   const manualMask=staff&&p.photo_type==="interior"&&p.preview_url?
+   const manualMask=staff&&!isPublished&&p.photo_type==="interior"&&p.preview_url?
        '<button type="button" class="secondary" data-photo-action="mark_windows" data-photo-id="'+esc(p.id)+
        '" data-photo-preview="'+esc(p.preview_url)+'">🎯 Zaznacz widok za szybą</button>':"";
    const controls=manualMask+(staff&&p.state==="review"?(btn("approve","Zatwierdź","secondary")+btn("reject","Odrzuć","danger")):"")+
