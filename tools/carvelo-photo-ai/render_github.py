@@ -1,0 +1,69 @@
+"""CARVELO: segment real vehicle pixels, compose approved showroom, apply canonical logo.
+Only exterior photos are handled. Output is review-only: no automatic publishing.
+"""
+import os,io,json,hashlib,pathlib,requests,sys
+from PIL import Image,ImageOps,ImageDraw
+import cairosvg
+from rembg import remove,new_session
+from broker import oidc,URL,post
+
+ROOT=pathlib.Path(__file__).resolve().parents[2]
+JOB=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"carvelo-job.json").read_text())
+SCENE=ROOT/"assets/brand/carvelo-showroom-v1.webp"
+LOGO=ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
+
+def render():
+ if not JOB or JOB.get("type")!="exterior" or JOB.get("mode")!="showroom_exterior":
+    raise ValueError("only_exterior_full_vehicle_supported")
+ if not SCENE.is_file() or not LOGO.is_file():raise RuntimeError("missing_official_scene_or_logo")
+ original_url=JOB["original_url"]
+ source=requests.get(original_url,timeout=55)
+ source.raise_for_status()
+ if len(source.content)>6_000_000:raise ValueError("source_size_limit")
+ with Image.open(io.BytesIO(source.content)) as img:
+  img=ImageOps.exif_transpose(img)
+  if img.width*img.height>12000000:raise ValueError("source_pixel_limit")
+  img=img.convert("RGBA")
+  img.thumbnail((1400,1400),Image.Resampling.LANCZOS)
+ # Keep original vehicle pixels; rembg only computes segmentation/alpha mask.
+ inp=io.BytesIO();img.convert("RGB").save(inp,format="PNG")
+ cut=remove(inp.getvalue(),session=new_session("u2net"))
+ with Image.open(io.BytesIO(cut)) as fg: foreground=fg.convert("RGBA")
+ if foreground.size!=img.size:foreground=foreground.resize(img.size,Image.Resampling.BILINEAR)
+ alpha=foreground.getchannel("A")
+ # A conservative mask-quality gate. Marginal masks remain unpublished and are flagged.
+ import numpy as np
+ matte=np.asarray(alpha,dtype=np.uint8)
+ coverage=float((matte>48).mean())
+ opaque=float((matte>238).mean())
+ if coverage<.12 or coverage>.86 or opaque<.08:raise ValueError("mask_quality_unreliable")
+ # Only original car pixels are visible; no generative reconstruction of body or wheels.
+ with Image.open(SCENE) as base:
+  background=ImageOps.fit(base.convert("RGB"),img.size,method=Image.Resampling.LANCZOS).convert("RGBA")
+ background.alpha_composite(foreground)
+ logo_data=cairosvg.svg2png(url=str(LOGO),output_width=max(110,min(280,round(background.width*.18))))
+ with Image.open(io.BytesIO(logo_data)) as lm: logo=lm.convert("RGBA")
+ safe=max(12,round(background.width*.03))
+ x=background.width-logo.width-safe-14
+ y=background.height-logo.height-safe-11
+ ImageDraw.Draw(background,"RGBA").rounded_rectangle((x-12,y-9,x+logo.width+12,y+logo.height+9),
+    radius=10,fill=(8,24,40,224))
+ background.alpha_composite(logo,(x,y))
+ result=io.BytesIO()
+ background.convert("RGB").save(result,format="PNG",optimize=True)
+ body=result.getvalue()
+ if len(body)>6_500_000:raise ValueError("output_too_large")
+ h={"Authorization":"Bearer "+oidc()}
+ res=requests.post(URL,data={
+   "action":"complete","job_id":JOB["id"],"photo_id":JOB["photo_id"],"offer_id":JOB["offer_id"]
+ },files={"file":("carvelo-branded.png",body,"image/png")},headers=h,timeout=100)
+ if not res.ok:raise RuntimeError("broker_complete_"+str(res.status_code))
+ print("CARVELO AI candidate created for moderation. Source pixels kept; official logo embedded.")
+if __name__=="__main__":
+ try:render()
+ except Exception as exc:
+  reason=str(exc)[:90].replace("\n"," ").replace("\r"," ")
+  print("CARVELO worker:",reason,file=sys.stderr)
+  try:post("fail",{"job_id":JOB["id"],"error_code":reason})
+  except Exception as ex:print("Could not mark failure:",type(ex).__name__,file=sys.stderr)
+  raise SystemExit(1)
