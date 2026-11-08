@@ -4,7 +4,7 @@
 **Docelowy interfejs:** \`/panel/\`; **backend:** Supabase Auth, PostgreSQL, Storage oraz funkcje serwerowe.
 
 ## 1. Cel biznesowy
-Wszystkie fotografie **publikowane w CARVELO** mają mieć jednakowy, premium charakter. **Każde zdjęcie i każda publiczna miniatura muszą mieć trwale naniesione logo CARVELO** (watermark zapisany w pikselach pliku, nigdy tylko nakładka CSS). Fotografie całych samochodów z zewnątrz mają — po pomyślnej weryfikacji jakości — otrzymywać spójne tło wirtualnego salonu CARVELO. Wnętrza, elementy wyposażenia i detale zachowują oryginalne tło. Sam samochód, kolor lakieru, koła, proporcje, logo producenta i wyposażenie nigdy nie mogą być generatywnie zmieniane.
+Wszystkie fotografie **publikowane w CARVELO** mają mieć jednakowy, premium charakter. **Każde zdjęcie i każda publiczna miniatura muszą mieć trwale naniesione logo CARVELO** (watermark zapisany w pikselach pliku, nigdy tylko nakładka CSS). Fotografie całych samochodów z zewnątrz mają — po pomyślnej weryfikacji jakości — otrzymywać spójne tło wirtualnego salonu CARVELO. Wnętrza i detale zachowują wszystkie elementy auta i jego wyposażenia; dopuszcza się selektywną podmianę **wyłącznie otoczenia widocznego przez szyby**, jeśli można je bezpiecznie odseparować od refleksów i elementów wnętrza. Sam samochód, kolor lakieru, koła, proporcje, logo producenta i wyposażenie nigdy nie mogą być generatywnie zmieniane.
 
 **Rozróżnienie:** prywatny oryginał techniczny pozostaje bez znakowania, aby możliwa była ponowna obróbka; nigdy nie jest publikowany ani udostępniany przez publiczne API. Wersja na stronie, w karcie samochodu, miniaturach i eksporcie zawsze zawiera logo.
 
@@ -14,8 +14,8 @@ Wszystkie fotografie **publikowane w CARVELO** mają mieć jednakowy, premium ch
 | --- | --- | --- | --- |
 | Zewnętrzne ujęcie całego samochodu | Tak, o ile maska i klasyfikacja spełniają progi jakości | **Obowiązkowe** | Zachowaj samochód pikselowo, z zachowaniem geometrii; można dopasować tło, cień i kolorystykę *otoczenia* |
 | Zewnętrzny kadr z uciętym samochodem, niepewna maska | Nie; oryginalne tło + kolejka do weryfikacji | **Obowiązkowe** | Nie ryzykuj „dorabiania” części auta |
-| Wnętrze (kabina, kokpit, fotele, bagażnik od środka) | **Nigdy** | **Obowiązkowe** | Bez zmiany układu i obiektów; tylko korekta ekspozycji / balansu bieli |
-| Detale (lampy, felgi, logo producenta, silnik, tapicerka itd.) | **Nigdy** | **Obowiązkowe** | Nie retuszuj cech wpływających na opis oferty |
+| Wnętrze (kabina, kokpit, fotele, bagażnik od środka) | **Tylko widok za szybami, jeśli maska jest pewna** | **Obowiązkowe** | Bez zmian elementów kabiny, słupków, uszczelek, szyb i refleksów; fallback: oryginalny widok + logo |
+| Detale (lampy, felgi, logo producenta, silnik, tapicerka itd.) | **Zwykle nie**; tylko jednoznaczny widok przez szybę | **Obowiązkowe** | Nie retuszuj cech wpływających na opis oferty; gdy maska niepewna, tło bez zmian |
 | Materiał nierozpoznany / błąd AI | Nie; zachowaj tło, oznacz „do sprawdzenia” | **Obowiązkowe** | Bezpieczny fallback, żadnej automatycznej zamiany tła |
 | Materiał niebędący prawidłową fotografią pojazdu | Nie publikuj automatycznie | — | Odrzuć lub skieruj do moderacji |
 
@@ -60,11 +60,11 @@ W istniejącym formularzu dodawania/edycji oferty dodać sekcję **Zdjęcia**:
 - Drag & drop lub przycisk „Dodaj zdjęcia” (multi-upload, także telefon).
 - Licznik, miniatury, postęp osobno dla każdego pliku.
 - W każdym kafelku: **Oryginał techniczny** (dostępny wyłącznie uprawnionemu personelowi do porównania), **Zdjęcie CARVELO** (z logo), typ rozpoznania, status, ewentualny powód ręcznej weryfikacji.
-- Ustawienie dla zewnętrznych: \`Wirtualny salon CARVELO\` / \`Oryginalne tło\`. Wnętrze/detal: wybór salonu niedostępny.
+- Ustawienie dla zewnętrznych: \`Wirtualny salon CARVELO\` / \`Oryginalne tło\`. Wnętrze: osobna opcja \`Zamień tylko widok za szybami\` / \`Oryginalny widok\`; dla detali domyślnie brak zmian.
 - Pole „Logo CARVELO: **Zawsze włączone**” jako informacja (nie checkbox, nie do wyłączenia).
 - Działania: „Podejrzyj”, „Zaakceptuj”, „Odrzuć”, „Przetwórz ponownie”, „Ustaw jako główne”, „Zmień kolejność”, „Usuń”.
 - Statusy: \`uploaded\` → \`queued\` → \`classifying\` → \`processing\` → \`review\` → \`approved\` lub \`failed\` / \`rejected\`.
-- Po ściśle określonym błędzie AI: pokaż opcję „Zachowaj oryginalne tło + dodaj logo”; dla wnętrza/detalu zawsze w ten sposób.
+- Po błędzie AI lub niepewnej masce: pokaż opcję „Zachowaj oryginalne tło + dodaj logo”; również dla widoku przez szyby, gdy nie można zagwarantować ochrony wnętrza.
 - Przed publikacją wymagane co najmniej jedno zaakceptowane zdjęcie główne z logo (warunek po stronie backendu). Pozostałe mogą czekać na obróbkę, lecz nie trafią do galerii aż do akceptacji.
 
 ### 5.1 Stany wyjątkowe
@@ -179,7 +179,7 @@ Wstępne parametry konfigurowalne:
 ## 10. Akceptacja, bezpieczeństwo, testy
 **Kryteria odbioru MVP (wszystkie obowiązkowe):**
 1. Każda publicznie widoczna fotografia i miniatura zawiera rzeczywiście wypalone, czytelne logo CARVELO.
-2. Zdjęcia wnętrza i detalu nigdy nie otrzymują nowego tła, również po ręcznym przeklasyfikowaniu.
+2. Zdjęcia wnętrza i detalu zachowują nienaruszone elementy samochodu. Dopuszcza się zmianę jedynie precyzyjnie rozpoznanego widoku **za szybą**, z zachowaniem refleksów, uszczelek i elementów pojazdu; w pozostałych przypadkach brak zmiany tła.
 3. Zewnętrzny samochód zachowuje geometrię, kolor, detale; przy niepewnej masce fallback do oryginalnego tła + logo.
 4. Dealer A nie może podglądać, moderować ani usuwać prywatnych zdjęć dealera B; testować także bezpośrednio przez Storage API / REST.
 5. Nieopublikowany samochód nie ujawnia zdjęć ani prywatnych URL-i użytkownikom anonimowym.
@@ -196,14 +196,14 @@ Wstępne parametry konfigurowalne:
 ## 11. Plan implementacji (kolejność prac)
 **Faza A — fundamenty:** zatwierdzić oficjalne logo i asset salonu; przygotować migrację DB, buckety private/public, Storage RLS, uprawnienia, testy negatywne.  
 **Faza B — upload i logo:** podpisany upload, walidacja, worker bez AI, watermark każdej fotografii, formaty i warianty, moderacja. **To pierwszy bezpieczny release MVP.**  
-**Faza C — inteligentne tło:** klasyfikacja zewnętrzne/wnętrze/detal; bezpieczna segmentacja i kompozycja wyłącznie zewnętrznych pełnych ujęć; fallback bez zmiany tła.  
+**Faza C — inteligentne tło:** klasyfikacja zewnętrzne/wnętrze/detal; bezpieczna segmentacja i kompozycja pełnych aut z zewnątrz oraz osobna maska widoku za szybami wnętrza; fallback bez zmiany tła.  
 **Faza D — publikacja i katalog:** ograniczenia DB/server na publikację, galeria oferty i zdjęcie główne, publiczne warianty, cache invalidation, integracja z \`catalog-live.js\`.  
 **Faza E — testy i operacje:** e2e dealer/admin, visual QA, koszty na zdjęcie, monitoring workerów, błędów i limitów, dokumentacja.
 
 **Decyzje do zatwierdzenia przed implementacją:** ostateczny plik logo CARVELO i logo_version; jedna scena salonu CARVELO; dostawca segmentacji/worker i jego koszty; limit zdjęć; zasady retencji oryginałów. Te decyzje nie blokują rozpoczęcia projektowania DB/UX ani samego modułu watermarkowania.
 
 ## 12. Definition of Done
-Wersję MVP można uznać za gotową dopiero gdy: istnieje działający upload w obecnym \`/panel/\`, zdjęcia przetwarzane są na serwerze, oryginały pozostają prywatne, logo widnieje na 100% publicznych wariantów, wnętrza i detale pozostają nietknięte pod względem tła, kontrola RLS i publikacja są egzekwowane po stronie backendu, galeria pojawia się na publicznej karcie samochodu, a testy jakości i bezpieczeństwa przechodzą pozytywnie.
+Wersję MVP można uznać za gotową dopiero gdy: istnieje działający upload w obecnym \`/panel/\`, zdjęcia przetwarzane są na serwerze, oryginały pozostają prywatne, logo widnieje na 100% publicznych wariantów, elementy wnętrza i detali pozostają nietknięte, a modyfikacja dotyczy co najwyżej otoczenia widocznego przez szyby, kontrola RLS i publikacja są egzekwowane po stronie backendu, galeria pojawia się na publicznej karcie samochodu, a testy jakości i bezpieczeństwa przechodzą pozytywnie.
 
 ---
 **Status dokumentu:** specyfikacja do realizacji. **Brak jeszcze działającego modułu fotograficznego w panelu lub bazie**; żadne schematy, Storage ani funkcje AI nie zostały utworzone przez zapisanie niniejszego dokumentu.
@@ -212,3 +212,6 @@ Wersję MVP można uznać za gotową dopiero gdy: istnieje działający upload w
 - Supabase Storage RLS: https://supabase.com/docs/guides/storage/security/access-control
 - Supabase Edge Functions: https://supabase.com/docs/guides/functions
 - Supabase PostgreSQL RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
+
+
+**Aktualizacja 2026-11-08:** szczegóły selektywnej zmiany widoku za szybami, maskowania szyb, etapów realizacji i testów znajdują się w `docs/PLAN_WDROZENIA_AI_TLO_SZYBY_CARVELO.md`. Zasada nadrzędna: wszystkie publikowane zdjęcia mają dokładnie ten sam oficjalny znak CARVELO.
