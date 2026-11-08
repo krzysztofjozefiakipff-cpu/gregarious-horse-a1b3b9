@@ -24,7 +24,7 @@ async function authenticate(req:Request){
     payload.workflow_ref!==WORKFLOW||
     payload.ref!=="refs/heads/main"||
     payload.repository_visibility!=="public"||
-    !["schedule","workflow_dispatch"].includes(String(payload.event_name||""))||
+    !["schedule","workflow_dispatch","push"].includes(String(payload.event_name||""))||
     payload.runner_environment!=="github-hosted"||
     !/^[0-9]{5,32}$/.test(String(payload.run_id||"")))
    throw new Error("github_workflow_not_authorized");
