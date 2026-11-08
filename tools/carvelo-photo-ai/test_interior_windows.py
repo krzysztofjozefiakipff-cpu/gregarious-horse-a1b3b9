@@ -1,7 +1,7 @@
 """Local mask safety tests, no external model and no personal photos required."""
 import numpy as np
 from PIL import Image
-from interior_windows import compose_view,UnsafeWindowMask
+from interior_windows import compose_view,compose_staff_window_mask,UnsafeWindowMask
 
 w,h=640,480
 original=Image.new("RGBA",(w,h),(73,64,51,255))
@@ -22,4 +22,19 @@ except UnsafeWindowMask:
   pass
 else:
   raise AssertionError("Full-frame scene was not rejected")
+# Staff-selected window-only polygon must not alter dashboard, pillars or unselected pixels.
+staff_polygons=[[[.15,.12],[.86,.12],[.86,.41],[.15,.41]]]
+manual_out,manual_coverage=compose_staff_window_mask(original,background,staff_polygons)
+actual=np.asarray(manual_out.convert("RGB"))
+assert .10 < manual_coverage < .26
+assert np.array_equal(actual[350:,:,:],base[350:,:,:]),"Manual masking touched dashboard"
+assert np.array_equal(actual[:,0:60,:],base[:,0:60,:]),"Manual masking touched pillars"
+assert (actual[105,200,:]!=base[105,200,:]).any(),"Manual mask did not replace scenery"
+try:
+  compose_staff_window_mask(original,background,[[[0,0],[1,0],[1,.99],[0,.99]]])
+except UnsafeWindowMask:
+  pass
+else:
+  raise AssertionError("Unsafe large manual polygon passed")
+print("MANUAL WINDOW MASK SAFETY PASS",w,h,round(manual_coverage,3))
 print("INTERIOR MASK SAFETY PASS",w,h,round(fraction,3))
