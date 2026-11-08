@@ -12,22 +12,23 @@ const escape=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">"
 const isActive=j=>j&&["queued","processing"].includes(j.state);
 const percent=j=>j?.state==="queued"?0:Math.max(0,Math.min(100,Number(j?.progress_percent)||0));
 const stage=j=>stages[j?.state==="queued"?"queued":j?.progress_stage]||stages[j?.state]||"Przetwarzanie";
-function duration(iso){
+function duration(iso,finishedAt){
  const t=Date.parse(iso||"");
  if(!Number.isFinite(t))return "—";
- const s=Math.max(0,Math.floor((Date.now()-t)/1000));
+ const end=Date.parse(finishedAt||"");
+ const s=Math.max(0,Math.floor(((Number.isFinite(end)?end:Date.now())-t)/1000));
  const h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=s%60;
  return h?h+" godz. "+String(m).padStart(2,"0")+" min":m+" min "+String(sec).padStart(2,"0")+" s";
 }
 export function progressMarkup(photoId,job){
- if(!isActive(job))return "";
- const pc=percent(job),started=job.state==="queued"?job.created_at:(job.started_at||job.created_at);
+ if(!isActive(job)&&job?.state!=="review")return "";
+ const pc=job.state==="review"?100:percent(job),started=job.state==="queued"?job.created_at:(job.started_at||job.created_at);
  return '<div class="cv-ai-progress" data-progress-photo="'+escape(photoId)+'">'+
  '<div class="cv-ai-head"><strong data-ai-stage>'+escape(stage(job))+'</strong><b data-ai-value>'+pc+'%</b></div>'+
  '<div class="cv-ai-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pc+'" aria-label="Postęp obróbki zdjęcia">'+
  '<span class="cv-ai-fill" style="width:'+pc+'%"></span></div>'+
- '<small data-ai-elapsed data-job-state="'+escape(job.state)+'" data-start="'+escape(started)+'">'+
- (job.state==="queued"?"Czas oczekiwania: ":"Czas obróbki: ")+duration(started)+'</small>'+
+ '<small data-ai-elapsed data-job-state="'+escape(job.state)+'" data-start="'+escape(started)+'" data-finished="'+escape(job.finished_at||"")+'">'+
+ (job.state==="queued"?"Czas oczekiwania: ":"Czas obróbki: ")+duration(started,job.finished_at)+'</small>'+
  '<small class="cv-ai-disclaimer">Procent oznacza zakończone etapy, nie przewidywany czas.</small></div>';
 }
 export function stopPhotoProgress(){
@@ -38,7 +39,7 @@ export function stopPhotoProgress(){
 function tickElapsed(){
  if(document.hidden)return;
  for(const el of document.querySelectorAll("#photoList [data-ai-elapsed]")){
-  el.textContent=(el.dataset.jobState==="queued"?"Czas oczekiwania: ":"Czas obróbki: ")+duration(el.dataset.start);
+  el.textContent=(el.dataset.jobState==="queued"?"Czas oczekiwania: ":"Czas obróbki: ")+duration(el.dataset.start,el.dataset.finished);
  }
 }
 export function startPhotoProgress(rows,options){
