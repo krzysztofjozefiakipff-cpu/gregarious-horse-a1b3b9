@@ -23,7 +23,12 @@
     .statusbar{position:sticky;bottom:0;z-index:40;max-width:1300px;margin:auto;padding:0 22px 12px}.statusbar span{display:block;background:#092437;color:white;padding:13px 17px;max-width:max-content;border-radius:11px;box-shadow:0 10px 35px #152e3b45;font-size:13px}.statusbar span.error{background:#a41926}
     footer{padding:30px 22px;text-align:center;background:#081522;color:#afc0ce;font-size:12px}
     @media(max-width:760px){main{padding:26px 13px 60px}.surface{padding:24px;margin:16px auto}.top{padding:13px 15px}.logo{font-size:24px}.security{display:none}.cards{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.col-full{grid-column:auto}.block{padding:20px}.heading h1{font-size:28px}.table{min-width:670px}.form-buttons{justify-content:stretch}.form-buttons button{flex:1}}
-  </style>
+  .photo-before-after{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}
+.photo-before-after figure{margin:0;min-width:0;border:1px solid #d5dde6;background:#eef2f6;border-radius:10px;padding:8px}
+.photo-before-after figcaption{font-size:12px;font-weight:700;color:#27384a;margin-bottom:7px}
+.photo-before-after img{width:100%;height:auto;max-height:340px;object-fit:contain;display:block;border-radius:7px}
+@media(max-width:690px){.photo-before-after{grid-template-columns:1fr}}
+</style>
 <style id="carvelo-canonical-logo">.logo img{display:block;width:169px;height:auto;max-width:44vw}.logo{display:inline-flex;align-items:center;text-decoration:none}</style><style id="carvelo-photo-panel-style">
 .photo-upload-part{background:#f3f7fa;border:1px solid #dfe7ed;padding:20px;border-radius:15px;margin:20px 0}
 .photo-upload-part h3{font-size:19px;margin:0 0 12px}.photo-required{display:inline-block;font-size:11px;border-radius:99px;background:#102c43;color:white;padding:5px 9px;margin-left:10px;vertical-align:middle}
