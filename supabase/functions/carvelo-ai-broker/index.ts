@@ -92,7 +92,28 @@ Deno.serve(async(req:Request)=>{
      const path=offerId+"/"+photoId+"/ai/"+crypto.randomUUID()+".png";
      const uploaded=await admin.storage.from(BUCKET).upload(path,bytes,{contentType:"image/png",cacheControl:"0",upsert:false});
      if(uploaded.error)throw uploaded.error;
-     const completed=await admin.rpc("cv_ai_complete",{p_job:jobId,p_run_id:runId,p_result_path:path});
+     const claimed=await admin.from("cv_photo_jobs").select("target_mode")
+       .eq("id",jobId).single();
+     if(claimed.error)throw claimed.error;
+     const isWindow=claimed.data.target_mode==="showroom_windows";
+     const changedValue=String(form.get("window_view_changed")??"");
+     if(isWindow&&!["true","false"].includes(changedValue)){
+       await admin.storage.from(BUCKET).remove([path]);
+       return reply({error:"Missing window QA state"},400);
+     }
+     const confidenceRaw=String(form.get("mask_confidence")??"");
+     const confidence=confidenceRaw!==""?Number(confidenceRaw):null;
+     if(confidence!==null&&(!Number.isFinite(confidence)||confidence<0||confidence>1)){
+       await admin.storage.from(BUCKET).remove([path]);
+       return reply({error:"Invalid mask confidence"},400);
+     }
+     const reason=String(form.get("review_required_reason")??"").slice(0,120);
+     const completed=await admin.rpc("cv_ai_complete_v2",{
+       p_job:jobId,p_run_id:runId,p_result_path:path,
+       p_window_changed:isWindow?changedValue==="true":null,
+       p_mask_confidence:isWindow?confidence:null,
+       p_review_reason:isWindow?(reason||null):null
+     });
      if(completed.error){
        await admin.storage.from(BUCKET).remove([path]);
        throw completed.error;
