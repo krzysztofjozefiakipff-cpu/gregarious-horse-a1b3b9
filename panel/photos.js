@@ -3,6 +3,17 @@ let getClient, notify, getRole, activeId=null, busy=false;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const labels={review:"Do zatwierdzenia",approved:"Zatwierdzone",rejected:"Odrzucone"};
+function aiErrorLabel(code){
+ if(!code)return "";
+ const value=String(code);
+ if(value.startsWith("window_mask_uncertain")||value.startsWith("window_core_not_safe")||value==="window_mask_reaches_interior")
+  return "Nie rozpoznano bezpiecznie widoku za szybą. Zachowano oryginał z logo CARVELO.";
+ if(value==="window_no_visible_view")
+  return "Na zdjęciu nie wykryto widoku na zewnątrz. Tło pozostało bez zmian.";
+ if(value.startsWith("mask_quality_unreliable"))
+  return "Maska tła wymaga kontroli. Oryginalne zdjęcie pozostaje bez zmian.";
+ return "Przetwarzanie nie powiodło się. Oryginał został zachowany.";
+}
 async function callFunction(body){
  const client=getClient();if(!client)throw Error("Zaloguj się ponownie.");
  const res=await client.functions.invoke("carvelo-photos",{body});
@@ -40,7 +51,7 @@ export async function refreshPhotos(){
    const classify=staff?'<div class="photo-type-edit"><label>Typ zdjęcia <select data-photo-select>'+categoryOptions+
        '</select></label>'+btn("classify","Zapisz typ","secondary")+'</div>':"";
    const ai=(p.ai_job?'<small>AI: '+esc(({queued:"W kolejce",processing:"Przetwarzanie",review:"Do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowane"})[p.ai_job.state]||p.ai_job.state)+
-       (p.ai_job.error_code?' — '+esc(p.ai_job.error_code):'')+'</small>':"")+
+       (p.ai_job.error_code?' — '+esc(aiErrorLabel(p.ai_job.error_code)):'')+'</small>':"")+
        (((aiEnabled&&p.photo_type==="exterior")||(windowsEnabled&&p.photo_type==="interior"))
           && !["queued","processing"].includes(p.ai_job?.state)
           ?btn("request_ai",p.photo_type==="interior"?"Zmień widok za szybami (BETA)":"Przetwórz w salonie AI (BETA)","secondary"):"")+
