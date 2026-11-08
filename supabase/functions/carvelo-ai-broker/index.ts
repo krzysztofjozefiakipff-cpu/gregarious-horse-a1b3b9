@@ -108,12 +108,20 @@ Deno.serve(async(req:Request)=>{
        return reply({error:"Invalid mask confidence"},400);
      }
      const reason=String(form.get("review_required_reason")??"").slice(0,120);
-     const completed=await admin.rpc("cv_ai_complete_v2",{
+     const scene=String(form.get("scene_version")||"");
+     if(scene!=="studio-v2"&&scene!=="showroom-v1"){
+       await admin.storage.from(BUCKET).remove([path]);
+       return reply({error:"Unsupported scene"},400);
+     }
+     const args={
        p_job:jobId,p_run_id:runId,p_result_path:path,
        p_window_changed:isWindow?changedValue==="true":null,
        p_mask_confidence:isWindow?confidence:null,
        p_review_reason:isWindow?(reason||null):null
-     });
+     };
+     const completed=scene==="studio-v2"
+       ?await admin.rpc("cv_ai_complete_v3",{...args,p_scene_version:scene})
+       :await admin.rpc("cv_ai_complete_v2",args);
      if(completed.error){
        await admin.storage.from(BUCKET).remove([path]);
        throw completed.error;
