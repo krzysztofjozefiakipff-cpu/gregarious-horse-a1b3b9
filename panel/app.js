@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
+import {initPhotoControls,selectPhotos,clearPhotos,uploadOfferPhotos} from "./photos.js";
 
 const $ = (id) => document.getElementById(id);
 const dom = {
@@ -119,6 +120,7 @@ function renderOffers() {
   dom.offersBody.innerHTML=offers.map((o)=>{
     const controls=[
       canEdit(o)?'<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="edit">Edytuj</button>':"",
+      (canEdit(o)||internal())?'<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="photos">📷 Zdjęcia</button>':"",
       canChangeStatus()&&o.status!=="published"?
         '<button type="button" class="secondary" data-offer="'+esc(o.id)+'" data-action="publish">Publikuj</button>':"",
       canChangeStatus()&&o.status!=="rejected"?
@@ -162,6 +164,7 @@ function clearOfferForm(){
   $("saveOfferBtn").textContent="Dodaj ofertę →";
   $("cancelEditBtn").hidden=true;
   fillDealerOptions();
+  clearPhotos();
 }
 async function saveOffer(event){
   event.preventDefault();
@@ -179,6 +182,11 @@ async function saveOffer(event){
   };
   const button=$("saveOfferBtn");button.disabled=true;
   try{
+    let savedId=editingId;
+    if(!editingId && payload.status==="published"){
+      payload.status="pending";
+      notify("Najpierw zapisz zdjęcia i zatwierdź fotografię główną. Oferta zostanie zapisana jako oczekująca.");
+    }
     if(editingId){
       const result=await client.from("cv_offers").update(payload).eq("id",editingId)
         .select("id").maybeSingle();
@@ -187,11 +195,23 @@ async function saveOffer(event){
       notify("Oferta została zaktualizowana.");
     } else {
       const result=await client.from("cv_offers").insert(payload).select("id").single();
-      must(result,"Dodanie oferty");
-      notify("Oferta zapisana w centralnej bazie.");
+      const saved=must(result,"Dodanie oferty");
+      savedId=saved?.id;
+      notify("Oferta zapisana w bazie. Teraz możesz dodać i zatwierdzić zdjęcia.");
     }
-    clearOfferForm();
     await refreshData();
+    if(savedId){
+      editingId=savedId;
+      const savedOffer=offers.find((o)=>o.id===savedId);
+      if(savedOffer){
+        $("offerFormTitle").textContent="Edytuj ofertę";
+        $("saveOfferBtn").textContent="Zapisz zmiany →";
+        $("cancelEditBtn").hidden=false;
+        selectPhotos(savedId,savedOffer.brand+" "+savedOffer.model);
+      }
+      if($("photoFiles").files?.length)await uploadOfferPhotos();
+      $("photoBlock").scrollIntoView({behavior:"smooth",block:"start"});
+    }
   }catch(error){notify(error.message||String(error),true)}
   finally{button.disabled=false}
 }
@@ -206,6 +226,7 @@ function editOffer(id){
   $("offerFormTitle").textContent="Edytuj ofertę";
   $("saveOfferBtn").textContent="Zapisz zmiany →";
   $("cancelEditBtn").hidden=false;
+  selectPhotos(id,o.brand+" "+o.model);
   $("offerFormBlock").scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function changeOfferStatus(id, status){
@@ -267,10 +288,11 @@ async function logIn(event){
 }
 async function logOut(){
   if(client)await client.auth.signOut();
-  user=null;profile=null;offers=[];accounts=[];clearOfferForm();show(dom.login);
+  user=null;profile=null;offers=[];accounts=[];clearOfferForm();clearPhotos();show(dom.login);
   notify("Wylogowano.");
 }
 function attach(){
+  initPhotoControls(()=>client,notify,()=>profile?.role);
   $("loginForm").addEventListener("submit",logIn);
   $("logoutBtn").addEventListener("click",logOut);
   $("noAccessLogout").addEventListener("click",logOut);
@@ -284,6 +306,14 @@ function attach(){
     if(!btn)return;
     const id=btn.dataset.offer,action=btn.dataset.action;
     if(action==="edit")editOffer(id);
+    if(action==="photos"){
+      const offer=offers.find(o=>o.id===id);
+      if(offer && (canEdit(offer)||internal())){
+        if(canEdit(offer))editOffer(id);
+        else selectPhotos(id,offer.brand+" "+offer.model);
+        $("photoBlock").scrollIntoView({behavior:"smooth",block:"start"});
+      }
+    }
     if(action==="publish")await changeOfferStatus(id,"published");
     if(action==="reject")await changeOfferStatus(id,"rejected");
   });
