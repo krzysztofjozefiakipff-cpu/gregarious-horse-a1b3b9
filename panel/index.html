@@ -84,10 +84,10 @@
             <p class="muted">Wybierz zdjęcia już przy dodawaniu oferty. Po zapisaniu samochodu zostaną automatycznie przesłane i otrzymają logo CARVELO. Maks. 4 MB na plik: JPG, PNG, WebP.</p>
             <div class="grid">
               <label class="field">Wgraj zdjęcia samochodu<input id="photoFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
-              <label class="field">Rodzaj zdjęć<select id="photoType"><option value="unknown">Do weryfikacji (bez zmiany tła)</option><option value="exterior">Z zewnątrz</option><option value="interior">Wnętrze — bez zmiany tła</option><option value="detail">Detal — bez zmiany tła</option></select></label>
+              <label class="field">Rodzaj zdjęć<select id="photoType"><option value="unknown">Do weryfikacji (bez zmiany tła)</option><option value="exterior">Z zewnątrz</option><option value="interior">Wnętrze — widok przez szyby (BETA)</option><option value="detail">Detal — bez zmiany tła</option></select></label>
             </div>
             <p class="muted" id="photoSelection">Możesz wybrać kilka zdjęć jednocześnie.</p>
-            <p class="muted">BETA: dla zdjęć oznaczonych „Z zewnątrz” system automatycznie ustawia zadanie zmiany tła na salon CARVELO. Wynik pojawi się do zatwierdzenia w galerii; nie będzie publikowany bez akceptacji. Wnętrze i detale pozostają z oryginalnym tłem.</p>
+            <p class="muted">BETA: zdjęcia zewnętrzne otrzymują tło salonu CARVELO. Dla wnętrz testujemy osobny tryb, który zmienia tylko widok za szybami, bez naruszania kokpitu, foteli i elementów samochodu. Wyniki AI wymagają akceptacji. Detale pozostają bez zmian.</p>
           </div>
           <div class="form-buttons"><button type="reset" class="secondary" id="resetFormBtn">Wyczyść</button><button type="submit" class="primary" id="saveOfferBtn">Dodaj ofertę →</button></div>
         </form>
@@ -96,7 +96,7 @@
         <div class="bar"><div><span class="eyebrow">GALERIA CARVELO</span><h2>Zdjęcia oferty</h2><p class="muted" id="photoOfferLabel"></p></div><button id="uploadPhotoBtn" class="primary" type="button">Prześlij wybrane zdjęcia →</button></div>
         <p class="muted" id="photoStatus">Wszystkie fotografie są znakowane logo CARVELO.</p>
         <div id="photoList" class="photo-grid"></div>
-        <p class="muted">Akceptacja zdjęcia przez CARVELO jest wymagana przed publikacją. Zdjęcia wnętrza i detali zachowują oryginalne tło.</p>
+        <p class="muted">Akceptacja zdjęcia przez CARVELO jest wymagana przed publikacją. Wnętrze auta pozostaje nietknięte — w trybie BETA AI może zmieniać tylko otoczenie widoczne przez szyby. Detale zachowują oryginalne tło.</p>
       </section>
       <section class="block">
         <div class="bar"><div><span class="eyebrow">INWENTARZ</span><h2>Oferty samochodów</h2></div><span class="muted">Widoczność zależy od uprawnień konta</span></div>
