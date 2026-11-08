@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+ <title>CARVELO neutral studio 2.0 — blank wall and continuous concrete floor</title>
+ <defs>
+  <linearGradient id="wall" x1="0" x2="0" y1="0" y2="1">
+   <stop offset="0" stop-color="#cbd2d9"/>
+   <stop offset=".44" stop-color="#e6e9ec"/>
+   <stop offset="1" stop-color="#f0f1f2"/>
+  </linearGradient>
+  <radialGradient id="softlight" cx=".52" cy=".42" r=".63">
+   <stop offset="0" stop-color="#fff" stop-opacity=".42"/>
+   <stop offset=".65" stop-color="#fff" stop-opacity=".11"/>
+   <stop offset="1" stop-color="#3b4350" stop-opacity=".04"/>
+  </radialGradient>
+  <linearGradient id="ground" x1="0" x2="0" y1="0" y2="1">
+   <stop offset="0" stop-color="#c5cbd0"/>
+   <stop offset=".5" stop-color="#b9bfc5"/>
+   <stop offset="1" stop-color="#9ea8b2"/>
+  </linearGradient>
+  <radialGradient id="groundGlow" cx=".48" cy=".1" r=".9">
+   <stop offset="0" stop-color="#f8f9fa" stop-opacity=".39"/>
+   <stop offset=".65" stop-color="#f2f4f5" stop-opacity=".07"/>
+   <stop offset="1" stop-color="#1e2933" stop-opacity=".08"/>
+  </radialGradient>
+ </defs>
+ <rect width="1600" height="900" fill="url(#wall)"/>
+ <rect width="1600" height="900" fill="url(#softlight)"/>
+ <rect x="0" y="574" width="1600" height="326" fill="url(#ground)"/>
+ <rect x="0" y="574" width="1600" height="326" fill="url(#groundGlow)"/>
+ <path d="M0 573.5 H1600" stroke="#b8c0c6" stroke-width="1.5" opacity=".34"/>
+</svg>
