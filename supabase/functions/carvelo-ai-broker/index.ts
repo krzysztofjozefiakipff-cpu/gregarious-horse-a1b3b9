@@ -53,7 +53,7 @@ Deno.serve(async(req:Request)=>{
        // Download URL is short-lived, private and NEVER printed by the workflow.
        return reply({job:{id:job.job_id,photo_id:job.photo_id,offer_id:job.offer_id,
           type:job.photo_type,mode:job.target_mode,attempt:job.attempt,
-          original_url:signed.data.signedUrl}});
+          original_url:signed.data.signedUrl,window_polygons:job.window_polygons??null}});
      }
      if(payload.action==="fail"){
        const id=String(payload.job_id||"");
