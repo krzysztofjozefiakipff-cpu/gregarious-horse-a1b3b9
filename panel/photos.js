@@ -61,7 +61,10 @@ export async function refreshPhotos(){
            '<img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI zdjęcia samochodu z logo CARVELO">'+
            '<button type="button" class="secondary" data-photo-action="accept_ai" data-photo-id="'+esc(p.id)+
            '" data-version-id="'+esc(p.ai_candidate.id)+'">Zastosuj wersję AI do moderacji</button></div>':"");
-   const controls=(staff&&p.state==="review"?(btn("approve","Zatwierdź","secondary")+btn("reject","Odrzuć","danger")):"")+
+   const manualMask=staff&&p.photo_type==="interior"&&p.preview_url?
+       '<button type="button" class="secondary" data-photo-action="mark_windows" data-photo-id="'+esc(p.id)+
+       '" data-photo-preview="'+esc(p.preview_url)+'">🎯 Zaznacz widok za szybą</button>':"";
+   const controls=manualMask+(staff&&p.state==="review"?(btn("approve","Zatwierdź","secondary")+btn("reject","Odrzuć","danger")):"")+
       (staff&&p.state==="approved"&&!p.is_cover?btn("cover","Ustaw główne","secondary"):"")+btn("delete","Usuń","secondary");
    return '<article class="photo-card"><div class="photo-preview">'+(p.preview_url?'<img src="'+esc(p.preview_url)+'" alt="Zdjęcie samochodu z logo CARVELO" loading="lazy">':'Brak podglądu')+
     '</div><div class="photo-desc"><strong>'+(p.is_cover?'★ Główne':'Zdjęcie')+'</strong><span>'+esc(labels[p.state]||p.state)+'</span>'+
@@ -104,8 +107,94 @@ async function act(action,id,extra={}){
  }catch(e){notify(e.message,true)}
  finally{loading(false);await refreshPhotos().catch(e=>notify(e.message,true))}
 }
+let maskPhotoId="",maskBase=null,maskPoints=[],maskPolygons=[];
+function drawMaskPreview(){
+ const canvas=$("windowMaskCanvas");
+ if(!maskBase||!canvas)return;
+ const ctx=canvas.getContext("2d");
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.drawImage(maskBase,0,0,canvas.width,canvas.height);
+ const trace=(points,closed)=>{
+   if(!points.length)return;
+   ctx.beginPath();
+   ctx.moveTo(points[0][0]*canvas.width,points[0][1]*canvas.height);
+   for(const pt of points.slice(1))ctx.lineTo(pt[0]*canvas.width,pt[1]*canvas.height);
+   if(closed){ctx.closePath();ctx.fillStyle="rgba(0,164,231,.25)";ctx.fill();}
+   ctx.lineWidth=Math.max(3,canvas.width*.004);
+   ctx.strokeStyle=closed?"#19BFFB":"#FF6A6A";ctx.stroke();
+   for(const [x,y] of points){ctx.beginPath();ctx.arc(x*canvas.width,y*canvas.height,
+     Math.max(5,canvas.width*.006),0,Math.PI*2);ctx.fillStyle="#E6F8FF";ctx.fill();}
+ };
+ for(const polygon of maskPolygons)trace(polygon,true);
+ trace(maskPoints,false);
+ $("windowMaskStatus").textContent=maskPolygons.length+" zamkniętych obszarów. "+
+   (maskPoints.length?("Teraz zaznaczono "+maskPoints.length+" punktów — zamknij obszar."):
+   "Kliknij punkty wzdłuż widoku za szybą (maksymalnie 6 obszarów).");
+}
+function openWindowMask(photoId,imageUrl){
+ if(busy||!["admin","staff"].includes(getRole()))return;
+ const dialog=$("windowMaskDialog");
+ maskPhotoId=photoId;maskPoints=[];maskPolygons=[];maskBase=null;
+ $("windowMaskStatus").textContent="Ładowanie zdjęcia…";
+ const img=new Image();
+ img.onload=()=>{
+  if(maskPhotoId!==photoId)return;
+  maskBase=img;
+  const canvas=$("windowMaskCanvas");
+  canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+  drawMaskPreview();
+ };
+ img.onerror=()=>{
+  $("windowMaskStatus").textContent="Brak dostępu do podglądu. Odśwież galerię.";
+ };
+ img.src=imageUrl;
+ dialog.showModal();
+}
+async function submitWindowMask(){
+ if(busy||!activeId||!maskPhotoId)return;
+ if(maskPoints.length){
+  $("windowMaskStatus").textContent="Najpierw zamknij aktualny obszar.";
+  return;
+ }
+ if(!maskPolygons.length){$("windowMaskStatus").textContent="Zaznacz co najmniej jeden obszar za szybą.";return;}
+ const photoId=maskPhotoId, offerId=activeId;
+ loading(true);$("windowMaskStatus").textContent="Zlecam bezpieczny montaż tła CARVELO…";
+ try{
+  await callFunction({action:"request_ai",offer_id:offerId,photo_id:photoId,window_polygons:maskPolygons});
+  notify("Zlecono wersję ze wskazanym widokiem za szybami. Oryginał i wnętrze pozostają bez zmian.");
+  $("windowMaskDialog").close();maskPhotoId="";maskPolygons=[];maskPoints=[];
+ }catch(e){
+  $("windowMaskStatus").textContent=e.message;
+  notify("Maska szyb: "+e.message,true);
+ }finally{
+  loading(false);await refreshPhotos().catch(e=>notify(e.message,true));
+ }
+}
+function initWindowMaskControls(){
+ $("windowMaskCanvas").addEventListener("click",event=>{
+  if(!maskBase||!maskPhotoId||maskPolygons.length>=6||maskPoints.length>=20)return;
+  const rect=event.currentTarget.getBoundingClientRect();
+  const x=Math.min(1,Math.max(0,(event.clientX-rect.left)/rect.width));
+  const y=Math.min(1,Math.max(0,(event.clientY-rect.top)/rect.height));
+  if(y>.79){$("windowMaskStatus").textContent="Nie zaznaczaj dolnej części wnętrza. Wskaż tylko obszar za szybą.";return;}
+  maskPoints.push([Number(x.toFixed(5)),Number(y.toFixed(5))]);drawMaskPreview();
+ });
+ $("windowMaskFinishBtn").addEventListener("click",()=>{
+  if(maskPoints.length<3){$("windowMaskStatus").textContent="Obszar musi mieć co najmniej 3 punkty.";return;}
+  maskPolygons.push(maskPoints);maskPoints=[];drawMaskPreview();
+ });
+ $("windowMaskUndoBtn").addEventListener("click",()=>{
+  if(maskPoints.length)maskPoints.pop();else if(maskPolygons.length)maskPolygons.pop();
+  drawMaskPreview();
+ });
+ $("windowMaskCloseBtn").addEventListener("click",()=>$("windowMaskDialog").close());
+ $("windowMaskSaveBtn").addEventListener("click",submitWindowMask);
+ $("windowMaskDialog").addEventListener("close",()=>{maskPhotoId="";maskBase=null;maskPoints=[];maskPolygons=[];});
+}
+
 export function initPhotoControls(clientGetter,notifyFn,roleGetter){
  getClient=clientGetter;notify=notifyFn;getRole=roleGetter;
+ initWindowMaskControls();
  $("uploadPhotoBtn").addEventListener("click",uploadOfferPhotos);
  $("photoFiles").addEventListener("change",()=>{
    const n=$("photoFiles").files.length;
@@ -114,6 +203,10 @@ export function initPhotoControls(clientGetter,notifyFn,roleGetter){
  $("photoList").addEventListener("click",event=>{
    const btn=event.target.closest("button[data-photo-action]");
    if(btn){
+     if(btn.dataset.photoAction==="mark_windows"){
+       openWindowMask(btn.dataset.photoId,btn.dataset.photoPreview);
+       return;
+     }
      const selected=btn.closest(".photo-card")?.querySelector("select[data-photo-select]");
      act(btn.dataset.photoAction,btn.dataset.photoId,{
        photo_type:selected?.value||"unknown",version_id:btn.dataset.versionId||""
