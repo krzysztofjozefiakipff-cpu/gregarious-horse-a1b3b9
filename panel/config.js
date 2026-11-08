@@ -1,9 +1,3 @@
-/*
- * CARVELO — browser-safe Supabase configuration.
- *
- * Fill these TWO public values after creating your Supabase project.
- * A publishable/anon key is safe in frontend code ONLY with RLS configured.
- * NEVER put service_role, secret keys, database passwords or user credentials here.
- */
-export const SUPABASE_URL = "";
-export const SUPABASE_PUBLISHABLE_KEY = "";
+/* CARVELO | public Supabase client configuration; never store secret/service_role keys. */
+export const SUPABASE_URL = "https://rgnqsrllgemsyumvjwax.supabase.co";
+export const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_jT4f4bpGrIwVJHEFi5KNag__kY9dRnw";
