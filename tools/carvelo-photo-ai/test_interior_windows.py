@@ -36,5 +36,14 @@ except UnsafeWindowMask:
   pass
 else:
   raise AssertionError("Unsafe large manual polygon passed")
+from interior_windows import conservative_window_mask
+for unsafe_positive,unsafe_keep in [
+ (np.full((h,w),np.nan,dtype=np.float32),keep),
+ (np.full((h,w),.90,dtype=np.float32),np.full((h,w),.90,dtype=np.float32)),
+ (np.ones((h,w),dtype=np.float32),keep),
+]:
+ try: conservative_window_mask(unsafe_positive,unsafe_keep,(w,h))
+ except UnsafeWindowMask: pass
+ else: raise AssertionError("Unsafe window confidence accepted")
 print("MANUAL WINDOW MASK SAFETY PASS",w,h,round(manual_coverage,3))
 print("INTERIOR MASK SAFETY PASS",w,h,round(fraction,3))

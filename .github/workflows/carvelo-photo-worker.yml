@@ -21,11 +21,24 @@ jobs:
     if: github.repository == 'krzysztofjozefiakipff-cpu/gregarious-horse-a1b3b9' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 22
+    env:
+      HF_HOME: ${{ runner.temp }}/carvelo-hf
+      HF_HUB_DISABLE_TELEMETRY: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            tools/carvelo-photo-ai/requirements-gh.txt
+            tools/carvelo-photo-ai/requirements-interior.txt
+      - name: Przywróć cache modelu CLIPSeg
+        if: github.event_name != 'push'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/carvelo-hf
+          key: carvelo-clipseg-rd64-refined-v1-${{ runner.os }}
       - name: Kontrola bezpieczeństwa maski szyb (bez modelu i bez zdjęć klientów)
         if: github.event_name == 'push'
         run: |
