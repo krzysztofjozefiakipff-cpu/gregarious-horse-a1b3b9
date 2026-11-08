@@ -20,5 +20,9 @@ if __name__=="__main__":
     job=post("claim")["job"]
     path=pathlib.Path(os.environ["RUNNER_TEMP"])/"carvelo-job.json"
     path.write_text(json.dumps(job),encoding="utf-8")
-    with open(os.environ["GITHUB_OUTPUT"],"a") as out:out.write("pending="+("true" if job else "false")+"\n")
+    mode=job.get("mode") if job else ""
+    if mode not in ("showroom_exterior","showroom_windows",""):raise RuntimeError("Unexpected photo job mode")
+    with open(os.environ["GITHUB_OUTPUT"],"a") as out:
+        out.write("pending="+("true" if job else "false")+"\\n")
+        out.write("mode="+mode+"\\n")
     print("CARVELO queue:", "one job claimed" if job else "no jobs (no model packages downloaded)")
