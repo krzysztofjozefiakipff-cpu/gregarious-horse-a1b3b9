@@ -69,9 +69,7 @@ def compose_grounded_vehicle(
             fill=116,
         )
     contact = contact.filter(ImageFilter.GaussianBlur(max(3, round(h * .006))))
-    ambient = Image.fromarray(
-        __max_shadow(ambient, contact), mode="L"
-    )
+    ambient = __max_shadow(ambient, contact)
     dark = Image.new("RGBA", canvas.size, (23, 28, 34, 0))
     dark.putalpha(ambient)
     canvas.alpha_composite(dark)
