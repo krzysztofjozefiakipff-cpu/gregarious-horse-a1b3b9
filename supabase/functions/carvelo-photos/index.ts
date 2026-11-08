@@ -99,6 +99,21 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
   const ownDealer=profile.role==="dealer"&&offer.dealer_id===profile.dealer_id&&offer.source==="dealer";
   if(!staff&&!ownDealer)return fail(req,403,"Brak dostępu do zdjęć tej oferty");
 
+  if(action==="progress"){
+    // Low-cost polling: no signed Storage URLs, only jobs belonging to this offer.
+    const ownedPhotos=await supabase.from("cv_offer_photos").select("id").eq("offer_id",offerId).limit(40);
+    if(ownedPhotos.error)throw ownedPhotos.error;
+    const ids=(ownedPhotos.data??[]).map(row=>row.id);
+    if(!ids.length)return json(req,{jobs:[]});
+    const jobs=await supabase.from("cv_photo_jobs")
+      .select("id,photo_id,state,progress_percent,progress_stage,progress_at,created_at,started_at,finished_at,attempts,error_code")
+      .in("photo_id",ids).order("created_at",{ascending:false}).limit(400);
+    if(jobs.error)throw jobs.error;
+    const latest=new Map<string,unknown>();
+    for(const job of jobs.data??[])if(!latest.has(job.photo_id))latest.set(job.photo_id,job);
+    return json(req,{jobs:[...latest.values()]});
+  }
+
   if(action==="delete_offer"){
     if(profile.role!=="admin")return fail(req,403,"Tylko administrator CARVELO może trwale usunąć ofertę");
     if(String(data.confirm??"")!=="USUŃ")return fail(req,400,"Potwierdź usunięcie wpisując USUŃ");
@@ -148,7 +163,7 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     const ids=items.map((x)=>x.id);
     if(ids.length){
       const [jr,vr]=await Promise.all([
-        supabase.from("cv_photo_jobs").select("id,photo_id,state,target_mode,error_code,created_at").in("photo_id",ids).order("created_at",{ascending:false}).limit(250),
+        supabase.from("cv_photo_jobs").select("id,photo_id,state,target_mode,error_code,created_at,started_at,finished_at,progress_percent,progress_stage,progress_at,attempts").in("photo_id",ids).order("created_at",{ascending:false}).limit(250),
         supabase.from("cv_photo_versions").select("id,photo_id,result_path,qa_status,mode,logo_applied,mask_confidence,window_view_changed,review_required_reason").in("photo_id",ids).eq("qa_status","review").limit(250)
       ]);
       if(jr.error||vr.error)throw (jr.error||vr.error);
@@ -157,7 +172,10 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
       for(const v of vr.data||[])if(!versions.has(v.photo_id))versions.set(v.photo_id,v);
       for(const item of items){
         const job=jobs.get(item.id),version=versions.get(item.id);
-        if(job)item.ai_job={state:job.state,mode:job.target_mode,error_code:job.error_code};
+        if(job)item.ai_job={state:job.state,mode:job.target_mode,error_code:job.error_code,
+          job_id:job.id,progress_percent:job.progress_percent,progress_stage:job.progress_stage,
+          created_at:job.created_at,started_at:job.started_at,finished_at:job.finished_at,
+          progress_at:job.progress_at,attempts:job.attempts};
         if(version && (profile.role==="admin"||profile.role==="staff")){
           const signed=await supabaseAdmin.storage.from(BUCKET_MARKED).createSignedUrl(version.result_path,180);
           item.ai_candidate={id:version.id,url:signed.data?.signedUrl||null,
