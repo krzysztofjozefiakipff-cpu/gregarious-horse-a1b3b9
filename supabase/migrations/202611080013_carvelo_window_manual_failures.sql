@@ -7,6 +7,6 @@ begin
  if position('code like ''window_mask_uncertain%''' in fn)=0 then
  raise exception 'safe mask failure guard not found'; end if;
  fn:=replace(fn, 'code like ''window_mask_uncertain%''',
- '''code like ''manual_mask_%'' or code like ''window_mask_uncertain%''');
+ 'code like ''manual_mask_%'' or code like ''window_mask_uncertain%''');
  execute fn;
 end $manual$;
