@@ -26,8 +26,13 @@ def _refresh_legacy_showroom(scene: Image.Image) -> Image.Image:
     """
     original = scene.convert("RGBA")
     w, h = original.size
-    if (w, h) != (800, 450):
+    if w < 640 or h < 360 or abs(w / h - 16 / 9) > .025:
         raise ValueError("showroom_reference_unexpected_size")
+    # The approved reference is a smaller 16:9 WEBP; normalize its pixels
+    # before using wall and logo coordinates in the fixed 800x450 grid.
+    if (w, h) != (800, 450):
+        original = original.resize((800, 450), Image.Resampling.LANCZOS)
+        w, h = original.size
     replacement = original.copy()
     pix = replacement.load()
     # Interpolate existing dark wall paint across the former wordmark, preserving
