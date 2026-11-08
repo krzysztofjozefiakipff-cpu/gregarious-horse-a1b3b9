@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      HF_HOME: ${{ runner.temp }}/carvelo-hf-benchmark
-      U2NET_HOME: ${{ runner.temp }}/carvelo-u2net-benchmark
+      HF_HOME: /tmp/carvelo-hf-benchmark
+      U2NET_HOME: /tmp/carvelo-u2net-benchmark
       OMP_NUM_THREADS: '2'
       OPENBLAS_NUM_THREADS: '2'
     steps:
