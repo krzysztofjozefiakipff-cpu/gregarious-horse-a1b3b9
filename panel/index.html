@@ -33,6 +33,14 @@
 .photo-desc{padding:13px;display:flex;gap:7px;flex-direction:column}.photo-desc small{color:#5c7180}.photo-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.photo-actions button{font-size:11px;padding:8px}
 #photoStatus{background:#e9f2f5;border-radius:8px;padding:10px}
 @media(max-width:650px){.photo-upload-part{padding:15px}.photo-required{display:block;max-width:max-content;margin:8px 0}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.photo-actions button{flex:1}}
+</style><style id="carvelo-window-mask-style">
+.carvelo-mask-dialog{width:min(940px,95vw);max-height:92vh;overflow-y:auto;border:1px solid #d5e3ea;border-radius:18px;padding:22px;background:#fff;color:#102b3b;box-shadow:0 24px 80px #0715269c}
+.carvelo-mask-dialog::backdrop{background:rgba(6,21,33,.78)}
+.carvelo-mask-dialog h2{font-size:22px;margin:0 0 12px}
+.carvelo-mask-dialog canvas{display:block;max-width:100%;height:auto;touch-action:manipulation;cursor:crosshair;border-radius:12px;background:#14283a;margin:14px auto}
+.mask-buttons{display:flex;flex-wrap:wrap;gap:10px;margin:13px 0}.mask-buttons button{flex:1;min-width:145px}
+.carvelo-mask-dialog .muted{line-height:1.55}
+.photo-ai-candidate img{display:block;width:100%;height:auto;max-height:320px;object-fit:contain;border-radius:9px}
 </style></head>
 <body>
   <header class="top">
@@ -117,6 +125,19 @@
   </main>
   <div class="statusbar" aria-live="polite"><span id="toast" hidden></span></div>
   <footer>CARVELO • panel kont i ofert • dostęp zależny od roli • <a href="../" style="color:#dce8f2">Portal</a></footer>
+  <dialog id="windowMaskDialog" class="carvelo-mask-dialog" aria-labelledby="windowMaskTitle">
+    <h2 id="windowMaskTitle">CARVELO • wskaż widok za szybą</h2>
+    <p class="muted">Klikaj punkty wzdłuż <b>wewnętrznej części szyby</b>, obejmując jedynie widoczny za nią salon lub otoczenie. Nie zaznaczaj deski, słupków, foteli ani odbić. System zmieni wyłącznie wnętrze zamkniętych wielokątów; zachowa pozostałą część auta oraz obowiązkowe logo CARVELO.</p>
+    <canvas id="windowMaskCanvas" aria-label="Zaznacz widok za szybą"></canvas>
+    <p class="muted" id="windowMaskStatus">Zaznacz minimum trzy punkty wokół widoku przez szybę.</p>
+    <div class="mask-buttons">
+      <button class="secondary" type="button" id="windowMaskUndoBtn">↶ Cofnij punkt</button>
+      <button class="secondary" type="button" id="windowMaskFinishBtn">Zamknij obszar</button>
+      <button class="secondary" type="button" id="windowMaskCloseBtn">Anuluj</button>
+      <button class="primary" type="button" id="windowMaskSaveBtn">Przygotuj zdjęcie CARVELO →</button>
+    </div>
+    <p class="muted">Wersja po zmianie tła trafi wyłącznie do podglądu. Dopiero administrator może ją zaakceptować. Zmiana nie dotyczy zdjęć w opublikowanej ofercie.</p>
+  </dialog>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
