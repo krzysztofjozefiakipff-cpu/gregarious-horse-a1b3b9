@@ -1,11 +1,11 @@
 # CARVELO — uruchomienie zabezpieczonego panelu
 
-**Stan: kod panelu i schemat PostgreSQL przygotowane; Supabase nie jest jeszcze podłączony.**
-Obecny publiczny katalog Netlify pozostaje demonstracyjny i zapisuje dane lokalnie w przeglądarce.
+**Stan na 8 listopada 2026: Supabase CARVELO został uruchomiony i podłączony do panelu oraz publicznego katalogu.**
+Zakładka Oferty dealerskie pobiera wyłącznie opublikowane wpisy z Supabase; zakładka Przykłady (demo) pozostaje odrębna. Zapytania klientów nadal są demonstracyjne i nie są wysyłane.
 
 ## Architektura i uprawnienia
 
-- Publiczny katalog CARVELO: obecne demo (plik index.html).
+- Publiczny katalog CARVELO: opublikowane oferty z Supabase oraz oddzielny tryb demo (index.html + catalog-live.js).
 - Panel administracyjny i dealerski: folder panel/; adres https://carvelov2.netlify.app/panel/
 - Supabase Auth: logowanie kont zaproszonych przez administratora.
 - PostgreSQL + Row Level Security (RLS): oferty i uprawnienia egzekwowane w bazie.
@@ -73,10 +73,22 @@ Zaloguj osobne konta: admin, pracownik CARVELO, dealer A i dealer B. Sprawdź:
 
 ## 5. Kolejne prace przed produkcją
 
-- Podłącz publiczny katalog do opublikowanych ofert z centralnej bazy; demo localStorage nie jest jeszcze z nią zsynchronizowane.
+- Publiczny katalog odczytuje już opublikowane oferty z bazy. Oferty demo pozostają osobne i nie są synchronizowane z Supabase.
 - Dodaj zdjęcia i wyposażenie, historia i audyt zmian, logi moderacji.
 - Utwórz bezpieczną obsługę leadów z RODO, polityką prywatności, zgodami i retencją danych.
 - Dodaj MFA administratorów, backupy, monitoring, testy penetracyjne i paginację dla dużej liczby ofert.
 - Dopiero po testach integracyjnych i bezpieczeństwa uruchom obsługę realnych dealerów oraz klientów.
 
 Nie wprowadzaj prawdziwych danych klientów do obecnej makiety demonstracyjnej.
+
+
+## 6. Weryfikacja publicznego katalogu
+
+1. Zaloguj się do panelu administratora CARVELO.
+2. Dodaj dealera (jeśli jeszcze nie istnieje).
+3. Dodaj samochód, przypisz go do dealera i ustaw status Opublikowana.
+4. Otwórz portal, wybierz Oferty dealerskie i odśwież stronę. Opublikowane auto powinno się pojawić. Samochody z demo są dostępne osobno w Przykłady (demo).
+5. Zmień status samochodu na Odrzucona i odśwież portal. Oferta nie może być już widoczna publicznie.
+6. Sprawdź filtrowanie po racie, sortowanie, ulubione, porównywanie i możliwość udostępnienia linku do szczegółów.
+
+Obecnie nie ma serwerowej obsługi zapytań od klientów. Na rzeczywistych kartach samochodów przycisk kontaktu wyświetla komunikat o niedostępności usługi i nie gromadzi danych osobowych klientów. Nie traktuj jeszcze portalu jako gotowego do komercyjnego uruchomienia.
