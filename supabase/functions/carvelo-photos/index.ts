@@ -248,7 +248,10 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     return json(req,{ok:true,photo_type:category,ai_job_queued:queued});
   }
   if(action==="request_ai"){
-    if(offer.status==="published")return fail(req,409,"Najpierw zdejmij ofertę z publikacji");
+    // Published offers may be processed into PRIVATE previews by CARVELO staff.
+    // Replacing the public image is blocked in cv_photo_accept_ai_version.
+    if(offer.status==="published"&&!staff)
+      return fail(req,403,"Tylko zespół CARVELO może przygotować prywatny podgląd opublikowanej oferty");
     if(photo.photo_type!=="exterior"&&photo.photo_type!=="interior")
       return fail(req,400,"AI obsługuje ujęcia zewnętrzne oraz widok przez szyby na zdjęciach wnętrza");
     const manual=Object.prototype.hasOwnProperty.call(data,"window_polygons");
