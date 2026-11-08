@@ -70,7 +70,7 @@ def render():
  if len(body)>6_500_000:raise ValueError("output_too_large")
  h={"Authorization":"Bearer "+oidc()}
  data={"action":"complete","job_id":JOB["id"],"photo_id":JOB["photo_id"],
-        "offer_id":JOB["offer_id"],"scene_version":"studio-v2"}
+        "offer_id":JOB["offer_id"],"scene_version":"studio-v3"}
  if JOB["mode"]=="showroom_windows":
   data.update(window_view_changed=str(window_changed).lower(),
               mask_confidence="" if mask_confidence is None else str(mask_confidence),
@@ -78,7 +78,7 @@ def render():
  res=requests.post(URL,data=data,files={"file":("carvelo-branded.png",body,"image/png")},
                    headers=h,timeout=100)
  if not res.ok:raise RuntimeError("broker_complete_"+str(res.status_code))
- print("CARVELO AI candidate created for moderation.",JOB["mode"],"studio-v2, official top-right brand embedded.")
+ print("CARVELO AI candidate created for moderation.",JOB["mode"],"studio-v3, realistic shadow/reflection, official top-right brand.")
 if __name__=="__main__":
  try:render()
  except Exception as exc:
