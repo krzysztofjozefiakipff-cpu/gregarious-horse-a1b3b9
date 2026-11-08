@@ -1,0 +1,18 @@
+services:
+  - type: worker
+    name: carvelo-photo-ai
+    runtime: docker
+    repo: https://github.com/krzysztofjozefiakipff-cpu/gregarious-horse-a1b3b9
+    branch: main
+    dockerContext: .
+    dockerfilePath: tools/carvelo-photo-ai/Dockerfile
+    autoDeployTrigger: commit
+    envVars:
+      - key: CARVELO_DATABASE_URL
+        sync: false
+      - key: CARVELO_SUPABASE_URL
+        sync: false
+      - key: CARVELO_SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CARVELO_POLL_SECONDS
+        value: "2"

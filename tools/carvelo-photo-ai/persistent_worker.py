@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""CARVELO resident photo worker.
+
+Runs on a private Docker worker host. No GitHub OIDC is required: the worker
+holds a privileged DATABASE_URL and Supabase service key in HOST SECRETS ONLY.
+GitHub Actions remains the fallback until the host is explicitly provisioned.
+"""
+from __future__ import annotations
+import io
+import os
+import secrets
+import time
+import uuid
+from pathlib import Path
+from urllib.parse import quote
+from functools import lru_cache
+
+import psycopg
+import requests
+from PIL import Image, ImageOps
+from rembg import remove, new_session
+from studio_compose import render_scene, compose_grounded_vehicle, add_official_logo
+
+ROOT = Path(__file__).resolve().parents[2]
+SCENE = ROOT/"assets/brand/carvelo-showroom-v1.webp.b64"
+LOGO = ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
+DATABASE_URL = os.environ.get("CARVELO_DATABASE_URL","")
+SUPABASE_URL = os.environ.get("CARVELO_SUPABASE_URL","").rstrip("/")
+SERVICE_KEY = os.environ.get("CARVELO_SUPABASE_SERVICE_ROLE_KEY","")
+POLL_SECONDS = max(1,min(int(os.getenv("CARVELO_POLL_SECONDS","2")),60))
+HEADERS = {"apikey":SERVICE_KEY,"Authorization":"Bearer "+SERVICE_KEY}
+MAX_BYTES = 6_000_000
+MAX_PIXELS = 12_000_000
+
+@lru_cache(maxsize=1)
+def session():
+    return new_session("u2net")
+
+def get_photo(path):
+    url=SUPABASE_URL+"/storage/v1/object/carvelo-photo-originals/"+quote(path,safe="/")
+    resp=requests.get(url,headers=HEADERS,timeout=45)
+    resp.raise_for_status()
+    if len(resp.content)>MAX_BYTES:
+        raise ValueError("source_size_limit")
+    with Image.open(io.BytesIO(resp.content)) as raw:
+        if raw.width*raw.height>MAX_PIXELS:
+            raise ValueError("source_pixel_limit")
+        photo=ImageOps.exif_transpose(raw).convert("RGBA")
+        photo.thumbnail((1400,1400),Image.Resampling.LANCZOS)
+        return photo
+
+def make_candidate(job):
+    photo=get_photo(job["original_path"])
+    changed=None
+    reason=None
+    if job["target_mode"]=="showroom_exterior":
+        buf=io.BytesIO()
+        photo.convert("RGB").save(buf,"PNG")
+        cut=remove(buf.getvalue(),session=session())
+        with Image.open(io.BytesIO(cut)) as fg:
+            foreground=fg.convert("RGBA")
+        if foreground.size!=photo.size:
+            foreground=foreground.resize(photo.size,Image.Resampling.BILINEAR)
+        import numpy as np
+        matte=np.asarray(foreground.getchannel("A"),dtype=np.uint8)
+        covered=float((matte>48).mean())
+        if covered<.12 or covered>.86 or float((matte>238).mean())<.08:
+            raise ValueError("mask_quality_unreliable")
+        scene=render_scene(SCENE,photo.size)
+        result,placement=compose_grounded_vehicle(foreground,scene)
+        if not placement["wheel_grounded"]:
+            raise ValueError("wheel_grounding_unsafe")
+    elif job["target_mode"]=="showroom_windows":
+        from interior_windows import process_interior_windows, compose_staff_window_mask, UnsafeWindowMask
+        scene=render_scene(SCENE,photo.size)
+        try:
+            if job.get("window_polygons"):
+                result,coverage=compose_staff_window_mask(photo,scene,job["window_polygons"])
+            else:
+                result,coverage=process_interior_windows(photo,scene)
+            changed=True
+        except UnsafeWindowMask:
+            result=photo.copy()
+            changed=False
+            reason="window_mask_low_confidence"
+    else:
+        raise ValueError("unsupported_job_mode")
+    result=add_official_logo(result,LOGO)
+    buf=io.BytesIO()
+    result.convert("RGB").save(buf,format="PNG",optimize=True)
+    out=buf.getvalue()
+    if len(out)>6_500_000:
+        raise ValueError("output_too_large")
+    return out,changed,reason
+
+def upload(path,data):
+    response=requests.post(SUPABASE_URL+"/storage/v1/object/carvelo-photo-branded/"+quote(path,safe="/"),
+                           headers={**HEADERS,"Content-Type":"image/png","x-upsert":"false"},
+                           data=data,timeout=90)
+    response.raise_for_status()
+
+def remove_uploaded(path):
+    try:
+        requests.delete(SUPABASE_URL+"/storage/v1/object/carvelo-photo-branded/"+quote(path,safe="/"),
+                        headers=HEADERS,timeout=20)
+    except Exception:
+        pass
+
+def rpc(conn,query,values):
+    with conn.cursor() as cur:
+        cur.execute(query,values)
+        return cur.fetchone()[0]
+
+def run_once(conn):
+    # Numeric token matches the existing private DB claim interface.
+    run_id=str(secrets.randbelow(9_000_000_000_000_000)+1_000_000_000_000_000)
+    job=rpc(conn,"select public.cv_ai_claim(%s)",(run_id,))
+    conn.commit()
+    if not job:
+        return False
+    job_id=job["job_id"]
+    path=None
+    try:
+        data,changed,reason=make_candidate(job)
+        path=(str(job["offer_id"])+"/"+str(job["photo_id"])+"/ai/"+str(uuid.uuid4())+".png")
+        upload(path,data)
+        rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
+            (job_id,run_id,path,changed,None,reason,"studio-v4"))
+        conn.commit()
+        print("CARVELO ready for review",job_id,job["target_mode"],flush=True)
+    except Exception as exc:
+        conn.rollback()
+        if path:
+            remove_uploaded(path)
+        code=str(exc).replace("\n"," ").replace("\r"," ")[:100]
+        print("CARVELO worker job failed",job_id,code,flush=True)
+        rpc(conn,"select public.cv_ai_fail(%s,%s,%s)",(job_id,run_id,code))
+        conn.commit()
+    return True
+
+def main():
+    if not all((DATABASE_URL,SUPABASE_URL,SERVICE_KEY)):
+        raise RuntimeError("Missing CARVELO worker host secrets")
+    if not SCENE.is_file() or not LOGO.is_file():
+        raise RuntimeError("Approved showroom/logo missing")
+    print("CARVELO persistent worker listening",flush=True)
+    while True:
+        try:
+            with psycopg.connect(DATABASE_URL,connect_timeout=20) as conn:
+                while True:
+                    if not run_once(conn):
+                        time.sleep(POLL_SECONDS)
+        except Exception as exc:
+            print("CARVELO worker DB reconnect",type(exc).__name__,flush=True)
+            time.sleep(min(POLL_SECONDS*4,30))
+
+if __name__=="__main__":
+    main()
