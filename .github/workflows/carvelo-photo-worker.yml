@@ -1,0 +1,30 @@
+name: CARVELO AI – obróbka zdjęć zewnętrznych
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: carvelo-photo-ai
+  cancel-in-progress: false
+jobs:
+  render:
+    if: github.repository == 'krzysztofjozefiakipff-cpu/gregarious-horse-a1b3b9' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pobierz zadanie za pomocą GitHub OIDC (bez kluczy Supabase)
+        id: job
+        run: python tools/carvelo-photo-ai/broker.py
+      - name: Zainstaluj narzędzia segmentacji tylko gdy jest zdjęcie
+        if: steps.job.outputs.pending == 'true'
+        run: python -m pip install -r tools/carvelo-photo-ai/requirements-gh.txt
+      - name: Obrób zdjęcie i prześlij wersję z logo do moderacji
+        if: steps.job.outputs.pending == 'true'
+        run: python tools/carvelo-photo-ai/render_github.py
