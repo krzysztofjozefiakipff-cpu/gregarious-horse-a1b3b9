@@ -112,7 +112,7 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     if(ids.length){
       const [jr,vr]=await Promise.all([
         supabase.from("cv_photo_jobs").select("id,photo_id,state,target_mode,error_code,created_at").in("photo_id",ids).order("created_at",{ascending:false}).limit(250),
-        supabase.from("cv_photo_versions").select("id,photo_id,result_path,qa_status,mode,logo_applied").in("photo_id",ids).eq("qa_status","review").limit(250)
+        supabase.from("cv_photo_versions").select("id,photo_id,result_path,qa_status,mode,logo_applied,mask_confidence,window_view_changed,review_required_reason").in("photo_id",ids).eq("qa_status","review").limit(250)
       ]);
       if(jr.error||vr.error)throw (jr.error||vr.error);
       const jobs=new Map(),versions=new Map();
@@ -123,7 +123,16 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
         if(job)item.ai_job={state:job.state,mode:job.target_mode,error_code:job.error_code};
         if(version && (profile.role==="admin"||profile.role==="staff")){
           const signed=await supabaseAdmin.storage.from(BUCKET_MARKED).createSignedUrl(version.result_path,180);
-          item.ai_candidate={id:version.id,url:signed.data?.signedUrl||null,logo_applied:version.logo_applied};
+          item.ai_candidate={id:version.id,url:signed.data?.signedUrl||null,
+            mode:version.mode,logo_applied:version.logo_applied,
+            mask_confidence:version.mask_confidence,
+            window_view_changed:version.window_view_changed,
+            review_required_reason:version.review_required_reason};
+          const source=await supabaseAdmin.from("cv_offer_photos").select("original_path").eq("id",item.id).maybeSingle();
+          if(!source.error && source.data?.original_path){
+            const original=await supabaseAdmin.storage.from(BUCKET_RAW).createSignedUrl(source.data.original_path,180);
+            item.original_preview_url=original.data?.signedUrl??null;
+          }
         }
       }
     }
