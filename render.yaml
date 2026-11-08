@@ -2,6 +2,7 @@ services:
   - type: worker
     name: carvelo-photo-ai
     runtime: docker
+    plan: standard
     repo: https://github.com/krzysztofjozefiakipff-cpu/gregarious-horse-a1b3b9
     branch: main
     dockerContext: .
