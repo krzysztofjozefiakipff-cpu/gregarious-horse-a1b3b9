@@ -127,7 +127,7 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
         }
       }
     }
-    return json(req,{photos:items,ai_worker_enabled:await aiIsEnabled(supabaseAdmin),ai_windows_enabled:await aiIsEnabled(supabaseAdmin,"interior")});
+    return json(req,{photos:items,offer_status:offer.status,ai_worker_enabled:await aiIsEnabled(supabaseAdmin),ai_windows_enabled:await aiIsEnabled(supabaseAdmin,"interior")});
   }
 
   if(action==="upload") {
