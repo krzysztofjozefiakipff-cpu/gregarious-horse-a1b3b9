@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 22
     env:
-      HF_HOME: ${{ runner.temp }}/carvelo-hf
+      HF_HOME: /tmp/carvelo-hf
       HF_HUB_DISABLE_TELEMETRY: '1'
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
         if: github.event_name != 'push'
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/carvelo-hf
+          path: /tmp/carvelo-hf
           key: carvelo-clipseg-rd64-refined-v1-${{ runner.os }}
       - name: Kontrola bezpieczeństwa maski szyb (bez modelu i bez zdjęć klientów)
         if: github.event_name == 'push'
