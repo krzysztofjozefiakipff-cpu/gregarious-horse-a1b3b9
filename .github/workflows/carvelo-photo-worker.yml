@@ -24,28 +24,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Jednorazowy test E2E - przygotuj prywatny plik testowy
+      - name: Jednorazowe uporzadkowanie prywatnych danych testowych
         if: github.event_name == 'push'
-        run: python -c "import sys;sys.path.insert(0,'tools/carvelo-photo-ai');from broker import post;print(post('seed_e2e_photo'))"
+        run: python -c "import sys;sys.path.insert(0,'tools/carvelo-photo-ai');from broker import post;print(post('cleanup_e2e_photo'))"
       - name: Pobierz zadanie za pomocą GitHub OIDC (bez kluczy Supabase)
         id: job
         run: python tools/carvelo-photo-ai/broker.py
       - name: Zainstaluj narzędzia segmentacji tylko gdy jest zdjęcie
-        if: steps.job.outputs.pending == 'true' || github.event_name == 'push'
+        if: steps.job.outputs.pending == 'true'
         run: python -m pip install -r tools/carvelo-photo-ai/requirements-gh.txt
       - name: Rozpakuj stały obraz wzorcowego salonu CARVELO
-        if: steps.job.outputs.pending == 'true' || github.event_name == 'push'
+        if: steps.job.outputs.pending == 'true'
         run: base64 -d assets/brand/carvelo-showroom-v1.webp.b64 > assets/brand/carvelo-showroom-v1.webp
       - name: Obrób zdjęcie i prześlij wersję z logo do moderacji
         if: steps.job.outputs.pending == 'true'
         run: python tools/carvelo-photo-ai/render_github.py
-      - name: Test lokalnego modelu na przykładowej grafice (bez danych klientów)
-        if: github.event_name == 'push'
-        run: python tools/carvelo-photo-ai/smoke_test.py
-      - name: Zachowaj podgląd testu do kontroli jakości
-        if: github.event_name == 'push' && success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: carvelo-ai-smoke-preview
-          path: /tmp/carvelo-smoke.png
-          retention-days: 1
