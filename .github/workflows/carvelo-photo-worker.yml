@@ -7,6 +7,7 @@ on:
       - '.github/workflows/carvelo-photo-worker.yml'
       - 'tools/carvelo-photo-ai/**'
       - 'assets/brand/carvelo-showroom-v1.webp.b64'
+      - 'assets/brand/carvelo-showroom-empty-v5.webp'
       - 'assets/brand/carvelo-wordmark-on-dark.svg'
   schedule:
     - cron: '*/5 * * * *'

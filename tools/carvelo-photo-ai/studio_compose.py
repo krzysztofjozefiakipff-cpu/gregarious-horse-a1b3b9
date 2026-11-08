@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 
-SCENE_VERSION = "studio-v4"
+SCENE_VERSION = "studio-v5"
 GROUND_Y = 0.85
 
 
@@ -80,6 +80,14 @@ def render_scene(scene_path: Path, size: tuple[int, int]) -> Image.Image:
         refreshed = _refresh_legacy_showroom(original)
         return ImageOps.fit(refreshed, size, method=Image.Resampling.LANCZOS,
                             centering=(.5, .5))
+    if scene_path.suffix.lower() == ".webp":
+        with Image.open(scene_path) as decoded:
+            if decoded.format != "WEBP":
+                raise ValueError("showroom_reference_not_webp")
+            original = decoded.convert("RGBA")
+        if original.width < 640 or original.height < 360:
+            raise ValueError("showroom_reference_too_small")
+        return ImageOps.fit(original, size, method=Image.Resampling.LANCZOS, centering=(.5, .5))
     if scene_path.suffix.lower() != ".svg":
         raise ValueError("unsupported_showroom_file")
     data = cairosvg.svg2png(url=str(scene_path), output_width=w, output_height=h)
@@ -260,12 +268,10 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         "scene_version": SCENE_VERSION,
         "ground_contact_y": ground_y,
         "vehicle_bounds": [x, y, x + vw, y + vh],
-        "wheel_contact_points": contact_points,
-        "wheel_grounded": all(abs(pt_y-ground_y) <= round(h*.07) for _,pt_y in contact_points),
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
-        "wheel_grounded": True,
+        "wheel_grounded": all(abs(pt_y-ground_y) <= round(h*.07) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
         "subtle_floor_reflection": bool(reflect_h > 4),

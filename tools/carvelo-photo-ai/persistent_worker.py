@@ -22,7 +22,7 @@ from rembg import remove, new_session
 from studio_compose import render_scene, compose_grounded_vehicle, add_official_logo
 
 ROOT = Path(__file__).resolve().parents[2]
-SCENE = ROOT/"assets/brand/carvelo-showroom-v1.webp.b64"
+SCENE = ROOT/"assets/brand/carvelo-showroom-empty-v5.webp"
 LOGO = ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
 DATABASE_URL = os.environ.get("CARVELO_DATABASE_URL","")
 SUPABASE_URL = os.environ.get("CARVELO_SUPABASE_URL","").rstrip("/")
@@ -125,7 +125,7 @@ def run_once(conn):
         path=(str(job["offer_id"])+"/"+str(job["photo_id"])+"/ai/"+str(uuid.uuid4())+".png")
         upload(path,data)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
-            (job_id,run_id,path,changed,None,reason,"studio-v4"))
+            (job_id,run_id,path,changed,None,reason,"studio-v5"))
         conn.commit()
         print("CARVELO ready for review",job_id,job["target_mode"],flush=True)
     except Exception as exc:

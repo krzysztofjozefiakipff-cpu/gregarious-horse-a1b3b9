@@ -1,4 +1,4 @@
-"""CARVELO studio-v4 regression: photographic showroom, shadows and official logo."""
+"""CARVELO studio-v5 regression: photographic showroom, shadows and official logo."""
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
@@ -7,7 +7,7 @@ from studio_compose import (
 )
 
 root = Path(__file__).resolve().parents[2]
-scene_path = root/"assets/brand/carvelo-showroom-v1.webp.b64"
+scene_path = root/"assets/brand/carvelo-showroom-empty-v5.webp"
 logo_path = root/"assets/brand/carvelo-wordmark-on-dark.svg"
 scene = render_scene(scene_path, (1000, 650))
 assert scene.size == (1000,650)
@@ -23,7 +23,7 @@ ink.rounded_rectangle((80,213,720,336),radius=20,fill=(160,35,42,255))
 ink.ellipse((148,305,250,407),fill=(25,28,36,255))
 ink.ellipse((575,305,677,407),fill=(25,28,36,255))
 comp, stats = compose_grounded_vehicle(original, scene)
-assert stats["scene_version"]=="studio-v4"
+assert stats["scene_version"]=="studio-v5"
 assert stats["ground_contact_y"] == round(650 * .85)
 assert stats["vehicle_bounds"][3] >= stats["ground_contact_y"]-round(650*.07)
 assert stats["vehicle_bounds"][0] >= 0
@@ -67,4 +67,4 @@ ow=stats["vehicle_bounds"][2]-ox
 oh=stats["vehicle_bounds"][3]-oy
 color=np.asarray(comp.convert("RGB"))[oy+round(oh*.61),ox+round(ow*.49)]
 assert tuple(color)==(160,35,42), ("vehicle_rgb_modified",tuple(color))
-print("CARVELO_STUDIO_V4_GROUNDING_TEST_PASS",stats)
+print("CARVELO_STUDIO_V5_GROUNDING_TEST_PASS",stats)
