@@ -284,6 +284,23 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
     return json(req,{ok:true,result:res.data});
   }
 
+  if(action==="reject_ai"){
+    if(!staff)return fail(req,403,"Tylko CARVELO może odrzucić wynik AI");
+    const versionId=String(data.version_id??"");
+    if(!UUID.test(versionId))return fail(req,400,"Nieprawidłowa wersja zdjęcia");
+    const version=await supabase.from("cv_photo_versions")
+      .select("id,qa_status,photo_id").eq("id",versionId).eq("photo_id",photoId).maybeSingle();
+    if(version.error||!version.data||version.data.qa_status!=="review")
+      return fail(req,409,"Ta wersja nie oczekuje na akceptację");
+    const denied=await supabaseAdmin.from("cv_photo_versions").update({
+      qa_status:"rejected",reviewed_by:uid,reviewed_at:new Date().toISOString()
+    }).eq("id",versionId).eq("photo_id",photoId).eq("qa_status","review");
+    if(denied.error)throw denied.error;
+    const closed=await supabaseAdmin.from("cv_photo_jobs").update({state:"completed"})
+      .eq("result_version_id",versionId).eq("state","review");
+    if(closed.error)throw closed.error;
+    return json(req,{ok:true,original_unchanged:true});
+  }
   if(action==="approve"){
     if(!staff)return fail(req,403,"Zatwierdzać zdjęcia może tylko CARVELO");
     if(!photo.logo_applied||photo.logo_version!==LOGO_VERSION)
