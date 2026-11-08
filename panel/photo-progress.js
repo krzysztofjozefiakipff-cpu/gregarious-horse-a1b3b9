@@ -38,7 +38,7 @@ export function stopPhotoProgress(){
  pollTimer=null;tickTimer=null;
 }
 function tickElapsed(){
- if(document.hidden)return;
+ 
  for(const el of document.querySelectorAll("#photoList [data-ai-elapsed]")){
   el.textContent=(el.dataset.jobState==="queued"?"Czas oczekiwania: ":"Czas obróbki: ")+duration(el.dataset.start,el.dataset.finished);
  }
@@ -49,7 +49,7 @@ export function startPhotoProgress(rows,options){
  const {getOfferId,fetchJobs,onFinished,isBusy}=options;
  const selectedOfferId=getOfferId();
  async function poll(){
-  if(!selectedOfferId||selectedOfferId!==getOfferId()||pending||isBusy()||document.hidden)return;
+  if(!selectedOfferId||selectedOfferId!==getOfferId()||pending||isBusy() )return;
   pending=true;
   try{
    const jobs=await fetchJobs(selectedOfferId);
@@ -79,7 +79,8 @@ export function startPhotoProgress(rows,options){
   }catch(e){console.warn("CARVELO photo status temporarily unavailable",e?.message||e)}
   finally{pending=false;}
  }
- pollTimer=setInterval(poll,7000);
+ pollTimer=setInterval(poll,2500);
+ poll();
  tickTimer=setInterval(tickElapsed,1000);
  tickElapsed();
 }
