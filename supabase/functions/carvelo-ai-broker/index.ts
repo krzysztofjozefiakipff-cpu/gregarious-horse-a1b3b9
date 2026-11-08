@@ -55,6 +55,22 @@ Deno.serve(async(req:Request)=>{
           type:job.photo_type,mode:job.target_mode,attempt:job.attempt,
           original_url:signed.data.signedUrl,window_polygons:job.window_polygons??null}});
      }
+     if(payload.action==="progress"){
+       const id=String(payload.job_id??"");
+       const percent=Number(payload.percent);
+       const stage=String(payload.stage??"");
+       if(!UUID.test(id)||!Number.isInteger(percent)||percent<10||percent>95||
+           !/^[a-z_]{3,32}$/.test(stage))return reply({error:"Invalid progress update"},400);
+       const update=await admin.rpc("cv_ai_report_progress",{
+         p_job:id,p_run_id:runId,p_percent:percent,p_stage:stage
+       });
+       if(update.error){
+         if(update.error.message?.includes("invalid_worker_progress_claim"))
+           return reply({error:"Job claim expired"},409);
+         throw update.error;
+       }
+       return reply(update.data);
+     }
      if(payload.action==="fail"){
        const id=String(payload.job_id||"");
        if(!UUID.test(id))return reply({error:"Invalid job"},400);
