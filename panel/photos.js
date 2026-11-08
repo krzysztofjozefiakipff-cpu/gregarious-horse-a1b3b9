@@ -1,3 +1,4 @@
+import {progressMarkup,startPhotoProgress,stopPhotoProgress} from "./photo-progress.js";
 // CARVELO: secured photo actions. This module never receives server secrets.
 let getClient, notify, getRole, activeId=null, busy=false;
 const $=id=>document.getElementById(id);
@@ -23,6 +24,7 @@ async function callFunction(body){
 }
 function loading(v){busy=v;for(const id of ["uploadPhotoBtn","photoFiles","photoType"]){const el=$(id);if(el)el.disabled=v;}}
 export function selectPhotos(offerId,offerName){
+ stopPhotoProgress();
  activeId=offerId||null;
  $("photoBlock").hidden=!activeId;
  $("photoOfferLabel").textContent=activeId?(offerName||"Wybrana oferta"):"";
@@ -52,7 +54,7 @@ export async function refreshPhotos(){
        .map(([k,v])=>'<option value="'+k+'" '+(p.photo_type===k?'selected':'')+'>'+v+'</option>').join("");
    const classify=staff?'<div class="photo-type-edit"><label>Typ zdjęcia <select data-photo-select>'+categoryOptions+
        '</select></label>'+btn("classify","Zapisz typ","secondary")+'</div>':"";
-   const ai=(p.ai_job?'<small>AI: '+esc(({queued:"W kolejce",processing:"Przetwarzanie",review:"Do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowane"})[p.ai_job.state]||p.ai_job.state)+
+   const ai=progressMarkup(p.id,p.ai_job)+(p.ai_job?'<small>AI: '+esc(({queued:"W kolejce",processing:"Przetwarzanie",review:"Do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowane"})[p.ai_job.state]||p.ai_job.state)+
        (p.ai_job.error_code?' — '+esc(aiErrorLabel(p.ai_job.error_code)):'')+'</small>':"")+
        ((staff||!isPublished) && ((aiEnabled&&p.photo_type==="exterior")||(windowsEnabled&&p.photo_type==="interior"))
           && !["queued","processing"].includes(p.ai_job?.state)
@@ -84,6 +86,11 @@ export async function refreshPhotos(){
     '<small>'+esc(category)+' • '+(p.background_mode==='showroom'?(p.photo_type==='interior'?'zmieniony widok za szybami':'tło CARVELO'):'oryginalne tło')+'</small><small>Logo CARVELO: '+(p.logo_applied?'✓ dodane':'do sprawdzenia')+'</small>'+classify+ai+
     '<div class="photo-actions">'+controls+'</div></div></article>';
  }).join("")||'<p class="muted">Dodaj fotografie — logo CARVELO zostanie naniesione automatycznie. Zdjęcia wnętrz i detali zachowują swoje tło.</p>';
+ startPhotoProgress(rows,{
+  getOfferId:()=>activeId,isBusy:()=>busy,
+  fetchJobs:async offerId=>(await callFunction({action:"progress",offer_id:offerId})).jobs||[],
+  onFinished:()=>refreshPhotos()
+ });
 }
 export async function uploadOfferPhotos(){
  if(!activeId){notify("Najpierw zapisz ofertę.",true);return;}
