@@ -28,14 +28,27 @@ export async function refreshPhotos(){
  const rows=data.photos||[];
  $("photoStatus").textContent=rows.length?"Liczba zdjęć: "+rows.length+" • każde z logo CARVELO":"Brak zdjęć. Dodaj pierwszą fotografię.";
  const staff=["admin","staff"].includes(getRole());
+ const aiEnabled=!!data.ai_worker_enabled;
  $("photoList").innerHTML=rows.map(p=>{
    const category={exterior:"Zewnętrzne",interior:"Wnętrze",detail:"Detal",unknown:"Do oceny"}[p.photo_type]||"Do oceny";
    const btn=(action,label,cl)=>'<button type="button" class="'+cl+'" data-photo-action="'+action+'" data-photo-id="'+esc(p.id)+'">'+label+'</button>';
+   const categoryOptions=[["unknown","Do oceny"],["exterior","Zewnętrzne"],["interior","Wnętrze"],["detail","Detal"]]
+       .map(([k,v])=>'<option value="'+k+'" '+(p.photo_type===k?'selected':'')+'>'+v+'</option>').join("");
+   const classify=staff?'<div class="photo-type-edit"><label>Typ zdjęcia <select data-photo-select>'+categoryOptions+
+       '</select></label>'+btn("classify","Zapisz typ","secondary")+'</div>':"";
+   const ai=(p.ai_job?'<small>AI: '+esc(({queued:"W kolejce",processing:"Przetwarzanie",review:"Do akceptacji",completed:"Zakończone",failed:"Błąd",cancelled:"Anulowane"})[p.ai_job.state]||p.ai_job.state)+
+       (p.ai_job.error_code?' — '+esc(p.ai_job.error_code):'')+'</small>':"")+
+       (aiEnabled && p.photo_type==="exterior" && !["queued","processing"].includes(p.ai_job?.state)
+          ?btn("request_ai","Przygotuj salon AI","secondary"):"")+
+       (staff && p.ai_candidate?.url?'<div class="photo-ai-candidate"><small>Nowe tło CARVELO — podgląd do decyzji</small>'+
+           '<img loading="lazy" src="'+esc(p.ai_candidate.url)+'" alt="Wersja AI zdjęcia samochodu z logo CARVELO">'+
+           '<button type="button" class="secondary" data-photo-action="accept_ai" data-photo-id="'+esc(p.id)+
+           '" data-version-id="'+esc(p.ai_candidate.id)+'">Zastosuj wersję AI do moderacji</button></div>':"");
    const controls=(staff&&p.state==="review"?(btn("approve","Zatwierdź","secondary")+btn("reject","Odrzuć","danger")):"")+
       (staff&&p.state==="approved"&&!p.is_cover?btn("cover","Ustaw główne","secondary"):"")+btn("delete","Usuń","secondary");
    return '<article class="photo-card"><div class="photo-preview">'+(p.preview_url?'<img src="'+esc(p.preview_url)+'" alt="Zdjęcie samochodu z logo CARVELO" loading="lazy">':'Brak podglądu')+
     '</div><div class="photo-desc"><strong>'+(p.is_cover?'★ Główne':'Zdjęcie')+'</strong><span>'+esc(labels[p.state]||p.state)+'</span>'+
-    '<small>'+esc(category)+' • oryginalne tło</small><small>Logo CARVELO: '+(p.logo_applied?'✓ dodane':'do sprawdzenia')+'</small>'+
+    '<small>'+esc(category)+' • '+(p.background_mode==='showroom'?'tło CARVELO':'oryginalne tło')+'</small><small>Logo CARVELO: '+(p.logo_applied?'✓ dodane':'do sprawdzenia')+'</small>'+classify+ai+
     '<div class="photo-actions">'+controls+'</div></div></article>';
  }).join("")||'<p class="muted">Dodaj fotografie — logo CARVELO zostanie naniesione automatycznie. Zdjęcia wnętrz i detali zachowują swoje tło.</p>';
 }
@@ -60,13 +73,16 @@ export async function uploadOfferPhotos(){
   notify("Przesłano "+saved+" zdjęć z logo CARVELO."+(failed?" Błędy: "+failed:""),failed>0&&saved===0);
  }finally{loading(false);await refreshPhotos().catch(e=>notify(e.message,true))}
 }
-async function act(action,id){
+async function act(action,id,extra={}){
  if(busy||!activeId)return;
  if(action==="delete"&&!window.confirm("Usunąć to zdjęcie?"))return;
  const offerId=activeId;
  loading(true);
  try{
-   await callFunction({action,offer_id:offerId,photo_id:id});
+   const payload={action,offer_id:offerId,photo_id:id};
+   if(action==="classify")payload.photo_type=extra.photo_type;
+   if(action==="accept_ai")payload.version_id=extra.version_id;
+   await callFunction(payload);
    notify(({approve:"Zaakceptowano zdjęcie.",reject:"Odrzucono zdjęcie.",cover:"Ustawiono zdjęcie główne.",delete:"Usunięto zdjęcie."})[action]||"Zapisano.");
  }catch(e){notify(e.message,true)}
  finally{loading(false);await refreshPhotos().catch(e=>notify(e.message,true))}
@@ -80,6 +96,11 @@ export function initPhotoControls(clientGetter,notifyFn,roleGetter){
  });
  $("photoList").addEventListener("click",event=>{
    const btn=event.target.closest("button[data-photo-action]");
-   if(btn)act(btn.dataset.photoAction,btn.dataset.photoId);
+   if(btn){
+     const selected=btn.closest(".photo-card")?.querySelector("select[data-photo-select]");
+     act(btn.dataset.photoAction,btn.dataset.photoId,{
+       photo_type:selected?.value||"unknown",version_id:btn.dataset.versionId||""
+     });
+   }
  });
 }
