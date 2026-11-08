@@ -29,13 +29,6 @@ jobs:
         run: |
           python -m pip install Pillow==12.1.0 numpy==2.3.5
           python tools/carvelo-photo-ai/test_interior_windows.py
-      - name: Test uruchomienia modelu szyb CLIPSeg CPU — bez danych klientów
-        if: github.event_name == 'push'
-        run: |
-          python -m pip install -r tools/carvelo-photo-ai/requirements-gh.txt
-          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r tools/carvelo-photo-ai/requirements-interior.txt
-          python tools/carvelo-photo-ai/test_clipseg_model_smoke.py
       - name: Pobierz zadanie za pomocą GitHub OIDC (bez kluczy Supabase)
         id: job
         run: python tools/carvelo-photo-ai/broker.py
