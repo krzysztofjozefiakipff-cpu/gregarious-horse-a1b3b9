@@ -29,9 +29,13 @@ def render():
   img.thumbnail((1400,1400),Image.Resampling.LANCZOS)
  if JOB["mode"]=="showroom_windows":
   # Interior: only a conservative scene mask through glass is eligible; preserve cabin pixels.
-  from interior_windows import process_interior_windows,UnsafeWindowMask
+  from interior_windows import process_interior_windows,compose_staff_window_mask,UnsafeWindowMask
   with Image.open(SCENE) as base:
-   try: background,coverage=process_interior_windows(img,base)
+   try:
+    if JOB.get("window_polygons"):
+     background,coverage=compose_staff_window_mask(img,base,JOB["window_polygons"])
+    else:
+     background,coverage=process_interior_windows(img,base)
    except UnsafeWindowMask as e:raise ValueError(str(e)) from e
   print("CARVELO interior safe window area",round(coverage,3))
  else:
