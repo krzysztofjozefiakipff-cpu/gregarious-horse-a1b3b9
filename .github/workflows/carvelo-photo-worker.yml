@@ -25,6 +25,9 @@ jobs:
       - name: Zainstaluj narzędzia segmentacji tylko gdy jest zdjęcie
         if: steps.job.outputs.pending == 'true'
         run: python -m pip install -r tools/carvelo-photo-ai/requirements-gh.txt
+      - name: Rozpakuj stały obraz wzorcowego salonu CARVELO
+        if: steps.job.outputs.pending == 'true'
+        run: base64 -d assets/brand/carvelo-showroom-v1.webp.b64 > assets/brand/carvelo-showroom-v1.webp
       - name: Obrób zdjęcie i prześlij wersję z logo do moderacji
         if: steps.job.outputs.pending == 'true'
         run: python tools/carvelo-photo-ai/render_github.py
