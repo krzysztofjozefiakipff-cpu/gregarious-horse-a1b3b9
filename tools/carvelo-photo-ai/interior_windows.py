@@ -5,7 +5,7 @@ No generative drawing of cabin, seats, steering wheel, or vehicle parts.
 """
 import io
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageFilter, ImageOps, ImageDraw
 
 MODEL_ID = "CIDAS/clipseg-rd64-refined"
 WINDOW_PROMPTS = (
@@ -102,6 +102,60 @@ def compose_view(photo, scene, positive, protected):
     if not np.array_equal(composited[~core],base[~core]):
         raise AssertionError("protected_car_pixels_modified")
     return Image.fromarray(composited,mode="RGB").convert("RGBA"),float(np.mean(core))
+
+
+def compose_staff_window_mask(photo, scene, polygons):
+    """Precisely selected exterior view through windows. Staff reviews output before use."""
+    if not isinstance(polygons,list) or len(polygons)<1 or len(polygons)>6:
+        raise UnsafeWindowMask("manual_mask_invalid")
+    w,h=photo.size
+    picture=Image.new("L",(w,h),0)
+    canvas=ImageDraw.Draw(picture)
+    area_sum=0.0
+    for poly in polygons:
+        if not isinstance(poly,list) or not 3<=len(poly)<=20:
+            raise UnsafeWindowMask("manual_mask_invalid")
+        points=[]
+        for pt in poly:
+            if not isinstance(pt,list) or len(pt)!=2:
+                raise UnsafeWindowMask("manual_mask_invalid")
+            x,y=pt
+            if not all(isinstance(z,(int,float)) and np.isfinite(z) and 0<=z<=1 for z in (x,y)):
+                raise UnsafeWindowMask("manual_mask_invalid")
+            points.append((float(x),float(y)))
+        if max(p[1] for p in points)>.79:
+            raise UnsafeWindowMask("manual_mask_interior_risk")
+        shoelace=abs(sum(points[i][0]*points[(i+1)%len(points)][1]-
+             points[(i+1)%len(points)][0]*points[i][1] for i in range(len(points))))/2
+        if not .002<=shoelace<=.25:
+            raise UnsafeWindowMask("manual_mask_invalid_area")
+        area_sum+=shoelace
+        canvas.polygon([(round(x*w),round(y*h)) for x,y in points],fill=255)
+    if area_sum>.35:
+        raise UnsafeWindowMask("manual_mask_excessive_area")
+    safe=picture.filter(ImageFilter.MinFilter(max(9,min(23,int(w*.015)//2*2+1))))
+    core=np.asarray(safe,dtype=np.uint8)>127
+    coverage=float(np.mean(core))
+    if not .004<=coverage<=.32:
+        raise UnsafeWindowMask("manual_mask_invalid_area")
+    return compose_mask(photo,scene,core)
+
+
+def compose_mask(photo,scene,core):
+    """Pixel-perfect protection of car interior outside explicitly masked scenery."""
+    if photo.mode!="RGBA":
+        photo=photo.convert("RGBA")
+    scene=ImageOps.fit(scene.convert("RGB"),photo.size,method=Image.Resampling.LANCZOS).convert("RGBA")
+    original=np.asarray(photo.convert("RGB"),dtype=np.uint8)
+    target=np.asarray(scene.convert("RGB"),dtype=np.uint8)
+    matte=Image.fromarray(core.astype("uint8")*255,"L").filter(ImageFilter.GaussianBlur(2.5))
+    strength=np.asarray(matte,dtype=np.float32)/255.0*.86
+    strength[~core]=0
+    strength=strength[:,:,None]
+    result=np.clip(original.astype(np.float32)*(1-strength)+target.astype(np.float32)*strength,0,255).astype("uint8")
+    if not np.array_equal(result[~core],original[~core]):
+        raise AssertionError("protected_car_pixels_modified")
+    return Image.fromarray(result,mode="RGB").convert("RGBA"),float(np.mean(core))
 
 
 def process_interior_windows(photo, scene):
