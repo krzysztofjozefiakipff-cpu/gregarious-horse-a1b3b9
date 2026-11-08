@@ -36,7 +36,7 @@ assert "fail-2-invalid_window" in events, events
 assert "render-3" in events, "Single image failure must not block the next image."
 
 # Safety: no job may be claimed after the time budget expires.
-times = iter([0, 30])
+times = iter([0, 30, 30])
 short = process_extra_jobs(lambda: 1 / 0, lambda _: None, lambda _, __: None,
                            lambda: None, clock=lambda: next(times), max_seconds=20)
 assert short["completed"] == 0
