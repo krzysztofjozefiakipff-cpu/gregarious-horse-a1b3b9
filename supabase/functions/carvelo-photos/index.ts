@@ -99,6 +99,43 @@ const processRequest = withSupabase({auth:"user"},async(req,ctx)=>{
   const ownDealer=profile.role==="dealer"&&offer.dealer_id===profile.dealer_id&&offer.source==="dealer";
   if(!staff&&!ownDealer)return fail(req,403,"Brak dostępu do zdjęć tej oferty");
 
+  if(action==="delete_offer"){
+    if(profile.role!=="admin")return fail(req,403,"Tylko administrator CARVELO może trwale usunąć ofertę");
+    if(String(data.confirm??"")!=="USUŃ")return fail(req,400,"Potwierdź usunięcie wpisując USUŃ");
+    // One database transaction cancels pending queue messages, removes rows,
+    // and records all private media paths for reliable cleanup.
+    const prepared=await supabaseAdmin.rpc("cv_delete_offer_admin",{
+      p_offer_id:offerId,p_actor_id:uid
+    });
+    if(prepared.error){
+      if(prepared.error.message?.includes("offer_ai_processing_busy"))
+        return fail(req,409,"Trwa obróbka AI zdjęcia. Usuń ofertę po zakończeniu tego zadania.");
+      if(prepared.error.message?.includes("offer_not_found"))
+        return fail(req,404,"Nie znaleziono oferty do usunięcia.");
+      throw prepared.error;
+    }
+    const batch=prepared.data;
+    const faults:string[]=[];
+    for(const [bucket,paths] of [[BUCKET_RAW,batch.original_paths],[BUCKET_MARKED,batch.branded_paths]] as [string,string[]][]){
+      if(!Array.isArray(paths))continue;
+      for(let i=0;i<paths.length;i+=100){
+        const list=paths.slice(i,i+100).filter(path=>typeof path==="string"&&path.startsWith(offerId+"/"));
+        if(!list.length)continue;
+        const removed=await supabaseAdmin.storage.from(bucket).remove(list);
+        if(removed.error)faults.push(bucket+":"+String(removed.error.message||"storage_error").slice(0,120));
+      }
+    }
+    const recorded=await supabaseAdmin.from("cv_offer_cleanup_batches").update({
+      state:faults.length?"failed":"done",
+      last_error:faults.length?faults.join("; ").slice(0,450):null,
+      finished_at:new Date().toISOString()
+    }).eq("id",batch.batch_id);
+    if(recorded.error)console.error("CARVELO cleanup journal:",recorded.error.message);
+    return json(req,{ok:true,deleted:true,cleanup_pending:faults.length>0,
+      removed_original_files:batch.original_paths?.length??0,
+      removed_branded_files:batch.branded_paths?.length??0});
+  }
+
   if(action==="list") {
     const r=await supabase.from("cv_offer_photos")
       .select("id,offer_id,photo_type,background_mode,state,is_cover,sort_order,logo_applied,logo_version,processed_path,created_at")
