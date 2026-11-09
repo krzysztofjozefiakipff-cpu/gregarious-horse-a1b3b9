@@ -10,4 +10,6 @@ COPY tools/carvelo-photo-ai/ /app/tools/carvelo-photo-ai/
 COPY assets/brand/ /app/assets/brand/
 RUN useradd --create-home worker && chown -R worker:worker /app
 USER worker
+# Cache the segmentation model in the image; do not download it during a photo job.
+RUN python -c "from rembg import new_session; new_session('u2net'); print('CARVELO segmentation model ready', flush=True)"
 CMD ["python","tools/carvelo-photo-ai/persistent_worker.py"]
