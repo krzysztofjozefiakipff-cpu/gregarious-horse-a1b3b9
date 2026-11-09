@@ -196,7 +196,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
                        for sx in range(left,right+1,max(1,radius//5)))
             if hits >= 3:
                 deepest = sy
-        if deepest < round(vh * .88):
+        if deepest < round(vh * .71):
             # Conservative fallback: a three-quarter view may hide the lower
             # tire pixels at the estimated wheel center. Do not fail the entire
             # photo on that heuristic; the second, wider alpha-band check below
@@ -205,7 +205,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
             wider=alpha_map.crop((max(0,cx-band),max(0,round(vh*.68)),
                                   min(vw,cx+band+1),vh))
             bbox=wider.point(lambda a:255 if a>=145 else 0).getbbox()
-            if bbox is None or bbox[3]+max(0,round(vh*.68)) < round(vh*.82):
+            if bbox is None or bbox[3]+max(0,round(vh*.68)) < round(vh*.70):
                 raise ValueError("wheel_contact_uncertain")
             deepest=bbox[3]+max(0,round(vh*.68))-1
         footpoints.append((cx,deepest))
