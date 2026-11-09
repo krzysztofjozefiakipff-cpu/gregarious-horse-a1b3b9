@@ -154,7 +154,28 @@ def main():
                     if not run_once(conn):
                         time.sleep(POLL_SECONDS)
         except Exception as exc:
-            print("CARVELO worker DB reconnect",type(exc).__name__,flush=True)
+            # Classify connection failures without exposing database credentials,
+            # hostnames or the connection URL in production logs.
+            detail = str(exc).lower()
+            if "password authentication failed" in detail or "invalid password" in detail:
+                category = "invalid_database_password"
+            elif "tenant or user not found" in detail or "role" in detail and "does not exist" in detail:
+                category = "invalid_pooler_username"
+            elif "name or service not known" in detail or "could not translate host name" in detail:
+                category = "dns_resolution"
+            elif "connection timed out" in detail or "timeout expired" in detail:
+                category = "connection_timeout"
+            elif "connection refused" in detail:
+                category = "connection_refused"
+            elif "ssl" in detail or "certificate" in detail:
+                category = "tls_error"
+            elif "too many connections" in detail:
+                category = "pool_exhausted"
+            else:
+                category = "unclassified"
+            print("CARVELO worker DB reconnect",type(exc).__name__,
+                  "category="+category,"sqlstate="+str(getattr(exc,"sqlstate",None)),
+                  flush=True)
             time.sleep(min(POLL_SECONDS*4,30))
 
 if __name__=="__main__":
