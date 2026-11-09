@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "preview/**"
+      - "panel/config.js"
       - "infra/preview/**"
       - "tools/ovh/deploy_preview.sh"
       - ".github/workflows/carvamo-preview-deploy.yml"
@@ -27,6 +28,8 @@ jobs:
           grep -q 'ŚRODOWISKO TESTOWE CARVAMO' preview/index.html
           test -s infra/preview/Caddyfile
           bash -n tools/ovh/deploy_preview.sh
+          mkdir -p preview/panel
+          cp panel/config.js preview/panel/config.js
           tar -czf "/tmp/carvamo-preview-${GITHUB_SHA}.tgz" -C preview .
       - name: Configure pinned SSH host
         env:
