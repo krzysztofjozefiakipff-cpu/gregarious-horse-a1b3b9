@@ -1,0 +1,68 @@
+name: CARVAMO OVH controlled code sync
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = inspect only; deploy = fast-forward clean checkout"
+        required: true
+        type: choice
+        options:
+          - check
+          - deploy
+        default: check
+permissions:
+  contents: read
+concurrency:
+  group: carvamo-ovh-controlled-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: ovh-staging
+    steps:
+      - name: Install verified SSH identity
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_SSH_PRIVATE_KEY"
+          test -n "$OVH_SSH_HOST_KEY"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          chmod 600 ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Inspect and optionally fast-forward repository
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 carvamo-deploy@146.59.52.16 "MODE=$MODE sh -s" <<'REMOTE'
+          set -eu
+          cd /opt/carvamo/app
+          test "$(id -un)" = carvamo-deploy
+          test "$(git branch --show-current)" = main
+          echo "Current commit: $(git rev-parse --short HEAD)"
+          echo "Working tree (tracked files):"
+          git status --porcelain --untracked-files=no
+          git fetch origin main
+          echo "Remote commit: $(git rev-parse --short origin/main)"
+          if test "$MODE" = check; then
+            echo "CHECK ONLY: no changes applied"
+            exit 0
+          fi
+          test "$MODE" = deploy
+          if test -n "$(git status --porcelain --untracked-files=no)"; then
+            echo "BLOCKED: tracked local modifications require review and backup"
+            exit 1
+          fi
+          if test -n "$(git ls-files --others --exclude-standard)"; then
+            echo "BLOCKED: untracked files require review before deployment"
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD origin/main || { echo "BLOCKED: non-fast-forward history"; exit 1; }
+          git merge --ff-only origin/main
+          echo "Repository synchronized. No services restarted."
+          REMOTE
