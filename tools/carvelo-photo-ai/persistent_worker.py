@@ -148,7 +148,7 @@ def run_once(conn):
         upload(path,data)
         update_progress(conn,job_id,run_id,"finalizing",95)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
-            (job_id,run_id,path,changed,None,reason,"studio-v6"))
+            (job_id,run_id,path,changed,None,reason,"studio-v7"))
         conn.commit()
         print("CARVELO ready for review",job_id,job["target_mode"],flush=True)
     except Exception as exc:
@@ -156,7 +156,7 @@ def run_once(conn):
         if path:
             remove_uploaded(path)
         # Never print exception text: requests errors can contain API tokens in URLs.
-        safe_value_errors={"mask_quality_unreliable","wheel_grounding_unsafe","output_too_large","source_size_limit","source_pixel_limit","unsupported_job_mode","vehicle_mask_empty","vehicle_mask_invalid","vehicle_placement_overflows","wheel_contact_uncertain","wheel_contact_misaligned","wheel_contact_unreliable","wheel_ground_plane_unreliable","wheel_contact_not_on_floor","silhouette_below_floor","showroom_reference_unexpected_size","missing_official_carvelo_logo"}
+        safe_value_errors={"mask_quality_unreliable","wheel_grounding_unsafe","output_too_large","source_size_limit","source_pixel_limit","unsupported_job_mode","vehicle_mask_empty","vehicle_mask_invalid","vehicle_placement_overflows","wheel_contact_uncertain","wheel_detection_low_confidence","wheel_contact_misaligned","wheel_contact_unreliable","wheel_ground_plane_unreliable","wheel_contact_not_on_floor","silhouette_below_floor","showroom_reference_unexpected_size","missing_official_carvelo_logo"}
         code=str(exc) if isinstance(exc,ValueError) and str(exc) in safe_value_errors else type(exc).__name__
         print("CARVELO worker job failed",job_id,code,flush=True)
         rpc(conn,"select public.cv_ai_fail(%s,%s,%s)",(job_id,run_id,code))
