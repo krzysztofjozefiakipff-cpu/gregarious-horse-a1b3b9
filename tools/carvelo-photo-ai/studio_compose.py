@@ -207,7 +207,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         footpoints.append((cx,deepest))
     # Align the wheel contact plane, not the overall alpha bounding box.
     contact_plane = max(fp[1] for fp in footpoints)
-    if abs(footpoints[0][1]-footpoints[1][1]) > round(h*.18):
+    if max(cy for _,cy in footpoints)-min(cy for _,cy in footpoints) > round(h*.18):
         raise ValueError("wheel_contact_misaligned")
     corrected_y = ground_y-contact_plane
     if corrected_y < 0 or corrected_y+vh > h:
@@ -234,7 +234,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
             raise ValueError("wheel_contact_unreliable")
         cy = y + max(0,round(vh*.68)) + lower[3] - 1
         contact_points.append((cx, cy))
-    if abs(contact_points[0][1]-contact_points[1][1]) > h*.18:
+    if max(cy for _,cy in contact_points)-min(cy for _,cy in contact_points) > h*.18:
         raise ValueError("wheel_ground_plane_unreliable")
 
     if any(cy > ground_y + round(h * .025) or cy < ground_y - round(h * .18) for _, cy in contact_points):
