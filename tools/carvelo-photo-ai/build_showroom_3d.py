@@ -123,7 +123,7 @@ def build():
     camera.name = "CARVELO calibrated orbit camera"
     bpy.context.scene.camera = camera
     camera.data.type = "PERSP"
-    camera.data.lens = 35
+    camera.data.lens = 40
     camera.data.sensor_width = 36
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
@@ -138,12 +138,12 @@ def build():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
-    target = Vector((0, 0, 1.05))
+    target = Vector((0, 0, 1.0))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
-        camera.location = (8.2*math.sin(rad), -8.2*math.cos(rad), 1.45)
+        camera.location = (5.6*math.sin(rad), -5.6*math.cos(rad), 1.20)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -158,6 +158,9 @@ def build():
             "sensor_width_mm": camera.data.sensor_width,
             "resolution": [args.width, args.height],
             "floor_z_m": 0.0,
+            "hero_vehicle_target_frame_width_fraction": 0.85,
+            "camera_orbit_radius_m": 5.6,
+            "composition_note": "Camera is framed for a foreground vehicle; empty background renders alone cannot verify actual vehicle occupancy.",
             "target_m": list(target),
             "empty": True,
         })
