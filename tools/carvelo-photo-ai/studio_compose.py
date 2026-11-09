@@ -276,19 +276,30 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     footprint = Image.new("L", (w, h), 0)
     fd = ImageDraw.Draw(footprint)
     for cx, cy in contact_points:
-        rx = max(7, round(vw * .028))
+        # Two-layer tire footprint: an almost-black, very tight contact seam
+        # and a softer ground-level penumbra. Do not shift the seam toward the
+        # global ground line: perspective can place each tire at a different y.
+        rx = max(6, round(vw * .025))
         ry = max(2, round(h * .004))
-        fd.ellipse((cx-rx, cy-ry, cx+rx, cy+ry+2), fill=245)
-    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0015))))
+        fd.ellipse((cx-rx, cy-ry, cx+rx, cy+ry+2), fill=247)
+    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0012))))
 
-    # Underbody shadow: separate narrow dark core from broad ambient shade.
-    # Its upper half disappears behind the car; lower edge visually connects
-    # the undercarriage to the floor without painting over wheels or bodywork.
+    # Perspective-aware underbody occlusion: ground the body between the
+    # detected tire contacts, rather than a long ellipse across the whole car.
+    # This prevents a dark floating bar beyond the actual wheelbase.
     underbody = Image.new("L", (w, h), 0)
     ud = ImageDraw.Draw(underbody)
-    ud.ellipse((x+round(vw*.13), ground_y-round(h*.019),
-                x+round(vw*.87), ground_y+round(h*.019)), fill=158)
-    underbody = underbody.filter(ImageFilter.GaussianBlur(max(3, round(h*.008))))
+    sorted_contacts = sorted(contact_points)
+    left_x, left_y = sorted_contacts[0]
+    right_x, right_y = sorted_contacts[-1]
+    pad = round(vw * .055)
+    for i in range(25):
+        t = i / 24
+        cx = round(left_x * (1-t) + right_x*t)
+        cy = round(left_y * (1-t) + right_y*t)
+        radius = max(3, round(h * .011))
+        ud.ellipse((cx-pad//3, cy-radius, cx+pad//3, cy+radius), fill=146)
+    underbody = underbody.filter(ImageFilter.GaussianBlur(max(3, round(h*.006))))
     shadow = ImageChops.lighter(
         ImageChops.lighter(ImageChops.lighter(ambient, contact), directional),
         ImageChops.lighter(footprint, underbody))
