@@ -281,7 +281,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         # global ground line: perspective can place each tire at a different y.
         rx = max(6, round(vw * .025))
         ry = max(2, round(h * .004))
-        fd.ellipse((cx-rx, cy-ry, cx+rx, cy+ry+2), fill=247)
+        # Shift the contact patch a few pixels below the opaque tire edge:
+        # a centered ellipse is mostly hidden behind the wheel silhouette.
+        fd.ellipse((cx-rx, cy-1, cx+rx, cy+max(4, round(h*.010))), fill=247)
     footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0012))))
 
     # Perspective-aware underbody occlusion: ground the body between the
@@ -303,6 +305,16 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     shadow = ImageChops.lighter(
         ImageChops.lighter(ImageChops.lighter(ambient, contact), directional),
         ImageChops.lighter(footprint, underbody))
+    # Reinforce a short floor-only dark seam immediately below each tire.
+    # This stays behind the foreground and cannot recolor wheels or bodywork.
+    seam = Image.new("L", (w, h), 0)
+    seam_draw = ImageDraw.Draw(seam)
+    for cx, cy in contact_points:
+        seam_draw.ellipse((cx-max(5,round(vw*.019)), cy,
+                           cx+max(5,round(vw*.019)),
+                           cy+max(3,round(h*.007))), fill=235)
+    seam = seam.filter(ImageFilter.GaussianBlur(max(1,round(h*.001))))
+    shadow = ImageChops.lighter(shadow, seam)
     layer = Image.new("RGBA", (w, h), (25, 25, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
