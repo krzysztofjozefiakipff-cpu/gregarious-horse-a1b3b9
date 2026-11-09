@@ -9,7 +9,7 @@ from showroom_3d_adapter import load_views, load_background
 
 class Showroom3DAcceptance(unittest.TestCase):
     def make_bundle(self, root, angle=0):
-        Image.new("RGB", (1280, 720), (35, 36, 38)).save(root / "empty_%+04d.png" % angle)
+        Image.new("RGB", (1280, 720), (35, 36, 38)).save(root / ("empty_%+04d.png" % angle))
         (root / "camera_manifest.json").write_text(json.dumps({
             "camera_views": [{
                 "image": "empty_%+04d.png" % angle,
