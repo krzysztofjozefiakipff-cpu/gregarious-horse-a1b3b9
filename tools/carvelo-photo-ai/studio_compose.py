@@ -250,7 +250,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     ambient = Image.new("L", (w, h), 0)
     painter = ImageDraw.Draw(ambient)
     painter.ellipse((x + round(vw * .055), ground_y - round(h * .032),
-                     x + round(vw * .95), ground_y + round(h * .052)), fill=126)
+                     x + round(vw * .95), ground_y + round(h * .066)), fill=166)
     ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .017))))
 
     contact = Image.new("L", (w, h), 0)
@@ -286,22 +286,36 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         fd.ellipse((cx-rx, cy-1, cx+rx, cy+max(4, round(h*.010))), fill=247)
     footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0012))))
 
-    # Perspective-aware underbody occlusion: ground the body between the
-    # detected tire contacts, rather than a long ellipse across the whole car.
-    # This prevents a dark floating bar beyond the actual wheelbase.
+    # The source studio has a broad dark occlusion zone below the rocker
+    # panel. A thin line between tire centers leaves the underside bright
+    # and creates the levitating-car appearance. Build a two-scale footprint
+    # with a dense core and a wide soft penumbra following the axle slope.
     underbody = Image.new("L", (w, h), 0)
     ud = ImageDraw.Draw(underbody)
     sorted_contacts = sorted(contact_points)
     left_x, left_y = sorted_contacts[0]
     right_x, right_y = sorted_contacts[-1]
-    pad = round(vw * .055)
-    for i in range(25):
-        t = i / 24
+    wheel_span = max(1, right_x - left_x)
+    for i in range(41):
+        t = i / 40
         cx = round(left_x * (1-t) + right_x*t)
         cy = round(left_y * (1-t) + right_y*t)
-        radius = max(3, round(h * .011))
-        ud.ellipse((cx-pad//3, cy-radius, cx+pad//3, cy+radius), fill=146)
-    underbody = underbody.filter(ImageFilter.GaussianBlur(max(3, round(h*.006))))
+        taper = .65 + .35 * (1-abs(2*t-1))
+        rx = max(5, round(wheel_span * .046 * taper))
+        ry = max(4, round(h * .033 * taper))
+        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=210)
+    underbody = underbody.filter(ImageFilter.GaussianBlur(max(4, round(h*.012))))
+    core = Image.new("L", (w, h), 0)
+    cd = ImageDraw.Draw(core)
+    for i in range(37):
+        t = i / 36
+        cx = round(left_x * (1-t) + right_x*t)
+        cy = round(left_y * (1-t) + right_y*t)
+        rx = max(4, round(wheel_span*.025))
+        ry = max(3, round(h*.011))
+        cd.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=231)
+    core = core.filter(ImageFilter.GaussianBlur(max(2,round(h*.004))))
+    underbody = ImageChops.lighter(underbody,core)
     shadow = ImageChops.lighter(
         ImageChops.lighter(ImageChops.lighter(ambient, contact), directional),
         ImageChops.lighter(footprint, underbody))
