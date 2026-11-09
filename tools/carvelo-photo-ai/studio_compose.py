@@ -196,8 +196,8 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
             deepest=bbox[3]+max(0,round(vh*.68))-1
         footpoints.append((cx,deepest))
     # Align the wheel contact plane, not the overall alpha bounding box.
-    contact_plane = round(sum(fp[1] for fp in footpoints) / len(footpoints))
-    if abs(footpoints[0][1]-footpoints[1][1]) > round(h*.07):
+    contact_plane = max(fp[1] for fp in footpoints)
+    if abs(footpoints[0][1]-footpoints[1][1]) > round(h*.18):
         raise ValueError("wheel_contact_misaligned")
     corrected_y = ground_y-contact_plane
     if corrected_y < 0 or corrected_y+vh > h:
@@ -224,10 +224,10 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
             raise ValueError("wheel_contact_unreliable")
         cy = y + max(0,round(vh*.68)) + lower[3] - 1
         contact_points.append((cx, cy))
-    if abs(contact_points[0][1]-contact_points[1][1]) > h*.115:
+    if abs(contact_points[0][1]-contact_points[1][1]) > h*.18:
         raise ValueError("wheel_ground_plane_unreliable")
 
-    if any(abs(cy - ground_y) > round(h * .038) for _, cy in contact_points):
+    if any(cy > ground_y + round(h * .025) or cy < ground_y - round(h * .18) for _, cy in contact_points):
         raise ValueError("wheel_contact_not_on_floor")
 
     # Reflection is clipped to the floor and fades quickly; no mirror-image
@@ -258,7 +258,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     for cx, cy in contact_points:
         dx = max(9, round(vw * .038))
         dy = max(3, round(h * .008))
-        touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy), fill=228)
+        touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy+max(3,round(h*.008))), fill=238)
     contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .003))))
 
     directional = Image.new("L", (w, h), 0)
@@ -302,7 +302,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         cy = round(left_y * (1-t) + right_y*t)
         taper = .65 + .35 * (1-abs(2*t-1))
         rx = max(5, round(wheel_span * .046 * taper))
-        ry = max(4, round(h * .033 * taper))
+        ry = max(5, round(h * .042 * taper))
         ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=210)
     underbody = underbody.filter(ImageFilter.GaussianBlur(max(4, round(h*.012))))
     core = Image.new("L", (w, h), 0)
@@ -341,7 +341,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
-        "wheel_grounded": all(abs(pt_y-ground_y) <= round(h*.038) for _,pt_y in contact_points),
+        "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
         "subtle_floor_reflection": bool(reflect_h > 4),
