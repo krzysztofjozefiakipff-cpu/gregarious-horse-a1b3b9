@@ -1,0 +1,56 @@
+name: CARVAMO preview HTTPS deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - "preview/**"
+      - "infra/preview/**"
+      - "tools/ovh/deploy_preview.sh"
+      - ".github/workflows/carvamo-preview-deploy.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: carvamo-preview-web
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check preview files
+        run: |
+          set -euo pipefail
+          test -s preview/index.html
+          grep -q 'ŚRODOWISKO TESTOWE CARVAMO' preview/index.html
+          test -s infra/preview/Caddyfile
+          bash -n tools/ovh/deploy_preview.sh
+          tar -czf "/tmp/carvamo-preview-${GITHUB_SHA}.tgz" -C preview .
+      - name: Configure pinned SSH host
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_SSH_PRIVATE_KEY"
+          test -n "$OVH_SSH_HOST_KEY"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+      - name: Upload isolated preview release
+        run: |
+          set -euo pipefail
+          SSH=(ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=10)
+          SCP=(scp -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes)
+          HOST=carvamo-deploy@146.59.52.16
+          "${SSH[@]}" "$HOST" 'mkdir -p "$HOME/carvamo-preview"'
+          "${SCP[@]}" "/tmp/carvamo-preview-${GITHUB_SHA}.tgz" "$HOST:carvamo-preview/upload-${GITHUB_SHA}.tgz"
+          "${SCP[@]}" infra/preview/Caddyfile "$HOST:carvamo-preview/config-${GITHUB_SHA}.Caddyfile"
+          "${SCP[@]}" tools/ovh/deploy_preview.sh "$HOST:carvamo-preview/deploy-${GITHUB_SHA}.sh"
+      - name: Start preview and verify HTTPS
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes carvamo-deploy@146.59.52.16 "bash carvamo-preview/deploy-${GITHUB_SHA}.sh ${GITHUB_SHA}"
