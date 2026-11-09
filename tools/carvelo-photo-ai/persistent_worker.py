@@ -40,7 +40,7 @@ def get_photo(path):
     url=SUPABASE_URL+"/storage/v1/object/authenticated/carvelo-photo-originals/"+quote(path,safe="/")
     resp=requests.get(url,headers=HEADERS,timeout=45)
     if not resp.ok:
-        print("CARVELO storage download failed status="+str(resp.status_code),flush=True)
+        print("CARVELO storage download failed status="+str(resp.status_code)+" code="+str(resp.json().get("error",resp.json().get("code","unknown")))[:70] if resp.headers.get("content-type","").startswith("application/json") else "CARVELO storage download failed status="+str(resp.status_code),flush=True)
     resp.raise_for_status()
     if len(resp.content)>MAX_BYTES:
         raise ValueError("source_size_limit")
