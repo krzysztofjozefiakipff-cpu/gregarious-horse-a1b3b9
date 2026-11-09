@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v6"
+SCENE_VERSION = "studio-v7"
 GROUND_Y = 0.85
 
 
@@ -96,42 +96,55 @@ def render_scene(scene_path: Path, size: tuple[int, int]) -> Image.Image:
         return image.convert("RGBA")
 
 
-def _contact_centers(alpha: Image.Image) -> tuple[float, float]:
-    """Locate bottommost tire-like silhouette clusters; use stable conservative fallback.
+def _contact_centers(car: Image.Image) -> tuple[float, float]:
+    """Find tire centers from circular dark tire contours, not frame halves.
 
-    Works with side-view and three-quarter images. It never assumes two specific
-    wheel shapes when the silhouette is ambiguous.
+    In rear three-quarter views both visible wheels can occupy the LEFT
+    half of the image. The old fixed 24%/76% anchors placed the distant
+    wheel shadow under a bumper or empty floor.
     """
-    w, h = alpha.size
-    sample = alpha.convert("L").point(lambda p: 255 if p >= 175 else 0)
-    y_start = max(0, round(h * .87))
-    bottom = sample.crop((0, y_start, w, h))
-    candidates = []
-    for left_frac, right_frac, fallback in ((.08, .48, .24), (.52, .92, .76)):
-        x0, x1 = int(w * left_frac), int(w * right_frac)
-        segments = []
-        active = None
-        for x in range(x0, x1):
-            is_deep = False
-            for y in range(bottom.height - 1, -1, -1):
-                if bottom.getpixel((x, y)) and y + y_start >= h * .95:
-                    is_deep = True
-                    break
-            if is_deep and active is None:
-                active = x
-            if not is_deep and active is not None:
-                segments.append((active, x))
-                active = None
-        if active is not None:
-            segments.append((active, x1))
-        useful = [seg for seg in segments if
-                  .035 * w <= seg[1] - seg[0] <= .29 * w]
-        if useful:
-            best = max(useful, key=lambda seg: seg[1] - seg[0])
-            candidates.append((best[0] + best[1]) / (2 * w))
-        else:
-            candidates.append(fallback)
-    return candidates[0], candidates[1]
+    rgb = np.asarray(car.convert("RGB"), dtype=np.float32)
+    alpha = np.asarray(car.getchannel("A"), dtype=np.uint8)
+    h, w = alpha.shape
+    lum = rgb.mean(axis=2)
+    # Search multiple tire radii: the far wheel is smaller in perspective.
+    # A tire has a dark annulus with a lighter wheel/rim interior.
+    proposals = []
+    for radius in (max(10, round(h*.075)), max(10, round(h*.105)),
+                   max(10, round(h*.14)), max(10, round(h*.175))):
+        stride = max(5, round(radius*.19))
+        angles = np.linspace(0, 2*np.pi, 32, endpoint=False)
+        dx = np.rint(np.cos(angles)*radius).astype(int)
+        dy = np.rint(np.sin(angles)*radius).astype(int)
+        for cy in range(max(radius,round(h*.53)), min(h-radius,round(h*.90)), stride):
+            for cx in range(radius, w-radius, stride):
+                xs, ys = cx+dx, cy+dy
+                valid = alpha[ys,xs] >= 160
+                if valid.sum() < 23:
+                    continue
+                ring = lum[ys,xs][valid]
+                # Penalize bright body panels and low-contrast dark bodywork.
+                dark = float((ring < 115).mean())
+                if dark < .48:
+                    continue
+                inner = lum[max(0,cy-radius//3):min(h,cy+radius//3+1),
+                            max(0,cx-radius//3):min(w,cx+radius//3+1)]
+                contrast = float(inner.mean()-ring.mean())
+                score = dark + max(-.20,min(.35,contrast/140.))
+                proposals.append((score,cx,cy,radius))
+    proposals.sort(reverse=True)
+    selected = []
+    for score,cx,cy,radius in proposals:
+        if score < .52:
+            break
+        if all(abs(cx-x0) > max(radius,r0)*1.65 for _,x0,_,r0 in selected):
+            selected.append((score,cx,cy,radius))
+            if len(selected)==2:
+                break
+    if len(selected)!=2:
+        raise ValueError("wheel_detection_low_confidence")
+    selected.sort(key=lambda item:item[1])
+    return selected[0][1]/w, selected[1][1]/w
 
 
 def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_photo: Image.Image | None = None) -> tuple[Image.Image, dict]:
@@ -165,7 +178,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     y = ground_y - vh
     if x < 0 or y < 0 or x + vw > w or ground_y + round(h * .09) > h:
         raise ValueError("vehicle_placement_overflows")
-    wheel_fractions = _contact_centers(car.getchannel("A"))
+    wheel_fractions = _contact_centers(car)
     local_centers = [round(vw * frac) for frac in wheel_fractions]
     # The lowest pixel of the *whole silhouette* may be a bumper or shadow,
     # not an actual tire. Detect both tire foot-points independently.
