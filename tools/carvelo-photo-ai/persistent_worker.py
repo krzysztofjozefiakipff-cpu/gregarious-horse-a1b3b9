@@ -85,7 +85,10 @@ def make_candidate(job):
             reason="window_mask_low_confidence"
     else:
         raise ValueError("unsupported_job_mode")
-    result=add_official_logo(result,LOGO)
+    # The approved exterior showroom already carries the official CARVELO wall sign.
+    # Never add a second floating logo panel on exterior compositions.
+    if job["target_mode"] != "showroom_exterior":
+        result=add_official_logo(result,LOGO)
     buf=io.BytesIO()
     result.convert("RGB").save(buf,format="PNG",optimize=True)
     out=buf.getvalue()
@@ -125,7 +128,7 @@ def run_once(conn):
         path=(str(job["offer_id"])+"/"+str(job["photo_id"])+"/ai/"+str(uuid.uuid4())+".png")
         upload(path,data)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
-            (job_id,run_id,path,changed,None,reason,"studio-v5"))
+            (job_id,run_id,path,changed,None,reason,"studio-v6"))
         conn.commit()
         print("CARVELO ready for review",job_id,job["target_mode"],flush=True)
     except Exception as exc:
