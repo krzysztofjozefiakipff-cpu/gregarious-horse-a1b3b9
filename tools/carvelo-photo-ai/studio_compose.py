@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 
-SCENE_VERSION = "studio-v5"
+SCENE_VERSION = "studio-v6"
 GROUND_Y = 0.85
 
 
@@ -225,14 +225,17 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     if abs(contact_points[0][1]-contact_points[1][1]) > h*.115:
         raise ValueError("wheel_ground_plane_unreliable")
 
+    if any(abs(cy - ground_y) > round(h * .038) for _, cy in contact_points):
+        raise ValueError("wheel_contact_not_on_floor")
+
     # A very faint diffuse reflected silhouette, BELOW the tire contact plane.
     # Only the floor is modified, the car itself is not color graded/repainted.
-    reflect_h = min(round(vh * .19), h - ground_y - 4)
+    reflect_h = max(0, min(round(vh * .16), h - ground_y - 4))
     if reflect_h > 4:
         reflection = ImageOps.flip(car).resize((vw, reflect_h), Image.Resampling.BILINEAR)
         a = reflection.getchannel("A")
         fade = Image.new("L", (vw, reflect_h), 0)
-        fade.putdata([max(0, round(a0 * (.078 * (1 - iy / max(1, reflect_h - 1)) ** 1.8)))
+        fade.putdata([max(0, round(a0 * (.095 * (1 - iy / max(1, reflect_h - 1)) ** 1.8)))
                       for iy in range(reflect_h) for a0 in
                       list(a.crop((0, iy, vw, iy + 1)).getdata())])
         reflection.putalpha(fade)
@@ -244,18 +247,18 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     ambient = Image.new("L", (w, h), 0)
     painter = ImageDraw.Draw(ambient)
     painter.ellipse((x + round(vw * .07), ground_y - round(h * .025),
-                     x + round(vw * .93), ground_y + round(h * .031)), fill=58)
+                     x + round(vw * .93), ground_y + round(h * .037)), fill=85)
     ambient = ambient.filter(ImageFilter.GaussianBlur(max(8, round(h * .019))))
 
     # Local contact patches beneath tire centers, not two oversized black spots.
     contact = Image.new("L", (w, h), 0)
     touch = ImageDraw.Draw(contact)
     for cx, cy in contact_points:
-        dx = max(9, round(vw * .058))
-        dy = max(4, round(h * .007))
+        dx = max(9, round(vw * .045))
+        dy = max(3, round(h * .005))
         touch.ellipse((cx - dx, cy - dy,
-                       cx + dx, cy + round(dy * .8)), fill=162)
-    contact = contact.filter(ImageFilter.GaussianBlur(max(3, round(h * .007))))
+                       cx + dx, cy + round(dy * .8)), fill=205)
+    contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .004))))
     # Shallow daylight shadow leans away from the windows on the right.
     # It remains on the floor, below the real car silhouette.
     directional = Image.new("L", (w, h), 0)
@@ -281,7 +284,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
-        "wheel_grounded": all(abs(pt_y-ground_y) <= round(h*.07) for _,pt_y in contact_points),
+        "wheel_grounded": all(abs(pt_y-ground_y) <= round(h*.038) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
         "subtle_floor_reflection": bool(reflect_h > 4),
