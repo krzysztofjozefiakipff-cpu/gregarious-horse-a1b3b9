@@ -148,7 +148,7 @@ def run_once(conn):
         upload(path,data)
         update_progress(conn,job_id,run_id,"finalizing",95)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
-            (job_id,run_id,path,changed,None,reason,"studio-v7"))
+            (job_id,run_id,path,changed,None,reason,"studio-v6"))
         conn.commit()
         print("CARVELO ready for review",job_id,job["target_mode"],flush=True)
     except Exception as exc:
