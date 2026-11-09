@@ -1,0 +1,30 @@
+name: CARVAMO preview DNS bootstrap
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/carvamo-preview-dns.yml"
+      - "tools/ovh/create_preview_dns.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: carvamo-preview-dns
+  cancel-in-progress: false
+jobs:
+  dns:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create preview-only DNS record (never overwrite)
+        env:
+          OVH_APPLICATION_KEY: ${{ secrets.OVH_APPLICATION_KEY }}
+          OVH_APPLICATION_SECRET: ${{ secrets.OVH_APPLICATION_SECRET }}
+          OVH_CONSUMER_KEY: ${{ secrets.OVH_CONSUMER_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_APPLICATION_KEY"
+          test -n "$OVH_APPLICATION_SECRET"
+          test -n "$OVH_CONSUMER_KEY"
+          python3 tools/ovh/create_preview_dns.py
