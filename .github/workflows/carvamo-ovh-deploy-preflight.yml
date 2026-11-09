@@ -1,0 +1,51 @@
+name: CARVAMO OVH deployment preflight
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: carvamo-ovh-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate required SSH secrets
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_SSH_PRIVATE_KEY"
+          test -n "$OVH_SSH_HOST_KEY"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          chmod 600 ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Read-only OVH environment inspection
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 carvamo-deploy@146.59.52.16 '
+            set -eu
+            test "$(id -un)" = "carvamo-deploy"
+            printf "SSH identity: OK\n"
+            printf "Server: "; hostname
+            printf "Git: "; command -v git || true
+            printf "Docker: "; command -v docker || true
+            printf "App directory: "
+            if test -d /opt/carvamo/app; then echo PRESENT; else echo MISSING; fi
+            printf "App readable: "
+            if test -r /opt/carvamo/app/.git/HEAD; then echo YES; else echo NO; fi
+            printf "App writable: "
+            if test -w /opt/carvamo/app; then echo YES; else echo NO; fi
+            printf "Git HEAD: "
+            if test -r /opt/carvamo/app/.git/HEAD; then
+              git -C /opt/carvamo/app rev-parse --short HEAD || true
+            else
+              echo UNAVAILABLE
+            fi
+            printf "Docker access: "
+            if docker info >/dev/null 2>&1; then echo YES; else echo NO; fi
+          '
