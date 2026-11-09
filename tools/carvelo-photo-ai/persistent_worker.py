@@ -50,13 +50,17 @@ def get_photo(path):
         return photo
 
 def make_candidate(job):
+    print("CARVELO processing stage=download",job["job_id"],flush=True)
     photo=get_photo(job["original_path"])
+    print("CARVELO processing stage=downloaded",job["job_id"],flush=True)
     changed=None
     reason=None
     if job["target_mode"]=="showroom_exterior":
         buf=io.BytesIO()
         photo.convert("RGB").save(buf,"PNG")
+        print("CARVELO processing stage=segmentation",job["job_id"],flush=True)
         cut=remove(buf.getvalue(),session=session())
+        print("CARVELO processing stage=segmented",job["job_id"],flush=True)
         with Image.open(io.BytesIO(cut)) as fg:
             foreground=fg.convert("RGBA")
         if foreground.size!=photo.size:
@@ -122,10 +126,12 @@ def run_once(conn):
     if not job:
         return False
     job_id=job["job_id"]
+    print("CARVELO job claimed",job_id,flush=True)
     path=None
     try:
         data,changed,reason=make_candidate(job)
         path=(str(job["offer_id"])+"/"+str(job["photo_id"])+"/ai/"+str(uuid.uuid4())+".png")
+        print("CARVELO processing stage=upload",job_id,flush=True)
         upload(path,data)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
             (job_id,run_id,path,changed,None,reason,"studio-v6"))
