@@ -135,7 +135,8 @@ def run_once(conn):
         conn.rollback()
         if path:
             remove_uploaded(path)
-        code=str(exc).replace("\n"," ").replace("\r"," ")[:100]
+        # Never print exception text: requests errors can contain API tokens in URLs.
+        code=type(exc).__name__
         print("CARVELO worker job failed",job_id,code,flush=True)
         rpc(conn,"select public.cv_ai_fail(%s,%s,%s)",(job_id,run_id,code))
         conn.commit()
