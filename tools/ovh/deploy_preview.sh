@@ -28,10 +28,13 @@ if [ ! -d "$RELEASE" ]; then
   test -s "$RELEASE.tmp/index.html" || { echo "BLOCKED: missing index.html"; exit 9; }
   mv "$RELEASE.tmp" "$RELEASE"
 fi
+CONFIG_CHANGED=0
 if [ ! -e "$BASE/Caddyfile" ]; then
   cp "$CONFIG_UPLOAD" "$BASE/Caddyfile"
 elif ! cmp -s "$CONFIG_UPLOAD" "$BASE/Caddyfile"; then
-  echo "BLOCKED: unexpected server configuration change"; exit 10
+  cp "$BASE/Caddyfile" "$BASE/Caddyfile.previous"
+  cp "$CONFIG_UPLOAD" "$BASE/Caddyfile"
+  CONFIG_CHANGED=1
 fi
 PREVIOUS=""
 if [ -L "$BASE/current" ]; then PREVIOUS="$(readlink "$BASE/current")"; fi
@@ -39,6 +42,10 @@ ln -s "releases/$SHA" "$BASE/current.next"
 mv -Tf "$BASE/current.next" "$BASE/current"
 CREATED=0
 rollback() {
+  if [ "$CONFIG_CHANGED" = 1 ] && [ -f "$BASE/Caddyfile.previous" ]; then
+    cp "$BASE/Caddyfile.previous" "$BASE/Caddyfile"
+    docker exec "$NAME" caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
+  fi
   if [ -n "$PREVIOUS" ]; then
     ln -s "$PREVIOUS" "$BASE/current.rollback"
     mv -Tf "$BASE/current.rollback" "$BASE/current"
@@ -52,6 +59,10 @@ if ! docker container inspect "$NAME" >/dev/null 2>&1; then
     rollback; echo "BLOCKED: Docker launch failed"; exit 11
   fi
   CREATED=1
+elif [ "$CONFIG_CHANGED" = 1 ]; then
+  if ! docker exec "$NAME" caddy reload --config /etc/caddy/Caddyfile; then
+    rollback; echo "BLOCKED: Caddy reload failed"; exit 14
+  fi
 fi
 if ! docker ps --filter "name=^/$NAME$" --filter "status=running" --format '{{.Names}}' | grep -qx "$NAME"; then
   rollback; echo "BLOCKED: preview container not running"; exit 12
@@ -66,6 +77,6 @@ done
 if [ "$OK" != 1 ]; then
   rollback; echo "BLOCKED: preview HTTPS health check failed"; exit 13
 fi
-rm -f "$UPLOAD" "$CONFIG_UPLOAD"
+rm -f "$UPLOAD" "$CONFIG_UPLOAD" "$BASE/Caddyfile.previous"
 echo "PREVIEW DEPLOYED: $SHA"
 echo "https://preview.carvamo.com"
