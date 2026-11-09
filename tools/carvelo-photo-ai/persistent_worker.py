@@ -24,6 +24,8 @@ from studio_compose import render_scene, compose_grounded_vehicle, add_official_
 ROOT = Path(__file__).resolve().parents[2]
 SCENE = ROOT/"assets/brand/carvelo-showroom-empty-v5.webp"
 LOGO = ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
+SHOWROOM_3D_DIR = Path(os.getenv("CARVELO_SHOWROOM_3D_DIR", str(ROOT/"assets/brand/carvelo-showroom-3d")))
+SHOWROOM_3D_ENABLED = os.getenv("CARVELO_SHOWROOM_3D_ENABLED", "false").lower() == "true"
 DATABASE_URL = os.environ.get("CARVELO_DATABASE_URL","")
 SUPABASE_URL = os.environ.get("CARVELO_SUPABASE_URL","").rstrip("/")
 SERVICE_KEY = os.environ.get("CARVELO_SUPABASE_SERVICE_ROLE_KEY","")
@@ -75,7 +77,15 @@ def make_candidate(job, progress=None):
         covered=float((matte>48).mean())
         if covered<.12 or covered>.86 or float((matte>238).mean())<.08:
             raise ValueError("mask_quality_unreliable")
-        scene=render_scene(SCENE,photo.size)
+        if SHOWROOM_3D_ENABLED:
+            # Require a real source pose; never infer it from the alpha mask.
+            from showroom_3d_adapter import load_background
+            angle = job.get("source_camera_azimuth_deg")
+            if angle is None:
+                raise ValueError("source_camera_pose_missing")
+            scene = load_background(SHOWROOM_3D_DIR, float(angle), photo.size)
+        else:
+            scene = render_scene(SCENE, photo.size)
         result,placement=compose_grounded_vehicle(foreground,scene,source_photo=photo)
         if not placement["wheel_grounded"]:
             raise ValueError("wheel_grounding_unsafe")
@@ -156,7 +166,7 @@ def run_once(conn):
         if path:
             remove_uploaded(path)
         # Never print exception text: requests errors can contain API tokens in URLs.
-        safe_value_errors={"mask_quality_unreliable","wheel_grounding_unsafe","output_too_large","source_size_limit","source_pixel_limit","unsupported_job_mode","vehicle_mask_empty","vehicle_mask_invalid","vehicle_placement_overflows","wheel_contact_uncertain","wheel_detection_low_confidence","wheel_contact_misaligned","wheel_contact_unreliable","wheel_ground_plane_unreliable","wheel_contact_not_on_floor","silhouette_below_floor","showroom_reference_unexpected_size","missing_official_carvelo_logo"}
+        safe_value_errors={"mask_quality_unreliable","wheel_grounding_unsafe","output_too_large","source_size_limit","source_pixel_limit","unsupported_job_mode","vehicle_mask_empty","vehicle_mask_invalid","vehicle_placement_overflows","wheel_contact_uncertain","wheel_detection_low_confidence","wheel_contact_misaligned","wheel_contact_unreliable","wheel_ground_plane_unreliable","wheel_contact_not_on_floor","silhouette_below_floor","showroom_reference_unexpected_size","missing_official_carvelo_logo","source_camera_pose_missing","showroom_view_angle_mismatch","showroom_views_not_configured","showroom_view_missing","showroom_view_contains_vehicle","showroom_view_path_unsafe"}
         code=str(exc) if isinstance(exc,ValueError) and str(exc) in safe_value_errors else type(exc).__name__
         print("CARVELO worker job failed",job_id,code,flush=True)
         rpc(conn,"select public.cv_ai_fail(%s,%s,%s)",(job_id,run_id,code))
