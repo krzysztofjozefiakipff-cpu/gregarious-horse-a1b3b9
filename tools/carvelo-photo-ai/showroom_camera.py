@@ -53,3 +53,46 @@ def validate_alignment(measured, expected, image_height, tolerance=.018):
         raise ValueError("invalid_alignment_parameters")
     if floor_alignment_error(measured, expected) > image_height*tolerance:
         raise ValueError("wheel_ground_plane_unreliable")
+
+
+def camera_candidates(azimuth_step_deg: int = 5, heights_m=(1.15, 1.4, 1.65),
+                      pitches_deg=(-8, -4, 0, 4, 8)):
+    """Deterministic camera search grid for a continuous 3D showroom.
+
+    Candidates are hypotheses, not validated camera poses. Real photographs
+    require tire landmarks and image-level scoring before selecting one.
+    """
+    if not 1 <= azimuth_step_deg <= 30:
+        raise ValueError("invalid_camera_search_step")
+    return tuple(
+        Camera(float(azimuth), float(height), 800., 640., 360., float(pitch))
+        for azimuth in range(-90, 91, azimuth_step_deg)
+        for height in heights_m
+        for pitch in pitches_deg
+    )
+
+
+def best_camera_from_contacts(observed, world_contacts, candidates, max_error_px):
+    """Fit camera to measured wheel-ground anchors; reject uncertain matches.
+
+    world_contacts must be measured in metres on the floor, in the same
+    world coordinate system as the 3D showroom. Do not infer them from alpha.
+    """
+    if len(observed) != len(world_contacts) or len(observed) < 2:
+        raise ValueError("insufficient_tire_landmarks")
+    if max_error_px <= 0:
+        raise ValueError("invalid_alignment_parameters")
+    ranked = []
+    for camera in candidates:
+        try:
+            expected = [project_floor(camera, x, depth) for x, depth in world_contacts]
+            error = floor_alignment_error(observed, expected)
+            ranked.append((error, camera))
+        except ValueError:
+            continue
+    if not ranked:
+        raise ValueError("no_valid_camera_candidates")
+    error, camera = min(ranked, key=lambda item: item[0])
+    if error > max_error_px:
+        raise ValueError("wheel_ground_plane_unreliable")
+    return camera, error
