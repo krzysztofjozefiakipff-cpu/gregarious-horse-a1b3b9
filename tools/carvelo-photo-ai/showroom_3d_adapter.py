@@ -12,6 +12,8 @@ from showroom_views import CalibratedView, select_view
 
 def load_views(directory: Path):
     manifest_path = directory / "camera_manifest.json"
+    if not manifest_path.is_file():
+        raise ValueError("showroom_manifest_missing")
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     views = []
     for item in data["camera_views"]:
@@ -21,6 +23,12 @@ def load_views(directory: Path):
         if item.get("empty") is not True:
             raise ValueError("showroom_view_contains_vehicle")
         width, height = item["resolution"]
+        if width <= 0 or height <= 0 or not -90 <= float(item["azimuth_deg"]) <= 90:
+            raise ValueError("showroom_camera_metadata_invalid")
+        if abs(float(item.get("floor_z_m", 999))) > 1e-5:
+            raise ValueError("showroom_floor_metadata_invalid")
+        if abs(float(item["camera_location_m"][2]) - 1.2) > .001:
+            raise ValueError("showroom_camera_height_mismatch")
         # Blender metadata stores an actual camera location and orientation.
         # Camera() uses a different pinhole convention; don't silently mix them.
         # Angle is used ONLY for discrete selection; geometry must be calibrated
@@ -33,6 +41,8 @@ def load_views(directory: Path):
 
 
 def load_background(directory: Path, source_azimuth_deg: float, output_size):
+    if not -90 <= source_azimuth_deg <= 90:
+        raise ValueError("source_camera_pose_invalid")
     view = select_view(load_views(directory), source_azimuth_deg)
     with Image.open(view.image_path) as img:
         img.load()
