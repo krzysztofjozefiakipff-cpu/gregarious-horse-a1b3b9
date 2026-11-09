@@ -37,8 +37,10 @@ def session():
     return new_session("u2net")
 
 def get_photo(path):
-    url=SUPABASE_URL+"/storage/v1/object/carvelo-photo-originals/"+quote(path,safe="/")
+    url=SUPABASE_URL+"/storage/v1/object/authenticated/carvelo-photo-originals/"+quote(path,safe="/")
     resp=requests.get(url,headers=HEADERS,timeout=45)
+    if not resp.ok:
+        print("CARVELO storage download failed status="+str(resp.status_code),flush=True)
     resp.raise_for_status()
     if len(resp.content)>MAX_BYTES:
         raise ValueError("source_size_limit")
