@@ -268,7 +268,28 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
         (x-round(vw*.07), ground_y+round(h*.057))
     ], fill=48)
     directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h*.024))))
-    shadow = ImageChops.lighter(ImageChops.lighter(ambient, contact), directional)
+    # Tire grounding must be visible even on reflective light tiles.
+    # A two-scale footprint creates an opaque seam directly under each tire
+    # plus a wider soft penumbra, both behind the untouched vehicle pixels.
+    footprint = Image.new("L", (w, h), 0)
+    fd = ImageDraw.Draw(footprint)
+    for cx, cy in contact_points:
+        rx = max(7, round(vw * .028))
+        ry = max(2, round(h * .004))
+        fd.ellipse((cx-rx, cy-ry, cx+rx, cy+ry+2), fill=245)
+    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0015))))
+
+    # Underbody shadow: separate narrow dark core from broad ambient shade.
+    # Its upper half disappears behind the car; lower edge visually connects
+    # the undercarriage to the floor without painting over wheels or bodywork.
+    underbody = Image.new("L", (w, h), 0)
+    ud = ImageDraw.Draw(underbody)
+    ud.ellipse((x+round(vw*.13), ground_y-round(h*.019),
+                x+round(vw*.87), ground_y+round(h*.019)), fill=158)
+    underbody = underbody.filter(ImageFilter.GaussianBlur(max(3, round(h*.008))))
+    shadow = ImageChops.lighter(
+        ImageChops.lighter(ImageChops.lighter(ambient, contact), directional),
+        ImageChops.lighter(footprint, underbody))
     layer = Image.new("RGBA", (w, h), (25, 25, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
