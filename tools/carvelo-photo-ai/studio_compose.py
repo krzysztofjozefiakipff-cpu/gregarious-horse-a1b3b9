@@ -150,9 +150,11 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     if bw <= 0 or bh <= 0 or bw * bh < original.width * original.height * .045:
         raise ValueError("vehicle_mask_invalid")
 
-    # Do not create missing wheels or crop the front/rear bumpers. Original
-    # segment is only rescaled proportionally and centered in the blank studio.
-    scale = min(w * .84 / bw, h * .57 / bh, 1.5)
+    # Preserve source-photo vehicle prominence. The former 84% width / 57%
+    # height limits made full-size SUVs look like miniatures in the showroom.
+    # Fit generously but never crop bumpers, roof or wheels; keep the original
+    # foreground aspect ratio and cap enlargement of smaller source vehicles.
+    scale = min(w * .94 / bw, h * .73 / bh, 1.35)
     new_size = max(1, round(bw * scale)), max(1, round(bh * scale))
     cropped = original.crop(box)
     car = cropped.resize(new_size, Image.Resampling.LANCZOS)
