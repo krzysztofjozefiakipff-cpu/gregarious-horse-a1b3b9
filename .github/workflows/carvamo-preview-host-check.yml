@@ -1,0 +1,46 @@
+name: CARVAMO preview host preflight
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/carvamo-preview-host-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ovh-staging
+    steps:
+      - name: Configure pinned OVH SSH identity
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          test -n "$OVH_SSH_PRIVATE_KEY"
+          test -n "$OVH_SSH_HOST_KEY"
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+      - name: Read-only host capability inspection
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 carvamo-deploy@146.59.52.16 'sh -s' <<'REMOTE'
+          set -eu
+          printf 'identity: '; id -un
+          printf 'groups: '; id -Gn
+          printf 'docker_command: '; command -v docker || true
+          printf 'docker_socket: '; test -S /var/run/docker.sock && echo exists || echo missing
+          printf 'docker_access: '; if docker info >/dev/null 2>&1; then echo usable; else echo unavailable; fi
+          printf 'sudo_noninteractive: '; if sudo -n true >/dev/null 2>&1; then echo available; else echo unavailable; fi
+          printf 'available_ports_80_443:\n'
+          if command -v ss >/dev/null; then ss -ltn '( sport = :80 or sport = :443 )' || true; fi
+          printf 'dns_ipv4: '; getent ahostsv4 preview.carvamo.com | head -1 || true
+          printf 'app_checkout: '; test -f /opt/carvamo/app/index.html && echo exists || echo missing
+          printf 'app_checkout_readable: '; test -r /opt/carvamo/app/index.html && echo yes || echo no
+          printf 'app_checkout_commit: '; git -C /opt/carvamo/app rev-parse --short HEAD 2>/dev/null || true
+          printf 'home_writable: '; test -w "$HOME" && echo yes || echo no
+          REMOTE
