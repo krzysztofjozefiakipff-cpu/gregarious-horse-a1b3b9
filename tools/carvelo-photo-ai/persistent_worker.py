@@ -51,18 +51,21 @@ def get_photo(path):
         photo.thumbnail((1400,1400),Image.Resampling.LANCZOS)
         return photo
 
-def make_candidate(job):
+def make_candidate(job, progress=None):
     print("CARVELO processing stage=download",job["job_id"],flush=True)
     photo=get_photo(job["original_path"])
     print("CARVELO processing stage=downloaded",job["job_id"],flush=True)
+    if progress: progress("downloaded",30)
     changed=None
     reason=None
     if job["target_mode"]=="showroom_exterior":
         buf=io.BytesIO()
         photo.convert("RGB").save(buf,"PNG")
         print("CARVELO processing stage=segmentation",job["job_id"],flush=True)
+        if progress: progress("segmentation",40)
         cut=remove(buf.getvalue(),session=session())
         print("CARVELO processing stage=segmented",job["job_id"],flush=True)
+        if progress: progress("compositing",70)
         with Image.open(io.BytesIO(cut)) as fg:
             foreground=fg.convert("RGBA")
         if foreground.size!=photo.size:
@@ -95,6 +98,7 @@ def make_candidate(job):
     # Never add a second floating logo panel on exterior compositions.
     if job["target_mode"] != "showroom_exterior":
         result=add_official_logo(result,LOGO)
+    if progress: progress("encoding",85)
     buf=io.BytesIO()
     result.convert("RGB").save(buf,format="PNG",optimize=True)
     out=buf.getvalue()
@@ -120,6 +124,11 @@ def rpc(conn,query,values):
         cur.execute(query,values)
         return cur.fetchone()[0]
 
+def update_progress(conn,job_id,run_id,stage,percent):
+    with conn.cursor() as cur:
+        cur.execute("update public.cv_photo_jobs set progress_stage=%s, progress_percent=%s, progress_at=now() where id=%s and state='processing' and worker_run_id=%s",(stage,percent,job_id,run_id))
+    conn.commit()
+
 def run_once(conn):
     # Numeric token matches the existing private DB claim interface.
     run_id=str(secrets.randbelow(9_000_000_000_000_000)+1_000_000_000_000_000)
@@ -131,10 +140,13 @@ def run_once(conn):
     print("CARVELO job claimed",job_id,flush=True)
     path=None
     try:
-        data,changed,reason=make_candidate(job)
+        update_progress(conn,job_id,run_id,"downloading",15)
+        data,changed,reason=make_candidate(job,lambda stage,pct: update_progress(conn,job_id,run_id,stage,pct))
         path=(str(job["offer_id"])+"/"+str(job["photo_id"])+"/ai/"+str(uuid.uuid4())+".png")
+        update_progress(conn,job_id,run_id,"uploading",90)
         print("CARVELO processing stage=upload",job_id,flush=True)
         upload(path,data)
+        update_progress(conn,job_id,run_id,"finalizing",95)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
             (job_id,run_id,path,changed,None,reason,"studio-v6"))
         conn.commit()
