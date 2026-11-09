@@ -11,6 +11,7 @@ import base64
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
+import numpy as np
 
 SCENE_VERSION = "studio-v6"
 GROUND_Y = 0.85
@@ -133,7 +134,7 @@ def _contact_centers(alpha: Image.Image) -> tuple[float, float]:
     return candidates[0], candidates[1]
 
 
-def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[Image.Image, dict]:
+def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_photo: Image.Image | None = None) -> tuple[Image.Image, dict]:
     """Float-free car placement, soft body shadow, two tire contacts, faint reflection.
 
     Vehicle is uniformly scaled; original foreground colors are never altered.
@@ -229,6 +230,38 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
 
     if any(cy > ground_y + round(h * .025) or cy < ground_y - round(h * .18) for _, cy in contact_points):
         raise ValueError("wheel_contact_not_on_floor")
+
+    # Transfer the *real* ground occlusion from the original studio photograph.
+    # The original already contains perspective-correct shadows under distant
+    # wheels. Estimate floor brightness from unobstructed side strips, then
+    # recover only darker floor pixels outside the car's segmentation matte.
+    # Keep the original car pixels and CARVELO showroom floor untouched.
+    if source_photo is not None and source_photo.size == original.size:
+        src = np.asarray(source_photo.convert("RGB"), dtype=np.float32)
+        alpha_src = np.asarray(original.getchannel("A"), dtype=np.uint8)
+        floor_start = max(0, min(original.height - 1, box[1] + round(bh * .60)))
+        sample_rows = src[floor_start:, :, :]
+        sample_alpha = alpha_src[floor_start:, :]
+        side = max(8, round(original.width * .075))
+        side_values = np.concatenate((sample_rows[:, :side, :].reshape(-1, 3),
+                                      sample_rows[:, -side:, :].reshape(-1, 3)), axis=0)
+        # Use upper quantile: shadows at the frame edges must not lower the
+        # estimated brightness of the unshadowed floor.
+        baseline = float(np.percentile(side_values.mean(axis=1), 70))
+        gray = src.mean(axis=2)
+        darkness = np.clip((baseline - gray - 8.) / max(30., baseline * .50), 0., 1.)
+        yy = np.arange(original.height, dtype=np.float32)[:, None]
+        vertical = np.clip((yy - floor_start) / max(1., original.height - floor_start), 0., 1.)
+        floor_only = (alpha_src < 40).astype(np.float32)
+        # Exclude very distant background and suppress sharp original
+        # wall/floor edges; the transferred matte is a soft contact shadow.
+        dark_alpha = np.uint8(np.clip(darkness * floor_only * vertical * 185., 0, 175))
+        source_shadow = Image.fromarray(dark_alpha, "L").crop(box)
+        source_shadow = source_shadow.resize((vw, vh), Image.Resampling.BILINEAR)
+        source_shadow = source_shadow.filter(ImageFilter.GaussianBlur(max(2, round(h*.003))))
+        ground_layer = Image.new("RGBA", (vw, vh), (16, 17, 19, 0))
+        ground_layer.putalpha(source_shadow)
+        canvas.alpha_composite(ground_layer, (x, y))
 
     # Reflection is clipped to the floor and fades quickly; no mirror-image
     # floating above the tiles. Keep original vehicle pixels untouched.
