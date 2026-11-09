@@ -156,7 +156,8 @@ def run_once(conn):
         if path:
             remove_uploaded(path)
         # Never print exception text: requests errors can contain API tokens in URLs.
-        code=type(exc).__name__
+        safe_value_errors={"mask_quality_unreliable","wheel_grounding_unsafe","output_too_large","source_size_limit","source_pixel_limit","unsupported_job_mode"}
+        code=str(exc) if isinstance(exc,ValueError) and str(exc) in safe_value_errors else type(exc).__name__
         print("CARVELO worker job failed",job_id,code,flush=True)
         rpc(conn,"select public.cv_ai_fail(%s,%s,%s)",(job_id,run_id,code))
         conn.commit()
