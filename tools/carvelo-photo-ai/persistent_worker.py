@@ -76,7 +76,7 @@ def make_candidate(job, progress=None):
         if covered<.12 or covered>.86 or float((matte>238).mean())<.08:
             raise ValueError("mask_quality_unreliable")
         scene=render_scene(SCENE,photo.size)
-        result,placement=compose_grounded_vehicle(foreground,scene)
+        result,placement=compose_grounded_vehicle(foreground,scene,source_photo=photo)
         if not placement["wheel_grounded"]:
             raise ValueError("wheel_grounding_unsafe")
     elif job["target_mode"]=="showroom_windows":
