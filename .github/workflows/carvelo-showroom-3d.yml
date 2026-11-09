@@ -1,0 +1,66 @@
+name: CARVELO 3D showroom validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/carvelo-photo-ai/build_showroom_3d.py'
+      - 'tools/carvelo-photo-ai/showroom_3d_adapter.py'
+      - 'tools/carvelo-photo-ai/showroom_camera.py'
+      - 'tools/carvelo-photo-ai/showroom_views.py'
+      - 'tools/carvelo-photo-ai/test_showroom_3d_adapter.py'
+      - 'assets/brand/carvelo-wordmark-on-dark.svg'
+      - '.github/workflows/carvelo-showroom-3d.yml'
+jobs:
+  blender-scene:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender and rasterizer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-cairosvg
+          python3 -m pip install --user pillow
+      - name: Rasterize approved SVG logo
+        run: |
+          mkdir -p /tmp/carvelo-3d
+          python3 - <<'PY'
+          import cairosvg
+          cairosvg.svg2png(url="assets/brand/carvelo-wordmark-on-dark.svg",
+                           write_to="/tmp/carvelo-3d/official-logo.png",
+                           output_width=1200)
+          PY
+      - name: Render actual Blender 3D scene and orbit views
+        run: |
+          blender -b -t 2 --python tools/carvelo-photo-ai/build_showroom_3d.py -- \
+            --output-dir /tmp/carvelo-3d \
+            --logo-png /tmp/carvelo-3d/official-logo.png \
+            --step 30 --samples 8 --width 960 --height 540
+      - name: Run view selection and fail-closed tests
+        run: |
+          cd tools/carvelo-photo-ai
+          python3 -m unittest -v test_showroom_3d_adapter.py
+      - name: Validate generated render bundle
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from PIL import Image
+          root=Path("/tmp/carvelo-3d")
+          views=json.loads((root/"camera_manifest.json").read_text())["camera_views"]
+          assert len(views)==7, len(views)
+          assert (root/"carvelo_showroom_180.blend").stat().st_size > 10000
+          for view in views:
+              with Image.open(root/view["image"]) as im:
+                  im.verify()
+          print("Validated", len(views), "real Blender camera renders")
+          PY
+      - name: Publish Blender scene, renders and manifest for visual QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvelo-showroom-3d-preview
+          path: |
+            /tmp/carvelo-3d/*.png
+            /tmp/carvelo-3d/*.blend
+            /tmp/carvelo-3d/camera_manifest.json
+          retention-days: 14
