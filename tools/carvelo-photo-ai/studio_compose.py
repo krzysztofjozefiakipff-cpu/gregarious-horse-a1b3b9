@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v6"
+SCENE_VERSION = "studio-v7"
 GROUND_Y = 0.85
 
 
@@ -96,33 +96,51 @@ def render_scene(scene_path: Path, size: tuple[int, int]) -> Image.Image:
         return image.convert("RGBA")
 
 
-def _contact_centers(alpha: Image.Image) -> tuple[float, float]:
-    """Locate bottommost tire-like silhouette clusters; use stable conservative fallback."""
-    w, h = alpha.size
-    sample = alpha.convert("L").point(lambda p: 255 if p >= 175 else 0)
-    y_start = max(0, round(h * .87))
-    bottom = sample.crop((0, y_start, w, h))
+def _contact_centers(alpha: Image.Image) -> tuple[float, ...]:
+    """Find wheel-foot candidates from the lower silhouette across ALL x.
+
+    Three-quarter vehicles may show three tires and both principal tires may
+    occupy one half of the image. Never fabricate fixed left/right contacts.
+    A broad bumper/rocker plateau is not a tire: require a local downward
+    protrusion of meaningful width and prominence.
+    """
+    arr = np.asarray(alpha.convert("L"), dtype=np.uint8) >= 175
+    h, w = arr.shape
+    ys = np.where(arr, np.arange(h)[:, None], -1)
+    bottom = ys.max(axis=0).astype(np.float32)
+    window = max(7, int(w * .035) | 1)
+    kernel = np.ones(window, dtype=np.float32) / window
+    smooth = np.convolve(np.maximum(bottom, 0), kernel, mode="same")
+    # Reject the roof, bumpers and tiny isolated matte fragments.
+    floor = max(int(h * .66), int(np.percentile(bottom[bottom >= 0], 55))
+                if (bottom >= 0).any() else h)
     candidates = []
-    for left_frac, right_frac, fallback in ((.08, .48, .24), (.52, .92, .76)):
-        x0, x1 = int(w * left_frac), int(w * right_frac)
-        segments = []
-        active = None
-        for x in range(x0, x1):
-            is_deep = False
-            for y in range(bottom.height - 1, -1, -1):
-                if bottom.getpixel((x, y)) and y + y_start >= h * .95:
-                    is_deep = True
-                    break
-            if is_deep and active is None:
-                active = x
-            if not is_deep and active is not None:
-                segments.append((active, x))
-                active = None
-        if active is not None:
-            segments.append((active, x1))
-        useful = [seg for seg in segments if .035*w <= seg[1]-seg[0] <= .29*w]
-        candidates.append((max(useful,key=lambda seg:seg[1]-seg[0])[0]+max(useful,key=lambda seg:seg[1]-seg[0])[1])/(2*w) if useful else fallback)
-    return candidates[0], candidates[1]
+    min_gap = max(15, int(w * .13))
+    prominence_span = max(16, int(w * .095))
+    for x in range(max(window, int(w*.035)), min(w-window, int(w*.965))):
+        if smooth[x] < floor:
+            continue
+        l = max(0, x-prominence_span)
+        r = min(w, x+prominence_span+1)
+        if smooth[x] < smooth[l:r].max()-max(2,h*.008):
+            continue
+        left_base = np.percentile(smooth[l:x+1], 20)
+        right_base = np.percentile(smooth[x:r], 20)
+        prominence = smooth[x] - max(left_base, right_base)
+        if prominence < h*.028:
+            continue
+        candidates.append((float(prominence), int(x), float(smooth[x])))
+    candidates.sort(reverse=True)
+    selected = []
+    for prominence, x, depth in candidates:
+        if all(abs(x - prev[1]) >= min_gap for prev in selected):
+            selected.append((prominence, x, depth))
+        if len(selected) >= 3:
+            break
+    if len(selected) < 2:
+        raise ValueError("wheel_detection_low_confidence")
+    selected.sort(key=lambda row: row[1])
+    return tuple(x/w for _, x, _ in selected)
 
 
 def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_photo: Image.Image | None = None) -> tuple[Image.Image, dict]:
