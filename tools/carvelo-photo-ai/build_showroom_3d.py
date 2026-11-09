@@ -91,8 +91,8 @@ def build():
     for j in range(-8, 9):
         cube("Tile seam Y %s" % j, (0, j, .002), (19, .009, .003), grout)
     cube("Back wall", (0, 7.7, 2.8), (19, .2, 5.6), wall)
-    cube("Left wall", (-9.4, 0, 2.8), (.2, 17, 5.6), wall)
-    cube("Right wall", (9.4, 0, 2.8), (.2, 17, 5.6), glass)
+    # The 180-degree camera orbit passes the side elevations.
+    # Open camera-facing sides: side-on orbit views must not look through walls.\n    # Side glazing is deliberately omitted until visibility-safe 3D architecture is validated.
     cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)
 
     # Architectural vertical wood slats on the rear wall.
@@ -137,7 +137,6 @@ def build():
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
     target = Vector((0, 0, 1.0))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
@@ -164,7 +163,7 @@ def build():
             "target_m": list(target),
             "empty": True,
         })
-    (args.output_dir/"camera_manifest.json").write_text(
+    # Persist the actual calibrated camera pose, not the unpositioned camera.\n    camera.location = (0, -5.6, 1.20)\n    camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()\n    bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))\n    (args.output_dir/"camera_manifest.json").write_text(
         json.dumps({"scene": "CARVELO 180 3D v1",
                     "camera_views": metadata}, indent=2), encoding="utf-8")
     print("CARVELO 3D scene and %d camera views generated" % len(metadata))
