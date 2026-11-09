@@ -146,6 +146,7 @@ def build():
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.samples = args.samples
+    bpy.context.view_layer.cycles.use_denoising = False
     scene.render.resolution_x = args.width
     scene.render.resolution_y = args.height
     scene.render.resolution_percentage = 100
@@ -181,7 +182,11 @@ def build():
             "target_m": list(target),
             "empty": True,
         })
-    # Persist the actual calibrated camera pose, not the unpositioned camera.\n    camera.location = (0, -5.6, 1.20)\n    camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()\n    bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))\n    (args.output_dir/"camera_manifest.json").write_text(
+    # Persist the actual calibrated camera pose, not the unpositioned camera.
+    camera.location = (0, -5.6, 1.20)
+    camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
+    bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
+    (args.output_dir/"camera_manifest.json").write_text(
         json.dumps({"scene": "CARVELO 180 3D v1",
                     "camera_views": metadata}, indent=2), encoding="utf-8")
     print("CARVELO 3D scene and %d camera views generated" % len(metadata))
