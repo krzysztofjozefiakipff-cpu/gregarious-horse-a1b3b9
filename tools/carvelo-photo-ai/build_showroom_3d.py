@@ -101,9 +101,27 @@ def build():
         cube("Walnut slat %02d" % k, (x, 7.54, 2.9),
              (.10, .09, 5.1), wood, .012)
     cube("Brand fascia", (4.3, 7.48, 3.3), (7.3, .16, 2.2), wall, .04)
-    text_object("CAR", "Brand CAR", (2.35, 7.32, 3.13), .84, white)
-    text_object("V", "Brand V", (4.18, 7.30, 3.13), .86, red)
-    text_object("ELO", "Brand ELO", (6.05, 7.32, 3.13), .84, white)
+    # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
+    logo_png = Path(args.logo_png)
+    if not logo_png.is_file():
+        raise FileNotFoundError("official_carvelo_logo_png_missing: " + str(logo_png))
+    logo_image = bpy.data.images.load(str(logo_png), check_existing=True)
+    logo_material = bpy.data.materials.new("Official CARVELO logo PNG")
+    logo_material.use_nodes = True
+    nodes = logo_material.node_tree.nodes
+    bsdf = nodes.get("Principled BSDF")
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = logo_image
+    logo_material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
+    logo_material.node_tree.links.new(texture.outputs["Alpha"], bsdf.inputs["Alpha"])
+    logo_material.blend_method = "BLEND"
+    bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
+                                     rotation=(math.pi / 2, 0, 0))
+    sign = bpy.context.object
+    sign.name = "Official CARVELO SVG wall sign"
+    sign.dimensions = (5.7, 1.45, 1)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    sign.data.materials.append(logo_material)
 
     for x in (-6.9, -3.5, 0, 3.5, 6.9):
         for y in (-5.8, -.8, 4.2):
@@ -171,6 +189,7 @@ def build():
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, required=True)
+parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVELO SVG")
 parser.add_argument("--step", type=int, default=15)
 parser.add_argument("--samples", type=int, default=24)
 parser.add_argument("--width", type=int, default=1280)
