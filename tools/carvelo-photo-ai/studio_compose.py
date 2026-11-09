@@ -228,51 +228,48 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image) -> tuple[
     if any(abs(cy - ground_y) > round(h * .038) for _, cy in contact_points):
         raise ValueError("wheel_contact_not_on_floor")
 
-    # A very faint diffuse reflected silhouette, BELOW the tire contact plane.
-    # Only the floor is modified, the car itself is not color graded/repainted.
-    reflect_h = max(0, min(round(vh * .16), h - ground_y - 4))
+    # Reflection is clipped to the floor and fades quickly; no mirror-image
+    # floating above the tiles. Keep original vehicle pixels untouched.
+    floor_y = max(0, min(h-1, min(cy for _, cy in contact_points)))
+    reflect_h = max(0, min(round(vh * .20), h - floor_y - 3))
     if reflect_h > 4:
         reflection = ImageOps.flip(car).resize((vw, reflect_h), Image.Resampling.BILINEAR)
         a = reflection.getchannel("A")
         fade = Image.new("L", (vw, reflect_h), 0)
-        fade.putdata([max(0, round(a0 * (.095 * (1 - iy / max(1, reflect_h - 1)) ** 1.8)))
-                      for iy in range(reflect_h) for a0 in
-                      list(a.crop((0, iy, vw, iy + 1)).getdata())])
+        fade.putdata([round(px * .13 * (1 - iy / max(1, reflect_h-1))**2.3)
+                      for iy in range(reflect_h)
+                      for px in a.crop((0, iy, vw, iy+1)).getdata()])
         reflection.putalpha(fade)
-        reflection = reflection.filter(ImageFilter.GaussianBlur(max(1, round(h * .003))))
-        canvas.alpha_composite(reflection, (x, ground_y + 2))
+        reflection = reflection.filter(ImageFilter.GaussianBlur(max(2, round(h * .005))))
+        canvas.alpha_composite(reflection, (x, floor_y + 2))
 
-    # Broad ambient-occlusion shadow follows the car's footprint: low contrast,
-    # soft falloff, and offset barely toward the foreground.
+    # Layered, grounded shadows: broad ambient occlusion, tight tire contact,
+    # and a soft directional floor shadow away from the window wall.
     ambient = Image.new("L", (w, h), 0)
     painter = ImageDraw.Draw(ambient)
-    painter.ellipse((x + round(vw * .07), ground_y - round(h * .025),
-                     x + round(vw * .93), ground_y + round(h * .037)), fill=85)
-    ambient = ambient.filter(ImageFilter.GaussianBlur(max(8, round(h * .019))))
+    painter.ellipse((x + round(vw * .055), ground_y - round(h * .032),
+                     x + round(vw * .95), ground_y + round(h * .052)), fill=126)
+    ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .017))))
 
-    # Local contact patches beneath tire centers, not two oversized black spots.
     contact = Image.new("L", (w, h), 0)
     touch = ImageDraw.Draw(contact)
     for cx, cy in contact_points:
-        dx = max(9, round(vw * .045))
-        dy = max(3, round(h * .005))
-        touch.ellipse((cx - dx, cy - dy,
-                       cx + dx, cy + round(dy * .8)), fill=205)
-    contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .004))))
-    # Shallow daylight shadow leans away from the windows on the right.
-    # It remains on the floor, below the real car silhouette.
+        dx = max(9, round(vw * .038))
+        dy = max(3, round(h * .008))
+        touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy), fill=228)
+    contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .003))))
+
     directional = Image.new("L", (w, h), 0)
     dr = ImageDraw.Draw(directional)
     dr.polygon([
-        (x + round(vw * .14), ground_y - round(h * .009)),
-        (x + round(vw * .89), ground_y - round(h * .009)),
-        (x + round(vw * .57), ground_y + round(h * .068)),
-        (x - round(vw * .055), ground_y + round(h * .043))
-    ], fill=29)
-    directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h * .027))))
+        (x+round(vw*.12), ground_y-round(h*.010)),
+        (x+round(vw*.87), ground_y-round(h*.010)),
+        (x+round(vw*.54), ground_y+round(h*.079)),
+        (x-round(vw*.07), ground_y+round(h*.057))
+    ], fill=48)
+    directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h*.024))))
     shadow = ImageChops.lighter(ImageChops.lighter(ambient, contact), directional)
-    # Warm neutral shadow matches the window-lit photographic floor.
-    layer = Image.new("RGBA", (w, h), (29, 28, 26, 0))
+    layer = Image.new("RGBA", (w, h), (25, 25, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
     canvas.alpha_composite(car, (x, y))
