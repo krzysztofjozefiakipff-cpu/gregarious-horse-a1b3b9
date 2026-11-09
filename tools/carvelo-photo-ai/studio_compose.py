@@ -292,8 +292,19 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     # and a soft directional floor shadow away from the window wall.
     ambient = Image.new("L", (w, h), 0)
     painter = ImageDraw.Draw(ambient)
-    painter.ellipse((x + round(vw * .055), ground_y - round(h * .032),
-                     x + round(vw * .95), ground_y + round(h * .066)), fill=166)
+    # Follow the projected axle line. A horizontal ellipse tied to the
+    # nearest wheel's ground_y makes the far wheel visibly float.
+    left_contact, right_contact = sorted(contact_points)
+    ax0, ay0 = left_contact
+    ax1, ay1 = right_contact
+    span = max(1, ax1 - ax0)
+    depth = max(8, round(h * .030))
+    painter.polygon([
+        (ax0-round(span*.11), ay0-depth),
+        (ax1+round(span*.11), ay1-depth),
+        (ax1+round(span*.13), ay1+depth),
+        (ax0-round(span*.13), ay0+depth),
+    ], fill=120)
     ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .017))))
 
     contact = Image.new("L", (w, h), 0)
@@ -307,11 +318,11 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     directional = Image.new("L", (w, h), 0)
     dr = ImageDraw.Draw(directional)
     dr.polygon([
-        (x+round(vw*.12), ground_y-round(h*.010)),
-        (x+round(vw*.87), ground_y-round(h*.010)),
-        (x+round(vw*.54), ground_y+round(h*.079)),
-        (x-round(vw*.07), ground_y+round(h*.057))
-    ], fill=48)
+        (ax0, ay0),
+        (ax1, ay1),
+        (ax1-round(span*.20), ay1+round(h*.060)),
+        (ax0-round(span*.23), ay0+round(h*.046))
+    ], fill=42)
     directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h*.024))))
     # Tire grounding must be visible even on reflective light tiles.
     # A two-scale footprint creates an opaque seam directly under each tire
