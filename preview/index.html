@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#0a1424">
+<title>CARVAMO — portal nowych samochodów | Podgląd</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172134;background:#f5f6f8;font-synthesis:none}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0}button,select{font:inherit}button{cursor:pointer}
+a{color:inherit;text-decoration:none}button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid #5ab6ec;outline-offset:3px}
+.shell{max-width:1370px;margin:auto;padding-left:28px;padding-right:28px}
+.preview-ribbon{background:#eeeff2;color:#3b4351;font-size:12px;font-weight:650;text-align:center;padding:9px 15px;letter-spacing:.1px}
+.header{background:#071424;color:#fff;border-bottom:1px solid #2b3e52}
+.header .shell{height:78px;display:flex;align-items:center;gap:40px}
+.brand{font-weight:900;font-size:33px;letter-spacing:-1.9px;white-space:nowrap;line-height:1}
+.brand .accent{color:#ee3442}
+.brand small{display:block;font-size:8px;letter-spacing:2.1px;font-weight:750;color:#b7c7d8;margin-top:8px}
+.nav{display:flex;align-items:center;gap:31px;margin-left:auto;font-size:13px;font-weight:700}
+.nav a:hover{color:#ff7079}
+.nav-action{border:1px solid #ec3442;background:#d61b2c;color:#fff;border-radius:8px;padding:13px 18px;font-size:12px;font-weight:750}
+.hero{overflow:hidden;background:linear-gradient(114deg,#081626 4%,#12263b 57%,#13263a 100%);color:white}
+.hero .shell{min-height:515px;display:grid;grid-template-columns:48% 52%;align-items:center;gap:6px}
+.hero-tag{font-size:11px;font-weight:800;letter-spacing:2.5px;color:#ff757e}
+.hero h1{font-size:clamp(40px,4.5vw,69px);line-height:1.04;letter-spacing:-2.8px;margin:23px 0}
+.hero h1 span{color:#fa4756}
+.hero p{font-size:17px;color:#bacadb;max-width:500px;line-height:1.72;margin-bottom:28px}
+.btn{border:0;background:#d91e30;color:white;border-radius:9px;padding:16px 23px;font-weight:800;font-size:14px;display:inline-block}
+.btn:hover,.nav-action:hover{background:#ec3042}
+.btn.secondary{background:#ffffff14;border:1px solid #ffffff45;margin-left:10px}
+.hero-visual{position:relative;min-height:410px;display:grid;place-items:center}
+.hero-visual:before{content:"";position:absolute;inset:70px 0 35px;border-radius:50%;background:radial-gradient(ellipse,#526e8d66,transparent 71%);filter:blur(10px)}
+.hero-visual svg{position:relative;width:min(100%,680px);filter:drop-shadow(0 30px 24px #0007)}
+.proof{background:white;border-bottom:1px solid #dfe4eb}
+.proof .shell{display:grid;grid-template-columns:repeat(3,1fr);padding-top:20px;padding-bottom:20px}
+.proof .item{padding:5px 22px;border-right:1px solid #e4e8ee}
+.proof .item:first-child{padding-left:0}.proof .item:last-child{border:0}
+.proof strong{display:block;color:#142235;font-size:14px;margin-bottom:6px}.proof span{display:block;color:#68798a;font-size:12px}
+.finder{margin-top:37px;background:white;border:1px solid #e4e6ea;border-radius:17px;padding:24px;box-shadow:0 14px 37px #1625380b}
+.finder-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}
+.finder h2{font-size:21px;letter-spacing:-.5px;margin:0}.finder label{display:block;font-size:11px;font-weight:750;margin-bottom:7px;color:#5e6b7b}
+.filters{display:grid;grid-template-columns:repeat(3,1fr) 190px;gap:14px}
+.filters select{padding:13px;border:1px solid #d8dfe6;border-radius:8px;background:#fff;color:#253343;width:100%}
+.filters .btn{width:100%;height:46px;align-self:end}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:48px 0 20px}
+.section-head h2{font-size:29px;letter-spacing:-1.1px;margin:0}.section-head p{margin:5px 0 0;color:#6b7a8b;font-size:13px}
+.offer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:19px}
+.offer{background:#fff;border:1px solid #e7eaf0;box-shadow:0 8px 25px #18283e0a;border-radius:15px;overflow:hidden;transition:transform .18s,box-shadow .18s}
+.offer:hover{transform:translateY(-3px);box-shadow:0 14px 29px #18283e18}
+.car-view{height:188px;background:linear-gradient(135deg,#e7eff4,#bbcbd9);display:grid;place-items:center;position:relative}
+.car-view:before{content:"";position:absolute;inset:auto 10% 16px;height:10px;background:#5360712d;filter:blur(10px);border-radius:50%}
+.car-view svg{position:relative;width:84%;max-width:320px;height:130px}
+.car-view.dark{background:linear-gradient(135deg,#cbd5e0,#879bab)}
+.car-view.light{background:linear-gradient(135deg,#ecf0f0,#c8d8d6)}
+.offer-body{padding:20px}.chip{font-size:10px;letter-spacing:.5px;text-transform:uppercase;font-weight:800;color:#b51e2d;background:#fff1f2;border-radius:30px;display:inline-block;padding:7px 10px}
+.offer h3{font-size:21px;letter-spacing:-.7px;margin:15px 0 5px}.spec{font-size:13px;color:#728295}
+.offer-price{font-weight:850;font-size:25px;letter-spacing:-.7px;margin:20px 0 7px}.offer-price small{display:block;font-size:11px;color:#82909f;font-weight:600;letter-spacing:0;margin-bottom:5px}
+.offer button{border:1px solid #cf2434;border-radius:8px;background:#fff;color:#bc1424;font-size:13px;font-weight:800;padding:12px;width:100%;margin-top:9px}
+.offer button:hover{background:#fff3f4}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:15px 0 60px}
+.step{background:#fff;border:1px solid #e5e8ed;border-radius:14px;padding:24px}
+.step .number{color:#d32433;font-size:13px;font-weight:900;letter-spacing:1px}
+.step h3{font-size:18px;margin:12px 0 8px}.step p{font-size:13px;line-height:1.6;color:#68798a;margin:0}
+footer{background:#071424;color:#b9c6d3;padding:38px 0}
+footer .shell{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center;font-size:12px}
+footer strong{color:white;font-size:23px;letter-spacing:-1px}
+.empty{display:none;text-align:center;padding:48px;background:white;border:1px solid #e1e6ec;border-radius:12px;color:#708194}
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#081424b8;padding:24px;z-index:99}
+.modal.open{display:flex}.dialog{background:#fff;border-radius:18px;padding:32px;max-width:465px;width:100%;box-shadow:0 25px 80px #0004}
+.dialog h2{font-size:24px;margin:0 0 12px}.dialog p{line-height:1.7;color:#637487;font-size:14px}
+.dialog .btn{margin-top:8px}
+@media(max-width:990px){.hero .shell{grid-template-columns:1fr;min-height:0;padding-top:65px;padding-bottom:35px}.hero-visual{min-height:280px}.hero-visual svg{max-width:650px}.filters{grid-template-columns:repeat(2,1fr)}.offer-grid{grid-template-columns:repeat(2,1fr)}.nav{gap:15px}}
+@media(max-width:660px){.shell{padding-left:18px;padding-right:18px}.header .shell{height:auto;min-height:72px;gap:12px;flex-wrap:wrap;padding-top:16px;padding-bottom:16px}.brand{font-size:27px}.nav{order:3;justify-content:space-between;width:100%;margin:0;font-size:12px}.nav-action{margin-left:auto;padding:10px}.hero .shell{padding-top:50px}.hero h1{letter-spacing:-2px}.hero-visual{min-height:190px}.hero-visual svg{width:100%}.proof .shell{grid-template-columns:1fr}.proof .item{padding:13px 0;border:0;border-bottom:1px solid #e4e8ee}.filters,.offer-grid,.steps{grid-template-columns:1fr}.finder{padding:18px}.section-head h2{font-size:26px}.section-head{align-items:start}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.offer{transition:none}}
+</style>
+</head>
+<body>
+<div class="preview-ribbon">ŚRODOWISKO TESTOWE CARVAMO — przykładowe oferty, bez transakcji i wysyłania danych</div>
+<header class="header"><div class="shell">
+<a href="#" class="brand" aria-label="CARVAMO">carva<span class="accent">mo</span><small>NOWE AUTA. LEPSZE OFERTY.</small></a>
+<nav class="nav"><a href="#samochody">Samochody</a><a href="#jak-to-dziala">Jak to działa</a><a href="#kontakt">Kontakt</a></nav>
+<button type="button" class="nav-action" onclick="openInfo('Panel dealera')">Panel dealera</button>
+</div></header>
+<section class="hero"><div class="shell">
+<div><div class="hero-tag">OD AUTORYZOWANYCH DEALERÓW</div><h1>Twój nowy samochód.<br><span>Lepsza cena.</span><br>Jeden portal.</h1><p>Odkrywaj oferty nowych samochodów, porównuj modele i wybieraj bez zbędnych formalności. Odbiór auta u autoryzowanego dealera.</p><a class="btn" href="#samochody">Przeglądaj samochody</a><a class="btn secondary" href="#jak-to-dziala">Jak to działa</a></div>
+<div class="hero-visual" aria-hidden="true">
+<svg viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="body" x1="0" x2="1"><stop stop-color="#9aa9b8"/><stop offset=".32" stop-color="#e5ebef"/><stop offset=".64" stop-color="#adbdcc"/><stop offset="1" stop-color="#73889e"/></linearGradient><linearGradient id="glass" x1="0" x2="1"><stop stop-color="#182c40"/><stop offset="1" stop-color="#496982"/></linearGradient></defs><ellipse cx="385" cy="327" rx="300" ry="25" fill="#000" opacity=".3"/><path d="M92 245Q117 231 167 215L240 139Q251 126 278 124L515 120Q548 121 566 144L628 211Q670 219 682 244L689 294Q683 306 665 308H103Q82 304 82 284L84 266Z" fill="url(#body)" stroke="#9aa9b7" stroke-width="4"/><path d="M232 207L274 140 504 138Q520 139 532 155L576 208Z" fill="url(#glass)" stroke="#b2c0cf" stroke-width="6"/><path d="M409 140L428 209" stroke="#c3d3dd" stroke-width="7"/><path d="M117 251Q145 238 194 232" stroke="#edf7ff" stroke-width="7" stroke-linecap="round"/><path d="M605 242L666 251" stroke="#c32437" stroke-width="10" stroke-linecap="round"/><rect x="283" y="226" width="80" height="8" rx="4" fill="#506779" opacity=".6"/><rect x="517" y="229" width="70" height="8" rx="4" fill="#506779" opacity=".5"/><circle cx="221" cy="301" r="50" fill="#131e28"/><circle cx="221" cy="301" r="32" fill="#d9e1e7"/><circle cx="221" cy="301" r="15" fill="#6c7e8f"/><circle cx="568" cy="301" r="50" fill="#131e28"/><circle cx="568" cy="301" r="32" fill="#d9e1e7"/><circle cx="568" cy="301" r="15" fill="#6c7e8f"/></svg></div>
+</div></section>
+<section class="proof"><div class="shell"><div class="item"><strong>Nowe samochody</strong><span>Oferty modeli dostępnych na polskim rynku</span></div><div class="item"><strong>Bezpośrednio od dealerów</strong><span>Kontakt i odbiór w sieci dealerskiej</span></div><div class="item"><strong>Jasne zasady</strong><span>Porównywanie propozycji w jednym miejscu</span></div></div></section>
+<main class="shell">
+<section class="finder" aria-label="Wyszukiwarka samochodów">
+<div class="finder-top"><h2>Znajdź samochód dla siebie</h2><span style="font-size:11px;color:#758698">Wersja demonstracyjna</span></div>
+<div class="filters">
+<div><label for="marka">Marka</label><select id="marka"><option value="">Wszystkie marki</option><option>OMODA</option><option>JAECOO</option><option>MG</option><option>MAXUS</option></select></div>
+<div><label for="nadwozie">Rodzaj samochodu</label><select id="nadwozie"><option value="">Wszystkie rodzaje</option><option value="SUV">SUV</option><option value="Hybryda">Hybryda</option><option value="Dostawczy">Dostawczy</option></select></div>
+<div><label for="budzet">Cena do</label><select id="budzet"><option value="">Dowolna</option><option value="120000">120 000 zł</option><option value="160000">160 000 zł</option><option value="200000">200 000 zł</option></select></div>
+<button class="btn" type="button" id="szukaj">Szukaj ofert</button>
+</div></section>
+<section id="samochody"><div class="section-head"><div><h2>Wybrane samochody</h2><p>Przykładowe oferty do testowania układu portalu</p></div><span id="liczba" style="font-size:13px;color:#65788a"></span></div><div id="karty" class="offer-grid"></div><div id="brak" class="empty">Brak przykładowych ofert dla wybranych filtrów.</div></section>
+<section id="jak-to-dziala"><div class="section-head"><h2>Jak działa CARVAMO?</h2></div><div class="steps"><article class="step"><span class="number">01 — WYBIERZ</span><h3>Znajdź odpowiedni model</h3><p>Porównuj marki, typy nadwozia i propozycje cenowe.</p></article><article class="step"><span class="number">02 — PORÓWNAJ</span><h3>Sprawdź szczegóły</h3><p>W docelowej wersji poznasz szczegóły oferty i możliwości finansowania.</p></article><article class="step"><span class="number">03 — ODBIERZ</span><h3>Odbierz u dealera</h3><p>Zakup i wydanie samochodu realizowane w autoryzowanej sieci dealerskiej.</p></article></div></section>
+</main>
+<footer id="kontakt"><div class="shell"><strong>carvamo</strong><span>Portal CARVAMO — test wyglądu i nawigacji · Formularze i dane klientów wyłączone</span></div></footer>
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="dialog"><h2 id="modalTitle"></h2><p>To wersja testowa CARVAMO. Ta funkcja nie jest jeszcze połączona z systemem sprzedażowym. Żadne dane nie są zbierane ani wysyłane.</p><button type="button" class="btn" id="close">Zamknij</button></div></div>
+<script>
+"use strict";
+const cars=[
+{brand:"OMODA",model:"OMODA 5",type:"SUV",price:109900,tone:"light"},
+{brand:"JAECOO",model:"JAECOO 7",type:"SUV",price:139900,tone:"dark"},
+{brand:"MG",model:"MG HS Hybrid+",type:"Hybryda",price:149900,tone:"light"},
+{brand:"OMODA",model:"OMODA 9",type:"Hybryda",price:199900,tone:"dark"},
+{brand:"MAXUS",model:"MAXUS Deliver 9",type:"Dostawczy",price:119900,tone:""},
+{brand:"JAECOO",model:"JAECOO 5",type:"SUV",price:114900,tone:"light"}
+];
+const smallCar='<svg viewBox="0 0 340 150" aria-hidden="true"><ellipse cx="170" cy="123" rx="143" ry="11" fill="#293d50" opacity=".18"/><path d="M24 94L62 81 93 44Q103 33 123 33H229Q244 33 253 47L281 79 310 90Q320 96 321 111H19Q17 99 24 94Z" fill="#f0f3f5" stroke="#6c8193" stroke-width="3"/><path d="M92 78L114 45H231L260 78Z" fill="#516a81"/><path d="M172 46L178 78" stroke="#b7c5d1" stroke-width="4"/><circle cx="87" cy="110" r="26" fill="#203140"/><circle cx="87" cy="110" r="15" fill="#c6d4dd"/><circle cx="262" cy="110" r="26" fill="#203140"/><circle cx="262" cy="110" r="15" fill="#c6d4dd"/></svg>';
+const els={brand:document.getElementById("marka"),type:document.getElementById("nadwozie"),budget:document.getElementById("budzet"),grid:document.getElementById("karty")};
+function render(){
+ const max=Number(els.budget.value)||Infinity;
+ const filtered=cars.filter(c=>(!els.brand.value||els.brand.value===c.brand)&&(!els.type.value||els.type.value===c.type)&&c.price<=max);
+ els.grid.replaceChildren();
+ for(const c of filtered){
+   const card=document.createElement("article");card.className="offer";
+   const image=document.createElement("div");image.className="car-view "+c.tone;image.innerHTML=smallCar;
+   const body=document.createElement("div");body.className="offer-body";
+   const chip=document.createElement("span");chip.className="chip";chip.textContent="Oferta demonstracyjna";
+   const title=document.createElement("h3");title.textContent=c.model;
+   const spec=document.createElement("div");spec.className="spec";spec.textContent=c.brand+" · "+c.type+" · Nowy samochód";
+   const price=document.createElement("div");price.className="offer-price";const sm=document.createElement("small");sm.textContent="Cena przykładowa (brutto)";price.append(sm,document.createTextNode(c.price.toLocaleString("pl-PL")+" zł"));
+   const action=document.createElement("button");action.type="button";action.textContent="Zobacz ofertę";action.addEventListener("click",()=>openInfo(c.model));
+   body.append(chip,title,spec,price,action);card.append(image,body);els.grid.append(card);
+ }
+ document.getElementById("liczba").textContent=filtered.length+" ofert demonstracyjnych";
+ document.getElementById("brak").style.display=filtered.length?"none":"block";
+}
+function openInfo(name){document.getElementById("modalTitle").textContent=name;document.getElementById("modal").classList.add("open");document.getElementById("close").focus();}
+function closeInfo(){document.getElementById("modal").classList.remove("open");}
+window.openInfo=openInfo;
+document.getElementById("close").addEventListener("click",closeInfo);
+document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeInfo()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeInfo()});
+document.getElementById("szukaj").addEventListener("click",()=>{render();document.getElementById("samochody").scrollIntoView({behavior:"smooth"})});
+for(const el of [els.brand,els.type,els.budget])el.addEventListener("change",render);
+render();
+</script>
+</body>
+</html>
