@@ -247,12 +247,31 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         # Exclude very distant background and suppress sharp original
         # wall/floor edges; the transferred matte is a soft contact shadow.
         dark_alpha = np.uint8(np.clip(darkness * floor_only * vertical * 185., 0, 175))
-        source_shadow = Image.fromarray(dark_alpha, "L").crop(box)
-        source_shadow = source_shadow.resize((vw, vh), Image.Resampling.BILINEAR)
-        source_shadow = source_shadow.filter(ImageFilter.GaussianBlur(max(2, round(h*.003))))
-        ground_layer = Image.new("RGBA", (vw, vh), (16, 17, 19, 0))
-        ground_layer.putalpha(source_shadow)
-        canvas.alpha_composite(ground_layer, (x, y))
+        # A car's real floor shadow extends *below and outside* its bounding
+        # box. The old crop(box) cut away precisely the ground contact region.
+        # Project the complete source floor at the same scale/translation as
+        # the segmented vehicle, clipping safely to the showroom canvas.
+        source_shadow = Image.fromarray(dark_alpha, "L")
+        projected_w = max(1, round(original.width * scale))
+        projected_h = max(1, round(original.height * scale))
+        source_shadow = source_shadow.resize(
+            (projected_w, projected_h), Image.Resampling.BILINEAR)
+        source_shadow = source_shadow.filter(
+            ImageFilter.GaussianBlur(max(2, round(h*.003))))
+        shadow_x = x - round(box[0] * scale)
+        shadow_y = y - round(box[1] * scale)
+        paste_x0 = max(0, shadow_x)
+        paste_y0 = max(0, shadow_y)
+        paste_x1 = min(w, shadow_x + projected_w)
+        paste_y1 = min(h, shadow_y + projected_h)
+        if paste_x1 > paste_x0 and paste_y1 > paste_y0:
+            region = source_shadow.crop((
+                paste_x0 - shadow_x, paste_y0 - shadow_y,
+                paste_x1 - shadow_x, paste_y1 - shadow_y))
+            ground_layer = Image.new(
+                "RGBA", region.size, (16, 17, 19, 0))
+            ground_layer.putalpha(region)
+            canvas.alpha_composite(ground_layer, (paste_x0, paste_y0))
 
     # Reflection is clipped to the floor and fades quickly; no mirror-image
     # floating above the tiles. Keep original vehicle pixels untouched.
