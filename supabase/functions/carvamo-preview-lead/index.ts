@@ -4,7 +4,7 @@ const KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
 const db=createClient(URL,KEY,{auth:{persistSession:false}});
 const ORIGIN="https://preview.carvamo.com";
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const allowed=["utm_source","utm_medium","utm_campaign","utm_content","utm_term","gclid","fbclid","msclkid"];
+const allowed=["utm_source","utm_medium","utm_campaign","utm_content","utm_term","gclid","fbclid","msclkid","referrer_host"];
 function response(data,status=200,origin=ORIGIN){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","access-control-allow-origin":origin,"access-control-allow-methods":"GET, POST, PATCH, OPTIONS","access-control-allow-headers":"authorization, apikey, content-type","cache-control":"no-store","vary":"Origin"}})}
 function clean(v,max){return typeof v==="string"?v.trim().slice(0,max):""}
 async function hash(s){const bytes=new TextEncoder().encode(s);return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(b=>b.toString(16).padStart(2,"0")).join("")}
