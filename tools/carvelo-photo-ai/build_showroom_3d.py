@@ -13,8 +13,13 @@ import argparse
 import json
 import math
 import sys
-from carvamo_brand import NAVY, TURQUOISE, MINT, LIGHT
 from pathlib import Path
+
+# Blender --python does not guarantee that the script directory is importable.
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from carvamo_brand import NAVY, TURQUOISE, MINT, LIGHT
 
 import bpy
 from mathutils import Vector
