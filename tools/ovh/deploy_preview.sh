@@ -69,7 +69,7 @@ if ! docker ps --filter "name=^/$NAME$" --filter "status=running" --format '{{.N
 fi
 OK=0
 for i in $(seq 1 18); do
-  if curl -fsS --max-time 10 --resolve "preview.carvamo.com:443:127.0.0.1" "https://preview.carvamo.com/" 2>/dev/null | grep -q 'ŚRODOWISKO TESTOWE CARVAMO'; then
+  if curl -fsS --max-time 10 --resolve "preview.carvamo.com:443:127.0.0.1" "https://preview.carvamo.com/" 2>/dev/null | grep -q 'CARVAMO PREVIEW'; then
     OK=1; break
   fi
   sleep 5
