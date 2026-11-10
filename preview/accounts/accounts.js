@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];let importedSpec=null;
-const BUILD="2026-11-10.19";
+const BUILD="2026-11-10.20";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -330,7 +330,7 @@ async function offerMediaRequest(path,options={}){
 async function openOfferMedia(offer){
  mediaOffer=offer;$("offerMediaPanel").hidden=false;
  $("mediaOfferName").textContent=offer.brand+" "+offer.model+" — "+offer.status;
- $("offerPreviewContent").replaceChildren();
+ $("offerPreviewContent").replaceChildren();$("confirmOfferPreview").hidden=true;
  $("offerMediaPanel").scrollIntoView({behavior:"smooth",block:"start"});
  await refreshMediaPhotos().catch(e=>$("mediaStatus").textContent=e.message);
 }
@@ -366,7 +366,7 @@ $("uploadOfferPhotos").addEventListener("click",async()=>{
 });
 $("previewOffer").addEventListener("click",async()=>{
  if(!mediaOffer)return;
- const root=$("offerPreviewContent");root.replaceChildren();
+ const root=$("offerPreviewContent");root.replaceChildren();$("confirmOfferPreview").hidden=true;
  try{
   const data=await (await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/preview")).json();
   const o=data.offer;
@@ -387,5 +387,16 @@ $("previewOffer").addEventListener("click",async()=>{
    for(const [label,value] of entries){if(value===null||value===undefined||value==="")continue;const p=document.createElement("p");p.textContent=label+": "+value;section.append(p)}
    root.append(section);
   }
+  $("confirmOfferPreview").hidden=false;
  }catch(e){$("mediaStatus").textContent=e.message}
+});
+
+$("confirmOfferPreview").addEventListener("click",async()=>{
+ if(!mediaOffer)return;
+ const button=$("confirmOfferPreview");button.disabled=true;
+ try{
+  await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/confirm-preview",{method:"POST"});
+  $("mediaStatus").textContent="Podgląd potwierdzony. Możesz teraz opublikować ofertę (zgodnie z zasadami akceptacji CARVAMO).";
+  button.hidden=true;
+ }catch(e){$("mediaStatus").textContent=e.message}finally{button.disabled=false}
 });
