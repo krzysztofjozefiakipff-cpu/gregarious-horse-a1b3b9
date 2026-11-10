@@ -1,13 +1,15 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.6";
+const BUILD="2026-11-10.7";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
+ const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
+ if(!target)return;
  if(panel==="offers")refreshOffers().catch(e=>notice("Oferty: "+e.message));
  if(panel==="leads")refreshLeads().catch(e=>notice("Leady: "+e.message));
  for(const tab of workspaceTabs){
-  const selected=tab.dataset.panel===panel;
+  const selected=!tab.hidden&&tab.dataset.panel===panel;
   tab.setAttribute("aria-selected",String(selected));
   tab.tabIndex=selected?0:-1;
   const content=document.getElementById("section-"+tab.dataset.panel);
@@ -19,10 +21,11 @@ for(const tab of workspaceTabs){
  tab.addEventListener("keydown",event=>{
   if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
   event.preventDefault();
-  const index=workspaceTabs.indexOf(tab);
-  const next=event.key==="Home"?0:event.key==="End"?workspaceTabs.length-1:
-   (index+(event.key==="ArrowRight"?1:-1)+workspaceTabs.length)%workspaceTabs.length;
-  switchWorkspace(workspaceTabs[next].dataset.panel);workspaceTabs[next].focus();
+  const visible=workspaceTabs.filter(item=>!item.hidden);
+  const index=visible.indexOf(tab);
+  const next=event.key==="Home"?0:event.key==="End"?visible.length-1:
+   (index+(event.key==="ArrowRight"?1:-1)+visible.length)%visible.length;
+  switchWorkspace(visible[next].dataset.panel);visible[next].focus();
  });
 }
 function hasUnsavedWork(){
@@ -65,11 +68,19 @@ function syncRole(){const r=$("newRole").value;const isInternal=["admin","staff"
 $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({email:$("email").value,password:$("password").value})});token=r.token;$("password").value="";
  me=(await api("/api/auth/me")).account;
- if(!["admin","dealer_admin"].includes(me.role))throw new Error("Twoja rola nie umożliwia zarządzania kontami");
+ if(!["admin","staff","dealer","dealer_admin","dealer_staff"].includes(me.role))throw new Error("Brak dostępu do panelu");
+ const canManageAccounts=["admin","dealer_admin"].includes(me.role);
  const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
  dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
  if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
- configure();configureOffers();await refresh();switchWorkspace("accounts");$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
+ if(canManageAccounts)configure();configureOffers();
+ for(const tab of workspaceTabs){
+  const management=["accounts","create"].includes(tab.dataset.panel);
+  tab.hidden=management&&!canManageAccounts;
+ }
+ $("tab-leads").hidden=me.role==="staff"||me.role==="dealer";
+ if(canManageAccounts)await refresh();
+ switchWorkspace(canManageAccounts?"accounts":"offers");$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
  }catch(err){token="";notice(err.message)}});
 $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  const role=$("newRole").value;const dealer_id=me.role==="dealer_admin"?me.dealer_id:(["staff","admin"].includes(role)?null:$("newDealer").value);
@@ -84,7 +95,7 @@ $("changePassword").addEventListener("submit",async e=>{e.preventDefault();
  $("dashboard").hidden=true;$("loginBox").hidden=false;notice("Hasło zmienione. Zaloguj się ponownie nowym hasłem.");
  }catch(err){notice(err.message)}
 });
-$("logout").addEventListener("click",()=>{if(hasUnsavedWork()&&!confirm("Masz niezapisane dane formularza. Wylogowanie je usunie. Kontynuować?"))return; $("create").reset();$("changePassword").reset();$("offerCreate").reset();switchWorkspace("accounts");token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
+$("logout").addEventListener("click",()=>{if(hasUnsavedWork()&&!confirm("Masz niezapisane dane formularza. Wylogowanie je usunie. Kontynuować?"))return; $("create").reset();$("changePassword").reset();$("offerCreate").reset();token="";me=null;switchWorkspace("accounts");$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
 let resetToken = null;
 
 function showRecovery(confirming) {
