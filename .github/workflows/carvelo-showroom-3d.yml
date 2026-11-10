@@ -36,6 +36,8 @@ jobs:
             --output-dir /tmp/carvelo-3d \
             --logo-png /tmp/carvelo-3d/official-logo.png \
             --step 30 --samples 8 --width 960 --height 540
+      - name: Validate rendered images with technical smoke test
+        run: python3 tools/carvelo-photo-ai/validate_showroom_renders.py /tmp/carvelo-3d
       - name: Run view selection and fail-closed tests
         run: |
           cd tools/carvelo-photo-ai
@@ -49,16 +51,17 @@ jobs:
           root=Path("/tmp/carvelo-3d")
           views=json.loads((root/"camera_manifest.json").read_text())["camera_views"]
           assert len(views)==7, len(views)
-          assert (root/"carvelo_showroom_180.blend").stat().st_size > 10000
+          assert (root/"carvamo_showroom_180.blend").stat().st_size > 10000
           for view in views:
               with Image.open(root/view["image"]) as im:
                   im.verify()
           print("Validated", len(views), "real Blender camera renders")
           PY
       - name: Publish Blender scene, renders and manifest for visual QA
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: carvelo-showroom-3d-preview
+          name: carvamo-showroom-3d-preview
           path: |
             /tmp/carvelo-3d/*.png
             /tmp/carvelo-3d/*.blend
