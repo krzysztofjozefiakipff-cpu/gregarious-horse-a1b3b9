@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];let importedSpec=null;
-const BUILD="2026-11-10.20";
+const BUILD="2026-11-11.1";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -364,39 +364,57 @@ $("uploadOfferPhotos").addEventListener("click",async()=>{
   $("offerPhotoFiles").value="";await refreshMediaPhotos();
  }catch(e){$("mediaStatus").textContent=e.message}finally{button.disabled=false}
 });
+function previewText(tag,text,className){const node=document.createElement(tag);if(text!==undefined)node.textContent=String(text);if(className)node.className=className;return node}
+function previewFact(parent,label,value){const row=previewText("div"),dt=previewText("dt",label),dd=previewText("dd",value||"Nie podano — zapytaj dealera");row.append(dt,dd);parent.append(row)}
+function closeOfferPreviewModal(){$("offerPreviewModal").hidden=true;document.body.style.overflow=""}
+$("closeOfferPreview").addEventListener("click",closeOfferPreviewModal);
+$("offerPreviewModal").addEventListener("click",e=>{if(e.target===$("offerPreviewModal"))closeOfferPreviewModal()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("offerPreviewModal").hidden)closeOfferPreviewModal()});
 $("previewOffer").addEventListener("click",async()=>{
  if(!mediaOffer)return;
- const root=$("offerPreviewContent");root.replaceChildren();$("confirmOfferPreview").hidden=true;
+ const root=$("offerPreviewContent");root.replaceChildren();
  try{
   const data=await (await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/preview")).json();
   const o=data.offer;
-  const heading=document.createElement("h2");heading.textContent="Podgląd klienta — "+o.brand+" "+o.model;
-  const note=document.createElement("p");note.textContent="WERSJA ROBOCZA — widoczna wyłącznie dla uprawnionych użytkowników.";
-  root.append(heading,note);
-  for(const [title,entries] of [
-   ["Samochód",[["Marka",o.brand],["Model",o.model],["Wersja",o.trim_name],["Nadwozie",o.body],["Dealer",o.dealer_name]]],
-   ["Silnik i napęd",[["Silnik",o.engine_name],["Moc (KM)",o.power_hp],["Paliwo",o.fuel],["Napęd",o.drive_type],["Skrzynia",o.transmission_type]]],
-   ["Cena",[["Cena brutto",Number(o.gross_price).toLocaleString("pl-PL")+" zł"]]],
-   ["Wyposażenie standardowe",(o.standard_equipment||[]).map(x=>["•",x])],
-   ["Wyposażenie dodatkowe",(o.optional_equipment||[]).map(x=>["•",x])],
-   ["Pozostałe informacje",Object.entries(o.other_details||{})]
-  ]){
-   const section=document.createElement("section");section.style.cssText="padding:14px;margin:12px 0;background:#f5f9f8;border-radius:10px";
-   const h=document.createElement("h3");h.textContent=title;section.append(h);
-   if(!entries.length){const p=document.createElement("p");p.textContent="Brak potwierdzonych danych.";section.append(p)}
-   for(const [label,value] of entries){if(value===null||value===undefined||value==="")continue;const p=document.createElement("p");p.textContent=label+": "+value;section.append(p)}
-   root.append(section);
+  const shell=previewText("article",undefined,"detail-shell");
+  const hero=previewText("div",undefined,"detail-hero");
+  hero.append(previewText("div","CARVAMO · DOBRA CENA. PROSTO OD DEALERA.","detail-tag"),previewText("h1",o.brand+" "+o.model),previewText("p","Oferta demonstracyjna — podgląd przed publikacją"));
+  shell.append(hero);
+  const grid=previewText("div",undefined,"detail-grid"),left=previewText("div"),right=previewText("div",undefined,"detail-form");
+  const gallery=previewText("div");gallery.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin:16px 0";
+  for(const photo of (await (await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/photos")).json()).photos||[]){
+   const image=previewText("img");image.alt="Zdjęcie pojazdu";image.style.cssText="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px";
+   const blob=await (await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/photos/"+encodeURIComponent(photo.id)+"/file")).blob();
+   const url=URL.createObjectURL(blob);mediaObjectUrls.push(url);image.src=url;gallery.append(image);
   }
-  $("confirmOfferPreview").hidden=false;
+  left.append(gallery);
+  const price=previewText("div",Number(o.gross_price).toLocaleString("pl-PL")+" zł","detail-price");
+  price.prepend(previewText("small","Cena brutto wg oferty"));left.append(price);
+  const facts=previewText("dl",undefined,"detail-facts");
+  for(const [label,value] of [["Model",o.brand+" "+o.model],["Wersja wyposażenia",o.trim_name],["Silnik",o.engine_name],["Moc",o.power_hp?o.power_hp+" KM":""],["Paliwo",o.fuel],["Napęd",o.drive_type],["Skrzynia biegów",o.transmission_type],["Nadwozie",o.body],["Salon",o.dealer_name]])previewFact(facts,label,value);
+  left.append(facts);
+  const terms=previewText("div",undefined,"detail-terms");terms.append(previewText("h3","Specyfikacja i wyposażenie"));
+  for(const [label,values] of [["Wyposażenie standardowe",o.standard_equipment||[]],["Wyposażenie dodatkowe",o.optional_equipment||[]]]){
+   terms.append(previewText("h4",label));
+   if(!values.length)terms.append(previewText("p","Nie podano"));
+   for(const value of values)terms.append(previewText("p","• "+value));
+  }
+  for(const [key,value] of Object.entries(o.other_details||{}))terms.append(previewText("p",key+": "+value));
+  left.append(terms);
+  right.append(previewText("h2","Zapytaj o tę ofertę"),previewText("p",o.brand+" "+o.model+" · "+Number(o.gross_price).toLocaleString("pl-PL")+" zł"),previewText("p","Podgląd formularza kontaktowego klienta — wysyłanie wyłączone."));
+  for(const label of ["Imię i nazwisko","E-mail","Telefon","Wiadomość"]){const field=previewText("label",label),input=previewText("input");input.disabled=true;right.append(field,input)}
+  const send=previewText("button","Wyślij zapytanie");send.disabled=true;right.append(send);
+  grid.append(left,right);shell.append(grid);root.append(shell);
+  $("offerPreviewModal").hidden=false;document.body.style.overflow="hidden";
+  $("closeOfferPreview").focus();
  }catch(e){$("mediaStatus").textContent=e.message}
 });
-
-$("confirmOfferPreview").addEventListener("click",async()=>{
+$("confirmOfferPreviewModal").addEventListener("click",async()=>{
  if(!mediaOffer)return;
- const button=$("confirmOfferPreview");button.disabled=true;
+ const button=$("confirmOfferPreviewModal");button.disabled=true;
  try{
   await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/confirm-preview",{method:"POST"});
-  $("mediaStatus").textContent="Podgląd potwierdzony. Możesz teraz opublikować ofertę (zgodnie z zasadami akceptacji CARVAMO).";
-  button.hidden=true;
+  $("mediaStatus").textContent="Podgląd potwierdzony. Oferta gotowa do kolejnego etapu publikacji.";
+  closeOfferPreviewModal();
  }catch(e){$("mediaStatus").textContent=e.message}finally{button.disabled=false}
 });
