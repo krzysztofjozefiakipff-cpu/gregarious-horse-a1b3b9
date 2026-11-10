@@ -138,6 +138,36 @@ def _contact_centers(alpha: Image.Image) -> tuple[float, ...]:
         if len(selected) >= 3:
             break
     if len(selected) < 2:
+        # Conservative fallback for flat tire-foot plateaus missed by peak prominence.
+        # Require two distinct deep silhouette bands separated by a shallower valley.
+        valid = bottom >= 0
+        if valid.any():
+            deep_level = max(floor, float(np.percentile(bottom[valid], 83)))
+            deep = smooth >= deep_level
+            runs = []
+            start = None
+            stop = min(w-window, int(w*.965))
+            for xx in range(max(window, int(w*.035)), stop):
+                if deep[xx] and start is None:
+                    start = xx
+                if start is not None and (not deep[xx] or xx == stop-1):
+                    end = xx if not deep[xx] else xx+1
+                    if end-start >= max(5, int(w*.012)) and end-start <= w*.20:
+                        runs.append((start, end))
+                    start = None
+            bands = [((a+b)//2, float(smooth[a:b].max())) for a,b in runs]
+            for i, (xa, ya) in enumerate(bands):
+                for xb, yb in bands[i+1:]:
+                    if xb-xa < min_gap:
+                        continue
+                    valley = float(smooth[xa:xb+1].min())
+                    if min(ya,yb)-valley >= h*.022:
+                        selected = [(min(ya,yb)-valley, xa, ya),
+                                    (min(ya,yb)-valley, xb, yb)]
+                        break
+                if len(selected) >= 2:
+                    break
+    if len(selected) < 2:
         raise ValueError("wheel_detection_low_confidence")
     selected.sort(key=lambda row: row[1])
     return tuple(x/w for _, x, _ in selected)
