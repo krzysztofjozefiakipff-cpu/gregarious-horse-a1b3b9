@@ -911,3 +911,21 @@ def get_offer_photo(actor,offer_id,photo_id):
     if not photo:
         return fail("Zdjęcie nie istnieje",404)
     return send_file(photo["original_path"],mimetype="image/jpeg",max_age=0)
+
+@app.get("/api/offers/<uuid:offer_id>/preview")
+@account
+def preview_offer(actor,offer_id):
+    with conn() as db:
+        if not offer_photo_access(db,actor,offer_id):
+            return fail("Brak dostępu do oferty",404)
+        row=db.execute(
+            "SELECT o.id,o.brand,o.model,o.trim_name,o.engine_name,o.power_hp,o.drive_type,"
+            "o.transmission_type,o.body,o.fuel,o.gross_price,o.status,d.name AS dealer_name,"
+            "s.standard_equipment,s.optional_equipment,s.other_details "
+            "FROM offers o JOIN dealers d ON d.id=o.dealer_id "
+            "LEFT JOIN offer_specifications s ON s.offer_id=o.id WHERE o.id=%s",(offer_id,)
+        ).fetchone()
+    row["standard_equipment"]=row["standard_equipment"] or []
+    row["optional_equipment"]=row["optional_equipment"] or []
+    row["other_details"]=row["other_details"] or {}
+    return jsonify({"offer":row})
