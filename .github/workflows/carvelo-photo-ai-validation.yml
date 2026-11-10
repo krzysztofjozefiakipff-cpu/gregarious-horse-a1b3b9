@@ -1,0 +1,28 @@
+name: CARVELO Photo AI 180 - validation
+on:
+  pull_request:
+    paths:
+      - 'tools/carvelo-photo-ai/**'
+      - '.github/workflows/carvelo-photo-ai-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependency
+        run: python -m pip install 'Pillow>=10,<12' 'numpy>=1.26,<3' 'cairosvg>=2.7,<3' 'requests>=2.31,<3'
+      - name: Python syntax check (including Blender script)
+        run: |
+          python -m py_compile services/accounts/photo_ai_api.py services/accounts/app.py
+          python -m py_compile tools/carvelo-photo-ai/ovh_worker.py tools/carvelo-photo-ai/ovh_transport.py
+          python -m py_compile tools/carvelo-photo-ai/build_showroom_3d.py
+          python -m py_compile tools/carvelo-photo-ai/validate_showroom_renders.py
+          python -m py_compile tools/carvelo-photo-ai/test_validate_showroom_renders.py
+      - name: Synthetic render validation tests
+        working-directory: tools/carvelo-photo-ai
+        run: python -m unittest -v test_validate_showroom_renders.py test_wheel_contacts.py test_ovh_transport.py
