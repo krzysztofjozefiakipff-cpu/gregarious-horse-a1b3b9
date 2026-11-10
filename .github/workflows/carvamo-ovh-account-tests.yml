@@ -36,6 +36,11 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -X -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/tests/roles_isolation.sql
           echo "CARVAMO role isolation tests passed; test records rolled back"
+      - name: Check lead database schema and application errors
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec carvamo-db-staging psql -X -v ON_ERROR_STOP=1 -U carvamo -d carvamo -Atqc "SELECT count(*) FROM leads;"'
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker logs --tail 100 carvamo-accounts-staging 2>&1 | grep -E "Traceback|psycopg.errors|UndefinedColumn|ProgrammingError|Internal Server Error|ERROR in app|Exception on" | tail -20 || true'
       - name: Verify public API requires authentication
         run: |
           set -euo pipefail
