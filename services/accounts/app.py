@@ -164,7 +164,7 @@ def account(f):
     return wrapper
 
 def permitted(actor, role, dealer_id):
-    if actor["role"] == "admin":
+    if actor["role"] in {"admin", "staff"}:
         return (role in {"admin", "staff"} and dealer_id is None) or (
             role in {"dealer", "dealer_admin", "dealer_staff"} and dealer_id is not None
         )
@@ -208,10 +208,10 @@ def login():
 @app.get("/api/accounts")
 @account
 def list_accounts(actor):
-    if actor["role"] not in {"admin", "dealer_admin"}:
+    if actor["role"] not in {"admin", "staff", "dealer_admin"}:
         return fail("Brak uprawnień", 403)
     with conn() as db:
-        if actor["role"] == "admin":
+        if actor["role"] in {"admin", "staff"}:
             rows = db.execute("SELECT id,email,role,dealer_id,enabled,created_at,(phone IS NOT NULL) AS has_phone FROM users ORDER BY created_at DESC LIMIT 500").fetchall()
         else:
             rows = db.execute("SELECT id,email,role,dealer_id,enabled,created_at,(phone IS NOT NULL) AS has_phone FROM users WHERE dealer_id=%s AND role='dealer_staff' ORDER BY created_at DESC LIMIT 500", (actor["dealer_id"],)).fetchall()
@@ -300,7 +300,7 @@ def change_password(actor):
 @app.get("/api/dealers")
 @account
 def list_dealers(actor):
-    if actor["role"] != "admin":
+    if actor["role"] not in {"admin", "staff"}:
         return fail("Brak uprawnień", 403)
     with conn() as db:
         rows = db.execute("SELECT id,name,active FROM dealers WHERE active=true ORDER BY name LIMIT 500").fetchall()
@@ -440,7 +440,7 @@ def list_leads(actor):
 @app.patch("/api/leads/<uuid:lead_id>/assign")
 @account
 def assign_lead(actor, lead_id):
-    if actor["role"] not in {"admin", "dealer_admin"}:
+    if actor["role"] not in {"admin", "staff", "dealer_admin"}:
         return fail("Brak uprawnień", 403)
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or "assigned_to" not in data:
@@ -479,7 +479,7 @@ def change_lead_status(actor, lead_id):
         if not lead:
             return fail("Nie znaleziono leada", 404)
         role = actor["role"]
-        permitted = (role == "admin" or
+        permitted = (role in {"admin", "staff"} or
                      (role == "dealer_admin" and str(actor["dealer_id"]) == str(lead["dealer_id"])) or
                      (role == "dealer_staff" and str(actor["dealer_id"]) == str(lead["dealer_id"]) and str(actor["id"]) == str(lead["assigned_to"])))
         if not permitted:
@@ -491,10 +491,10 @@ def change_lead_status(actor, lead_id):
 @app.get("/api/leads/assignees")
 @account
 def lead_assignees(actor):
-    if actor["role"] not in {"admin", "dealer_admin"}:
+    if actor["role"] not in {"admin", "staff", "dealer_admin"}:
         return fail("Brak uprawnień", 403)
     with conn() as db:
-        if actor["role"] == "admin":
+        if actor["role"] in {"admin", "staff"}:
             rows = db.execute("SELECT id,email,dealer_id FROM users WHERE role='dealer_staff' AND enabled=true ORDER BY email LIMIT 500").fetchall()
         else:
             rows = db.execute("SELECT id,email,dealer_id FROM users WHERE role='dealer_staff' AND enabled=true AND dealer_id=%s ORDER BY email LIMIT 200", (actor["dealer_id"],)).fetchall()
