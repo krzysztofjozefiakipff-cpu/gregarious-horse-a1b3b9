@@ -1,0 +1,28 @@
+name: CARVAMO mobile offer E2E
+on:
+  push:
+    branches: [main]
+    paths:
+      - "preview/**"
+      - ".github/workflows/carvamo-preview-mobile-e2e.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browser test dependency
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start static preview server
+        run: |
+          mkdir -p preview/panel
+          cp panel/config.js preview/panel/config.js
+          python3 -m http.server 8765 --directory preview > /tmp/carvamo-preview-http.log 2>&1 &
+          sleep 2
+      - name: Test iPhone offer-to-lead journey (mocked API, no personal data stored)
+        run: node preview/tests/mobile-e2e.mjs
