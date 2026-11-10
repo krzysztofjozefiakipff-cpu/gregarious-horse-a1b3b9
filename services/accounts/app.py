@@ -437,6 +437,9 @@ def publish_offer(actor, offer_id):
             return fail("Oferty nie można opublikować", 409)
         if row["status"] == "pending" and actor["role"] not in {"admin", "staff"}:
             return fail("Oferta oczekuje na zatwierdzenie CARVAMO", 409)
+        confirmed = db.execute("SELECT preview_confirmed_at FROM offers WHERE id=%s",(offer_id,)).fetchone()
+        if not confirmed["preview_confirmed_at"]:
+            return fail("Najpierw sprawdź i potwierdź podgląd oferty",409)
         missing = missing_offer_publication_fields(db, offer_id)
         if missing:
             return jsonify({"error": "Uzupełnij wymagane pola przed publikacją: " + ", ".join(missing), "missing_fields": missing}), 422
@@ -604,6 +607,10 @@ def review_offer(actor, offer_id):
             return fail("Nie znaleziono oferty", 404)
         if offer["status"] != "pending":
             return fail("Oferta nie oczekuje na zatwierdzenie", 409)
+        if decision == "approve":
+            confirmation=db.execute("SELECT preview_confirmed_at FROM offers WHERE id=%s",(offer_id,)).fetchone()
+            if not confirmation["preview_confirmed_at"]:
+                return fail("Oferta wymaga potwierdzenia podglądu przed zatwierdzeniem",409)
         if decision == "approve":
             missing = missing_offer_publication_fields(db, offer_id)
             if missing:
@@ -896,6 +903,7 @@ def upload_offer_photo(actor, offer_id):
             image=ImageOps.exif_transpose(image).convert("RGB")
             image.thumbnail((2400,2400))
             image.save(destination,format="JPEG",quality=90,optimize=True)
+        db.execute("UPDATE offers SET preview_confirmed_at=NULL,preview_confirmed_by=NULL WHERE id=%s",(offer_id,))
         db.execute("INSERT INTO offer_photos(id,offer_id,uploaded_by,original_path,photo_type,state,is_cover,sort_order) VALUES (%s,%s,%s,%s,'unknown','review',%s,%s)",
                    (photo_id,offer_id,actor["id"],str(destination),count==0,count))
     return jsonify({"ok":True,"photo":{"id":photo_id,"state":"review"}}),201
@@ -929,3 +937,18 @@ def preview_offer(actor,offer_id):
     row["optional_equipment"]=row["optional_equipment"] or []
     row["other_details"]=row["other_details"] or {}
     return jsonify({"offer":row})
+
+@app.post("/api/offers/<uuid:offer_id>/confirm-preview")
+@account
+def confirm_offer_preview(actor,offer_id):
+    with conn() as db:
+        offer=offer_photo_access(db,actor,offer_id)
+        if not offer:
+            return fail("Brak dostępu do oferty",404)
+        if offer["status"]=="published":
+            return fail("Oferta została już opublikowana",409)
+        missing=missing_offer_publication_fields(db,offer_id)
+        if missing:
+            return jsonify({"error":"Uzupełnij pola przed potwierdzeniem: "+", ".join(missing),"missing_fields":missing}),422
+        db.execute("UPDATE offers SET preview_confirmed_at=now(),preview_confirmed_by=%s WHERE id=%s",(actor["id"],offer_id))
+    return jsonify({"ok":True,"preview_confirmed":True})
