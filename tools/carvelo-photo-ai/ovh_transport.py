@@ -46,9 +46,9 @@ class OVHTransport:
             raise TransportError("photo_api_invalid_claim")
         return payload["job"]
 
-    def download(self, job_id):
+    def download(self, job_id, lease_token):
         # Download through the authenticated backend, not an arbitrary URL from a job.
-        response = self._request("GET", "/api/internal/photo-ai/jobs/" + str(job_id) + "/original", timeout=55, stream=True)
+        response = self._request("GET", "/api/internal/photo-ai/jobs/" + str(job_id) + "/original", timeout=55, stream=True, headers={"X-Photo-Lease": lease_token})
         data = bytearray()
         try:
             for chunk in response.iter_content(65536):
