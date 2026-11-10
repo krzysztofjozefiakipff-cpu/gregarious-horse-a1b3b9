@@ -791,6 +791,12 @@ def save_offer_specification(actor, offer_id):
     optional=clean_items("optional_equipment")
     if standard is None or optional is None:
         return fail("Wyposażenie musi być listą krótkich opisów",400)
+    details=data.get("other_details",{})
+    if not isinstance(details,dict) or len(details)>30 or any(
+        not isinstance(k,str) or not isinstance(v,str) or len(k)>100 or len(v)>500
+        for k,v in details.items()
+    ):
+        return fail("Nieprawidłowe dane dodatkowe",400)
     import json
     with conn() as db:
         offer=db.execute("SELECT dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE",(offer_id,)).fetchone()
@@ -802,9 +808,9 @@ def save_offer_specification(actor, offer_id):
             return fail("Zmiany opublikowanej specyfikacji wymagają obsługi CARVAMO",409)
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)",(str(actor["id"]),))
         db.execute(
-            "INSERT INTO offer_specifications(offer_id,standard_equipment,optional_equipment,updated_at) VALUES (%s,%s::jsonb,%s::jsonb,now()) "
+            "INSERT INTO offer_specifications(offer_id,standard_equipment,optional_equipment,other_details,updated_at) VALUES (%s,%s::jsonb,%s::jsonb,%s::jsonb,now()) "
             "ON CONFLICT(offer_id) DO UPDATE SET standard_equipment=EXCLUDED.standard_equipment,"
-            "optional_equipment=EXCLUDED.optional_equipment,updated_at=now()",
-            (offer_id,json.dumps(standard,ensure_ascii=False),json.dumps(optional,ensure_ascii=False))
+            "optional_equipment=EXCLUDED.optional_equipment,other_details=EXCLUDED.other_details,updated_at=now()",
+            (offer_id,json.dumps(standard,ensure_ascii=False),json.dumps(optional,ensure_ascii=False),json.dumps(details,ensure_ascii=False))
         )
     return jsonify({"ok":True,"standard_count":len(standard),"optional_count":len(optional)})
