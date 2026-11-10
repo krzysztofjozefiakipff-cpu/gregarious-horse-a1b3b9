@@ -683,34 +683,37 @@ def import_offer_specification(actor):
             item = re.sub(r"^(?:[-•✓]\\s*|wyposażenie\\s*[:\\-]\\s*)", "", line, flags=re.IGNORECASE)
             if item and item not in equipment:
                 equipment.append(item)
-    # Dealer tables use 8-digit option codes, with descriptions wrapped onto following lines.
+    # Parse dealer equipment tables with codes in any column, including wrapped rows.
     coded_equipment = []
     current = None
     for original in raw.splitlines():
-        line = original.strip()
-        code = re.match(r"^(\\d{8})\\s+(.+)$", line)
+        line = re.sub(r"\s+", " ", original).strip()
+        code = re.search(r"(?<!\d)(\d{8})(?!\d)\s*[:;|\-]?\s*(.*)", line)
         if code:
-            if current:
+            if current and current["description"]:
                 coded_equipment.append(current)
-            current = {"code": code.group(1), "description": code.group(2).strip()}
-        elif current and line and not re.match(r"^(?:Strona \\d|Informacja o specyfikacji|Wyposażenie opcjonalne)$", line, re.I):
-            if not re.match(r"^\\d{8}$", line) and len(line) < 180:
-                current["description"] += " " + line
-        elif current and not line:
-            continue
-    if current:
+            description = code.group(2).strip(" -:|;")
+            current = {"code": code.group(1), "description": description}
+        elif current and line:
+            if re.match(r"(?i)^(?:strona\s+\d|informacja o specyfikacji|wyposażenie opcjonalne|typ:|lakier:|tapicerka:)",line):
+                if current["description"]:
+                    coded_equipment.append(current)
+                current = None
+            elif len(line) <= 180 and not re.match(r"^(?:\d{1,3}|\d{2}[./-]\d{2}[./-]\d{4})$",line):
+                current["description"] += (" " if current["description"] else "") + line
+    if current and current["description"]:
         coded_equipment.append(current)
     if coded_equipment:
-        equipment = list(dict.fromkeys(item["description"] for item in coded_equipment))
-    model_header = re.search(r"(?im)^\\s*(Jaecoo|Omoda|MG|BYD|Toyota|Lexus|Maxus)\\s+(\\d+[A-Za-z]?)\\s+([^\\n]+)", raw)
-    vehicle_type = match(r"(?im)^\\s*Typ:\\s*([A-Z0-9]+)")
-    paint = match(r"(?im)^\\s*Lakier:\\s*([^\\n]+)")
-    upholstery = match(r"(?im)^\\s*Tapicerka:\\s*([^\\n]+)")
+        equipment = list(dict.fromkeys(item["description"] for item in coded_equipment if item["description"]))
+    model_header = re.search(r"(?i)\b(Jaecoo|Omoda|MG|BYD|Toyota|Lexus|Maxus)\s+(\d+[A-Za-z]?)\s*(Hybrid|HEV|PHEV|MHEV|Comfort|Premium|Luxury|Executive|Prestige)?", raw)
+    vehicle_type = match(r"(?im)^\s*Typ\s*:\s*([A-Z0-9]+)")
+    paint = match(r"(?im)^\s*Lakier\s*:\s*([^\n]+)")
+    upholstery = match(r"(?im)^\s*Tapicerka\s*:\s*([^\n]+)")
     candidates = {"power_hp": int(power) if power and 1 <= int(power) <= 3000 else None,
                   "gross_price": price.replace(" ", "") if price else None,
                   "fuel": fuel, "transmission_type": transmission, "drive_type": drive}
     if model_header:
-        candidates.update({"brand": model_header.group(1).upper(), "model": model_header.group(2), "trim_name": model_header.group(3).strip()})
+        candidates.update({"brand": model_header.group(1).upper(), "model": model_header.group(2), "trim_name": (model_header.group(3) or "").strip()})
     return jsonify({"candidates": candidates, "equipment": equipment[:150], "equipment_codes": coded_equipment[:150],
                     "other_details": {k:v for k,v in {"Typ pojazdu":vehicle_type,"Lakier (kod)":paint,"Tapicerka":upholstery}.items() if v},
                     "source_text": raw[:30000], "pages": len(reader.pages),
