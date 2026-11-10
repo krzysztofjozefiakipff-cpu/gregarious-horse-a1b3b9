@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];let importedSpec=null;
-const BUILD="2026-11-11.1";
+const BUILD="2026-11-11.2";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -330,7 +330,7 @@ async function offerMediaRequest(path,options={}){
 async function openOfferMedia(offer){
  mediaOffer=offer;$("offerMediaPanel").hidden=false;
  $("mediaOfferName").textContent=offer.brand+" "+offer.model+" — "+offer.status;
- $("offerPreviewContent").replaceChildren();$("confirmOfferPreview").hidden=true;
+ $("offerPreviewContent").replaceChildren();
  $("offerMediaPanel").scrollIntoView({behavior:"smooth",block:"start"});
  await refreshMediaPhotos().catch(e=>$("mediaStatus").textContent=e.message);
 }
