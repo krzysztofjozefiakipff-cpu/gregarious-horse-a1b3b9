@@ -375,11 +375,15 @@ def create_offer(actor):
     return jsonify({"offer": row}), 201
 
 
-@app.patch("/api/offers/<uuid:offer_id>/submit")
+@app.patch("/api/offers/<uuid:offer_id>/publish")
 @account
-def submit_offer(actor, offer_id):
+def publish_offer(actor, offer_id):
+    """Dealer publishes own offer without CARVAMO approval."""
     with conn() as db:
-        row = db.execute("SELECT id,dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE", (offer_id,)).fetchone()
+        row = db.execute(
+            "SELECT id,dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE",
+            (offer_id,)
+        ).fetchone()
         if not row:
             return fail("Nie znaleziono oferty", 404)
         if actor["role"] not in {"admin", "staff"} and (
@@ -387,8 +391,30 @@ def submit_offer(actor, offer_id):
             str(actor["dealer_id"]) != str(row["dealer_id"])
         ):
             return fail("Brak uprawnień", 403)
-        if row["status"] not in {"draft", "rejected"}:
-            return fail("Oferty nie można przekazać do weryfikacji", 409)
+        if row["status"] not in {"draft", "pending", "rejected"}:
+            return fail("Oferty nie można opublikować", 409)
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
-        db.execute("UPDATE offers SET status='pending',updated_at=now() WHERE id=%s", (offer_id,))
-    return jsonify({"ok": True, "status": "pending"})
+        db.execute("UPDATE offers SET status='published',updated_at=now() WHERE id=%s", (offer_id,))
+    return jsonify({"ok": True, "status": "published"})
+
+
+@app.patch("/api/offers/<uuid:offer_id>/withdraw")
+@account
+def withdraw_offer(actor, offer_id):
+    with conn() as db:
+        row = db.execute(
+            "SELECT id,dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE",
+            (offer_id,)
+        ).fetchone()
+        if not row:
+            return fail("Nie znaleziono oferty", 404)
+        if actor["role"] not in {"admin", "staff"} and (
+            actor["role"] not in {"dealer", "dealer_admin", "dealer_staff"} or
+            str(actor["dealer_id"]) != str(row["dealer_id"])
+        ):
+            return fail("Brak uprawnień", 403)
+        if row["status"] != "published":
+            return fail("Oferta nie jest opublikowana", 409)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
+        db.execute("UPDATE offers SET status='draft',updated_at=now() WHERE id=%s", (offer_id,))
+    return jsonify({"ok": True, "status": "draft"})
