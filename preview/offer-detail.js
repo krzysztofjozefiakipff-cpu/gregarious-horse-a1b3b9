@@ -11,7 +11,7 @@ function elem(tag,text,cls){const e=document.createElement(tag);if(text!==undefi
 function row(dl,label,value){const wrap=elem("div");wrap.append(elem("dt",label),elem("dd",value||"Nie podano — zapytaj dealera"));dl.append(wrap)}
 function val(v){return typeof v==="string"&&v.trim()?v.trim():""}
 function format(n){return Number(n).toLocaleString("pl-PL")+" zł"}
-function source(){const out={};for(const k of allowedParams){const v=params.get(k);if(v)out[k]=v.slice(0,160)}return out}
+function source(){const out={};for(const k of allowedParams){const v=params.get(k);if(v)out[k]=v.slice(0,160)}try{if(document.referrer){const host=new URL(document.referrer).hostname;if(host&&host!==location.hostname)out.referrer_host=host.slice(0,160)}}catch{}return out}
 function showError(msg){node.replaceChildren(elem("p",msg,"detail-status error"))}
 async function load(){
 if(!id)return;
