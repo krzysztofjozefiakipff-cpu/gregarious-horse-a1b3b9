@@ -16,6 +16,10 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
+# Explicitly disabled until OVH storage, DB migration and worker secrets are provisioned.
+if os.environ.get("CARVAMO_PHOTO_API_ENABLED") == "true":
+    from photo_ai_api import bp as photo_ai_bp
+    app.register_blueprint(photo_ai_bp)
 # Only the private Caddy proxy can reach this container.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 DATABASE_URL = os.environ["DATABASE_URL"]
