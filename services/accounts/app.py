@@ -403,6 +403,20 @@ def create_offer(actor):
     return jsonify({"offer": row}), 201
 
 
+def missing_offer_publication_fields(db, offer_id):
+    offer = db.execute(
+        "SELECT brand,model,trim_name,engine_name,power_hp,drive_type,transmission_type,"
+        "body,fuel,gross_price FROM offers WHERE id=%s", (offer_id,)
+    ).fetchone()
+    required = {
+        "Marka": "brand", "Model": "model", "Wersja wyposażenia": "trim_name",
+        "Silnik / oznaczenie": "engine_name", "Moc (KM)": "power_hp",
+        "Napęd": "drive_type", "Skrzynia biegów": "transmission_type",
+        "Nadwozie": "body", "Paliwo": "fuel", "Cena brutto": "gross_price"
+    }
+    return [label for label, key in required.items() if offer[key] is None or str(offer[key]).strip() == ""]
+
+
 @app.patch("/api/offers/<uuid:offer_id>/publish")
 @account
 def publish_offer(actor, offer_id):
@@ -421,6 +435,11 @@ def publish_offer(actor, offer_id):
             return fail("Brak uprawnień", 403)
         if row["status"] not in {"draft", "pending", "rejected"}:
             return fail("Oferty nie można opublikować", 409)
+        if row["status"] == "pending" and actor["role"] not in {"admin", "staff"}:
+            return fail("Oferta oczekuje na zatwierdzenie CARVAMO", 409)
+        missing = missing_offer_publication_fields(db, offer_id)
+        if missing:
+            return jsonify({"error": "Uzupełnij wymagane pola przed publikacją: " + ", ".join(missing), "missing_fields": missing}), 422
         if actor["role"] not in {"admin", "staff"} and row["trim_name"]:
             known = db.execute(
                 "SELECT 1 FROM vehicle_catalog WHERE lower(brand)=lower(%s) AND lower(model)=lower(%s) "
@@ -585,6 +604,10 @@ def review_offer(actor, offer_id):
             return fail("Nie znaleziono oferty", 404)
         if offer["status"] != "pending":
             return fail("Oferta nie oczekuje na zatwierdzenie", 409)
+        if decision == "approve":
+            missing = missing_offer_publication_fields(db, offer_id)
+            if missing:
+                return jsonify({"error": "Uzupełnij wymagane pola przed zatwierdzeniem: " + ", ".join(missing), "missing_fields": missing}), 422
         status = "published" if decision == "approve" else "rejected"
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         db.execute("UPDATE offers SET status=%s,updated_at=now() WHERE id=%s", (status,offer_id))
