@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.11";
+const BUILD="2026-11-10.12";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -212,6 +212,10 @@ $("offersRefresh").addEventListener("click",()=>refreshOffers().catch(e=>notice(
 $("offerCreate").addEventListener("submit",async event=>{
  event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
  const payload={brand:$("offerBrand").value,model:$("offerModel").value,body:$("offerBody").value,fuel:$("offerFuel").value,gross_price:$("offerPrice").value,special:$("offerSpecial").checked,trim_name:$("offerVersion").value,engine_name:$("offerEngine").value,power_hp:$("offerPower").value||null,drive_type:$("offerDrive").value||null,transmission_type:$("offerTransmission").value||null};
+ const brand=payload.brand.trim().toLocaleLowerCase("pl"),model=payload.model.trim().toLocaleLowerCase("pl");
+ if(!catalogVehicles.some(x=>x.brand.toLocaleLowerCase("pl")===brand&&x.model.toLocaleLowerCase("pl")===model)){
+  notice("Wybierz markę i model z podpowiedzi katalogu CARVAMO.");button.disabled=false;return;
+ }
  if(["admin","staff"].includes(me.role))payload.dealer_id=$("offerDealer").value;
  try{await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});event.currentTarget.reset();await refreshOffers();notice("Szkic zapisany. Możesz go opublikować.")}catch(e){notice(e.message)}finally{button.disabled=false}
 });
@@ -265,8 +269,8 @@ function updateCatalogTrims(){
  const brand=$("offerBrand").value.trim().toLowerCase(),model=$("offerModel").value.trim().toLowerCase();
  fillCatalog("offerVersions",[...new Set(catalogVehicles.filter(x=>x.brand.toLowerCase()===brand&&x.model.toLowerCase()===model).map(x=>x.trim_name))]);
 }
-$("offerBrand").addEventListener("input",updateCatalogModels);
-$("offerModel").addEventListener("input",updateCatalogTrims);
+$("offerBrand").addEventListener("input",()=>{updateCatalogModels();$("offerBrand").setCustomValidity("");});
+$("offerModel").addEventListener("input",()=>{updateCatalogTrims();$("offerModel").setCustomValidity("");});
 $("catalogForm").addEventListener("submit",async event=>{
  event.preventDefault();
  if(!["admin","staff"].includes(me?.role))return;
