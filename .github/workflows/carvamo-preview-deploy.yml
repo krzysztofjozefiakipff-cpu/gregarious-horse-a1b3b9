@@ -32,6 +32,12 @@ jobs:
           test -s preview/live-catalog.js
           node --check preview/live-catalog.js || true
           grep -q "carvamoLoadLiveOffers" preview/index.html
+          grep -q "loadPublishedOffers" preview/index.html
+          test -s preview/offer-detail.js
+          test -s preview/offer-detail.css
+          test -s preview/leads-admin.html
+          node --check preview/offer-detail.js
+          node --check preview/leads-admin.js
           bash -n tools/ovh/deploy_preview.sh
           mkdir -p preview/panel
           cp panel/config.js preview/panel/config.js
@@ -65,7 +71,7 @@ jobs:
       - name: Verify branded assets and catalog module over HTTPS
         run: |
           set -euo pipefail
-          for path in /assets/carvamo-wordmark.svg /assets/carvamo-favicon.svg /live-catalog.js /panel/config.js; do
+          for path in /assets/carvamo-wordmark.svg /assets/carvamo-favicon.svg /live-catalog.js /offer-detail.js /offer-detail.css /leads-admin.html /panel/config.js; do
             echo "Checking $path"
             curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com$path" -o /dev/null
           done
