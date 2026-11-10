@@ -1,9 +1,9 @@
 preview.carvamo.com {
     root * /site/current
     encode zstd gzip
-    @dynamicFiles path /panel/* /accounts/* /offer-detail.js /leads-admin.js /live-catalog.js
+    @dynamicFiles path /panel/* /accounts/* /catalog/* /offer-detail.js /leads-admin.js /live-catalog.js
     header @dynamicFiles Cache-Control "no-store, max-age=0"
-    @accountsAPI path /api/auth/* /api/accounts /api/accounts/* /api/dealers /api/offers /api/offers/* /api/leads /api/leads/* /api/health
+    @accountsAPI path /api/auth/* /api/accounts /api/accounts/* /api/dealers /api/vehicle-catalog /api/vehicle-catalog/* /api/public/offers/* /api/offers /api/offers/* /api/leads /api/leads/* /api/health
     handle @accountsAPI {
         reverse_proxy carvamo-accounts-staging:8000
     }
