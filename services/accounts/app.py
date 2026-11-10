@@ -666,3 +666,84 @@ def import_offer_specification(actor):
     return jsonify({"candidates": candidates, "equipment": equipment[:150],
                     "source_text": raw[:30000], "pages": len(reader.pages),
                     "warning": "Wartości rozpoznane automatycznie wymagają weryfikacji. Nie zapisano oferty ani pliku."})
+
+def public_offer_data(offer_id):
+    with conn() as db:
+        row = db.execute(
+            "SELECT o.id,o.brand,o.model,o.body,o.fuel,o.gross_price,o.trim_name,o.engine_name,"
+            "o.power_hp,o.drive_type,o.transmission_type,d.name AS dealer_name,"
+            "s.standard_equipment,s.optional_equipment,s.other_details "
+            "FROM offers o JOIN dealers d ON d.id=o.dealer_id "
+            "LEFT JOIN offer_specifications s ON s.offer_id=o.id "
+            "WHERE o.id=%s AND o.status='published' AND o.deletion_pending=false AND d.active=true",
+            (offer_id,)
+        ).fetchone()
+    return row
+
+@app.get("/api/public/offers/<uuid:offer_id>")
+def public_offer_details(offer_id):
+    row = public_offer_data(offer_id)
+    if not row:
+        return fail("Oferta niedostępna", 404)
+    row["standard_equipment"] = row["standard_equipment"] or []
+    row["optional_equipment"] = row["optional_equipment"] or []
+    row["other_details"] = row["other_details"] or {}
+    return jsonify({"offer": row})
+
+@app.get("/api/public/offers/<uuid:offer_id>/pdf")
+def download_public_offer_pdf(offer_id):
+    from io import BytesIO
+    from flask import send_file
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib import colors
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from xml.sax.saxutils import escape
+    row = public_offer_data(offer_id)
+    if not row:
+        return fail("Oferta niedostępna", 404)
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    if not os.path.isfile(font_path):
+        return fail("Generator PDF nie jest skonfigurowany", 503)
+    if "CarvamoUnicode" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("CarvamoUnicode", font_path))
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="CarvamoHeading",fontName="CarvamoUnicode",fontSize=19,leading=25,textColor=colors.HexColor("#102A34"),spaceAfter=15))
+    styles.add(ParagraphStyle(name="CarvamoText",fontName="CarvamoUnicode",fontSize=9,leading=15,spaceAfter=7))
+    styles.add(ParagraphStyle(name="CarvamoSection",fontName="CarvamoUnicode",fontSize=12,leading=18,spaceBefore=12,spaceAfter=8,textColor=colors.HexColor("#006B62")))
+    buffer = BytesIO()
+    document = SimpleDocTemplate(buffer,pagesize=(595,842),leftMargin=44,rightMargin=44,topMargin=48,bottomMargin=45)
+    story = [Paragraph("CARVAMO | OFERTA SAMOCHODU",styles["CarvamoHeading"])]
+    def field(label,value):
+        if value is not None and str(value).strip():
+            story.append(Paragraph("<b>"+escape(label)+":</b> "+escape(str(value)),styles["CarvamoText"]))
+    def section(label):
+        story.append(Paragraph(escape(label),styles["CarvamoSection"]))
+    section("Samochód")
+    field("Marka i model",row["brand"]+" "+row["model"])
+    field("Wersja",row["trim_name"])
+    field("Nadwozie",row["body"])
+    field("Dealer",row["dealer_name"])
+    section("Silnik i napęd")
+    for label,key in [("Silnik","engine_name"),("Moc (KM)","power_hp"),("Paliwo","fuel"),("Napęd","drive_type"),("Skrzynia biegów","transmission_type")]:
+        field(label,row[key])
+    section("Cena i warunki")
+    field("Cena brutto (PLN)",row["gross_price"])
+    for label,key in [("Wyposażenie standardowe","standard_equipment"),("Wyposażenie dodatkowe","optional_equipment")]:
+        section(label)
+        values=row[key] or []
+        if values:
+            for item in values[:300]:
+                story.append(Paragraph("• "+escape(str(item)[:400]),styles["CarvamoText"]))
+        else:
+            story.append(Paragraph("Brak potwierdzonych danych w specyfikacji.",styles["CarvamoText"]))
+    section("Pozostałe informacje")
+    for key,value in (row["other_details"] or {}).items():
+        field(str(key)[:100],str(value)[:500])
+    story.append(Spacer(1,15))
+    story.append(Paragraph("Dokument wygenerowany na podstawie danych opublikowanej oferty CARVAMO. Wyposażenie należy potwierdzić u dealera.",styles["CarvamoText"]))
+    document.build(story)
+    buffer.seek(0)
+    return send_file(buffer,mimetype="application/pdf",as_attachment=True,download_name="carvamo-oferta-"+str(offer_id)+".pdf")
