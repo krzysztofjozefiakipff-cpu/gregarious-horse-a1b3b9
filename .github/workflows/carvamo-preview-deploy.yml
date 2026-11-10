@@ -41,10 +41,12 @@ jobs:
           node --check preview/leads-admin.js
           bash -n tools/ovh/deploy_preview.sh
           mkdir -p preview/panel preview/assets/brand
-          cp -a panel/. preview/panel/
+          rsync -a --ignore-existing panel/ preview/panel/
           cp -a assets/brand/. preview/assets/brand/
           test -s preview/panel/index.html
           test -s preview/panel/app.js
+          grep -q 'CARVAMO' preview/panel/index.html
+          ! grep -qi 'carvelo' preview/panel/index.html
           test -s preview/panel/photos.js
           test -s preview/assets/brand/carvelo-wordmark-on-dark.svg
           tar -czf "/tmp/carvamo-preview-${GITHUB_SHA}.tgz" -C preview .
