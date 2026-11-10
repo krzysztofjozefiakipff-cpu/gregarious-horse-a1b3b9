@@ -384,6 +384,15 @@ def create_offer(actor):
         dealer = db.execute("SELECT id FROM dealers WHERE id::text=%s AND active=true", (dealer_id,)).fetchone()
         if not dealer:
             return fail("Dealer nie istnieje lub jest nieaktywny", 400)
+        # Brand and model must be selected from the centrally managed catalog.
+        catalog_match = db.execute(
+            "SELECT brand,model FROM vehicle_catalog WHERE lower(brand)=lower(%s) "
+            "AND lower(model)=lower(%s) LIMIT 1",
+            (fields["brand"], fields["model"])
+        ).fetchone()
+        if not catalog_match:
+            return fail("Wybierz markę i model z katalogu CARVAMO", 400)
+        fields["brand"], fields["model"] = catalog_match["brand"], catalog_match["model"]
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         row = db.execute(
             "INSERT INTO offers(brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_by,trim_name,engine_name,power_hp,drive_type,transmission_type,catalog_source) "
