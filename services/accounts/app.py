@@ -40,15 +40,20 @@ def account(f):
         if not auth.startswith("Bearer "):
             return fail("Wymagane logowanie", 401)
         try:
-            uid = signer.loads(auth[7:], max_age=SESSION_SECONDS)
+            payload = signer.loads(auth[7:], max_age=SESSION_SECONDS)
+            uid = payload["id"]
+            credential_version = payload["credential_version"]
         except (BadSignature, SignatureExpired):
             return fail("Sesja wygasła", 401)
         with conn() as db:
             user = db.execute(
-                "SELECT id,email,role,dealer_id,enabled FROM users WHERE id=%s", (uid,)
+                "SELECT id,email,role,dealer_id,enabled,password_hash FROM users WHERE id=%s", (uid,)
             ).fetchone()
         if not user or not user["enabled"]:
             return fail("Konto nieaktywne", 403)
+        if not secrets.compare_digest(credential_version, __import__("hashlib").sha256((user["password_hash"] or "").encode()).hexdigest()):
+            return fail("Sesja została unieważniona", 401)
+        user.pop("password_hash", None)
         return f(user, *args, **kwargs)
     return wrapper
 
@@ -92,7 +97,7 @@ def login():
     except (VerifyMismatchError, VerificationError):
         return fail("Nieprawidłowe dane logowania", 401)
     attempts.clear()
-    return jsonify({"token": signer.dumps(str(user["id"])), "expires_in": SESSION_SECONDS})
+    return jsonify({"token": signer.dumps({"id": str(user["id"]), "credential_version": __import__("hashlib").sha256(user["password_hash"].encode()).hexdigest()}), "expires_in": SESSION_SECONDS})
 
 @app.get("/api/accounts")
 @account
@@ -177,3 +182,12 @@ def change_password(actor):
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         db.execute("UPDATE users SET password_hash=%s WHERE id=%s", (hasher.hash(new), actor["id"]))
     return jsonify({"ok": True})
+
+@app.get("/api/dealers")
+@account
+def list_dealers(actor):
+    if actor["role"] != "admin":
+        return fail("Brak uprawnień", 403)
+    with conn() as db:
+        rows = db.execute("SELECT id,name,active FROM dealers WHERE active=true ORDER BY name LIMIT 500").fetchall()
+    return jsonify({"dealers": rows})
