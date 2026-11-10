@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];let importedSpec=null;
-const BUILD="2026-11-10.18";
+const BUILD="2026-11-10.19";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -204,6 +204,7 @@ async function refreshOffers(){
     button.addEventListener("click",async()=>{button.disabled=true;try{await api("/api/offers/"+encodeURIComponent(offer.id)+"/review",{method:"PATCH",body:JSON.stringify({decision})});await refreshOffers();notice(decision==="approve"?"Oferta zatwierdzona.":"Oferta odrzucona.")}catch(e){notice(e.message)}finally{button.disabled=false}});action.appendChild(button);
    }
   }
+  const media=el("button","Zdjęcia / podgląd");media.type="button";media.className="outline";media.addEventListener("click",()=>openOfferMedia(offer));action.appendChild(media);
   tr.appendChild(action);body.appendChild(tr);
  }
  if(!body.children.length){const tr=el("tr"),td=el("td","Brak ofert.");td.colSpan=4;tr.appendChild(td);body.appendChild(tr)}
@@ -317,4 +318,74 @@ $("offerPdfImport").addEventListener("click",async()=>{
   details.append(title,pre);result.appendChild(details);
   notice("Specyfikacja odczytana. Sprawdź pola i wyposażenie przed zapisaniem oferty.");
  }catch(e){result.textContent="";notice(e.message)}finally{button.disabled=false}
+});
+
+let mediaOffer=null,mediaObjectUrls=[];
+function clearMediaUrls(){for(const url of mediaObjectUrls)URL.revokeObjectURL(url);mediaObjectUrls=[]}
+async function offerMediaRequest(path,options={}){
+ const response=await fetch(path,{...options,headers:{Authorization:"Bearer "+token,...options.headers},cache:"no-store"});
+ if(!response.ok){const error=await response.json().catch(()=>({}));throw Error(error.error||"Błąd HTTP "+response.status)}
+ return response;
+}
+async function openOfferMedia(offer){
+ mediaOffer=offer;$("offerMediaPanel").hidden=false;
+ $("mediaOfferName").textContent=offer.brand+" "+offer.model+" — "+offer.status;
+ $("offerPreviewContent").replaceChildren();
+ $("offerMediaPanel").scrollIntoView({behavior:"smooth",block:"start"});
+ await refreshMediaPhotos().catch(e=>$("mediaStatus").textContent=e.message);
+}
+async function refreshMediaPhotos(){
+ if(!mediaOffer)return;
+ clearMediaUrls();const gallery=$("offerPhotoGallery");gallery.replaceChildren();
+ const id=encodeURIComponent(mediaOffer.id);
+ const data=await (await offerMediaRequest("/api/offers/"+id+"/photos")).json();
+ for(const photo of data.photos||[]){
+  const figure=document.createElement("figure");figure.style.margin="0";
+  const img=document.createElement("img");img.alt="Zdjęcie samochodu";img.style.cssText="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px";
+  const blob=await (await offerMediaRequest("/api/offers/"+id+"/photos/"+encodeURIComponent(photo.id)+"/file")).blob();
+  const url=URL.createObjectURL(blob);mediaObjectUrls.push(url);img.src=url;
+  const caption=document.createElement("figcaption");caption.textContent=photo.state==="review"?"Oryginał — do obróbki i weryfikacji":photo.state;
+  figure.append(img,caption);gallery.append(figure);
+ }
+ $("mediaStatus").textContent=(data.photos||[]).length+" zdjęć. Zdjęcia nie są jeszcze przetworzone przez AI.";
+}
+$("closeMedia").addEventListener("click",()=>{clearMediaUrls();mediaOffer=null;$("offerMediaPanel").hidden=true});
+$("uploadOfferPhotos").addEventListener("click",async()=>{
+ if(!mediaOffer)return;
+ const files=Array.from($("offerPhotoFiles").files||[]),button=$("uploadOfferPhotos");
+ if(!files.length){$("mediaStatus").textContent="Wybierz zdjęcia.";return}
+ button.disabled=true;
+ try{
+  for(const file of files){
+   if(file.size>12*1024*1024)throw Error(file.name+": maksymalny rozmiar 12 MB");
+   const form=new FormData();form.append("file",file);
+   await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/photos",{method:"POST",body:form});
+  }
+  $("offerPhotoFiles").value="";await refreshMediaPhotos();
+ }catch(e){$("mediaStatus").textContent=e.message}finally{button.disabled=false}
+});
+$("previewOffer").addEventListener("click",async()=>{
+ if(!mediaOffer)return;
+ const root=$("offerPreviewContent");root.replaceChildren();
+ try{
+  const data=await (await offerMediaRequest("/api/offers/"+encodeURIComponent(mediaOffer.id)+"/preview")).json();
+  const o=data.offer;
+  const heading=document.createElement("h2");heading.textContent="Podgląd klienta — "+o.brand+" "+o.model;
+  const note=document.createElement("p");note.textContent="WERSJA ROBOCZA — widoczna wyłącznie dla uprawnionych użytkowników.";
+  root.append(heading,note);
+  for(const [title,entries] of [
+   ["Samochód",[["Marka",o.brand],["Model",o.model],["Wersja",o.trim_name],["Nadwozie",o.body],["Dealer",o.dealer_name]]],
+   ["Silnik i napęd",[["Silnik",o.engine_name],["Moc (KM)",o.power_hp],["Paliwo",o.fuel],["Napęd",o.drive_type],["Skrzynia",o.transmission_type]]],
+   ["Cena",[["Cena brutto",Number(o.gross_price).toLocaleString("pl-PL")+" zł"]]],
+   ["Wyposażenie standardowe",(o.standard_equipment||[]).map(x=>["•",x])],
+   ["Wyposażenie dodatkowe",(o.optional_equipment||[]).map(x=>["•",x])],
+   ["Pozostałe informacje",Object.entries(o.other_details||{})]
+  ]){
+   const section=document.createElement("section");section.style.cssText="padding:14px;margin:12px 0;background:#f5f9f8;border-radius:10px";
+   const h=document.createElement("h3");h.textContent=title;section.append(h);
+   if(!entries.length){const p=document.createElement("p");p.textContent="Brak potwierdzonych danych.";section.append(p)}
+   for(const [label,value] of entries){if(value===null||value===undefined||value==="")continue;const p=document.createElement("p");p.textContent=label+": "+value;section.append(p)}
+   root.append(section);
+  }
+ }catch(e){$("mediaStatus").textContent=e.message}
 });
