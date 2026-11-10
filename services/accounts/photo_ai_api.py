@@ -1,5 +1,6 @@
 """Private CARVAMO photo AI endpoints; mount only behind OVH HTTPS reverse proxy."""
 import hashlib
+import io
 import os
 import re
 import secrets
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import psycopg
 from flask import Blueprint, abort, jsonify, request, send_file
-from werkzeug.utils import secure_filename
+from PIL import Image, UnidentifiedImageError
 
 bp = Blueprint("photo_ai", __name__, url_prefix="/api/internal/photo-ai")
 MAX_INPUT = 6_000_000
@@ -99,7 +100,14 @@ def complete(job_id):
     if not lease or f is None:
         abort(400)
     payload = f.stream.read(MAX_OUTPUT+1)
-    if len(payload)>MAX_OUTPUT or not payload.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if len(payload)>MAX_OUTPUT or not payload.startswith(bytes.fromhex("89504e470d0a1a0a")):
+        abort(400)
+    try:
+        with Image.open(io.BytesIO(payload)) as candidate:
+            if candidate.format != "PNG" or candidate.width * candidate.height > 12_000_000:
+                abort(400)
+            candidate.verify()
+    except (UnidentifiedImageError, OSError, ValueError):
         abort(400)
     with db() as conn:
         row = lease_job(conn,job_id,lease)
