@@ -7,6 +7,7 @@ import re
 from datetime import timedelta
 from functools import wraps
 from flask import Flask, request, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 import psycopg
 from psycopg.rows import dict_row
 from argon2 import PasswordHasher
@@ -15,6 +16,8 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
+# Only the private Caddy proxy can reach this container.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 DATABASE_URL = os.environ["DATABASE_URL"]
 SESSION_SECRET = os.environ["SESSION_SECRET"]
 if len(SESSION_SECRET) < 40:
@@ -80,7 +83,7 @@ def login():
     if len(email) > 254 or not password:
         return fail("Nieprawidłowe dane logowania", 401)
     # Conservative per-source throttling; production deployment should also apply proxy-level limits.
-    source = request.remote_addr or "unknown"
+    source = (request.remote_addr or "unknown") + "|" + email
     now = time.monotonic()
     attempts = LOGIN_ATTEMPTS[source]
     while attempts and attempts[0] < now - LOGIN_WINDOW:
