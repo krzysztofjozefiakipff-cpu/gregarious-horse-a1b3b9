@@ -37,11 +37,19 @@ if [ -s "$BASE/accounts-mail.env" ]; then
   cat "$BASE/accounts-mail.env" >> "$BASE/accounts.env"
 fi
 chmod 600 "$BASE/accounts.env"
+SMTP_EGRESS=carvamo_accounts_egress
+if [ -s "$BASE/accounts-mail.env" ]; then
+  docker network inspect "$SMTP_EGRESS" >/dev/null 2>&1 ||
+    docker network create "$SMTP_EGRESS" >/dev/null
+fi
 docker build -t carvamo-accounts:staging "$BASE/accounts-src"
 if docker inspect carvamo-accounts-staging >/dev/null 2>&1; then
   docker rm -f carvamo-accounts-staging >/dev/null
 fi
 docker run -d --name carvamo-accounts-staging --label com.carvamo.role=accounts-staging --restart unless-stopped --network carvamo_backend_private --env-file "$BASE/accounts.env" --read-only --tmpfs /tmp:rw,noexec,nosuid --security-opt no-new-privileges --cap-drop ALL carvamo-accounts:staging >/dev/null
+if [ -s "$BASE/accounts-mail.env" ]; then
+  docker network connect "$SMTP_EGRESS" carvamo-accounts-staging
+fi
 for i in $(seq 1 20); do
   if docker exec carvamo-accounts-staging python -c 'import urllib.request; assert urllib.request.urlopen("http://127.0.0.1:8000/api/health",timeout=2).status==200' >/dev/null 2>&1; then
     echo "CARVAMO ACCOUNTS PRIVATE STAGING HEALTHY (no public ports)"
