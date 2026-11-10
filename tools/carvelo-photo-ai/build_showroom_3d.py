@@ -92,8 +92,10 @@ def build():
         cube("Tile seam Y %s" % j, (0, j, .002), (19, .009, .003), grout)
     cube("Back wall", (0, 7.7, 2.8), (19, .2, 5.6), wall)
     # The 180-degree camera orbit passes the side elevations.
-    # Open camera-facing sides: avoid occluding the orbit with side walls.\n    # Glazing is deferred until occlusion-safe architecture is verified.
-    # An overhead slab obscures camera views at the orbit edges.\n    # Keep it hidden from camera rays while retaining its lighting geometry.\n    roof = cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)\n    roof.visible_camera = False
+    # Open camera-facing sides: avoid occluding the orbit with side walls.
+    # Glazing is deferred until occlusion-safe architecture is verified.
+    # An overhead slab obscures camera views at the orbit edges.
+    # Keep it hidden from camera rays while retaining its lighting geometry.\n    roof = cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)\n    roof.visible_camera = False
 
     # Architectural vertical wood slats on the rear wall.
     for k in range(23):
@@ -156,7 +158,8 @@ def build():
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    # A vehicle-sized proxy gives the camera a meaningful framing target.\n    # It is hidden from renders; it is NOT a generated vehicle.\n    target = Vector((0, 0, 0.95))
+    # A vehicle-sized proxy gives the camera a meaningful framing target.
+    # It is hidden from renders; it is NOT a generated vehicle.\n    target = Vector((0, 0, 0.95))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
