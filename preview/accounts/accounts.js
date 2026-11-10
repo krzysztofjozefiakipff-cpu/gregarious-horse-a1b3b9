@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.10";
+const BUILD="2026-11-10.11";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -189,14 +189,20 @@ async function refreshOffers(){
   const tr=el("tr"),name=el("td",(offer.brand||"")+" "+(offer.model||""));
   tr.append(name,el("td",formatPrice(offer.gross_price)),el("td",offer.status||"—"));
   const action=el("td");
-  const publish=["draft","pending","rejected"].includes(offer.status);
+  const publish=["draft","rejected"].includes(offer.status);
   if(publish||offer.status==="published"){
    const button=el("button",publish?"Opublikuj":"Wycofaj");
    button.className=publish?"":"outline";
    button.addEventListener("click",async()=>{
     button.disabled=true;
-    try{await api("/api/offers/"+encodeURIComponent(offer.id)+"/"+(publish?"publish":"withdraw"),{method:"PATCH"});await refreshOffers();notice(publish?"Oferta opublikowana.":"Oferta wycofana.")}catch(e){notice(e.message)}finally{button.disabled=false}
+    try{const result=await api("/api/offers/"+encodeURIComponent(offer.id)+"/"+(publish?"publish":"withdraw"),{method:"PATCH"});await refreshOffers();notice(result.status==="pending"?"Oferta oczekuje na zatwierdzenie CARVAMO.":publish?"Oferta opublikowana.":"Oferta wycofana.")}catch(e){notice(e.message)}finally{button.disabled=false}
    });action.appendChild(button);
+  }
+  if(offer.status==="pending"&&["admin","staff"].includes(me.role)){
+   for(const [decision,label] of [["approve","Zatwierdź"],["reject","Odrzuć"]]){
+    const button=el("button",label);button.className=decision==="reject"?"outline":"";
+    button.addEventListener("click",async()=>{button.disabled=true;try{await api("/api/offers/"+encodeURIComponent(offer.id)+"/review",{method:"PATCH",body:JSON.stringify({decision})});await refreshOffers();notice(decision==="approve"?"Oferta zatwierdzona.":"Oferta odrzucona.")}catch(e){notice(e.message)}finally{button.disabled=false}});action.appendChild(button);
+   }
   }
   tr.appendChild(action);body.appendChild(tr);
  }
@@ -206,7 +212,7 @@ $("offersRefresh").addEventListener("click",()=>refreshOffers().catch(e=>notice(
 $("offerCreate").addEventListener("submit",async event=>{
  event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
  const payload={brand:$("offerBrand").value,model:$("offerModel").value,body:$("offerBody").value,fuel:$("offerFuel").value,gross_price:$("offerPrice").value,special:$("offerSpecial").checked,trim_name:$("offerVersion").value,engine_name:$("offerEngine").value,power_hp:$("offerPower").value||null,drive_type:$("offerDrive").value||null,transmission_type:$("offerTransmission").value||null};
- if(me.role==="admin")payload.dealer_id=$("offerDealer").value;
+ if(["admin","staff"].includes(me.role))payload.dealer_id=$("offerDealer").value;
  try{await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});event.currentTarget.reset();await refreshOffers();notice("Szkic zapisany. Możesz go opublikować.")}catch(e){notice(e.message)}finally{button.disabled=false}
 });
 async function refreshLeads(){
