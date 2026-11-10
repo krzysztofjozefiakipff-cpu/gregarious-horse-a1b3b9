@@ -44,5 +44,11 @@ $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  await api("/api/accounts",{method:"POST",body:JSON.stringify({email:$("newEmail").value,role,dealer_id,temporary_password:$("newPassword").value})});
  $("newEmail").value="";$("newPassword").value="";await refresh();notice("Konto utworzone")
  }catch(err){notice(err.message)}});
+$("changePassword").addEventListener("submit",async e=>{e.preventDefault();try{
+ await api("/api/auth/change-password",{method:"POST",body:JSON.stringify({current_password:$("currentPassword").value,new_password:$("replacementPassword").value})});
+ $("currentPassword").value="";$("replacementPassword").value="";token="";me=null;
+ $("dashboard").hidden=true;$("loginBox").hidden=false;notice("Hasło zmienione. Zaloguj się ponownie nowym hasłem.");
+ }catch(err){notice(err.message)}
+});
 $("logout").addEventListener("click",()=>{token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
 try{const r=await api("/api/health");if(r.status==="ok"){$("availability").hidden=true;$("loginBox").hidden=false}}catch{ /* The API is deliberately private until authenticated reverse-proxy rollout. */ }
