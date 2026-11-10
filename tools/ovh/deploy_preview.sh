@@ -64,6 +64,12 @@ elif [ "$CONFIG_CHANGED" = 1 ]; then
     rollback; echo "BLOCKED: Caddy reload failed"; exit 14
   fi
 fi
+# Keep the reverse proxy on the private backend network without publishing API ports.
+if docker network inspect carvamo_backend_private >/dev/null 2>&1; then
+  if ! docker inspect -f '{{json .NetworkSettings.Networks}}' "$NAME" | grep -q '"carvamo_backend_private"'; then
+    docker network connect carvamo_backend_private "$NAME"
+  fi
+fi
 if ! docker ps --filter "name=^/$NAME$" --filter "status=running" --format '{{.Names}}' | grep -qx "$NAME"; then
   rollback; echo "BLOCKED: preview container not running"; exit 12
 fi
