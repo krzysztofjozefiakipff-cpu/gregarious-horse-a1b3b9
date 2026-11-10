@@ -1,5 +1,10 @@
 name: CARVAMO OVH private staging database
 on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/ovh/provision_staging_db.sh"
+      - ".github/workflows/carvamo-ovh-staging-db.yml"
   workflow_dispatch:
 permissions:
   contents: read
