@@ -1,5 +1,8 @@
 """CARVAMO account API (OVH). No default credentials or bootstrap endpoints."""
 import os
+import time
+import secrets
+from collections import defaultdict, deque
 import re
 from datetime import timedelta
 from functools import wraps
@@ -20,6 +23,9 @@ signer = URLSafeTimedSerializer(SESSION_SECRET, salt="carvamo-session-v1")
 hasher = PasswordHasher()
 ROLES = {"admin", "staff", "dealer", "dealer_admin", "dealer_staff"}
 SESSION_SECONDS = 8 * 3600
+LOGIN_ATTEMPTS = defaultdict(deque)
+LOGIN_LIMIT = 8
+LOGIN_WINDOW = 900
 
 def conn():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
@@ -68,6 +74,15 @@ def login():
     password = str(data.get("password", ""))
     if len(email) > 254 or not password:
         return fail("Nieprawidłowe dane logowania", 401)
+    # Conservative per-source throttling; production deployment should also apply proxy-level limits.
+    source = request.remote_addr or "unknown"
+    now = time.monotonic()
+    attempts = LOGIN_ATTEMPTS[source]
+    while attempts and attempts[0] < now - LOGIN_WINDOW:
+        attempts.popleft()
+    if len(attempts) >= LOGIN_LIMIT:
+        return fail("Zbyt wiele prób. Spróbuj później", 429)
+    attempts.append(now)
     with conn() as db:
         user = db.execute("SELECT id,password_hash,enabled FROM users WHERE lower(email)=%s", (email,)).fetchone()
     if not user or not user["enabled"] or not user["password_hash"]:
@@ -76,6 +91,7 @@ def login():
         hasher.verify(user["password_hash"], password)
     except (VerifyMismatchError, VerificationError):
         return fail("Nieprawidłowe dane logowania", 401)
+    attempts.clear()
     return jsonify({"token": signer.dumps(str(user["id"])), "expires_in": SESSION_SECONDS})
 
 @app.get("/api/accounts")
