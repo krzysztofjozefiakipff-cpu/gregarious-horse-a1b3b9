@@ -95,7 +95,9 @@ def build():
     # Open camera-facing sides: avoid occluding the orbit with side walls.
     # Glazing is deferred until occlusion-safe architecture is verified.
     # An overhead slab obscures camera views at the orbit edges.
-    # Keep it hidden from camera rays while retaining its lighting geometry.\n    roof = cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)\n    roof.visible_camera = False
+    # Keep it hidden from camera rays while retaining its lighting geometry.
+    roof = cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)
+    roof.visible_camera = False
 
     # Architectural vertical wood slats on the rear wall.
     for k in range(23):
@@ -116,7 +118,11 @@ def build():
     texture.image = logo_image
     logo_material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
     logo_material.node_tree.links.new(texture.outputs["Alpha"], bsdf.inputs["Alpha"])
-    # Blender 4.2 removed the legacy BLEND material setting.\n    if hasattr(logo_material, "surface_render_method"):\n        logo_material.surface_render_method = "DITHERED"\n    else:\n        logo_material.blend_method = "BLEND"
+    # Blender 4.2 removed the legacy BLEND material setting.
+    if hasattr(logo_material, "surface_render_method"):
+        logo_material.surface_render_method = "DITHERED"
+    else:
+        logo_material.blend_method = "BLEND"
     bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
                                      rotation=(math.pi / 2, 0, 0))
     sign = bpy.context.object
@@ -159,12 +165,15 @@ def build():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     # A vehicle-sized proxy gives the camera a meaningful framing target.
-    # It is hidden from renders; it is NOT a generated vehicle.\n    target = Vector((0, 0, 0.95))
+    # It is hidden from renders; it is NOT a generated vehicle.
+    target = Vector((0, 0, 0.95))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
-        # Orbit around the vehicle from the front half of the showroom.\n        # A negative Y offset prevents side views from collapsing onto the back wall.\n        camera.location = (5.6*math.sin(rad), -2.8 - 5.6*math.cos(rad), 1.55)
+        # Orbit around the vehicle from the front half of the showroom.
+        # A negative Y offset prevents side views from collapsing onto the back wall.
+        camera.location = (5.6*math.sin(rad), -2.8 - 5.6*math.cos(rad), 1.55)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -180,7 +189,8 @@ def build():
             "resolution": [args.width, args.height],
             "floor_z_m": 0.0,
             "hero_vehicle_target_frame_width_fraction": 0.85,
-            "camera_orbit_radius_m": 5.6,\n            "camera_orbit_center_m": [0, -2.8, 1.55],
+            "camera_orbit_radius_m": 5.6,
+            "camera_orbit_center_m": [0, -2.8, 1.55],
             "composition_note": "Camera is framed for a foreground vehicle; empty background renders alone cannot verify actual vehicle occupancy.",
             "target_m": list(target),
             "empty": True,
