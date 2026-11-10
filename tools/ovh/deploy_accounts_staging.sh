@@ -32,6 +32,10 @@ cat > "$BASE/accounts.env" <<EOF
 DATABASE_URL=postgresql://carvamo_accounts:$PASS@carvamo-db-staging:5432/carvamo
 SESSION_SECRET=$(cat "$BASE/accounts-session-secret")
 EOF
+if [ -s "$BASE/accounts-mail.env" ]; then
+  printf '\n' >> "$BASE/accounts.env"
+  cat "$BASE/accounts-mail.env" >> "$BASE/accounts.env"
+fi
 chmod 600 "$BASE/accounts.env"
 docker build -t carvamo-accounts:staging "$BASE/accounts-src"
 if docker inspect carvamo-accounts-staging >/dev/null 2>&1; then

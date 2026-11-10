@@ -1,5 +1,11 @@
 """CARVAMO account API (OVH). No default credentials or bootstrap endpoints."""
+import hashlib
 import os
+import smtplib
+import ssl
+from concurrent.futures import ThreadPoolExecutor
+from email.message import EmailMessage
+from threading import BoundedSemaphore, Lock
 import time
 import secrets
 from collections import defaultdict, deque
@@ -24,6 +30,16 @@ if len(SESSION_SECRET) < 40:
     raise RuntimeError("SESSION_SECRET must be at least 40 characters")
 signer = URLSafeTimedSerializer(SESSION_SECRET, salt="carvamo-session-v1")
 hasher = PasswordHasher()
+reset_signer = URLSafeTimedSerializer(SESSION_SECRET, salt="carvamo-password-reset-v1")
+RESET_SECONDS = 20 * 60
+SMTP_USER = os.getenv("RESET_SMTP_USER")
+SMTP_PASSWORD = os.getenv("RESET_SMTP_PASSWORD")
+SMTP_HOST = os.getenv("RESET_SMTP_HOST")
+RESET_ORIGIN = "https://preview.carvamo.com"
+reset_pool = ThreadPoolExecutor(max_workers=2)
+reset_slots = BoundedSemaphore(16)
+reset_lock = Lock()
+reset_attempts = {}
 ROLES = {"admin", "staff", "dealer", "dealer_admin", "dealer_staff"}
 SESSION_SECONDS = 8 * 3600
 LOGIN_ATTEMPTS = defaultdict(deque)
@@ -35,6 +51,93 @@ def conn():
 
 def fail(message, status=400):
     return jsonify({"error": message}), status
+
+def credential_version_for(password_hash):
+    return hashlib.sha256((password_hash or "").encode()).hexdigest()
+
+def allow_reset_request(email):
+    now = time.monotonic()
+    keys = [("ip", request.remote_addr or "unknown", 8), ("email", email, 2)]
+    with reset_lock:
+        for key, attempts in list(reset_attempts.items()):
+            while attempts and attempts[0] <= now - RESET_SECONDS:
+                attempts.popleft()
+            if not attempts:
+                del reset_attempts[key]
+        if len(reset_attempts) >= 4096:
+            return False
+        if any(len(reset_attempts.get((kind, value), ())) >= limit for kind, value, limit in keys):
+            return False
+        for kind, value, _ in keys:
+            reset_attempts.setdefault((kind, value), deque()).append(now)
+    return True
+
+def send_reset_link(email):
+    try:
+        with conn() as db:
+            user = db.execute(
+                "SELECT id,email,password_hash FROM users WHERE lower(email)=%s AND enabled", (email,)
+            ).fetchone()
+        if not user or not user["password_hash"]:
+            return
+        token = reset_signer.dumps({
+            "id": str(user["id"]),
+            "version": credential_version_for(user["password_hash"]),
+            "nonce": secrets.token_urlsafe(16),
+        })
+        message = EmailMessage()
+        message["From"] = SMTP_USER
+        message["To"] = user["email"]
+        message["Subject"] = "Carvamo — reset hasła"
+        message.set_content(
+            "Ustaw nowe hasło do konta Carvamo. Link jest ważny 20 minut.\n\n"
+            f"{RESET_ORIGIN}/accounts/#reset={token}\n\n"
+            "Jeśli nie proszono o reset, zignoruj tę wiadomość.\n"
+        )
+        with smtplib.SMTP_SSL(SMTP_HOST, 465, context=ssl.create_default_context(), timeout=8) as smtp:
+            smtp.login(SMTP_USER, SMTP_PASSWORD)
+            smtp.send_message(message)
+    except Exception:
+        app.logger.error("Password reset delivery failed")
+    finally:
+        reset_slots.release()
+
+@app.post("/api/auth/password-reset/request")
+def request_password_reset():
+    if not all((SMTP_HOST, SMTP_USER, SMTP_PASSWORD)):
+        return fail("Reset przez e-mail jest chwilowo niedostępny.", 503)
+    data = request.get_json(silent=True)
+    email = str(data.get("email", "")).strip().lower() if isinstance(data, dict) else ""
+    if len(email) <= 254 and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        if allow_reset_request(email) and reset_slots.acquire(blocking=False):
+            reset_pool.submit(send_reset_link, email)
+    return jsonify({"ok": True}), 202
+
+@app.post("/api/auth/password-reset/confirm")
+def confirm_password_reset():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return fail("Nieprawidłowe dane resetu.")
+    password, token = data.get("password"), data.get("token")
+    if not isinstance(password, str) or not 14 <= len(password) <= 256:
+        return fail("Nowe hasło musi mieć od 14 do 256 znaków.")
+    invalid = "Link do resetu jest nieprawidłowy, wygasł lub został już użyty."
+    if not isinstance(token, str) or not 1 <= len(token) <= 1024:
+        return fail(invalid)
+    try:
+        payload = reset_signer.loads(token, max_age=RESET_SECONDS)
+    except BadSignature:
+        return fail(invalid)
+    with conn() as db:
+        user = db.execute(
+            "SELECT id,password_hash FROM users WHERE id=%s AND enabled FOR UPDATE",
+            (payload["id"],),
+        ).fetchone()
+        if not user or not secrets.compare_digest(payload["version"], credential_version_for(user["password_hash"])):
+            return fail(invalid)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(user["id"]),))
+        db.execute("UPDATE users SET password_hash=%s WHERE id=%s", (hasher.hash(password), user["id"]))
+    return jsonify({"ok": True})
 
 def account(f):
     @wraps(f)
@@ -54,7 +157,7 @@ def account(f):
             ).fetchone()
         if not user or not user["enabled"]:
             return fail("Konto nieaktywne", 403)
-        if not secrets.compare_digest(credential_version, __import__("hashlib").sha256((user["password_hash"] or "").encode()).hexdigest()):
+        if not secrets.compare_digest(credential_version, credential_version_for(user["password_hash"])):
             return fail("Sesja została unieważniona", 401)
         user.pop("password_hash", None)
         return f(user, *args, **kwargs)
@@ -100,7 +203,7 @@ def login():
     except (VerifyMismatchError, VerificationError):
         return fail("Nieprawidłowe dane logowania", 401)
     attempts.clear()
-    return jsonify({"token": signer.dumps({"id": str(user["id"]), "credential_version": __import__("hashlib").sha256(user["password_hash"].encode()).hexdigest()}), "expires_in": SESSION_SECONDS})
+    return jsonify({"token": signer.dumps({"id": str(user["id"]), "credential_version": credential_version_for(user["password_hash"])}), "expires_in": SESSION_SECONDS})
 
 @app.get("/api/accounts")
 @account

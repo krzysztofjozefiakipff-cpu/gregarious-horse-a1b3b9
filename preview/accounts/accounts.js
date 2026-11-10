@@ -55,4 +55,60 @@ $("changePassword").addEventListener("submit",async e=>{e.preventDefault();try{
  }catch(err){notice(err.message)}
 });
 $("logout").addEventListener("click",()=>{token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
-try{const r=await api("/api/health");if(r.status==="ok"){$("availability").hidden=true;$("loginBox").hidden=false}}catch{ /* The API is deliberately private until authenticated reverse-proxy rollout. */ }
+let resetToken = new URLSearchParams(location.hash.slice(1)).get("reset");
+if (resetToken !== null) history.replaceState(null, "", location.pathname + location.search);
+
+function showRecovery(confirming) {
+ $("loginBox").hidden = true;
+ $("recoveryBox").hidden = false;
+ $("requestReset").hidden = confirming;
+ $("confirmReset").hidden = !confirming;
+ $(confirming ? "resetPassword" : "resetEmail").focus();
+}
+
+function showLogin() {
+ resetToken = null;
+ $("confirmReset").reset();
+ $("recoveryBox").hidden = true;
+ $("loginBox").hidden = false;
+ $("email").focus();
+}
+
+$("forgot").addEventListener("click", () => {
+ $("resetEmail").value = $("email").value;
+ notice("");
+ showRecovery(false);
+});
+$("backToLogin").addEventListener("click", () => { notice(""); showLogin(); });
+for (const [form, path, payload, success] of [
+ ["requestReset", "request", () => ({email: $("resetEmail").value}), () => {
+  notice("Jeśli istnieje aktywne konto dla tego adresu, otrzymasz link do ustawienia nowego hasła.");
+ }],
+ ["confirmReset", "confirm", () => ({token: resetToken, password: $("resetPassword").value}), () => {
+  showLogin();
+  notice("Hasło zostało zmienione. Zaloguj się nowym hasłem.");
+ }],
+]) {
+ $(form).addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("button[type=submit]");
+  button.disabled = true;
+  notice("");
+  try {
+   await api("/api/auth/password-reset/" + path, {method: "POST", body: JSON.stringify(payload())});
+   success();
+  } catch (error) {
+   notice(error.message);
+  } finally {
+   button.disabled = false;
+  }
+ });
+}
+try {
+ const health = await api("/api/health");
+ if (health.status === "ok") {
+  $("availability").hidden = true;
+  if (resetToken) showRecovery(true);
+  else $("loginBox").hidden = false;
+ }
+} catch { /* Keep the availability notice visible. */ }
