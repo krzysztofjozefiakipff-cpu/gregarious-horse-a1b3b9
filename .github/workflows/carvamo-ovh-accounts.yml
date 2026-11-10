@@ -1,0 +1,42 @@
+name: CARVAMO OVH private accounts API
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/accounts/**"
+      - "tools/ovh/deploy_accounts_staging.sh"
+      - ".github/workflows/carvamo-ovh-accounts.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python and shell
+        run: |
+          python -m py_compile services/accounts/app.py
+          bash -n tools/ovh/deploy_accounts_staging.sh
+      - name: Configure SSH
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_SSH_PRIVATE_KEY" && test -n "$OVH_SSH_HOST_KEY"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+      - name: Stage isolated service and deploy
+        run: |
+          set -euo pipefail
+          SSH="ssh -i $HOME/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          SCP="scp -i $HOME/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          $SSH carvamo-deploy@146.59.52.16 'install -d -m 700 ~/carvamo-backend/accounts-src'
+          $SCP services/accounts/app.py services/accounts/requirements.txt services/accounts/Dockerfile carvamo-deploy@146.59.52.16:carvamo-backend/accounts-src/
+          $SCP tools/ovh/deploy_accounts_staging.sh carvamo-deploy@146.59.52.16:carvamo-backend/deploy_accounts_staging.sh
+          $SSH carvamo-deploy@146.59.52.16 'bash ~/carvamo-backend/deploy_accounts_staging.sh'
