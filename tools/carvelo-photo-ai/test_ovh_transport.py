@@ -28,10 +28,10 @@ class TransportTests(unittest.TestCase):
         response = Mock(ok=True)
         response.iter_content.return_value = iter([buf.getvalue()])
         self.http.request.return_value = response
-        self.assertEqual(self.transport.download("job1").size, (40, 30))
+        self.assertEqual(self.transport.download("job1", "lease-token").size, (40, 30))
         args = self.http.request.call_args
         self.assertIn("/jobs/job1/original", args.args[1])
-        self.assertIn("Authorization", args.kwargs["headers"])
+        self.assertIn("Authorization", args.kwargs["headers"])\n        self.assertEqual(args.kwargs["headers"]["X-Photo-Lease"], "lease-token")
 
     def test_rejects_oversized_download(self):
         response = Mock(ok=True)
