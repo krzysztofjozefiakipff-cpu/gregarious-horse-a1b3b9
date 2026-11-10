@@ -637,34 +637,34 @@ def import_offer_specification(actor):
         page_texts = [(page.extract_text(extraction_mode="layout") or "") for page in reader.pages]
     except (PdfReadError, ValueError, KeyError, TypeError):
         return fail("Nie można odczytać dokumentu PDF", 400)
-    raw = "\\n".join(page_texts)[:200000]
+    raw = "\n".join(page_texts)[:200000]
     if len(raw.strip()) < 40:
         return fail("Dokument nie zawiera tekstu do odczytu. Skan wymaga OCR.", 422)
-    lines = [re.sub(r"\\s+", " ", line).strip() for line in raw.splitlines()]
+    lines = [re.sub(r"\s+", " ", line).strip() for line in raw.splitlines()]
     lines = [line for line in lines if line]
     def match(pattern):
         result = re.search(pattern, raw, re.IGNORECASE | re.MULTILINE)
         return result.group(1).strip() if result else None
-    power = match(r"(?:moc(?: silnika)?|power)\\s*[:\\-]?\\s*(\\d{2,4})\\s*(?:KM|HP|PS)\\b")
+    power = match(r"(?:moc(?: silnika)?|power)\s*[:\-]?\s*(\d{2,4})\s*(?:KM|HP|PS)\b")
     if not power:
-        power = match(r"\\b(\\d{2,4})\\s*(?:KM|HP|PS)\\b")
-    price = match(r"(?:cena brutto|brutto|gross price)\\s*[:\\-]?\\s*([\\d\\s.,]+)\\s*(?:zł|PLN)")
+        power = match(r"\b(\d{2,4})\s*(?:KM|HP|PS)\b")
+    price = match(r"(?:cena brutto|brutto|gross price)\s*[:\-]?\s*([\d\s.,]+)\s*(?:zł|PLN)")
     fuel = None
     for pattern, value in [
-        (r"plug[ -]?in|\\bPHEV\\b", "Hybryda plug-in PHEV"),
-        (r"\\bHEV\\b|pełna hybryda", "Hybryda HEV"),
-        (r"\\bMHEV\\b|miękka hybryda", "Miękka hybryda MHEV benzyna"),
-        (r"\\bBEV\\b|elektryczny", "Elektryczny BEV"),
-        (r"\\bdiesel\\b|olej napędowy", "Diesel"),
-        (r"\\bbenzyna\\b", "Benzyna"),
+        (r"plug[ -]?in|\bPHEV\b", "Hybryda plug-in PHEV"),
+        (r"\bHEV\b|pełna hybryda", "Hybryda HEV"),
+        (r"\bMHEV\b|miękka hybryda", "Miękka hybryda MHEV benzyna"),
+        (r"\bBEV\b|elektryczny", "Elektryczny BEV"),
+        (r"\bdiesel\b|olej napędowy", "Diesel"),
+        (r"\bbenzyna\b", "Benzyna"),
     ]:
         if re.search(pattern, raw, re.IGNORECASE):
             fuel = value
             break
     transmission = None
     for pattern, value in [
-        (r"\\bDCT\\b|\\bDSG\\b|dwusprzęgł", "dct"),
-        (r"\\bCVT\\b|e-CVT", "cvt"),
+        (r"\bDCT\b|\bDSG\b|dwusprzęgł", "dct"),
+        (r"\bCVT\b|e-CVT", "cvt"),
         (r"automatyczn|automatic", "automatic"),
         (r"manualn|manual", "manual"),
     ]:
@@ -672,15 +672,15 @@ def import_offer_specification(actor):
             transmission = value
             break
     drive = None
-    for pattern, value in [(r"\\bAWD\\b", "AWD"), (r"\\b4WD\\b|\\b4x4\\b", "4WD"), (r"\\bFWD\\b", "FWD"), (r"\\bRWD\\b", "RWD")]:
+    for pattern, value in [(r"\bAWD\b", "AWD"), (r"\b4WD\b|\b4x4\b", "4WD"), (r"\bFWD\b", "FWD"), (r"\bRWD\b", "RWD")]:
         if re.search(pattern, raw, re.IGNORECASE):
             drive = value
             break
     # Only explicit labels become structured equipment; preserve source text for review.
     equipment = []
     for line in lines:
-        if re.match(r"^(?:[-•✓]\\s*|wyposażenie\\s*[:\\-])", line, re.IGNORECASE) and 5 <= len(line) <= 180:
-            item = re.sub(r"^(?:[-•✓]\\s*|wyposażenie\\s*[:\\-]\\s*)", "", line, flags=re.IGNORECASE)
+        if re.match(r"^(?:[-•✓]\s*|wyposażenie\s*[:\-])", line, re.IGNORECASE) and 5 <= len(line) <= 180:
+            item = re.sub(r"^(?:[-•✓]\s*|wyposażenie\s*[:\-]\s*)", "", line, flags=re.IGNORECASE)
             if item and item not in equipment:
                 equipment.append(item)
     # Parse dealer equipment tables with codes in any column, including wrapped rows.
