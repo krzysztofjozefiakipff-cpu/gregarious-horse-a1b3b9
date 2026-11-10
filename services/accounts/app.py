@@ -487,3 +487,15 @@ def change_lead_status(actor, lead_id):
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         db.execute("UPDATE leads SET status=%s WHERE id=%s", (status, lead_id))
     return jsonify({"ok": True, "status": status})
+
+@app.get("/api/leads/assignees")
+@account
+def lead_assignees(actor):
+    if actor["role"] not in {"admin", "dealer_admin"}:
+        return fail("Brak uprawnień", 403)
+    with conn() as db:
+        if actor["role"] == "admin":
+            rows = db.execute("SELECT id,email,dealer_id FROM users WHERE role='dealer_staff' AND enabled=true ORDER BY email LIMIT 500").fetchall()
+        else:
+            rows = db.execute("SELECT id,email,dealer_id FROM users WHERE role='dealer_staff' AND enabled=true AND dealer_id=%s ORDER BY email LIMIT 200", (actor["dealer_id"],)).fetchall()
+    return jsonify({"assignees": rows})
