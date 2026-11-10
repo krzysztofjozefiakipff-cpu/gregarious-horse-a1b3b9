@@ -12,7 +12,7 @@ assert.equal(new URL(page.url()).searchParams.get("utm_source"),"meta");
 assert.equal(new URL(page.url()).searchParams.get("offer"),id);
 await page.getByRole("heading",{name:"OMODA OMODA 5"}).waitFor();
 await page.getByText("Comfort").waitFor();
-assert.match((await page.locator(".detail-price").innerText()).replace(/\\s/g," "),/109 900 zł/);
+assert.match((await page.locator(".detail-price").innerText()).replace(/\s/g," "),/109 900 zł/);
 await page.getByText("Rabat testowy").waitFor();
 await page.getByText("Zakup gotówkowy").waitFor();
 await page.getByText("Leasing testowy").waitFor();
