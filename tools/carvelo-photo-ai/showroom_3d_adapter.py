@@ -46,4 +46,6 @@ def load_background(directory: Path, source_azimuth_deg: float, output_size):
     view = select_view(load_views(directory), source_azimuth_deg)
     with Image.open(view.image_path) as img:
         img.load()
-        return img.convert("RGBA").resize(output_size, Image.Resampling.LANCZOS)
+        # Ubuntu Blender runners may ship Pillow < 9.1 without Image.Resampling.
+        resampling = getattr(Image, "Resampling", Image)
+        return img.convert("RGBA").resize(output_size, resampling.LANCZOS)
