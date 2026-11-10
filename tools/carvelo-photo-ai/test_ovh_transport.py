@@ -39,7 +39,7 @@ class TransportTests(unittest.TestCase):
         response.iter_content.return_value = iter([b"x"*6_000_001])
         self.http.request.return_value = response
         with self.assertRaisesRegex(ValueError, "source_size_limit"):
-            self.transport.download("job1")
+            self.transport.download("job1", "lease-token")
         response.close.assert_called_once()
 
     def test_fail_sanitizes_error(self):
