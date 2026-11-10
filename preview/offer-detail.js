@@ -26,16 +26,17 @@ const rows=await res.json();const o=rows[0];if(!o){showError("Ta oferta nie jest
 const dr=await fetch(api+"cv_dealers?select=id,name&active=eq.true&id=eq."+encodeURIComponent(o.dealer_id)+"&limit=1",{headers:heads,cache:"no-store"});
 if(!dr.ok)throw Error("Nie udało się zweryfikować dealera");
 const dealers=await dr.json();if(!dealers[0]){showError("Oferta nie jest obecnie dostępna.");return}
-render(o,dealers[0]);
+let details={};try{const mr=await fetch(api+"cv_preview_offer_details?select=version_name,discount_terms,purchase_terms,financing_terms,pickup_city,availability_confirmed,availability_confirmed_at,availability_confirmed_by&offer_id=eq."+encodeURIComponent(id)+"&limit=1",{headers:heads,cache:"no-store"});if(mr.ok){const m=await mr.json();details=m[0]||{}}}catch(e){console.warn("Offer details unavailable")}
+render(o,dealers[0],details);
 }catch(e){showError("Nie można teraz pobrać oferty. Spróbuj ponownie później.")}}
-function render(o,dealer){
+function render(o,dealer,details){
 node.replaceChildren();
 const back=elem("a","← Wszystkie samochody","detail-back");back.href="/";node.append(back);
-const shell=elem("article",undefined,"detail-shell");const head=elem("div",undefined,"detail-hero");head.append(elem("div","CARVAMO · DOBRA CENA. PROSTO OD DEALERA.","detail-tag"),elem("h1",val(o.brand)+" "+val(o.model)),elem("p","Oferta opublikowana · Zapytaj o dostępność"));shell.append(head);
+const shell=elem("article",undefined,"detail-shell");const head=elem("div",undefined,"detail-hero");head.append(elem("div","CARVAMO · DOBRA CENA. PROSTO OD DEALERA.","detail-tag"),elem("h1",val(o.brand)+" "+val(o.model)),elem("p",details.availability_confirmed&&details.availability_confirmed_at&&details.availability_confirmed_by?"Dostępność potwierdzona":"Zapytaj o dostępność"));shell.append(head);
 const grid=elem("div",undefined,"detail-grid"),left=elem("div"),right=elem("div",undefined,"detail-form");
 const price=elem("div",format(o.gross_price),"detail-price");price.prepend(elem("small","Cena brutto wg opublikowanej oferty"));left.append(price);
-const dl=elem("dl",undefined,"detail-facts");row(dl,"Model",val(o.brand)+" "+val(o.model));row(dl,"Wersja wyposażenia","Nie podano — zapytaj dealera");row(dl,"Cena brutto",format(o.gross_price));row(dl,"Salon / miasto odbioru",val(dealer.name)+" · miasto do potwierdzenia");row(dl,"Dostępność","Zapytaj o dostępność");left.append(dl);
-const terms=elem("div",undefined,"detail-terms");terms.append(elem("h3","Warunki oferty"),elem("p","Warunki rabatu: nie podano — potwierdź u dealera."),elem("p","Warunki zakupu: nie podano — potwierdź u dealera."),elem("p","Warunki finansowania: nie podano — potwierdź u dealera. Cena może zależeć od sposobu finansowania."));left.append(terms);
+const dl=elem("dl",undefined,"detail-facts");row(dl,"Model",val(o.brand)+" "+val(o.model));row(dl,"Wersja wyposażenia",val(details.version_name)||"Nie podano — zapytaj dealera");row(dl,"Cena brutto",format(o.gross_price));row(dl,"Salon / miasto odbioru",val(dealer.name)+" · "+(val(details.pickup_city)||"miasto do potwierdzenia"));row(dl,"Dostępność",details.availability_confirmed&&details.availability_confirmed_at&&details.availability_confirmed_by?"Dostępność potwierdzona":"Zapytaj o dostępność");left.append(dl);
+const terms=elem("div",undefined,"detail-terms");terms.append(elem("h3","Warunki oferty"),elem("p","Warunki rabatu: "+(val(details.discount_terms)||"nie podano — potwierdź u dealera.")),elem("p","Warunki zakupu: "+(val(details.purchase_terms)||"nie podano — potwierdź u dealera.")),elem("p","Warunki finansowania: "+(val(details.financing_terms)||"nie podano — potwierdź u dealera. Cena może zależeć od sposobu finansowania.")));left.append(terms);
 right.append(elem("h2","Zapytaj o tę ofertę"),elem("p",val(o.brand)+" "+val(o.model)+" · "+format(o.gross_price)));
 const form=elem("form");form.id="offer-lead-form";form.autocomplete="on";
 for(const [name,label,type] of [["full_name","Imię i nazwisko","text"],["email","E-mail","email"],["phone","Telefon","tel"]]){const l=elem("label",label);l.htmlFor="lead-"+name;const inp=elem("input");inp.name=name;inp.id=l.htmlFor;inp.type=type;inp.maxLength=120;inp.required=true;form.append(l,inp)}
