@@ -31,7 +31,8 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(self.transport.download("job1", "lease-token").size, (40, 30))
         args = self.http.request.call_args
         self.assertIn("/jobs/job1/original", args.args[1])
-        self.assertIn("Authorization", args.kwargs["headers"])\n        self.assertEqual(args.kwargs["headers"]["X-Photo-Lease"], "lease-token")
+        self.assertIn("Authorization", args.kwargs["headers"])
+        self.assertEqual(args.kwargs["headers"]["X-Photo-Lease"], "lease-token")
 
     def test_rejects_oversized_download(self):
         response = Mock(ok=True)
