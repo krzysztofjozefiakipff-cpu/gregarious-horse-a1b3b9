@@ -6,7 +6,6 @@ const id=params.get("offer");
 const node=document.getElementById("offer-detail");
 const list=document.getElementById("portal-main");
 const hero=document.getElementById("portal-hero");
-const proof=document.getElementById("portal-proof");
 function elem(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
 function row(dl,label,value){const wrap=elem("div");wrap.append(elem("dt",label),elem("dd",value||"Nie podano — zapytaj dealera"));dl.append(wrap)}
 function val(v){return typeof v==="string"&&v.trim()?v.trim():""}
@@ -15,7 +14,7 @@ function source(){const out={};for(const k of allowedParams){const v=params.get(
 function showError(msg){node.replaceChildren(elem("p",msg,"detail-status error"))}
 async function load(){
 if(!id)return;
-list.classList.add("detail-hidden");hero.classList.add("detail-hidden");proof.classList.add("detail-hidden");node.classList.remove("detail-hidden");
+list.classList.add("detail-hidden");hero.classList.add("detail-hidden");node.classList.remove("detail-hidden");
 if(!ID.test(id)){if(id.startsWith("demo-")){const demo=[["demo-omoda5","OMODA","OMODA 5",109900],["demo-jaecoo7","JAECOO","JAECOO 7",139900],["demo-mghs","MG","MG HS Hybrid+",149900],["demo-omoda9","OMODA","OMODA 9",199900],["demo-maxus9","MAXUS","MAXUS Deliver 9",119900],["demo-jaecoo5","JAECOO","JAECOO 5",114900]].find(x=>x[0]===id);if(demo){render({id:demo[0],brand:demo[1],model:demo[2],gross_price:demo[3]},{name:"Salon do potwierdzenia"},{},true);return}}showError("Nieprawidłowy adres oferty.");return}
 try{
 const api=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/";
