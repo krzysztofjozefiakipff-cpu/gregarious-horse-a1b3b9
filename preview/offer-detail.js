@@ -16,7 +16,7 @@ function showError(msg){node.replaceChildren(elem("p",msg,"detail-status error")
 async function load(){
 if(!id)return;
 list.classList.add("detail-hidden");hero.classList.add("detail-hidden");proof.classList.add("detail-hidden");node.classList.remove("detail-hidden");
-if(!ID.test(id)){showError("Nieprawidłowy adres oferty.");return}
+if(!ID.test(id)){if(id.startsWith("demo-")){const demo=[["demo-omoda5","OMODA","OMODA 5",109900],["demo-jaecoo7","JAECOO","JAECOO 7",139900],["demo-mghs","MG","MG HS Hybrid+",149900],["demo-omoda9","OMODA","OMODA 9",199900],["demo-maxus9","MAXUS","MAXUS Deliver 9",119900],["demo-jaecoo5","JAECOO","JAECOO 5",114900]].find(x=>x[0]===id);if(demo){render({id:demo[0],brand:demo[1],model:demo[2],gross_price:demo[3]},{name:"Salon do potwierdzenia"},{},true);return}}showError("Nieprawidłowy adres oferty.");return}
 try{
 const api=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/";
 const heads={apikey:SUPABASE_PUBLISHABLE_KEY,Accept:"application/json"};
@@ -29,10 +29,10 @@ const dealers=await dr.json();if(!dealers[0]){showError("Oferta nie jest obecnie
 let details={};try{const mr=await fetch(api+"cv_preview_offer_details?select=version_name,discount_terms,purchase_terms,financing_terms,pickup_city,availability_confirmed,availability_confirmed_at,availability_confirmed_by&offer_id=eq."+encodeURIComponent(id)+"&limit=1",{headers:heads,cache:"no-store"});if(mr.ok){const m=await mr.json();details=m[0]||{}}}catch(e){console.warn("Offer details unavailable")}
 render(o,dealers[0],details);
 }catch(e){showError("Nie można teraz pobrać oferty. Spróbuj ponownie później.")}}
-function render(o,dealer,details){
+function render(o,dealer,details,isDemo=false){
 node.replaceChildren();
 const back=elem("a","← Wszystkie samochody","detail-back");back.href="/";node.append(back);
-const shell=elem("article",undefined,"detail-shell");const head=elem("div",undefined,"detail-hero");head.append(elem("div","CARVAMO · DOBRA CENA. PROSTO OD DEALERA.","detail-tag"),elem("h1",val(o.brand)+" "+val(o.model)),elem("p",details.availability_confirmed&&details.availability_confirmed_at&&details.availability_confirmed_by?"Dostępność potwierdzona":"Zapytaj o dostępność"));shell.append(head);
+const shell=elem("article",undefined,"detail-shell");const head=elem("div",undefined,"detail-hero");head.append(elem("div","CARVAMO · DOBRA CENA. PROSTO OD DEALERA.","detail-tag"),elem("h1",val(o.brand)+" "+val(o.model)),elem("p",isDemo?"Oferta demonstracyjna — dostępność niepotwierdzona":details.availability_confirmed&&details.availability_confirmed_at&&details.availability_confirmed_by?"Dostępność potwierdzona":"Zapytaj o dostępność"));shell.append(head);
 const grid=elem("div",undefined,"detail-grid"),left=elem("div"),right=elem("div",undefined,"detail-form");
 const price=elem("div",format(o.gross_price),"detail-price");price.prepend(elem("small","Cena brutto wg opublikowanej oferty"));left.append(price);
 const dl=elem("dl",undefined,"detail-facts");row(dl,"Model",val(o.brand)+" "+val(o.model));row(dl,"Wersja wyposażenia",val(details.version_name)||"Nie podano — zapytaj dealera");row(dl,"Cena brutto",format(o.gross_price));row(dl,"Salon / miasto odbioru",val(dealer.name)+" · "+(val(details.pickup_city)||"miasto do potwierdzenia"));row(dl,"Dostępność",details.availability_confirmed&&details.availability_confirmed_at&&details.availability_confirmed_by?"Dostępność potwierdzona":"Zapytaj o dostępność");left.append(dl);
@@ -43,7 +43,7 @@ for(const [name,label,type] of [["full_name","Imię i nazwisko","text"],["email"
 const label=elem("label","Wiadomość (opcjonalnie)");label.htmlFor="lead-message";const textarea=elem("textarea");textarea.id=label.htmlFor;textarea.name="message";textarea.maxLength=1200;textarea.rows=3;form.append(label,textarea);
 const consent=elem("label",undefined,"consent");const checkbox=elem("input");checkbox.type="checkbox";checkbox.required=true;checkbox.name="consent";consent.append(checkbox,elem("span","Wyrażam zgodę na kontakt w sprawie tej oferty. Zapoznałem/am się z informacją o przetwarzaniu danych."));form.append(consent);
 const honeypot=elem("input");honeypot.name="website";honeypot.tabIndex=-1;honeypot.autocomplete="off";honeypot.setAttribute("aria-hidden","true");honeypot.style.cssText="position:absolute;left:-9999px";form.append(honeypot);
-const submit=elem("button","Zapytaj o tę ofertę");submit.type="submit";form.append(submit);
+const submit=elem("button",isDemo?"Formularz niedostępny dla oferty demonstracyjnej":"Zapytaj o tę ofertę");submit.type="submit";submit.disabled=isDemo;form.append(submit);
 const note=elem("p","Dane testowe zostaną zapisane w wydzielonej tabeli zgłoszeń CARVAMO Preview. Nie są automatycznie przekazywane dealerowi.","detail-notice");form.append(note);
 const status=elem("div",undefined,"detail-status detail-hidden");status.role="status";form.append(status);
 form.addEventListener("submit",async e=>{e.preventDefault();if(!form.reportValidity())return;submit.disabled=true;status.classList.add("detail-hidden");try{
