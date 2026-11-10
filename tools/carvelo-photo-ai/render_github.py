@@ -71,7 +71,7 @@ def render():
   if coverage<.12 or coverage>.86 or opaque<.08:raise ValueError("mask_quality_unreliable")
   report(74,"compositing",JOB["id"])
   with render_scene(SCENE,img.size) as base:
-   background,placement=compose_grounded_vehicle(foreground,base)
+   background,placement=compose_grounded_vehicle(foreground,base,source_photo=img)
   print("CARVELO studio grounding",placement)
  report(85,"branding",JOB["id"])
  background=add_official_logo(background,LOGO)
