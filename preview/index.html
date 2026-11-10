@@ -80,17 +80,35 @@ footer strong{color:white;font-size:23px;letter-spacing:-1px}
 .btn:hover,.nav-action:hover{background:#008F83}
 .offer button:hover{background:#E4F8F4}
 @media(max-width:660px){.logo-word{font-size:27px}}
+.brand-image{display:block;width:192px;height:auto;aspect-ratio:782/158;object-fit:contain;background:#fff;padding:7px 11px;border-radius:10px;box-sizing:content-box;box-shadow:0 5px 22px #00000018}
+.header .shell{height:88px}
+.hero{background:radial-gradient(circle at 79% 32%,#2f6e7255 0,transparent 32%),linear-gradient(112deg,#102A34 0%,#133841 100%)}
+.hero .shell{min-height:505px}
+.hero-tag{color:#31E7D0}
+.hero h1{font-size:clamp(40px,4.2vw,60px);letter-spacing:-1.9px;line-height:1.1}
+.hero p{max-width:520px;color:#d0e0df}
+.btn{box-shadow:0 5px 15px #006B6220}
+.finder{margin-top:32px;border:1px solid #dce9e5;box-shadow:0 18px 45px #102A3410}
+.offer{border-color:#dce8e4;box-shadow:0 12px 30px #102A340b}
+.offer:hover{box-shadow:0 18px 38px #102A341b}
+.car-view{background:linear-gradient(140deg,#eaf4f1,#d1e2dd)}
+.car-view.dark{background:linear-gradient(140deg,#d6e5e1,#a6c4bd)}
+.car-view.light{background:linear-gradient(140deg,#eff8f5,#c9dfd9)}
+.proof{border-bottom-color:#dbe8e4}
+.proof strong{color:#102A34}
+.section-head h2,.finder h2{color:#102A34}
+@media(max-width:660px){.brand-image{width:164px}.header .shell{min-height:76px;height:auto}.hero h1{font-size:42px}}
 </style>
 </head>
 <body>
 <div class="preview-ribbon">ŚRODOWISKO TESTOWE CARVAMO — przykładowe oferty, bez transakcji i wysyłania danych</div>
 <header class="header"><div class="shell">
-<a href="#" class="brand" aria-label="Carvamo"><img src="./assets/carvamo-wordmark.svg" alt="Carvamo" width="208" height="43" style="display:block;background:white;border-radius:7px;padding:3px"><small>DOBRA CENA. PROSTO OD DEALERA.</small></a>
+<a href="#" class="brand" aria-label="Carvamo"><img class="brand-image" src="./assets/carvamo-wordmark.svg" alt="Carvamo" width="192" height="40"></a>
 <nav class="nav"><a href="#samochody">Samochody</a><a href="#jak-to-dziala">Jak to działa</a><a href="#kontakt">Kontakt</a></nav>
 <button type="button" class="nav-action" onclick="openInfo('Panel dealera')">Panel dealera</button>
 </div></header>
 <section class="hero"><div class="shell">
-<div><div class="hero-tag">OD AUTORYZOWANYCH DEALERÓW</div><h1>Znajdź nowe auto.<br><span>Dobra cena.</span><br>Prosto od dealera.</h1><p>Porównaj oferty nowych aut od autoryzowanych dealerów. Wybierz samochód i zapytaj o termin odbioru w salonie.</p><a class="btn" href="#samochody">Zobacz oferty</a><a class="btn secondary" href="#jak-to-dziala">Jak to działa</a></div>
+<div><div class="hero-tag">CARVAMO · DOBRA CENA. PROSTO OD DEALERA.</div><h1>Znajdź nowe auto.<br><span>Dobra cena.</span><br>Prosto od dealera.</h1><p>Porównaj oferty nowych aut od autoryzowanych dealerów. Wybierz samochód i zapytaj o termin odbioru w salonie.</p><a class="btn" href="#samochody">Zobacz oferty</a><a class="btn secondary" href="#jak-to-dziala">Jak to działa</a></div>
 <div class="hero-visual" aria-hidden="true">
 <svg viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="body" x1="0" x2="1"><stop stop-color="#9aa9b8"/><stop offset=".32" stop-color="#e5ebef"/><stop offset=".64" stop-color="#adbdcc"/><stop offset="1" stop-color="#73889e"/></linearGradient><linearGradient id="glass" x1="0" x2="1"><stop stop-color="#182c40"/><stop offset="1" stop-color="#496982"/></linearGradient></defs><ellipse cx="385" cy="327" rx="300" ry="25" fill="#000" opacity=".3"/><path d="M92 245Q117 231 167 215L240 139Q251 126 278 124L515 120Q548 121 566 144L628 211Q670 219 682 244L689 294Q683 306 665 308H103Q82 304 82 284L84 266Z" fill="url(#body)" stroke="#9aa9b7" stroke-width="4"/><path d="M232 207L274 140 504 138Q520 139 532 155L576 208Z" fill="url(#glass)" stroke="#b2c0cf" stroke-width="6"/><path d="M409 140L428 209" stroke="#c3d3dd" stroke-width="7"/><path d="M117 251Q145 238 194 232" stroke="#edf7ff" stroke-width="7" stroke-linecap="round"/><path d="M605 242L666 251" stroke="#c32437" stroke-width="10" stroke-linecap="round"/><rect x="283" y="226" width="80" height="8" rx="4" fill="#506779" opacity=".6"/><rect x="517" y="229" width="70" height="8" rx="4" fill="#506779" opacity=".5"/><circle cx="221" cy="301" r="50" fill="#131e28"/><circle cx="221" cy="301" r="32" fill="#d9e1e7"/><circle cx="221" cy="301" r="15" fill="#6c7e8f"/><circle cx="568" cy="301" r="50" fill="#131e28"/><circle cx="568" cy="301" r="32" fill="#d9e1e7"/><circle cx="568" cy="301" r="15" fill="#6c7e8f"/></svg></div>
 </div></section>
