@@ -1,0 +1,27 @@
+name: CARVAMO preview lead API security smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/carvamo-preview-lead/**"
+      - ".github/workflows/carvamo-preview-api-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify public API rejects invalid and unauthorized requests
+        env:
+          API: https://rgnqsrllgemsyumvjwax.supabase.co/functions/v1/carvamo-preview-lead
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/invalid.json -w '%{http_code}' -X POST "$API" -H 'Origin: https://preview.carvamo.com' -H 'Content-Type: application/json' --data '{"offer_id":"invalid","full_name":"Test","email":"test@example.invalid","phone":"123456789","consent":true}')
+          test "$code" = 400 || { echo "Invalid request status: $code"; cat /tmp/invalid.json; exit 1; }
+          code=$(curl -sS -o /tmp/private.json -w '%{http_code}' -X GET "$API" -H 'Origin: https://preview.carvamo.com')
+          test "$code" = 403 || { echo "Unauthorized request status: $code"; cat /tmp/private.json; exit 1; }
+          code=$(curl -sS -o /tmp/origin.json -w '%{http_code}' -X POST "$API" -H 'Origin: https://evil.example' -H 'Content-Type: application/json' --data '{}')
+          test "$code" = 403 || { echo "Wrong origin status: $code"; cat /tmp/origin.json; exit 1; }
+          echo "PASS: invalid lead, unauthorized staff read and wrong-origin requests rejected."
