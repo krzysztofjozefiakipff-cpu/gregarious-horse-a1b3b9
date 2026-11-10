@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];let importedSpec=null;
-const BUILD="2026-11-10.17";
+const BUILD="2026-11-10.18";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -223,7 +223,7 @@ document.querySelectorAll("[data-choice-for]").forEach(button=>{
  });
 });
 $("offerCreate").addEventListener("submit",async event=>{
- event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
+ event.preventDefault();const form=event.currentTarget;const button=form.querySelector('[type="submit"]');button.disabled=true;
  if(!$("offerFuel").value){notice("Zaznacz rodzaj paliwa.");button.disabled=false;return;}
  if(!$("offerBody").value){notice("Zaznacz rodzaj nadwozia.");button.disabled=false;return;}
  const payload={brand:$("offerBrand").value,model:$("offerModel").value,body:$("offerBody").value,fuel:$("offerFuel").value,gross_price:$("offerPrice").value,special:$("offerSpecial").checked,trim_name:$("offerVersion").value,engine_name:$("offerEngine").value,power_hp:$("offerPower").value||null,drive_type:$("offerDrive").value||null,transmission_type:$("offerTransmission").value||null};
@@ -232,7 +232,7 @@ $("offerCreate").addEventListener("submit",async event=>{
   notice("Wybierz markę i model z podpowiedzi katalogu CARVAMO.");button.disabled=false;return;
  }
  if(["admin","staff"].includes(me.role))payload.dealer_id=$("offerDealer").value;
- try{const created=await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});let saved=true;if(importedSpec&&created.offer?.id){try{await api("/api/offers/"+created.offer.id+"/specification",{method:"PUT",body:JSON.stringify(importedSpec)})}catch(err){saved=false;notice("Szkic zapisany, ale specyfikacja nie została zapisana: "+err.message)}}event.currentTarget.reset();syncOfferChoices();if(saved){importedSpec=null;$("offerPdfResult").replaceChildren();$("offerPdf").value=""}await refreshOffers();if(saved)notice("Szkic i rozpoznana specyfikacja zapisane.")}catch(e){notice(e.message)}finally{button.disabled=false}
+ try{const created=await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});let saved=true;if(importedSpec&&created.offer?.id){try{await api("/api/offers/"+created.offer.id+"/specification",{method:"PUT",body:JSON.stringify(importedSpec)})}catch(err){saved=false;notice("Szkic zapisany, ale specyfikacja nie została zapisana: "+err.message)}}form.reset();syncOfferChoices();if(saved){importedSpec=null;$("offerPdfResult").replaceChildren();$("offerPdf").value=""}try{await refreshOffers()}catch(refreshError){notice("Szkic zapisany, ale nie udało się odświeżyć listy: "+refreshError.message);return}if(saved)notice("Szkic zapisany"+(importedSpec?" ze specyfikacją.":"."))}catch(e){notice(e.message)}finally{button.disabled=false}
 });
 async function refreshLeads(){
  if(!token||!me)return;
