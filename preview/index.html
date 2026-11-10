@@ -145,7 +145,10 @@ main.shell{max-width:1350px}
 footer{padding:48px 0}
 @media(max-width:990px){.hero .shell{grid-template-columns:1fr;min-height:0;padding-top:58px}.hero-visual{min-height:440px}.hero-visual .showroom-car{top:18%;width:100%;left:0}.nav{gap:17px}.header .shell{height:auto}}
 @media(max-width:660px){.header .shell{min-height:80px}.brand-image{width:158px}.hero .shell{padding-top:52px}.hero h1{font-size:clamp(40px,9vw,54px);letter-spacing:-1.9px}.hero p{font-size:15px}.hero-visual{min-height:300px;margin-top:18px}.hero-visual .showroom-car{top:22%}.showroom-caption{font-size:7px}.proof .item{padding:14px 0}.finder{padding:21px;margin-top:29px}.section-head{margin-top:46px}.section-head h2{font-size:28px}.offer-grid{gap:18px}.car-view{height:195px}.step{padding:22px}.nav{font-size:10px;letter-spacing:0}.nav-action{padding:11px 13px}}
+.offer-link{display:block;text-align:center;padding:13px 16px;background:#006B62;color:#fff;border-radius:4px;font-weight:800;font-size:13px;margin-top:15px}.offer-link:hover{background:#008F83}
+@media(max-width:660px){.header .nav{display:none}.brand-image{width:158px}}
 </style>
+<link rel="stylesheet" href="./offer-detail.css">
 </head>
 <body>
 <div class="preview-ribbon">CARVAMO PREVIEW · ŚRODOWISKO TESTOWE · BEZ TRANSAKCJI</div>
@@ -154,8 +157,8 @@ footer{padding:48px 0}
 <nav class="nav"><a href="#samochody">Samochody</a><a href="#jak-to-dziala">Jak to działa</a><a href="#kontakt">Kontakt</a></nav>
 <button type="button" class="nav-action" onclick="openInfo('Panel dealera')">Panel dealera</button>
 </div></header>
-<section class="hero"><div class="shell">
-<div><div class="hero-tag">CARVAMO · DOBRA CENA. PROSTO OD DEALERA.</div><h1>Nowy samochód.<br><span>Nowe możliwości.</span><br>Lepsza oferta.</h1><p>Odkrywaj samochody z ofert autoryzowanych dealerów. Przejrzyste ceny, wygodne porównanie i wybór na Twoich zasadach.</p><a class="btn" href="#samochody">Zobacz oferty</a><a class="btn secondary" href="#jak-to-dziala">Jak to działa</a></div>
+<section class="hero" id="portal-hero"><div class="shell">
+<div><div class="hero-tag">CARVAMO · DOBRA CENA. PROSTO OD DEALERA.</div><h1>Nowe auta od<br><span>autoryzowanych</span><br>dealerów</h1><p>Odkrywaj samochody z ofert autoryzowanych dealerów. Przejrzyste ceny, wygodne porównanie i wybór na Twoich zasadach.</p><a class="btn" href="#samochody">Zobacz oferty</a><a class="btn secondary" href="#jak-to-dziala">Jak to działa</a></div>
 <div class="hero-visual" aria-hidden="true">
 <div class="showroom-scene">
   <div class="showroom-light light-one"></div><div class="showroom-light light-two"></div><div class="showroom-light light-three"></div>
@@ -165,8 +168,8 @@ footer{padding:48px 0}
   <div class="showroom-caption"><span class="caption-dot"></span> NOWY WYMIAR ZAKUPU AUTA</div>
 </div>
 </div></section>
-<section class="proof"><div class="shell"><div class="item"><strong>Nowe samochody</strong><span>Oferty modeli dostępnych na polskim rynku</span></div><div class="item"><strong>Bezpośrednio od dealerów</strong><span>Kontakt i odbiór w sieci dealerskiej</span></div><div class="item"><strong>Jasne zasady</strong><span>Porównywanie propozycji w jednym miejscu</span></div></div></section>
-<main class="shell">
+<section class="proof" id="portal-proof"><div class="shell"><div class="item"><strong>Nowe samochody</strong><span>Oferty modeli dostępnych na polskim rynku</span></div><div class="item"><strong>Bezpośrednio od dealerów</strong><span>Kontakt i odbiór w sieci dealerskiej</span></div><div class="item"><strong>Jasne zasady</strong><span>Porównywanie propozycji w jednym miejscu</span></div></div></section>
+<main class="shell" id="portal-main">
 <section class="finder" aria-label="Wyszukiwarka samochodów">
 <div class="finder-top"><h2>Znajdź nowe auto</h2><span style="font-size:11px;color:#758698">Podgląd bez formularzy i transakcji</span></div>
 <div class="filters">
@@ -178,6 +181,7 @@ footer{padding:48px 0}
 <section id="samochody"><div class="section-head"><div><h2>Wybrane samochody</h2><p>Publiczne oferty zatwierdzone przez dealerów; dane demonstracyjne tylko przy niedostępności katalogu</p></div><span id="liczba" style="font-size:13px;color:#65788a"></span></div><div id="karty" class="offer-grid"></div><div id="brak" class="empty">Brak przykładowych ofert dla wybranych filtrów.</div></section>
 <section id="porownanie" aria-live="polite" style="display:none;margin-top:28px;background:white;border:1px solid #dce8e4;border-radius:16px;padding:24px"><div class="section-head" style="margin:0 0 14px"><div><h2>Porównaj oferty</h2><p>Porównanie przykładowych modeli, bez pobierania danych klientów.</p></div><button type="button" id="wyczysc" class="btn">Wyczyść</button></div><div id="porownanie-tabela" style="overflow-x:auto"></div></section><section id="jak-to-dziala"><div class="section-head"><h2>Jak działa CARVAMO?</h2></div><div class="steps"><article class="step"><span class="number">01 — WYBIERZ</span><h3>Znajdź odpowiedni model</h3><p>Porównuj marki, typy nadwozia i propozycje cenowe.</p></article><article class="step"><span class="number">02 — PORÓWNAJ</span><h3>Sprawdź szczegóły</h3><p>W docelowej wersji poznasz szczegóły oferty i możliwości finansowania.</p></article><article class="step"><span class="number">03 — ODBIERZ</span><h3>Odbierz u dealera</h3><p>Zakup i wydanie samochodu realizowane w autoryzowanej sieci dealerskiej.</p></article></div></section>
 </main>
+<section id="offer-detail" class="offer-detail detail-hidden" aria-live="polite"></section>
 <footer id="kontakt"><div class="shell"><strong>carvamo</strong><span>Portal CARVAMO — test wyglądu i nawigacji · Formularze i dane klientów wyłączone</span></div></footer>
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="dialog"><h2 id="modalTitle"></h2><p>To wersja testowa CARVAMO. Ta funkcja nie jest jeszcze połączona z systemem sprzedażowym. Żadne dane nie są zbierane ani wysyłane.</p><button type="button" class="btn" id="close">Zamknij</button></div></div>
 <script>
@@ -206,7 +210,7 @@ function render(){
    const title=document.createElement("h3");title.textContent=c.model;
    const spec=document.createElement("div");spec.className="spec";spec.textContent=c.brand+" · "+c.type+" · "+(c.live?c.dealer:"Nowy samochód");
    const price=document.createElement("div");price.className="offer-price";const sm=document.createElement("small");sm.textContent=c.live?"Cena brutto wg opublikowanej oferty":"Przykładowa cena brutto";price.append(sm,document.createTextNode(c.price.toLocaleString("pl-PL")+" zł"));
-   const action=document.createElement("button");action.type="button";action.textContent="Zapytaj o ofertę";action.addEventListener("click",()=>openInfo(c.model));
+   const action=document.createElement(c.live&&c.id?"a":"button");action.textContent=c.live&&c.id?"Zobacz ofertę":"Oferta demonstracyjna";if(c.live&&c.id){const q=new URLSearchParams(location.search);q.set("offer",c.id);action.href="/?"+q.toString();action.className="offer-link"}else{action.type="button";action.addEventListener("click",()=>openInfo(c.model))}
    const compare=document.createElement("button");compare.type="button";compare.textContent=selected.has(c.model)?"✓ Dodano do porównania":"Porównaj ofertę";compare.style.marginTop="8px";compare.style.borderColor="#90bcb6";compare.style.color="#006B62";compare.setAttribute("aria-pressed",String(selected.has(c.model)));compare.addEventListener("click",()=>{if(selected.has(c.model)){selected.delete(c.model)}else if(selected.size<3){selected.add(c.model)}else{openInfo("Możesz porównać maksymalnie 3 samochody");return}render();renderComparison()});body.append(chip,title,spec,price,action,compare);card.append(image,body);els.grid.append(card);
  }
  document.getElementById("liczba").textContent=filtered.length+(catalogMode==="live"?" opublikowanych ofert":" ofert demonstracyjnych");
@@ -227,5 +231,6 @@ document.getElementById("szukaj").addEventListener("click",()=>{render();documen
 for(const el of [els.brand,els.type,els.budget])el.addEventListener("change",render);
 render();
 </script>
+<script type="module" src="./offer-detail.js"></script>
 </body>
 </html>
