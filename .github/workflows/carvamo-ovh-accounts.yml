@@ -58,3 +58,28 @@ jobs:
             echo "::notice::RESET_SMTP_PASSWORD is not configured in GitHub Actions."
           fi
           $SSH carvamo-deploy@146.59.52.16 'bash ~/carvamo-backend/deploy_accounts_staging.sh'
+      - name: Check SMTP connectivity from OVH
+        run: |
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            carvamo-deploy@146.59.52.16 'docker exec -i carvamo-accounts-staging python -' <<'PY'
+          import os
+          import smtplib
+          import ssl
+
+          host = os.getenv("RESET_SMTP_HOST")
+          user = os.getenv("RESET_SMTP_USER")
+          password = os.getenv("RESET_SMTP_PASSWORD")
+          if not all((host, user, password)):
+              print("SMTP not configured")
+              raise SystemExit(0)
+          try:
+              with smtplib.SMTP_SSL(host, 465, timeout=8, context=ssl.create_default_context()) as smtp:
+                  smtp.login(user, password)
+          except smtplib.SMTPResponseException as error:
+              print(f"SMTP verification failed: {type(error).__name__}, status {error.smtp_code}")
+              raise SystemExit(1)
+          except (OSError, smtplib.SMTPException) as error:
+              print(f"SMTP verification failed: {type(error).__name__}")
+              raise SystemExit(1)
+          print("SMTP authentication succeeded")
+          PY
