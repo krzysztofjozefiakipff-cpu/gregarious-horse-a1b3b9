@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the CARVELO 180-degree showroom as a real Blender scene.
+"""Build the CARVAMO 180-degree showroom as a real Blender scene.
 
 Usage:
   blender -b -t 2 --python tools/carvelo-photo-ai/build_showroom_3d.py -- \
@@ -13,10 +13,15 @@ import argparse
 import json
 import math
 import sys
+from carvamo_brand import NAVY, TURQUOISE, MINT, LIGHT
 from pathlib import Path
 
 import bpy
 from mathutils import Vector
+
+
+def rgb(hex_color):
+    return tuple(int(hex_color[i:i+2], 16) / 255 for i in (1, 3, 5))
 
 
 def material(name, color, metallic=0, roughness=.6):
@@ -74,15 +79,13 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("Warm pearl stone floor", (.47, .46, .43), .08, .28)
-    grout = material("Floor joints", (.23, .23, .22), 0, .85)
-    wall = material("Graphite walls", (.055, .064, .071), .04, .7)
-    ceiling = material("Ceiling charcoal", (.085, .092, .097), 0, .75)
-    wood = material("Warm walnut slats", (.24, .12, .065), 0, .52)
-    led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
+    floor = material("CARVAMO light neutral floor", rgb(LIGHT), .03, .38)
+    grout = material("Subtle floor joints", (.72, .77, .76), 0, .85)
+    wall = material("CARVAMO navy", rgb(NAVY), .02, .72)
+    ceiling = material("CARVAMO navy ceiling", rgb(NAVY), 0, .75)
+    wood = material("CARVAMO turquoise accent", rgb(TURQUOISE), 0, .58)
+    led = material("CARVAMO mint diffuser", rgb(MINT), 0, .35)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
-    white = material("CARVELO white letters", (.88, .9, .89), .1, .3)
-    red = material("CARVELO red V", (.76, .055, .075), .05, .3)
 
     cube("Floor slab", (0, 0, -.13), (19, 17, .26), floor)
     # Tile seams are physical geometry, so perspective is rendered correctly.
@@ -108,9 +111,9 @@ def build():
     # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
     logo_png = Path(args.logo_png)
     if not logo_png.is_file():
-        raise FileNotFoundError("official_carvelo_logo_png_missing: " + str(logo_png))
+        raise FileNotFoundError("official_carvamo_logo_png_missing: " + str(logo_png))
     logo_image = bpy.data.images.load(str(logo_png), check_existing=True)
-    logo_material = bpy.data.materials.new("Official CARVELO logo PNG")
+    logo_material = bpy.data.materials.new("Official CARVAMO logo PNG")
     logo_material.use_nodes = True
     nodes = logo_material.node_tree.nodes
     bsdf = nodes.get("Principled BSDF")
@@ -126,7 +129,7 @@ def build():
     bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
                                      rotation=(math.pi / 2, 0, 0))
     sign = bpy.context.object
-    sign.name = "Official CARVELO SVG wall sign"
+    sign.name = "Official CARVAMO wall sign"
     sign.dimensions = (5.7, 1.45, 1)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     sign.data.materials.append(logo_material)
@@ -146,7 +149,7 @@ def build():
     world.node_tree.nodes["Background"].inputs["Strength"].default_value = .45
     bpy.ops.object.camera_add()
     camera = bpy.context.object
-    camera.name = "CARVELO calibrated orbit camera"
+    camera.name = "CARVAMO calibrated orbit camera"
     bpy.context.scene.camera = camera
     camera.data.type = "PERSP"
     camera.data.lens = 40
@@ -198,16 +201,16 @@ def build():
     # Persist the actual calibrated camera pose, not the unpositioned camera.
     camera.location = (0, -8.4, 1.55)
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
-    bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
+    bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvamo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
-        json.dumps({"scene": "CARVELO 180 3D v1",
+        json.dumps({"scene": "CARVAMO 180 3D v1",
                     "camera_views": metadata}, indent=2), encoding="utf-8")
-    print("CARVELO 3D scene and %d camera views generated" % len(metadata))
+    print("CARVAMO 3D scene and %d camera views generated" % len(metadata))
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, required=True)
-parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVELO SVG")
+parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVAMO artwork")
 parser.add_argument("--step", type=int, default=15)
 parser.add_argument("--samples", type=int, default=24)
 parser.add_argument("--width", type=int, default=1280)
