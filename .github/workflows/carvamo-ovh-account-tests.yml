@@ -1,0 +1,39 @@
+name: CARVAMO OVH account security tests
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/ovh/db/tests/**"
+      - ".github/workflows/carvamo-ovh-account-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+      - name: Verify role isolation inside rollback transaction
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -X -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/tests/roles_isolation.sql
+          echo "CARVAMO role isolation tests passed; test records rolled back"
+      - name: Verify public API requires authentication
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 15 https://preview.carvamo.com/api/health | grep -q '"status":"ok"'
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://preview.carvamo.com/api/accounts)
+          test "$code" = 401
+          echo "CARVAMO API reachable over HTTPS; account listing blocked without login"
