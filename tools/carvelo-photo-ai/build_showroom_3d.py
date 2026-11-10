@@ -92,8 +92,8 @@ def build():
         cube("Tile seam Y %s" % j, (0, j, .002), (19, .009, .003), grout)
     cube("Back wall", (0, 7.7, 2.8), (19, .2, 5.6), wall)
     # The 180-degree camera orbit passes the side elevations.
-    # Open camera-facing sides: side-on orbit views must not look through walls.\n    # Side glazing is deliberately omitted until visibility-safe 3D architecture is validated.
-    cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)
+    # Open camera-facing sides: avoid occluding the orbit with side walls.\n    # Glazing is deferred until occlusion-safe architecture is verified.
+    # An overhead slab obscures camera views at the orbit edges.\n    # Keep it hidden from camera rays while retaining its lighting geometry.\n    roof = cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)\n    roof.visible_camera = False
 
     # Architectural vertical wood slats on the rear wall.
     for k in range(23):
@@ -114,7 +114,7 @@ def build():
     texture.image = logo_image
     logo_material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
     logo_material.node_tree.links.new(texture.outputs["Alpha"], bsdf.inputs["Alpha"])
-    logo_material.blend_method = "BLEND"
+    # Blender 4.2 removed the legacy BLEND material setting.\n    if hasattr(logo_material, "surface_render_method"):\n        logo_material.surface_render_method = "DITHERED"\n    else:\n        logo_material.blend_method = "BLEND"
     bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
                                      rotation=(math.pi / 2, 0, 0))
     sign = bpy.context.object
@@ -156,12 +156,12 @@ def build():
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    target = Vector((0, 0, 1.0))
+    # A vehicle-sized proxy gives the camera a meaningful framing target.\n    # It is hidden from renders; it is NOT a generated vehicle.\n    target = Vector((0, 0, 0.95))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
-        camera.location = (5.6*math.sin(rad), -5.6*math.cos(rad), 1.20)
+        # Orbit around the vehicle from the front half of the showroom.\n        # A negative Y offset prevents side views from collapsing onto the back wall.\n        camera.location = (5.6*math.sin(rad), -2.8 - 5.6*math.cos(rad), 1.55)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -177,13 +177,13 @@ def build():
             "resolution": [args.width, args.height],
             "floor_z_m": 0.0,
             "hero_vehicle_target_frame_width_fraction": 0.85,
-            "camera_orbit_radius_m": 5.6,
+            "camera_orbit_radius_m": 5.6,\n            "camera_orbit_center_m": [0, -2.8, 1.55],
             "composition_note": "Camera is framed for a foreground vehicle; empty background renders alone cannot verify actual vehicle occupancy.",
             "target_m": list(target),
             "empty": True,
         })
     # Persist the actual calibrated camera pose, not the unpositioned camera.
-    camera.location = (0, -5.6, 1.20)
+    camera.location = (0, -8.4, 1.55)
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
