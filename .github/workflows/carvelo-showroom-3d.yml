@@ -1,9 +1,10 @@
-name: CARVELO 3D showroom validation
+name: CARVAMO 3D showroom validation
 on:
   workflow_dispatch:
   push:
     paths:
       - 'tools/carvelo-photo-ai/build_showroom_3d.py'
+      - 'tools/carvelo-photo-ai/carvamo_brand.py'
       - 'tools/carvelo-photo-ai/showroom_3d_adapter.py'
       - 'tools/carvelo-photo-ai/showroom_camera.py'
       - 'tools/carvelo-photo-ai/showroom_views.py'
@@ -32,10 +33,13 @@ jobs:
           PY
       - name: Render actual Blender 3D scene and orbit views
         run: |
+          set -o pipefail
           blender -b -t 2 --python tools/carvelo-photo-ai/build_showroom_3d.py -- \
             --output-dir /tmp/carvelo-3d \
             --logo-png /tmp/carvelo-3d/official-logo.png \
             --step 30 --samples 8 --width 960 --height 540
+          test -s /tmp/carvelo-3d/camera_manifest.json
+          test -s /tmp/carvelo-3d/carvamo_showroom_180.blend
       - name: Validate rendered images with technical smoke test
         run: python3 tools/carvelo-photo-ai/validate_showroom_renders.py /tmp/carvelo-3d
       - name: Run view selection and fail-closed tests
