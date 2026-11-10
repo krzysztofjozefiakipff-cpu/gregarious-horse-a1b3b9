@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "infra/ovh/db/tests/**"
+      - "infra/ovh/db/demo/**"
       - ".github/workflows/carvamo-ovh-account-tests.yml"
   workflow_dispatch:
 permissions:
@@ -25,6 +26,11 @@ jobs:
           printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
           printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+      - name: Seed demo dealerships on staging only
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -X -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/demo/seed_dealers.sql
+          echo "Two demo dealerships seeded on OVH staging"
       - name: Verify role isolation inside rollback transaction
         run: |
           set -euo pipefail
