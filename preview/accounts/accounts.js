@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];let importedSpec=null;
-const BUILD="2026-11-10.15";
+const BUILD="2026-11-10.16";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -73,7 +73,7 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
  dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
  if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
- if(canManageAccounts)configure();configureOffers();$("catalogAdmin").hidden=!(["admin","staff"].includes(me.role));
+ if(canManageAccounts)configure();configureOffers();$("catalogLink").hidden=!(["admin","staff"].includes(me.role));
  for(const tab of workspaceTabs){
   const management=["accounts","create"].includes(tab.dataset.panel);
   tab.hidden=management&&!canManageAccounts;
@@ -285,15 +285,7 @@ function updateCatalogTrims(){
 }
 $("offerBrand").addEventListener("input",()=>{updateCatalogModels();$("offerBrand").setCustomValidity("");});
 $("offerModel").addEventListener("input",()=>{updateCatalogTrims();$("offerModel").setCustomValidity("");});
-$("catalogForm").addEventListener("submit",async event=>{
- event.preventDefault();
- if(!["admin","staff"].includes(me?.role))return;
- const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
- try{
-  await api("/api/vehicle-catalog",{method:"POST",body:JSON.stringify({brand:$("catalogBrand").value,model:$("catalogModel").value,trim_name:$("catalogTrim").value})});
-  event.currentTarget.reset();await refreshCatalog();notice("Pozycja dodana do centralnego katalogu CARVAMO.");
- }catch(e){notice(e.message)}finally{button.disabled=false}
-});
+
 
 $("offerPdfImport").addEventListener("click",async()=>{
  const file=$("offerPdf").files?.[0],button=$("offerPdfImport"),result=$("offerPdfResult");
