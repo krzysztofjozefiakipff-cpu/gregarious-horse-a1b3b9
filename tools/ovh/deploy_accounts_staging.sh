@@ -18,6 +18,7 @@ SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'carvamo_accounts', :'app_pass
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='carvamo_accounts') \gexec
 ALTER ROLE carvamo_accounts NOBYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 ALTER ROLE carvamo_accounts SET search_path = public;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
 GRANT CONNECT ON DATABASE carvamo TO carvamo_accounts;
 GRANT USAGE ON SCHEMA public TO carvamo_accounts;
 GRANT SELECT ON users, dealers TO carvamo_accounts;

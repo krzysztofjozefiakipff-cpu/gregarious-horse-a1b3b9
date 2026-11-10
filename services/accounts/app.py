@@ -212,9 +212,9 @@ def list_accounts(actor):
         return fail("Brak uprawnień", 403)
     with conn() as db:
         if actor["role"] == "admin":
-            rows = db.execute("SELECT id,email,role,dealer_id,enabled,created_at FROM users ORDER BY created_at DESC LIMIT 500").fetchall()
+            rows = db.execute("SELECT id,email,role,dealer_id,enabled,created_at,(phone IS NOT NULL) AS has_phone FROM users ORDER BY created_at DESC LIMIT 500").fetchall()
         else:
-            rows = db.execute("SELECT id,email,role,dealer_id,enabled,created_at FROM users WHERE dealer_id=%s AND role='dealer_staff' ORDER BY created_at DESC LIMIT 500", (actor["dealer_id"],)).fetchall()
+            rows = db.execute("SELECT id,email,role,dealer_id,enabled,created_at,(phone IS NOT NULL) AS has_phone FROM users WHERE dealer_id=%s AND role='dealer_staff' ORDER BY created_at DESC LIMIT 500", (actor["dealer_id"],)).fetchall()
     return jsonify({"accounts": rows})
 
 @app.post("/api/accounts")
@@ -225,6 +225,14 @@ def create_account(actor):
     role = str(data.get("role", ""))
     dealer_id = data.get("dealer_id") or None
     password = str(data.get("temporary_password", ""))
+    raw_phone = data.get("phone", "")
+    if not isinstance(raw_phone, str) or len(raw_phone) > 24:
+        return fail("Nieprawidłowy numer telefonu")
+    phone = re.sub(r"[ ()-]", "", raw_phone)
+    if re.fullmatch(r"[0-9]{9}", phone):
+        phone = "+48" + phone
+    if phone and not re.fullmatch(r"\+[1-9][0-9]{7,14}", phone):
+        return fail("Wpisz 9 cyfr dla Polski lub numer z prefiksem kraju.")
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
         return fail("Nieprawidłowy e-mail")
     if role not in ROLES or not permitted(actor, role, dealer_id):
@@ -235,8 +243,8 @@ def create_account(actor):
         with conn() as db:
             db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
             row = db.execute(
-                "INSERT INTO users(email,password_hash,role,dealer_id,enabled) VALUES (%s,%s,%s,%s,true) RETURNING id,email,role,dealer_id,enabled",
-                (email, hasher.hash(password), role, dealer_id)
+                "INSERT INTO users(email,password_hash,role,dealer_id,enabled,phone) VALUES (%s,%s,%s,%s,true,%s) RETURNING id,email,role,dealer_id,enabled",
+                (email, hasher.hash(password), role, dealer_id, phone or None)
             ).fetchone()
             db.execute("INSERT INTO account_audit(actor_id,target_id,dealer_id,action,new_role) VALUES (%s,%s,%s,'create',%s)",
                        (actor["id"], row["id"], dealer_id, role))

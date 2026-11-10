@@ -16,7 +16,7 @@ async function refresh(){
  const data=await api("/api/accounts");const tbody=$("accounts");tbody.replaceChildren();
  for(const user of data.accounts){
   const tr=document.createElement("tr");
-  for(const value of [user.email,roleNames[user.role]||user.role,dealerName(user.dealer_id),user.enabled?"Aktywne":"Zablokowane"])tr.appendChild(el("td",value));
+  for(const value of [user.email,roleNames[user.role]||user.role,dealerName(user.dealer_id),user.enabled?"Aktywne":"Zablokowane",user.has_phone?"Do weryfikacji":"Brak"])tr.appendChild(el("td",value));
   const td=document.createElement("td");if(user.id!==me.id && user.role!=="admin"){
    const b=el("button",user.enabled?"Zablokuj":"Aktywuj");b.className="outline";
    b.addEventListener("click",async()=>{if(!confirm("Zmienić status konta "+user.email+"?"))return;try{await api("/api/accounts/"+encodeURIComponent(user.id)+"/status",{method:"PATCH",body:JSON.stringify({enabled:!user.enabled})});await refresh()}catch(e){notice(e.message)}});td.appendChild(b)
@@ -45,8 +45,8 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  }catch(err){token="";notice(err.message)}});
 $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  const role=$("newRole").value;const dealer_id=me.role==="dealer_admin"?me.dealer_id:(["staff","admin"].includes(role)?null:$("newDealer").value);
- await api("/api/accounts",{method:"POST",body:JSON.stringify({email:$("newEmail").value,role,dealer_id,temporary_password:$("newPassword").value})});
- $("newEmail").value="";$("newPassword").value="";await refresh();notice("Konto utworzone")
+ await api("/api/accounts",{method:"POST",body:JSON.stringify({email:$("newEmail").value,role,dealer_id,temporary_password:$("newPassword").value,phone:$("newPhone").value})});
+ $("newPhone").value="";$("newEmail").value="";$("newPassword").value="";await refresh();notice("Konto utworzone")
  }catch(err){notice(err.message)}});
 $("changePassword").addEventListener("submit",async e=>{e.preventDefault();
  if ($("replacementPassword").value !== $("replacementPasswordAgain").value) { notice("Hasła się różnią."); $("replacementPasswordAgain").focus(); return; }
