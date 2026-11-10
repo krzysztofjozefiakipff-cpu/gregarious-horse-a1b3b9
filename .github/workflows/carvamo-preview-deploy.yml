@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s preview/index.html
-          grep -q 'ŚRODOWISKO TESTOWE CARVAMO' preview/index.html
+          grep -q 'CARVAMO PREVIEW' preview/index.html
           test -s infra/preview/Caddyfile
           test -s preview/assets/carvamo-wordmark.svg
           test -s preview/assets/carvamo-favicon.svg
