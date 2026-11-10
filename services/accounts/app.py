@@ -589,3 +589,80 @@ def review_offer(actor, offer_id):
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         db.execute("UPDATE offers SET status=%s,updated_at=now() WHERE id=%s", (status,offer_id))
     return jsonify({"ok": True, "status": status})
+
+@app.post("/api/offers/import-specification")
+@account
+def import_offer_specification(actor):
+    """Preview only: parse PDF in memory; never publish or overwrite an offer."""
+    import io
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+    if actor["role"] not in {"admin", "staff", "dealer", "dealer_admin", "dealer_staff"}:
+        return fail("Brak uprawnień", 403)
+    upload = request.files.get("file")
+    if not upload or not upload.filename.lower().endswith(".pdf"):
+        return fail("Wybierz dokument PDF", 400)
+    content = upload.stream.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        return fail("Maksymalny rozmiar PDF: 10 MB", 413)
+    if not content.startswith(b"%PDF-"):
+        return fail("Nieprawidłowy plik PDF", 400)
+    try:
+        reader = PdfReader(io.BytesIO(content), strict=False)
+        if reader.is_encrypted or len(reader.pages) > 40:
+            return fail("PDF zabezpieczony hasłem lub przekracza 40 stron", 400)
+        page_texts = [(page.extract_text(extraction_mode="layout") or "") for page in reader.pages]
+    except (PdfReadError, ValueError, KeyError, TypeError):
+        return fail("Nie można odczytać dokumentu PDF", 400)
+    raw = "\\n".join(page_texts)[:200000]
+    if len(raw.strip()) < 40:
+        return fail("Dokument nie zawiera tekstu do odczytu. Skan wymaga OCR.", 422)
+    lines = [re.sub(r"\\s+", " ", line).strip() for line in raw.splitlines()]
+    lines = [line for line in lines if line]
+    def match(pattern):
+        result = re.search(pattern, raw, re.IGNORECASE | re.MULTILINE)
+        return result.group(1).strip() if result else None
+    power = match(r"(?:moc(?: silnika)?|power)\\s*[:\\-]?\\s*(\\d{2,4})\\s*(?:KM|HP|PS)\\b")
+    if not power:
+        power = match(r"\\b(\\d{2,4})\\s*(?:KM|HP|PS)\\b")
+    price = match(r"(?:cena brutto|brutto|gross price)\\s*[:\\-]?\\s*([\\d\\s.,]+)\\s*(?:zł|PLN)")
+    fuel = None
+    for pattern, value in [
+        (r"plug[ -]?in|\\bPHEV\\b", "Hybryda plug-in PHEV"),
+        (r"\\bHEV\\b|pełna hybryda", "Hybryda HEV"),
+        (r"\\bMHEV\\b|miękka hybryda", "Miękka hybryda MHEV benzyna"),
+        (r"\\bBEV\\b|elektryczny", "Elektryczny BEV"),
+        (r"\\bdiesel\\b|olej napędowy", "Diesel"),
+        (r"\\bbenzyna\\b", "Benzyna"),
+    ]:
+        if re.search(pattern, raw, re.IGNORECASE):
+            fuel = value
+            break
+    transmission = None
+    for pattern, value in [
+        (r"\\bDCT\\b|\\bDSG\\b|dwusprzęgł", "dct"),
+        (r"\\bCVT\\b|e-CVT", "cvt"),
+        (r"automatyczn|automatic", "automatic"),
+        (r"manualn|manual", "manual"),
+    ]:
+        if re.search(pattern, raw, re.IGNORECASE):
+            transmission = value
+            break
+    drive = None
+    for pattern, value in [(r"\\bAWD\\b", "AWD"), (r"\\b4WD\\b|\\b4x4\\b", "4WD"), (r"\\bFWD\\b", "FWD"), (r"\\bRWD\\b", "RWD")]:
+        if re.search(pattern, raw, re.IGNORECASE):
+            drive = value
+            break
+    # Only explicit labels become structured equipment; preserve source text for review.
+    equipment = []
+    for line in lines:
+        if re.match(r"^(?:[-•✓]\\s*|wyposażenie\\s*[:\\-])", line, re.IGNORECASE) and 5 <= len(line) <= 180:
+            item = re.sub(r"^(?:[-•✓]\\s*|wyposażenie\\s*[:\\-]\\s*)", "", line, flags=re.IGNORECASE)
+            if item and item not in equipment:
+                equipment.append(item)
+    candidates = {"power_hp": int(power) if power and 1 <= int(power) <= 3000 else None,
+                  "gross_price": price.replace(" ", "") if price else None,
+                  "fuel": fuel, "transmission_type": transmission, "drive_type": drive}
+    return jsonify({"candidates": candidates, "equipment": equipment[:150],
+                    "source_text": raw[:30000], "pages": len(reader.pages),
+                    "warning": "Wartości rozpoznane automatycznie wymagają weryfikacji. Nie zapisano oferty ani pliku."})
