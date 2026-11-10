@@ -5,15 +5,19 @@ const db=createClient(URL,KEY,{auth:{persistSession:false}});
 const ORIGIN="https://preview.carvamo.com";
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const allowed=["utm_source","utm_medium","utm_campaign","utm_content","utm_term","gclid","fbclid","msclkid"];
-function response(data,status=200,origin=ORIGIN){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","access-control-allow-origin":origin,"access-control-allow-methods":"POST, PATCH, OPTIONS","access-control-allow-headers":"authorization, apikey, content-type","cache-control":"no-store","vary":"Origin"}})}
+function response(data,status=200,origin=ORIGIN){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","access-control-allow-origin":origin,"access-control-allow-methods":"GET, POST, PATCH, OPTIONS","access-control-allow-headers":"authorization, apikey, content-type","cache-control":"no-store","vary":"Origin"}})}
 function clean(v,max){return typeof v==="string"?v.trim().slice(0,max):""}
 async function hash(s){const bytes=new TextEncoder().encode(s);return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(b=>b.toString(16).padStart(2,"0")).join("")}
-async function qualify(req,body){
- const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"");
- if(!token)return response({error:"Wymagane logowanie"},401);
- const {data:{user},error}=await db.auth.getUser(token);if(error||!user)return response({error:"Nieautoryzowany"},401);
+async function authorize(req){
+ const token=(req.headers.get("authorization")||"").replace(/^Bearer\\s+/i,"");
+ if(!token)return null;
+ const {data:{user},error}=await db.auth.getUser(token);if(error||!user)return null;
  const {data:profile}=await db.from("cv_profiles").select("role,enabled").eq("id",user.id).single();
- if(!profile?.enabled||!["admin","staff"].includes(profile.role))return response({error:"Brak uprawnień"},403);
+ if(!profile?.enabled||!["admin","staff"].includes(profile.role))return null;
+ return user;
+}
+async function qualify(req,body){
+ const user=await authorize(req);if(!user)return response({error:"Brak uprawnień"},403);
  if(!UUID.test(body.lead_id||"")||!["qualified","unqualified","contacted"].includes(body.status))return response({error:"Nieprawidłowe dane"},400);
  const change={status:body.status,qualified_at:body.status==="qualified"?new Date().toISOString():null,qualified_by:body.status==="qualified"?user.id:null};
  const {data,error:err}=await db.from("cv_preview_leads").update(change).eq("id",body.lead_id).select("id,status").single();
@@ -24,7 +28,13 @@ Deno.serve(async req=>{
  const origin=req.headers.get("origin")||"";
  if(origin!==ORIGIN)return response({error:"Niedozwolone źródło"},403,"null");
  if(req.method==="OPTIONS")return response({ok:true});
- if(!["POST","PATCH"].includes(req.method))return response({error:"Metoda niedozwolona"},405);
+ if(!["GET","POST","PATCH"].includes(req.method))return response({error:"Metoda niedozwolona"},405);
+ if(req.method==="GET"){
+   const user=await authorize(req);if(!user)return response({error:"Brak uprawnień"},403);
+   const {data,error}=await db.from("cv_preview_leads").select("id,offer_id,full_name,email,phone,message,attribution,status,created_at,qualified_at").order("created_at",{ascending:false}).limit(100);
+   if(error)return response({error:"Nie można pobrać zgłoszeń"},500);
+   return response({ok:true,leads:data});
+ }
  if(Number(req.headers.get("content-length")||0)>7000)return response({error:"Za duże zgłoszenie"},413);
  let body;try{body=await req.json()}catch{return response({error:"Nieprawidłowy JSON"},400)}
  if(req.method==="PATCH")return qualify(req,body);
