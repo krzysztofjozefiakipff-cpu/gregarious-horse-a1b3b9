@@ -1,9 +1,11 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.5";
+const BUILD="2026-11-10.6";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
+ if(panel==="offers")refreshOffers().catch(e=>notice("Oferty: "+e.message));
+ if(panel==="leads")refreshLeads().catch(e=>notice("Leady: "+e.message));
  for(const tab of workspaceTabs){
   const selected=tab.dataset.panel===panel;
   tab.setAttribute("aria-selected",String(selected));
@@ -24,7 +26,7 @@ for(const tab of workspaceTabs){
  });
 }
 function hasUnsavedWork(){
- return ["newEmail","newPhone","newPassword","currentPassword","replacementPassword","replacementPasswordAgain"]
+ return ["newEmail","newPhone","newPassword","currentPassword","replacementPassword","replacementPasswordAgain","offerBrand","offerModel","offerBody","offerFuel","offerPrice"]
  .some(id=>Boolean($(id)?.value));
 }
 
@@ -67,7 +69,7 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
  dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
  if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
- configure();await refresh();switchWorkspace("accounts");$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
+ configure();configureOffers();await refresh();switchWorkspace("accounts");$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
  }catch(err){token="";notice(err.message)}});
 $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  const role=$("newRole").value;const dealer_id=me.role==="dealer_admin"?me.dealer_id:(["staff","admin"].includes(role)?null:$("newDealer").value);
@@ -82,7 +84,7 @@ $("changePassword").addEventListener("submit",async e=>{e.preventDefault();
  $("dashboard").hidden=true;$("loginBox").hidden=false;notice("Hasło zmienione. Zaloguj się ponownie nowym hasłem.");
  }catch(err){notice(err.message)}
 });
-$("logout").addEventListener("click",()=>{if(hasUnsavedWork()&&!confirm("Masz niezapisane dane formularza. Wylogowanie je usunie. Kontynuować?"))return; $("create").reset();$("changePassword").reset();switchWorkspace("accounts");token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
+$("logout").addEventListener("click",()=>{if(hasUnsavedWork()&&!confirm("Masz niezapisane dane formularza. Wylogowanie je usunie. Kontynuować?"))return; $("create").reset();$("changePassword").reset();$("offerCreate").reset();switchWorkspace("accounts");token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
 let resetToken = null;
 
 function showRecovery(confirming) {
@@ -159,3 +161,68 @@ try {
   if ($("recoveryBox").hidden) $("loginBox").hidden = false;
  }
 } catch { /* Keep the availability notice visible. */ }
+
+function configureOffers(){
+ const admin=me.role==="admin",wrap=$("offerDealerWrap"),select=$("offerDealer");
+ wrap.hidden=!admin;select.required=admin;select.replaceChildren();
+ if(admin){
+  const empty=el("option","Wybierz dealera");empty.value="";select.appendChild(empty);
+  for(const d of dealers){const option=el("option",d.name);option.value=d.id;select.appendChild(option)}
+ }
+}
+function formatPrice(value){const n=Number(value);return Number.isFinite(n)?n.toLocaleString("pl-PL",{style:"currency",currency:"PLN"}):"—"}
+async function refreshOffers(){
+ if(!token||!me)return;
+ const data=await api("/api/offers"),body=$("offersRows");body.replaceChildren();
+ for(const offer of data.offers||[]){
+  const tr=el("tr"),name=el("td",(offer.brand||"")+" "+(offer.model||""));
+  tr.append(name,el("td",formatPrice(offer.gross_price)),el("td",offer.status||"—"));
+  const action=el("td");
+  const publish=["draft","pending","rejected"].includes(offer.status);
+  if(publish||offer.status==="published"){
+   const button=el("button",publish?"Opublikuj":"Wycofaj");
+   button.className=publish?"":"outline";
+   button.addEventListener("click",async()=>{
+    button.disabled=true;
+    try{await api("/api/offers/"+encodeURIComponent(offer.id)+"/"+(publish?"publish":"withdraw"),{method:"PATCH"});await refreshOffers();notice(publish?"Oferta opublikowana.":"Oferta wycofana.")}catch(e){notice(e.message)}finally{button.disabled=false}
+   });action.appendChild(button);
+  }
+  tr.appendChild(action);body.appendChild(tr);
+ }
+ if(!body.children.length){const tr=el("tr"),td=el("td","Brak ofert.");td.colSpan=4;tr.appendChild(td);body.appendChild(tr)}
+}
+$("offersRefresh").addEventListener("click",()=>refreshOffers().catch(e=>notice(e.message)));
+$("offerCreate").addEventListener("submit",async event=>{
+ event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
+ const payload={brand:$("offerBrand").value,model:$("offerModel").value,body:$("offerBody").value,fuel:$("offerFuel").value,gross_price:$("offerPrice").value,special:$("offerSpecial").checked};
+ if(me.role==="admin")payload.dealer_id=$("offerDealer").value;
+ try{await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});event.currentTarget.reset();await refreshOffers();notice("Szkic zapisany. Możesz go opublikować.")}catch(e){notice(e.message)}finally{button.disabled=false}
+});
+async function refreshLeads(){
+ if(!token||!me)return;
+ const manager=["admin","dealer_admin"].includes(me.role);
+ $("leadsInfo").textContent=me.role==="dealer_admin"?"Leady Twojego dealera. Możesz przydzielać je pracownikom.":me.role==="dealer_staff"?"Widzisz tylko własne przypisane leady.":"Leady wszystkich dealerów.";
+ const data=await api("/api/leads");
+ let assignees=[];
+ if(manager){try{assignees=(await api("/api/leads/assignees")).assignees||[]}catch(e){notice("Nie udało się pobrać pracowników: "+e.message)}}
+ const body=$("leadsRows");body.replaceChildren();
+ for(const lead of data.leads||[]){
+  const tr=el("tr");tr.append(el("td",lead.full_name||"—"),el("td",[lead.email,lead.phone].filter(Boolean).join(" · ")));
+  const statusCell=el("td"),status=document.createElement("select");
+  for(const [value,label] of [["new","Nowy"],["contacted","Kontakt"],["qualified","Zakwalifikowany"],["unqualified","Niezakwalifikowany"]]){const option=el("option",label);option.value=value;status.appendChild(option)}
+  status.value=lead.status||"new";
+  status.addEventListener("change",async()=>{status.disabled=true;try{await api("/api/leads/"+encodeURIComponent(lead.id)+"/status",{method:"PATCH",body:JSON.stringify({status:status.value})});notice("Status zapisany.")}catch(e){notice(e.message);await refreshLeads().catch(()=>{})}finally{status.disabled=false}});
+  statusCell.appendChild(status);tr.appendChild(statusCell);
+  const ownerCell=el("td");
+  if(manager){
+   const select=document.createElement("select"),empty=el("option","Nieprzypisany");empty.value="";select.appendChild(empty);
+   for(const person of assignees){if(String(person.dealer_id)!==String(lead.dealer_id))continue;const option=el("option",person.email);option.value=person.id;select.appendChild(option)}
+   select.value=lead.assigned_to||"";
+   select.addEventListener("change",async()=>{select.disabled=true;try{await api("/api/leads/"+encodeURIComponent(lead.id)+"/assign",{method:"PATCH",body:JSON.stringify({assigned_to:select.value||null})});notice("Pracownik przypisany.")}catch(e){notice(e.message);await refreshLeads().catch(()=>{})}finally{select.disabled=false}});
+   ownerCell.appendChild(select);
+  }else ownerCell.textContent="Przypisany do mnie";
+  tr.appendChild(ownerCell);body.appendChild(tr);
+ }
+ if(!body.children.length){const tr=el("tr"),td=el("td","Brak leadów w Twoim zakresie.");td.colSpan=4;tr.appendChild(td);body.appendChild(tr)}
+}
+$("leadsRefresh").addEventListener("click",()=>refreshLeads().catch(e=>notice(e.message)));
