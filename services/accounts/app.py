@@ -305,3 +305,90 @@ def list_dealers(actor):
     with conn() as db:
         rows = db.execute("SELECT id,name,active FROM dealers WHERE active=true ORDER BY name LIMIT 500").fetchall()
     return jsonify({"dealers": rows})
+
+
+# Staging offer workflow: dealer isolation is enforced server-side, never by UI filters.
+@app.get("/api/offers")
+@account
+def list_offers(actor):
+    if actor["role"] not in {"admin", "staff", "dealer", "dealer_admin", "dealer_staff"}:
+        return fail("Brak uprawnień", 403)
+    with conn() as db:
+        if actor["role"] in {"admin", "staff"}:
+            rows = db.execute(
+                "SELECT id,brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_at "
+                "FROM offers WHERE deletion_pending=false ORDER BY created_at DESC LIMIT 200"
+            ).fetchall()
+        else:
+            if not actor["dealer_id"]:
+                return fail("Brak przypisanego dealera", 403)
+            rows = db.execute(
+                "SELECT id,brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_at "
+                "FROM offers WHERE dealer_id=%s AND deletion_pending=false ORDER BY created_at DESC LIMIT 200",
+                (actor["dealer_id"],)
+            ).fetchall()
+    return jsonify({"offers": rows})
+
+
+@app.post("/api/offers")
+@account
+def create_offer(actor):
+    if actor["role"] not in {"admin", "staff", "dealer", "dealer_admin", "dealer_staff"}:
+        return fail("Brak uprawnień", 403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return fail("Nieprawidłowe dane oferty")
+    fields = {}
+    for key in ("brand", "model", "body", "fuel"):
+        value = data.get(key)
+        if not isinstance(value, str) or not 1 <= len(value.strip()) <= 100:
+            return fail("Wymagane pole: " + key)
+        fields[key] = value.strip()
+    try:
+        from decimal import Decimal, InvalidOperation
+        price = Decimal(str(data.get("gross_price")))
+        if not price.is_finite() or not Decimal("0") < price < Decimal("100000000"):
+            return fail("Nieprawidłowa cena brutto")
+    except (InvalidOperation, TypeError, ValueError):
+        return fail("Nieprawidłowa cena brutto")
+    if not isinstance(data.get("special", False), bool):
+        return fail("Nieprawidłowe pole special")
+    if actor["role"] in {"admin", "staff"}:
+        dealer_id = data.get("dealer_id")
+        if not isinstance(dealer_id, str):
+            return fail("Wybierz dealera")
+    else:
+        dealer_id = str(actor["dealer_id"]) if actor["dealer_id"] else None
+    if not dealer_id:
+        return fail("Brak przypisanego dealera", 403)
+    with conn() as db:
+        dealer = db.execute("SELECT id FROM dealers WHERE id::text=%s AND active=true", (dealer_id,)).fetchone()
+        if not dealer:
+            return fail("Dealer nie istnieje lub jest nieaktywny", 400)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
+        row = db.execute(
+            "INSERT INTO offers(brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_by) "
+            "VALUES (%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s) RETURNING id,status",
+            (fields["brand"], fields["model"], fields["body"], fields["fuel"], price, dealer["id"],
+             "dealer" if actor["role"].startswith("dealer") else "carvamo", data.get("special", False), actor["id"])
+        ).fetchone()
+    return jsonify({"offer": row}), 201
+
+
+@app.patch("/api/offers/<uuid:offer_id>/submit")
+@account
+def submit_offer(actor, offer_id):
+    with conn() as db:
+        row = db.execute("SELECT id,dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE", (offer_id,)).fetchone()
+        if not row:
+            return fail("Nie znaleziono oferty", 404)
+        if actor["role"] not in {"admin", "staff"} and (
+            actor["role"] not in {"dealer", "dealer_admin", "dealer_staff"} or
+            str(actor["dealer_id"]) != str(row["dealer_id"])
+        ):
+            return fail("Brak uprawnień", 403)
+        if row["status"] not in {"draft", "rejected"}:
+            return fail("Oferty nie można przekazać do weryfikacji", 409)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
+        db.execute("UPDATE offers SET status='pending',updated_at=now() WHERE id=%s", (offer_id,))
+    return jsonify({"ok": True, "status": "pending"})
