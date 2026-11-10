@@ -747,3 +747,38 @@ def download_public_offer_pdf(offer_id):
     document.build(story)
     buffer.seek(0)
     return send_file(buffer,mimetype="application/pdf",as_attachment=True,download_name="carvamo-oferta-"+str(offer_id)+".pdf")
+
+@app.put("/api/offers/<uuid:offer_id>/specification")
+@account
+def save_offer_specification(actor, offer_id):
+    data=request.get_json(silent=True)
+    if not isinstance(data,dict):
+        return fail("Nieprawidłowa specyfikacja",400)
+    def clean_items(key):
+        items=data.get(key,[])
+        if not isinstance(items,list) or len(items)>300:
+            return None
+        if any(not isinstance(item,str) or not 1<=len(item.strip())<=400 for item in items):
+            return None
+        return list(dict.fromkeys(item.strip() for item in items))
+    standard=clean_items("standard_equipment")
+    optional=clean_items("optional_equipment")
+    if standard is None or optional is None:
+        return fail("Wyposażenie musi być listą krótkich opisów",400)
+    import json
+    with conn() as db:
+        offer=db.execute("SELECT dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE",(offer_id,)).fetchone()
+        if not offer:
+            return fail("Nie znaleziono oferty",404)
+        if actor["role"] not in {"admin","staff"} and (actor["role"] not in {"dealer","dealer_admin","dealer_staff"} or str(actor["dealer_id"])!=str(offer["dealer_id"])):
+            return fail("Brak uprawnień",403)
+        if offer["status"]=="published" and actor["role"] not in {"admin","staff"}:
+            return fail("Zmiany opublikowanej specyfikacji wymagają obsługi CARVAMO",409)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)",(str(actor["id"]),))
+        db.execute(
+            "INSERT INTO offer_specifications(offer_id,standard_equipment,optional_equipment,updated_at) VALUES (%s,%s::jsonb,%s::jsonb,now()) "
+            "ON CONFLICT(offer_id) DO UPDATE SET standard_equipment=EXCLUDED.standard_equipment,"
+            "optional_equipment=EXCLUDED.optional_equipment,updated_at=now()",
+            (offer_id,json.dumps(standard,ensure_ascii=False),json.dumps(optional,ensure_ascii=False))
+        )
+    return jsonify({"ok":True,"standard_count":len(standard),"optional_count":len(optional)})
