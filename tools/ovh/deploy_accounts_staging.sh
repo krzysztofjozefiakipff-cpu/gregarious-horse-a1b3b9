@@ -22,6 +22,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
 GRANT CONNECT ON DATABASE carvamo TO carvamo_accounts;
 GRANT USAGE ON SCHEMA public TO carvamo_accounts;
 GRANT SELECT ON users, dealers TO carvamo_accounts;
+# Catalog tables are created by the staging schema workflow before this deployment.
 GRANT SELECT, INSERT, UPDATE ON vehicle_catalog TO carvamo_accounts;
 GRANT SELECT, INSERT, UPDATE ON offer_specifications TO carvamo_accounts;
 GRANT SELECT, INSERT, UPDATE ON offers TO carvamo_accounts;
