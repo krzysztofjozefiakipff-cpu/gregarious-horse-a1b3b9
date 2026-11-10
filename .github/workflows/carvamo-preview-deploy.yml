@@ -83,7 +83,8 @@ jobs:
             echo "Checking $path"
             curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com$path" -o /dev/null
           done
-          curl --fail --silent --show-error --max-time 15 https://preview.carvamo.com/ | grep -q "carvamo-wordmark.svg"
+          curl --fail --silent --show-error --max-time 15 https://preview.carvamo.com/ -o /tmp/carvamo-home-check.html
+          grep -q "carvamo-wordmark.svg" /tmp/carvamo-home-check.html
           curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/panel/?check=${GITHUB_SHA}" -o /tmp/carvamo-panel-check.html
           grep -q "Panel CARVAMO" /tmp/carvamo-panel-check.html
           ! grep -qi "carvelo" /tmp/carvamo-panel-check.html
