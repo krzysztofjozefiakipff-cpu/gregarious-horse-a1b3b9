@@ -4,7 +4,17 @@ import os
 import time
 from PIL import Image
 from ovh_transport import OVHTransport
-from persistent_worker import session, SCENE, LOGO
+from functools import lru_cache
+from pathlib import Path
+from rembg import new_session
+
+ROOT = Path(__file__).resolve().parents[2]
+SCENE = ROOT / 'assets/brand/carvelo-showroom-empty-v5.webp'
+LOGO = ROOT / 'assets/brand/carvelo-wordmark-on-dark.svg'
+
+@lru_cache(maxsize=1)
+def session():
+    return new_session('u2net')
 from studio_compose import render_scene, compose_grounded_vehicle, add_official_logo
 from rembg import remove
 
