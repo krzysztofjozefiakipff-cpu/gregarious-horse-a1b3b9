@@ -5,3 +5,4 @@ itsdangerous==2.2.0
 gunicorn==23.0.0
 pypdf==5.9.0
 reportlab==4.4.3
+Pillow==11.3.0
