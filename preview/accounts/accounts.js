@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.8";
+const BUILD="2026-11-10.9";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -29,7 +29,7 @@ for(const tab of workspaceTabs){
  });
 }
 function hasUnsavedWork(){
- return ["newEmail","newPhone","newPassword","currentPassword","replacementPassword","replacementPasswordAgain","offerBrand","offerModel","offerBody","offerFuel","offerPrice"]
+ return ["newEmail","newPhone","newPassword","currentPassword","replacementPassword","replacementPasswordAgain","offerBrand","offerModel","offerBody","offerFuel","offerPrice","offerVersion","offerEngine","offerPower"]
  .some(id=>Boolean($(id)?.value));
 }
 
@@ -205,7 +205,7 @@ async function refreshOffers(){
 $("offersRefresh").addEventListener("click",()=>refreshOffers().catch(e=>notice(e.message)));
 $("offerCreate").addEventListener("submit",async event=>{
  event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
- const payload={brand:$("offerBrand").value,model:$("offerModel").value,body:$("offerBody").value,fuel:$("offerFuel").value,gross_price:$("offerPrice").value,special:$("offerSpecial").checked};
+ const payload={brand:$("offerBrand").value,model:$("offerModel").value,body:$("offerBody").value,fuel:$("offerFuel").value,gross_price:$("offerPrice").value,special:$("offerSpecial").checked,trim_name:$("offerVersion").value,engine_name:$("offerEngine").value,power_hp:$("offerPower").value||null,drive_type:$("offerDrive").value||null,transmission_type:$("offerTransmission").value||null};
  if(me.role==="admin")payload.dealer_id=$("offerDealer").value;
  try{await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});event.currentTarget.reset();await refreshOffers();notice("Szkic zapisany. Możesz go opublikować.")}catch(e){notice(e.message)}finally{button.disabled=false}
 });
