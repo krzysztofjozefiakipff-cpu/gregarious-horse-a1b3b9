@@ -23,7 +23,7 @@ fi
 for i in $(seq 1 25); do
   if docker exec "$NAME" pg_isready -U carvamo -d carvamo >/dev/null 2>&1; then
     echo "CARVAMO OVH STAGING POSTGRES READY (private Docker network, no published ports)"
-    docker exec "$NAME" psql -U carvamo -d carvamo -Atqc 'select current_database(),current_setting(\x27server_version\x27);'
+    docker exec "$NAME" psql -U carvamo -d carvamo -Atqc 'select current_database();'
     exit 0
   fi
   sleep 2
