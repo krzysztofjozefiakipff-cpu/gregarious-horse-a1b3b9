@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.13";
+const BUILD="2026-11-10.14";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -293,4 +293,34 @@ $("catalogForm").addEventListener("submit",async event=>{
   await api("/api/vehicle-catalog",{method:"POST",body:JSON.stringify({brand:$("catalogBrand").value,model:$("catalogModel").value,trim_name:$("catalogTrim").value})});
   event.currentTarget.reset();await refreshCatalog();notice("Pozycja dodana do centralnego katalogu CARVAMO.");
  }catch(e){notice(e.message)}finally{button.disabled=false}
+});
+
+$("offerPdfImport").addEventListener("click",async()=>{
+ const file=$("offerPdf").files?.[0],button=$("offerPdfImport"),result=$("offerPdfResult");
+ if(!file){notice("Wybierz plik PDF.");return}
+ if(file.size>10*1024*1024){notice("PDF może mieć maksymalnie 10 MB.");return}
+ button.disabled=true;result.textContent="Odczytywanie dokumentu…";
+ try{
+  const data=new FormData();data.append("file",file);
+  const response=await fetch("/api/offers/import-specification",{method:"POST",headers:{Authorization:"Bearer "+token},body:data,cache:"no-store"});
+  const parsed=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(parsed.error||"Nie udało się odczytać PDF");
+  const candidates=parsed.candidates||{};
+  for(const [field,id] of Object.entries({power_hp:"offerPower",gross_price:"offerPrice",fuel:"offerFuel",transmission_type:"offerTransmission",drive_type:"offerDrive"})){
+   if(candidates[field]!==null&&candidates[field]!==undefined&&candidates[field]!==""&&$(id)){
+    $(id).value=String(candidates[field]);
+   }
+  }
+  syncOfferChoices();
+  result.replaceChildren();
+  const heading=document.createElement("strong");heading.textContent="Odczytano "+parsed.pages+" str. — sprawdź wszystkie wartości przed zapisaniem.";result.appendChild(heading);
+  const equipment=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Rozpoznane wyposażenie ("+(parsed.equipment||[]).length+")";equipment.appendChild(summary);
+  const list=document.createElement("ul");
+  for(const item of parsed.equipment||[]){const li=document.createElement("li");li.textContent=item;list.appendChild(li)}
+  equipment.appendChild(list);result.appendChild(equipment);
+  const details=document.createElement("details"),title=document.createElement("summary"),pre=document.createElement("pre");
+  title.textContent="Pełny odczytany tekst specyfikacji (do weryfikacji)";pre.textContent=parsed.source_text||"";pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto";
+  details.append(title,pre);result.appendChild(details);
+  notice("Specyfikacja odczytana. Sprawdź pola i wyposażenie — dokument nie został zapisany.");
+ }catch(e){result.textContent="";notice(e.message)}finally{button.disabled=false}
 });
