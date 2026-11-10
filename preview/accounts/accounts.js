@@ -9,7 +9,7 @@ async function api(path,options={}){
  return data;
 }
 function el(tag,text){const node=document.createElement(tag);node.textContent=String(text??"");return node}
-function dealerName(id){return dealers.find(x=>x.id===id)?.name|| (id?"Przypisany dealer":"—")}
+function dealerName(id){return dealers.find(x=>String(x.id)===String(id))?.name|| (id?"Przypisany dealer":"—")}
 async function refresh(){
  const data=await api("/api/accounts");const tbody=$("accounts");tbody.replaceChildren();
  for(const user of data.accounts){
@@ -34,8 +34,10 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({email:$("email").value,password:$("password").value})});token=r.token;$("password").value="";
  me=(await api("/api/auth/me")).account;
  if(!["admin","dealer_admin"].includes(me.role))throw new Error("Twoja rola nie umożliwia zarządzania kontami");
- dealers=me.role==="admin"?(await api("/api/dealers")).dealers:[];
- configure();await refresh();$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;notice("");
+ const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
+ dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
+ if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
+ configure();await refresh();$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
  }catch(err){token="";notice(err.message)}});
 $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  const role=$("newRole").value;const dealer_id=me.role==="dealer_admin"?me.dealer_id:(["staff","admin"].includes(role)?null:$("newDealer").value);
