@@ -33,8 +33,10 @@ jobs:
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/001_core_schema.sql
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/002_account_roles.sql
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/003_account_self_service.sql
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/004_lead_assignment.sql
       - name: Verify schema and ensure no imported records are assumed
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 "docker exec carvamo-db-staging psql -U carvamo -d carvamo -Atqc \"select count(*) from information_schema.tables where table_schema='public' and table_name in ('users','dealers','offers','offer_details','offer_photos','leads','photo_jobs');\"" | grep -qx 7
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 "docker exec carvamo-db-staging psql -U carvamo -d carvamo -Atqc \"select count(*) from information_schema.columns where table_schema='public' and table_name='leads' and column_name='assigned_to';\"" | grep -qx 1
           echo "OVH staging schema verified: 7 tables and scoped account roles. No customer data imported or production traffic switched."
