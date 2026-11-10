@@ -84,4 +84,10 @@ jobs:
             curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com$path" -o /dev/null
           done
           curl --fail --silent --show-error --max-time 15 https://preview.carvamo.com/ | grep -q "carvamo-wordmark.svg"
+          curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/panel/?check=${GITHUB_SHA}" -o /tmp/carvamo-panel-check.html
+          grep -q "Panel CARVAMO" /tmp/carvamo-panel-check.html
+          ! grep -qi "carvelo" /tmp/carvamo-panel-check.html
+          curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/panel/config.js?check=${GITHUB_SHA}" -o /tmp/carvamo-panel-config.js
+          grep -q "https://rgnqsrllgemsyumvjwax.supabase.co" /tmp/carvamo-panel-config.js
+          echo "Verified: live CARVAMO panel branding and Supabase config"
           echo "CARVAMO preview branded assets and catalog module reachable"
