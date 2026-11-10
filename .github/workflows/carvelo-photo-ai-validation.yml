@@ -18,6 +18,8 @@ jobs:
         run: python -m pip install 'Pillow>=10,<12' 'numpy>=1.26,<3' 'cairosvg>=2.7,<3' 'requests>=2.31,<3'
       - name: Python syntax check (including Blender script)
         run: |
+          python -m py_compile services/accounts/photo_ai_api.py services/accounts/app.py
+          python -m py_compile tools/carvelo-photo-ai/ovh_worker.py tools/carvelo-photo-ai/ovh_transport.py
           python -m py_compile tools/carvelo-photo-ai/build_showroom_3d.py
           python -m py_compile tools/carvelo-photo-ai/validate_showroom_renders.py
           python -m py_compile tools/carvelo-photo-ai/test_validate_showroom_renders.py
