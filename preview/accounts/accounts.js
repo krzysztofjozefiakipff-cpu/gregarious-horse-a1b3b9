@@ -1,12 +1,12 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.9";
+const BUILD="2026-11-10.10";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
  if(!target)return;
- if(panel==="offers")refreshOffers().catch(e=>notice("Oferty: "+e.message));
+ if(panel==="offers"){refreshOffers().catch(e=>notice("Oferty: "+e.message));refreshCatalog().catch(e=>notice("Katalog: "+e.message));}
  if(panel==="leads")refreshLeads().catch(e=>notice("Leady: "+e.message));
  for(const tab of workspaceTabs){
   const selected=!tab.hidden&&tab.dataset.panel===panel;
@@ -73,7 +73,7 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
  dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
  if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
- if(canManageAccounts)configure();configureOffers();
+ if(canManageAccounts)configure();configureOffers();$("catalogAdmin").hidden=!(["admin","staff"].includes(me.role));
  for(const tab of workspaceTabs){
   const management=["accounts","create"].includes(tab.dataset.panel);
   tab.hidden=management&&!canManageAccounts;
@@ -237,3 +237,36 @@ async function refreshLeads(){
  if(!body.children.length){const tr=el("tr"),td=el("td","Brak leadów w Twoim zakresie.");td.colSpan=4;tr.appendChild(td);body.appendChild(tr)}
 }
 $("leadsRefresh").addEventListener("click",()=>refreshLeads().catch(e=>notice(e.message)));
+
+let catalogVehicles=[];
+async function refreshCatalog(){
+ if(!token)return;
+ const response=await api("/api/vehicle-catalog");
+ catalogVehicles=response.vehicles||[];
+ fillCatalog("offerBrands",[...new Set(catalogVehicles.map(x=>x.brand))]);
+ updateCatalogModels();
+}
+function fillCatalog(id,values){
+ const list=$(id);list.replaceChildren();
+ for(const value of values.filter(Boolean).sort((a,b)=>a.localeCompare(b,"pl"))){const option=document.createElement("option");option.value=value;list.appendChild(option)}
+}
+function updateCatalogModels(){
+ const brand=$("offerBrand").value.trim().toLowerCase();
+ fillCatalog("offerModels",[...new Set(catalogVehicles.filter(x=>x.brand.toLowerCase()===brand).map(x=>x.model))]);
+ updateCatalogTrims();
+}
+function updateCatalogTrims(){
+ const brand=$("offerBrand").value.trim().toLowerCase(),model=$("offerModel").value.trim().toLowerCase();
+ fillCatalog("offerVersions",[...new Set(catalogVehicles.filter(x=>x.brand.toLowerCase()===brand&&x.model.toLowerCase()===model).map(x=>x.trim_name))]);
+}
+$("offerBrand").addEventListener("input",updateCatalogModels);
+$("offerModel").addEventListener("input",updateCatalogTrims);
+$("catalogForm").addEventListener("submit",async event=>{
+ event.preventDefault();
+ if(!["admin","staff"].includes(me?.role))return;
+ const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
+ try{
+  await api("/api/vehicle-catalog",{method:"POST",body:JSON.stringify({brand:$("catalogBrand").value,model:$("catalogModel").value,trim_name:$("catalogTrim").value})});
+  event.currentTarget.reset();await refreshCatalog();notice("Pozycja dodana do centralnego katalogu CARVAMO.");
+ }catch(e){notice(e.message)}finally{button.disabled=false}
+});
