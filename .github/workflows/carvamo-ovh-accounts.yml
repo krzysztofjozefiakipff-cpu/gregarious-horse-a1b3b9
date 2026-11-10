@@ -34,6 +34,8 @@ jobs:
           printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
       - name: Stage isolated service and deploy
+        env:
+          RESET_SMTP_PASSWORD: ${{ secrets.RESET_SMTP_PASSWORD }}
         run: |
           set -euo pipefail
           SSH="ssh -i $HOME/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes"
@@ -42,4 +44,14 @@ jobs:
           $SCP services/accounts/app.py services/accounts/requirements.txt services/accounts/Dockerfile carvamo-deploy@146.59.52.16:carvamo-backend/accounts-src/
           $SCP tools/ovh/deploy_accounts_staging.sh carvamo-deploy@146.59.52.16:carvamo-backend/deploy_accounts_staging.sh
           $SCP tools/ovh/activate_first_admin.sh carvamo-deploy@146.59.52.16:carvamo-backend/activate_first_admin.sh
+          if [[ -n "$RESET_SMTP_PASSWORD" ]]; then
+            if [[ "$RESET_SMTP_PASSWORD" == *$'\n'* || "$RESET_SMTP_PASSWORD" == *$'\r'* ]]; then
+              echo "RESET_SMTP_PASSWORD must be a single line" >&2
+              exit 1
+            fi
+            printf 'RESET_SMTP_HOST=smtp.mail.ovh.net\nRESET_SMTP_USER=admin@carvamo.com\nRESET_SMTP_PASSWORD=%s\n' "$RESET_SMTP_PASSWORD" |
+              $SSH carvamo-deploy@146.59.52.16 'set -eu; umask 077; dir="$HOME/carvamo-backend"; tmp=$(mktemp "$dir/accounts-mail.XXXXXX"); trap '\''rm -f "$tmp"'\'' EXIT; cat > "$tmp"; mv "$tmp" "$dir/accounts-mail.env"'
+          else
+            echo "::notice::RESET_SMTP_PASSWORD is not configured in GitHub Actions."
+          fi
           $SSH carvamo-deploy@146.59.52.16 'bash ~/carvamo-backend/deploy_accounts_staging.sh'
