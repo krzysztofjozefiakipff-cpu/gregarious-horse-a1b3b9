@@ -4,7 +4,8 @@ on:
     branches: [main]
     paths:
       - "preview/**"
-      - "panel/config.js"
+      - "panel/**"
+      - "assets/brand/**"
       - "infra/preview/**"
       - "tools/ovh/deploy_preview.sh"
       - ".github/workflows/carvamo-preview-deploy.yml"
@@ -39,8 +40,13 @@ jobs:
           node --check preview/offer-detail.js
           node --check preview/leads-admin.js
           bash -n tools/ovh/deploy_preview.sh
-          mkdir -p preview/panel
-          cp panel/config.js preview/panel/config.js
+          mkdir -p preview/panel preview/assets/brand
+          cp -a panel/. preview/panel/
+          cp -a assets/brand/. preview/assets/brand/
+          test -s preview/panel/index.html
+          test -s preview/panel/app.js
+          test -s preview/panel/photos.js
+          test -s preview/assets/brand/carvelo-wordmark-on-dark.svg
           tar -czf "/tmp/carvamo-preview-${GITHUB_SHA}.tgz" -C preview .
       - name: Configure pinned SSH host
         env:
@@ -71,7 +77,7 @@ jobs:
       - name: Verify branded assets and catalog module over HTTPS
         run: |
           set -euo pipefail
-          for path in /assets/carvamo-wordmark.svg /assets/carvamo-favicon.svg /live-catalog.js /offer-detail.js /offer-detail.css /leads-admin.html /panel/config.js; do
+          for path in /assets/carvamo-wordmark.svg /assets/carvamo-favicon.svg /live-catalog.js /offer-detail.js /offer-detail.css /leads-admin.html /panel/config.js /panel/ /panel/app.js /panel/photos.js /assets/brand/carvelo-wordmark-on-dark.svg; do
             echo "Checking $path"
             curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com$path" -o /dev/null
           done
