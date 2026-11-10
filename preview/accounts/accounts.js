@@ -1,6 +1,8 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
+const BUILD="2026-11-10.4";
+const buildLabel=document.getElementById("buildVersion");if(buildLabel)buildLabel.textContent="Wersja panelu: "+BUILD;
 const notice=(s)=>{$("msg").textContent=s};
 async function api(path,options={}){
  const res=await fetch(path,{...options,headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{}),...options.headers},cache:"no-store",credentials:"omit"});
@@ -26,7 +28,9 @@ function configure(){
  const roles=me.role==="admin"?["staff","dealer","dealer_admin","dealer_staff"]:["dealer_staff"];
  $("newRole").replaceChildren(...roles.map(r=>{const o=el("option",roleNames[r]);o.value=r;return o}));
  $("newRole").addEventListener("change",syncRole);
- $("newDealer").replaceChildren(...[(()=>{const o=el("option","Wybierz dealera");o.value="";return o})(),...dealers.map(d=>{const o=el("option",d.name);o.value=d.id;return o})()]);
+ const dealerSelect=$("newDealer");dealerSelect.replaceChildren();
+ const placeholder=el("option","Wybierz dealera");placeholder.value="";dealerSelect.appendChild(placeholder);
+ for(const d of (Array.isArray(dealers)?dealers:[])){const o=el("option",d.name);o.value=d.id;dealerSelect.appendChild(o)}
  syncRole();
 }
 function syncRole(){const r=$("newRole").value;const isInternal=["admin","staff"].includes(r);$("dealerWrap").hidden=isInternal||me.role==="dealer_admin";$("newDealer").required=!isInternal&&me.role==="admin"}
