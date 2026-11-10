@@ -3,6 +3,7 @@
 BEGIN;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','staff','dealer','dealer_admin','dealer_staff'));
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_dealer_scope_check;
 ALTER TABLE users ADD CONSTRAINT users_dealer_scope_check CHECK (
  (role IN ('admin','staff') AND dealer_id IS NULL)
  OR (role IN ('dealer','dealer_admin','dealer_staff') AND dealer_id IS NOT NULL)
