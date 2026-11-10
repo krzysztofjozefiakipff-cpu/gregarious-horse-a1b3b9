@@ -33,7 +33,8 @@ jobs:
       - name: Verify public API requires authentication
         run: |
           set -euo pipefail
-          curl -fsS --max-time 15 https://preview.carvamo.com/api/health | grep -q '"status":"ok"'
+          curl -fsS --max-time 15 https://preview.carvamo.com/api/health -o /tmp/carvamo-health.json
+          grep -q '"status":"ok"' /tmp/carvamo-health.json
           code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://preview.carvamo.com/api/accounts)
           test "$code" = 401
           echo "CARVAMO API reachable over HTTPS; account listing blocked without login"
