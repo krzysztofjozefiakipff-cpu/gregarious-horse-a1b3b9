@@ -840,3 +840,74 @@ def save_offer_specification(actor, offer_id):
             (offer_id,json.dumps(standard,ensure_ascii=False),json.dumps(optional,ensure_ascii=False),json.dumps(details,ensure_ascii=False))
         )
     return jsonify({"ok":True,"standard_count":len(standard),"optional_count":len(optional)})
+
+def offer_photo_access(db, actor, offer_id):
+    offer = db.execute("SELECT id,dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false", (offer_id,)).fetchone()
+    if not offer:
+        return None
+    if actor["role"] not in {"admin","staff"} and str(actor.get("dealer_id")) != str(offer["dealer_id"]):
+        return None
+    return offer
+
+@app.get("/api/offers/<uuid:offer_id>/photos")
+@account
+def list_offer_photos(actor, offer_id):
+    with conn() as db:
+        if not offer_photo_access(db, actor, offer_id):
+            return fail("Brak dostępu do oferty", 404)
+        photos = db.execute("SELECT id,photo_type,state,logo_applied,is_cover,sort_order,created_at FROM offer_photos WHERE offer_id=%s ORDER BY sort_order,created_at", (offer_id,)).fetchall()
+    return jsonify({"photos":photos})
+
+@app.post("/api/offers/<uuid:offer_id>/photos")
+@account
+def upload_offer_photo(actor, offer_id):
+    from io import BytesIO
+    from pathlib import Path
+    from PIL import Image, UnidentifiedImageError
+    upload=request.files.get("file")
+    if not upload:
+        return fail("Wybierz zdjęcie JPG, PNG lub WebP",400)
+    content=upload.stream.read(12*1024*1024+1)
+    if len(content)>12*1024*1024:
+        return fail("Zdjęcie może mieć maksymalnie 12 MB",413)
+    try:
+        Image.MAX_IMAGE_PIXELS=35_000_000
+        with Image.open(BytesIO(content)) as image:
+            if image.format not in {"JPEG","PNG","WEBP"}:
+                return fail("Obsługiwane formaty: JPG, PNG, WebP",400)
+            image.verify()
+    except (UnidentifiedImageError,ValueError,OSError,Image.DecompressionBombError):
+        return fail("Nieprawidłowy lub zbyt duży obraz",400)
+    with conn() as db:
+        offer=offer_photo_access(db,actor,offer_id)
+        if not offer:
+            return fail("Brak dostępu do oferty",404)
+        if offer["status"]=="published" and actor["role"] not in {"admin","staff"}:
+            return fail("Zmiana zdjęć opublikowanej oferty wymaga obsługi CARVAMO",409)
+        count=db.execute("SELECT count(*) AS n FROM offer_photos WHERE offer_id=%s",(offer_id,)).fetchone()["n"]
+        if count>=30:
+            return fail("Maksymalnie 30 zdjęć w ofercie",400)
+        photo_id=__import__("uuid").uuid4()
+        directory=Path("/data/offer-photos")/str(offer_id)
+        directory.mkdir(parents=True,exist_ok=True)
+        destination=directory/(str(photo_id)+".jpg")
+        with Image.open(BytesIO(content)) as image:
+            from PIL import ImageOps
+            image=ImageOps.exif_transpose(image).convert("RGB")
+            image.thumbnail((2400,2400))
+            image.save(destination,format="JPEG",quality=90,optimize=True)
+        db.execute("INSERT INTO offer_photos(id,offer_id,uploaded_by,original_path,photo_type,state,is_cover,sort_order) VALUES (%s,%s,%s,%s,'unknown','review',%s,%s)",
+                   (photo_id,offer_id,actor["id"],str(destination),count==0,count))
+    return jsonify({"ok":True,"photo":{"id":photo_id,"state":"review"}}),201
+
+@app.get("/api/offers/<uuid:offer_id>/photos/<uuid:photo_id>/file")
+@account
+def get_offer_photo(actor,offer_id,photo_id):
+    from flask import send_file
+    with conn() as db:
+        if not offer_photo_access(db,actor,offer_id):
+            return fail("Brak dostępu do oferty",404)
+        photo=db.execute("SELECT original_path FROM offer_photos WHERE id=%s AND offer_id=%s",(photo_id,offer_id)).fetchone()
+    if not photo:
+        return fail("Zdjęcie nie istnieje",404)
+    return send_file(photo["original_path"],mimetype="image/jpeg",max_age=0)
