@@ -232,5 +232,9 @@ for(const el of [els.brand,els.type,els.budget])el.addEventListener("change",ren
 render();
 </script>
 <script type="module" src="./offer-detail.js"></script>
+<script type="module">
+import {loadPublishedOffers} from "./live-catalog.js";
+try {const offers=await loadPublishedOffers();if(offers.length){window.carvamoLoadLiveOffers?.(offers)}else{window.carvamoCatalogEmpty?.()}}catch(e){console.warn("Public catalog temporarily unavailable:",e.message);window.carvamoCatalogUnavailable?.()}
+</script>
 </body>
 </html>
