@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
-let token="",me=null,dealers=[];
-const BUILD="2026-11-10.14";
+let token="",me=null,dealers=[];let importedSpec=null;
+const BUILD="2026-11-10.15";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -231,7 +231,7 @@ $("offerCreate").addEventListener("submit",async event=>{
   notice("Wybierz markę i model z podpowiedzi katalogu CARVAMO.");button.disabled=false;return;
  }
  if(["admin","staff"].includes(me.role))payload.dealer_id=$("offerDealer").value;
- try{await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});event.currentTarget.reset();syncOfferChoices();await refreshOffers();notice("Szkic zapisany. Możesz go opublikować.")}catch(e){notice(e.message)}finally{button.disabled=false}
+ try{const created=await api("/api/offers",{method:"POST",body:JSON.stringify(payload)});let saved=true;if(importedSpec&&created.offer?.id){try{await api("/api/offers/"+created.offer.id+"/specification",{method:"PUT",body:JSON.stringify(importedSpec)})}catch(err){saved=false;notice("Szkic zapisany, ale specyfikacja nie została zapisana: "+err.message)}}event.currentTarget.reset();syncOfferChoices();if(saved){importedSpec=null;$("offerPdfResult").replaceChildren();$("offerPdf").value=""}await refreshOffers();if(saved)notice("Szkic i rozpoznana specyfikacja zapisane.")}catch(e){notice(e.message)}finally{button.disabled=false}
 });
 async function refreshLeads(){
  if(!token||!me)return;
@@ -306,12 +306,13 @@ $("offerPdfImport").addEventListener("click",async()=>{
   const parsed=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(parsed.error||"Nie udało się odczytać PDF");
   const candidates=parsed.candidates||{};
-  for(const [field,id] of Object.entries({power_hp:"offerPower",gross_price:"offerPrice",fuel:"offerFuel",transmission_type:"offerTransmission",drive_type:"offerDrive"})){
+  for(const [field,id] of Object.entries({brand:"offerBrand",model:"offerModel",trim_name:"offerVersion",power_hp:"offerPower",gross_price:"offerPrice",fuel:"offerFuel",transmission_type:"offerTransmission",drive_type:"offerDrive"})){
    if(candidates[field]!==null&&candidates[field]!==undefined&&candidates[field]!==""&&$(id)){
     $(id).value=String(candidates[field]);
    }
   }
-  syncOfferChoices();
+  updateCatalogModels();updateCatalogTrims();syncOfferChoices();
+  importedSpec={optional_equipment:parsed.equipment||[],standard_equipment:[],other_details:parsed.other_details||{}};
   result.replaceChildren();
   const heading=document.createElement("strong");heading.textContent="Odczytano "+parsed.pages+" str. — sprawdź wszystkie wartości przed zapisaniem.";result.appendChild(heading);
   const equipment=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Rozpoznane wyposażenie ("+(parsed.equipment||[]).length+")";equipment.appendChild(summary);
@@ -321,6 +322,6 @@ $("offerPdfImport").addEventListener("click",async()=>{
   const details=document.createElement("details"),title=document.createElement("summary"),pre=document.createElement("pre");
   title.textContent="Pełny odczytany tekst specyfikacji (do weryfikacji)";pre.textContent=parsed.source_text||"";pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto";
   details.append(title,pre);result.appendChild(details);
-  notice("Specyfikacja odczytana. Sprawdź pola i wyposażenie — dokument nie został zapisany.");
+  notice("Specyfikacja odczytana. Sprawdź pola i wyposażenie przed zapisaniem oferty.");
  }catch(e){result.textContent="";notice(e.message)}finally{button.disabled=false}
 });
