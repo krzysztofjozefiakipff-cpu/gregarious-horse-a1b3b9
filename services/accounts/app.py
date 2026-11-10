@@ -418,3 +418,72 @@ def withdraw_offer(actor, offer_id):
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         db.execute("UPDATE offers SET status='draft',updated_at=now() WHERE id=%s", (offer_id,))
     return jsonify({"ok": True, "status": "draft"})
+
+
+# Lead access is scoped in SQL, not merely hidden in the browser.
+@app.get("/api/leads")
+@account
+def list_leads(actor):
+    role = actor["role"]
+    with conn() as db:
+        if role == "admin":
+            rows = db.execute("SELECT id,offer_id,dealer_id,assigned_to,full_name,email,phone,message,status,created_at FROM leads ORDER BY created_at DESC LIMIT 200").fetchall()
+        elif role == "dealer_admin":
+            rows = db.execute("SELECT id,offer_id,dealer_id,assigned_to,full_name,email,phone,message,status,created_at FROM leads WHERE dealer_id=%s ORDER BY created_at DESC LIMIT 200", (actor["dealer_id"],)).fetchall()
+        elif role == "dealer_staff":
+            rows = db.execute("SELECT id,offer_id,dealer_id,assigned_to,full_name,email,phone,message,status,created_at FROM leads WHERE dealer_id=%s AND assigned_to=%s ORDER BY created_at DESC LIMIT 200", (actor["dealer_id"],actor["id"])).fetchall()
+        else:
+            return fail("Brak uprawnień do leadów", 403)
+    return jsonify({"leads": rows})
+
+
+@app.patch("/api/leads/<uuid:lead_id>/assign")
+@account
+def assign_lead(actor, lead_id):
+    if actor["role"] not in {"admin", "dealer_admin"}:
+        return fail("Brak uprawnień", 403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or "assigned_to" not in data:
+        return fail("Wymagane pole assigned_to")
+    assignee = data["assigned_to"]
+    if assignee is not None:
+        try:
+            from uuid import UUID
+            assignee = UUID(str(assignee))
+        except (ValueError, TypeError, AttributeError):
+            return fail("Nieprawidłowy identyfikator pracownika")
+    with conn() as db:
+        lead = db.execute("SELECT id,dealer_id FROM leads WHERE id=%s FOR UPDATE", (lead_id,)).fetchone()
+        if not lead:
+            return fail("Nie znaleziono leada", 404)
+        if actor["role"] == "dealer_admin" and str(actor["dealer_id"]) != str(lead["dealer_id"]):
+            return fail("Brak uprawnień", 403)
+        if assignee is not None:
+            target = db.execute("SELECT id FROM users WHERE id=%s AND role='dealer_staff' AND dealer_id=%s AND enabled=true", (assignee, lead["dealer_id"])).fetchone()
+            if not target:
+                return fail("Pracownik musi być aktywny i należeć do tego samego dealera", 400)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
+        db.execute("UPDATE leads SET assigned_to=%s WHERE id=%s", (assignee, lead_id))
+    return jsonify({"ok": True})
+
+
+@app.patch("/api/leads/<uuid:lead_id>/status")
+@account
+def change_lead_status(actor, lead_id):
+    data = request.get_json(silent=True)
+    status = data.get("status") if isinstance(data, dict) else None
+    if status not in {"new", "contacted", "qualified", "unqualified"}:
+        return fail("Nieprawidłowy status")
+    with conn() as db:
+        lead = db.execute("SELECT dealer_id,assigned_to FROM leads WHERE id=%s FOR UPDATE", (lead_id,)).fetchone()
+        if not lead:
+            return fail("Nie znaleziono leada", 404)
+        role = actor["role"]
+        permitted = (role == "admin" or
+                     (role == "dealer_admin" and str(actor["dealer_id"]) == str(lead["dealer_id"])) or
+                     (role == "dealer_staff" and str(actor["dealer_id"]) == str(lead["dealer_id"]) and str(actor["id"]) == str(lead["assigned_to"])))
+        if not permitted:
+            return fail("Brak uprawnień", 403)
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
+        db.execute("UPDATE leads SET status=%s WHERE id=%s", (status, lead_id))
+    return jsonify({"ok": True, "status": status})
