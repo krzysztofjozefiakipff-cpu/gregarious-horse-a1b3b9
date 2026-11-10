@@ -518,3 +518,36 @@ def lead_assignees(actor):
         else:
             rows = db.execute("SELECT id,email,dealer_id FROM users WHERE role='dealer_staff' AND enabled=true AND dealer_id=%s ORDER BY email LIMIT 200", (actor["dealer_id"],)).fetchall()
     return jsonify({"assignees": rows})
+
+@app.get("/api/vehicle-catalog")
+@account
+def list_vehicle_catalog(actor):
+    with conn() as db:
+        rows = db.execute("SELECT id,brand,model,trim_name FROM vehicle_catalog ORDER BY brand,model,trim_name LIMIT 5000").fetchall()
+    return jsonify({"vehicles": rows})
+
+@app.post("/api/vehicle-catalog")
+@account
+def add_vehicle_catalog(actor):
+    if actor["role"] not in {"admin", "staff"}:
+        return fail("Katalog może aktualizować wyłącznie CARVAMO", 403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return fail("Nieprawidłowe dane")
+    fields = {}
+    for key, limit in (("brand", 100), ("model", 100), ("trim_name", 120)):
+        value = data.get(key, "")
+        if not isinstance(value, str) or len(value.strip()) > limit or (key != "trim_name" and not value.strip()):
+            return fail("Nieprawidłowe pole: " + key)
+        fields[key] = value.strip()
+    try:
+        with conn() as db:
+            row = db.execute(
+                "INSERT INTO vehicle_catalog(brand,model,trim_name,created_by) VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT (brand,model,trim_name) DO UPDATE SET brand=EXCLUDED.brand RETURNING id,brand,model,trim_name",
+                (fields["brand"],fields["model"],fields["trim_name"],actor["id"])
+            ).fetchone()
+        return jsonify({"vehicle": row}), 201
+    except psycopg.Error:
+        return fail("Nie udało się zapisać katalogu", 500)
+
