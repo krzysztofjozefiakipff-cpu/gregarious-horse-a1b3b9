@@ -52,7 +52,7 @@ if docker inspect carvamo-accounts-staging >/dev/null 2>&1; then
   docker rm -f carvamo-accounts-staging >/dev/null
 fi
 mkdir -p "$BASE/offer-photos"
-chmod 700 "$BASE/offer-photos"
+docker run --rm --user 0 --mount type=bind,src="$BASE/offer-photos",dst=/data/offer-photos carvamo-accounts:staging chown -R 10001:10001 /data/offer-photos
 docker run -d --name carvamo-accounts-staging --label com.carvamo.role=accounts-staging --restart unless-stopped --network carvamo_backend_private --env-file "$BASE/accounts.env" --read-only --mount type=bind,src="$BASE/offer-photos",dst=/data/offer-photos --tmpfs /tmp:rw,noexec,nosuid --security-opt no-new-privileges --cap-drop ALL carvamo-accounts:staging >/dev/null
 if [ -s "$BASE/accounts-mail.env" ]; then
   docker network connect "$SMTP_EGRESS" carvamo-accounts-staging
