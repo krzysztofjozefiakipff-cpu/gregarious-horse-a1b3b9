@@ -9,7 +9,7 @@ function response(data,status=200,origin=ORIGIN){return new Response(JSON.string
 function clean(v,max){return typeof v==="string"?v.trim().slice(0,max):""}
 async function hash(s){const bytes=new TextEncoder().encode(s);return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(b=>b.toString(16).padStart(2,"0")).join("")}
 async function authorize(req){
- const token=(req.headers.get("authorization")||"").replace(/^Bearer\\s+/i,"");
+ const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"");
  if(!token)return null;
  const {data:{user},error}=await db.auth.getUser(token);if(error||!user)return null;
  const {data:profile}=await db.from("cv_profiles").select("role,enabled").eq("id",user.id).single();
