@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.7";
+const BUILD="2026-11-10.8";
 const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
 function switchWorkspace(panel){
  const target=workspaceTabs.find(tab=>tab.dataset.panel===panel&&!tab.hidden);
@@ -56,7 +56,7 @@ async function refresh(){
 }
 function configure(){
  $("identity").textContent=me.email+" · "+roleNames[me.role];
- const roles=me.role==="admin"?["staff","dealer","dealer_admin","dealer_staff"]:["dealer_staff"];
+ const roles=["admin","staff"].includes(me.role)?["staff","dealer","dealer_admin","dealer_staff"]:["dealer_staff"];
  $("newRole").replaceChildren(...roles.map(r=>{const o=el("option",roleNames[r]);o.value=r;return o}));
  $("newRole").addEventListener("change",syncRole);
  const dealerSelect=$("newDealer");dealerSelect.replaceChildren();
@@ -64,12 +64,12 @@ function configure(){
  for(const d of (Array.isArray(dealers)?dealers:[])){const o=el("option",d.name);o.value=d.id;dealerSelect.appendChild(o)}
  syncRole();
 }
-function syncRole(){const r=$("newRole").value;const isInternal=["admin","staff"].includes(r);$("dealerWrap").hidden=isInternal||me.role==="dealer_admin";$("newDealer").required=!isInternal&&me.role==="admin"}
+function syncRole(){const r=$("newRole").value;const isInternal=["admin","staff"].includes(r);$("dealerWrap").hidden=isInternal||me.role==="dealer_admin";$("newDealer").required=!isInternal&&["admin","staff"].includes(me.role)}
 $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({email:$("email").value,password:$("password").value})});token=r.token;$("password").value="";
  me=(await api("/api/auth/me")).account;
  if(!["admin","staff","dealer","dealer_admin","dealer_staff"].includes(me.role))throw new Error("Brak dostępu do panelu");
- const canManageAccounts=["admin","dealer_admin"].includes(me.role);
+ const canManageAccounts=["admin","staff","dealer_admin"].includes(me.role);
  const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
  dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
  if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
@@ -78,7 +78,7 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
   const management=["accounts","create"].includes(tab.dataset.panel);
   tab.hidden=management&&!canManageAccounts;
  }
- $("tab-leads").hidden=me.role==="staff"||me.role==="dealer";
+ $("tab-leads").hidden=me.role==="dealer";
  if(canManageAccounts)await refresh();
  switchWorkspace(canManageAccounts?"accounts":"offers");$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
  }catch(err){token="";notice(err.message)}});
@@ -211,7 +211,7 @@ $("offerCreate").addEventListener("submit",async event=>{
 });
 async function refreshLeads(){
  if(!token||!me)return;
- const manager=["admin","dealer_admin"].includes(me.role);
+ const manager=["admin","staff","dealer_admin"].includes(me.role);
  $("leadsInfo").textContent=me.role==="dealer_admin"?"Leady Twojego dealera. Możesz przydzielać je pracownikom.":me.role==="dealer_staff"?"Widzisz tylko własne przypisane leady.":"Leady wszystkich dealerów.";
  const data=await api("/api/leads");
  let assignees=[];
