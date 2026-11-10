@@ -1,7 +1,33 @@
 const $=id=>document.getElementById(id);
 const roleNames={admin:"Administrator CARVAMO",staff:"Pracownik CARVAMO",dealer:"Dealer",dealer_admin:"Administrator dealera",dealer_staff:"Pracownik dealera"};
 let token="",me=null,dealers=[];
-const BUILD="2026-11-10.4";
+const BUILD="2026-11-10.5";
+const workspaceTabs=[...document.querySelectorAll(".workspace-nav [role=tab]")];
+function switchWorkspace(panel){
+ for(const tab of workspaceTabs){
+  const selected=tab.dataset.panel===panel;
+  tab.setAttribute("aria-selected",String(selected));
+  tab.tabIndex=selected?0:-1;
+  const content=document.getElementById("section-"+tab.dataset.panel);
+  if(content)content.hidden=!selected;
+ }
+}
+for(const tab of workspaceTabs){
+ tab.addEventListener("click",()=>switchWorkspace(tab.dataset.panel));
+ tab.addEventListener("keydown",event=>{
+  if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
+  event.preventDefault();
+  const index=workspaceTabs.indexOf(tab);
+  const next=event.key==="Home"?0:event.key==="End"?workspaceTabs.length-1:
+   (index+(event.key==="ArrowRight"?1:-1)+workspaceTabs.length)%workspaceTabs.length;
+  switchWorkspace(workspaceTabs[next].dataset.panel);workspaceTabs[next].focus();
+ });
+}
+function hasUnsavedWork(){
+ return ["newEmail","newPhone","newPassword","currentPassword","replacementPassword","replacementPasswordAgain"]
+ .some(id=>Boolean($(id)?.value));
+}
+
 const buildLabel=document.getElementById("buildVersion");if(buildLabel)buildLabel.textContent="Wersja panelu: "+BUILD;
 const notice=(s)=>{$("msg").textContent=s};
 async function api(path,options={}){
@@ -41,7 +67,7 @@ $("login").addEventListener("submit",async e=>{e.preventDefault();try{
  const dealerResponse=me.role==="admin"?await api("/api/dealers"):{dealers:[]};
  dealers=Array.isArray(dealerResponse.dealers)?dealerResponse.dealers:[];
  if(me.role==="admin"&&!Array.isArray(dealerResponse.dealers))notice("Lista dealerów ma nieprawidłowy format. Konta wewnętrzne nadal można obsługiwać.");
- configure();await refresh();$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
+ configure();await refresh();switchWorkspace("accounts");$("loginBox").hidden=true;$("dashboard").hidden=false;$("availability").hidden=true;if(Array.isArray(dealerResponse.dealers))notice("");
  }catch(err){token="";notice(err.message)}});
 $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  const role=$("newRole").value;const dealer_id=me.role==="dealer_admin"?me.dealer_id:(["staff","admin"].includes(role)?null:$("newDealer").value);
@@ -56,7 +82,7 @@ $("changePassword").addEventListener("submit",async e=>{e.preventDefault();
  $("dashboard").hidden=true;$("loginBox").hidden=false;notice("Hasło zmienione. Zaloguj się ponownie nowym hasłem.");
  }catch(err){notice(err.message)}
 });
-$("logout").addEventListener("click",()=>{token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
+$("logout").addEventListener("click",()=>{if(hasUnsavedWork()&&!confirm("Masz niezapisane dane formularza. Wylogowanie je usunie. Kontynuować?"))return; $("create").reset();$("changePassword").reset();switchWorkspace("accounts");token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
 let resetToken = null;
 
 function showRecovery(confirming) {
