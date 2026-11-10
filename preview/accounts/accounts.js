@@ -48,15 +48,16 @@ $("create").addEventListener("submit",async e=>{e.preventDefault();try{
  await api("/api/accounts",{method:"POST",body:JSON.stringify({email:$("newEmail").value,role,dealer_id,temporary_password:$("newPassword").value})});
  $("newEmail").value="";$("newPassword").value="";await refresh();notice("Konto utworzone")
  }catch(err){notice(err.message)}});
-$("changePassword").addEventListener("submit",async e=>{e.preventDefault();try{
+$("changePassword").addEventListener("submit",async e=>{e.preventDefault();
+ if ($("replacementPassword").value !== $("replacementPasswordAgain").value) { notice("Hasła się różnią."); $("replacementPasswordAgain").focus(); return; }
+ try{
  await api("/api/auth/change-password",{method:"POST",body:JSON.stringify({current_password:$("currentPassword").value,new_password:$("replacementPassword").value})});
- $("currentPassword").value="";$("replacementPassword").value="";token="";me=null;
+ $("changePassword").reset();token="";me=null;
  $("dashboard").hidden=true;$("loginBox").hidden=false;notice("Hasło zmienione. Zaloguj się ponownie nowym hasłem.");
  }catch(err){notice(err.message)}
 });
 $("logout").addEventListener("click",()=>{token="";me=null;$("dashboard").hidden=true;$("loginBox").hidden=false;notice("Wylogowano")});
-let resetToken = new URLSearchParams(location.hash.slice(1)).get("reset");
-if (resetToken !== null) history.replaceState(null, "", location.pathname + location.search);
+let resetToken = null;
 
 function showRecovery(confirming) {
  $("loginBox").hidden = true;
@@ -65,6 +66,22 @@ function showRecovery(confirming) {
  $("confirmReset").hidden = !confirming;
  $(confirming ? "resetPassword" : "resetEmail").focus();
 }
+
+function openResetLink() {
+ const tokenFromLink = new URLSearchParams(location.hash.slice(1)).get("reset");
+ if (!tokenFromLink) return;
+ resetToken = tokenFromLink;
+ history.replaceState(null, "", location.pathname + location.search);
+ $("dashboard").hidden = true;
+ $("availability").hidden = true;
+ $("confirmReset").reset();
+ notice("");
+ showRecovery(true);
+}
+
+window.addEventListener("hashchange", openResetLink);
+window.addEventListener("pageshow", openResetLink);
+openResetLink();
 
 function showLogin() {
  resetToken = null;
@@ -91,6 +108,11 @@ for (const [form, path, payload, success] of [
 ]) {
  $(form).addEventListener("submit", async event => {
   event.preventDefault();
+  if (form === "confirmReset" && $("resetPassword").value !== $("resetPasswordAgain").value) {
+   notice("Hasła się różnią.");
+   $("resetPasswordAgain").focus();
+   return;
+  }
   const button = event.currentTarget.querySelector("button[type=submit]");
   button.disabled = true;
   notice("");
@@ -108,7 +130,6 @@ try {
  const health = await api("/api/health");
  if (health.status === "ok") {
   $("availability").hidden = true;
-  if (resetToken) showRecovery(true);
-  else $("loginBox").hidden = false;
+  if ($("recoveryBox").hidden) $("loginBox").hidden = false;
  }
 } catch { /* Keep the availability notice visible. */ }

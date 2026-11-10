@@ -119,8 +119,8 @@ def confirm_password_reset():
     if not isinstance(data, dict):
         return fail("Nieprawidłowe dane resetu.")
     password, token = data.get("password"), data.get("token")
-    if not isinstance(password, str) or not 14 <= len(password) <= 256:
-        return fail("Nowe hasło musi mieć od 14 do 256 znaków.")
+    if not isinstance(password, str) or not 12 <= len(password) <= 256:
+        return fail("Nowe hasło musi mieć od 12 do 256 znaków.")
     invalid = "Link do resetu jest nieprawidłowy, wygasł lub został już użyty."
     if not isinstance(token, str) or not 1 <= len(token) <= 1024:
         return fail(invalid)
@@ -229,8 +229,8 @@ def create_account(actor):
         return fail("Nieprawidłowy e-mail")
     if role not in ROLES or not permitted(actor, role, dealer_id):
         return fail("Nie można nadać tej roli", 403)
-    if len(password) < 14 or len(password) > 256:
-        return fail("Hasło tymczasowe musi mieć od 14 do 256 znaków")
+    if len(password) < 12 or len(password) > 256:
+        return fail("Hasło tymczasowe musi mieć od 12 do 256 znaków")
     try:
         with conn() as db:
             db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
@@ -277,8 +277,8 @@ def change_password(actor):
     data = request.get_json(silent=True) or {}
     old = str(data.get("current_password", ""))
     new = str(data.get("new_password", ""))
-    if len(new) < 14 or len(new) > 256:
-        return fail("Nowe hasło musi mieć od 14 do 256 znaków")
+    if len(new) < 12 or len(new) > 256:
+        return fail("Nowe hasło musi mieć od 12 do 256 znaków")
     with conn() as db:
         row = db.execute("SELECT password_hash FROM users WHERE id=%s", (actor["id"],)).fetchone()
         try:
