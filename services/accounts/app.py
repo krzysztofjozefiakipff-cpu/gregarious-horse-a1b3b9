@@ -316,14 +316,14 @@ def list_offers(actor):
     with conn() as db:
         if actor["role"] in {"admin", "staff"}:
             rows = db.execute(
-                "SELECT id,brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_at "
+                "SELECT id,brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_at,trim_name,engine_name,power_hp,drive_type,transmission_type,catalog_source "
                 "FROM offers WHERE deletion_pending=false ORDER BY created_at DESC LIMIT 200"
             ).fetchall()
         else:
             if not actor["dealer_id"]:
                 return fail("Brak przypisanego dealera", 403)
             rows = db.execute(
-                "SELECT id,brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_at "
+                "SELECT id,brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_at,trim_name,engine_name,power_hp,drive_type,transmission_type,catalog_source "
                 "FROM offers WHERE dealer_id=%s AND deletion_pending=false ORDER BY created_at DESC LIMIT 200",
                 (actor["dealer_id"],)
             ).fetchall()
@@ -353,6 +353,25 @@ def create_offer(actor):
         return fail("Nieprawidłowa cena brutto")
     if not isinstance(data.get("special", False), bool):
         return fail("Nieprawidłowe pole special")
+    specs = {}
+    for key in ("trim_name", "engine_name"):
+        value = data.get(key) or ""
+        if not isinstance(value, str) or len(value.strip()) > 120:
+            return fail("Nieprawidłowe pole: " + key)
+        specs[key] = value.strip() or None
+    power_hp = data.get("power_hp")
+    if power_hp not in (None, ""):
+        if isinstance(power_hp, bool) or not str(power_hp).isdigit() or not 1 <= int(power_hp) <= 3000:
+            return fail("Nieprawidłowa moc silnika")
+        power_hp = int(power_hp)
+    else:
+        power_hp = None
+    drive_type = data.get("drive_type") or None
+    transmission_type = data.get("transmission_type") or None
+    if drive_type not in (None, "FWD", "RWD", "AWD", "4WD"):
+        return fail("Nieprawidłowy napęd")
+    if transmission_type not in (None, "manual", "automatic", "dct", "cvt", "single_speed", "automated_manual"):
+        return fail("Nieprawidłowa skrzynia biegów")
     if actor["role"] in {"admin", "staff"}:
         dealer_id = data.get("dealer_id")
         if not isinstance(dealer_id, str):
@@ -367,10 +386,10 @@ def create_offer(actor):
             return fail("Dealer nie istnieje lub jest nieaktywny", 400)
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         row = db.execute(
-            "INSERT INTO offers(brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_by) "
-            "VALUES (%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s) RETURNING id,status",
+            "INSERT INTO offers(brand,model,body,fuel,gross_price,dealer_id,status,source,special,created_by,trim_name,engine_name,power_hp,drive_type,transmission_type,catalog_source) "
+            "VALUES (%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s,%s,%s,%s,%s,'manual') RETURNING id,status",
             (fields["brand"], fields["model"], fields["body"], fields["fuel"], price, dealer["id"],
-             "dealer" if actor["role"].startswith("dealer") else "carvamo", data.get("special", False), actor["id"])
+             "dealer" if actor["role"].startswith("dealer") else "carvamo", data.get("special", False), actor["id"], specs["trim_name"], specs["engine_name"], power_hp, drive_type, transmission_type)
         ).fetchone()
     return jsonify({"offer": row}), 201
 
