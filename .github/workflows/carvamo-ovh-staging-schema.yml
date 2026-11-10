@@ -37,6 +37,7 @@ jobs:
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/005_vehicle_specs.sql
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/006_vehicle_catalog.sql
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/007_offer_specifications.sql
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/008_offer_preview_confirmation.sql
       - name: Verify schema and ensure no imported records are assumed
         run: |
           set -euo pipefail
