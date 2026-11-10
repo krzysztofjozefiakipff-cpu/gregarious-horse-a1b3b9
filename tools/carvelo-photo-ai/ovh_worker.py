@@ -9,8 +9,8 @@ from pathlib import Path
 from rembg import new_session
 
 ROOT = Path(__file__).resolve().parents[2]
-SCENE = ROOT / 'assets/brand/carvelo-showroom-empty-v5.webp'
-LOGO = ROOT / 'assets/brand/carvelo-wordmark-on-dark.svg'
+SCENE = ROOT / 'assets/brand/carvamo-showroom-empty.webp'
+LOGO = ROOT / 'assets/brand/carvamo-wordmark-on-dark.svg'
 
 @lru_cache(maxsize=1)
 def session():
@@ -38,7 +38,7 @@ def process(job, transport):
         result, placement = compose_grounded_vehicle(foreground, scene, source_photo=photo)
         if not placement["wheel_grounded"]:
             raise ValueError("wheel_grounding_unsafe")
-        # This legacy scene already has wall branding; review CARVAMO branding before activation.
+        result = add_official_logo(result, LOGO)
     elif mode == "showroom_windows":
         from interior_windows import process_interior_windows, UnsafeWindowMask
         try:
@@ -56,6 +56,8 @@ def process(job, transport):
 def main():
     if os.environ.get("CARVAMO_OVH_WORKER_ENABLED") != "true":
         raise RuntimeError("OVH photo worker disabled until backend and brand assets are verified")
+    if not SCENE.is_file() or not LOGO.is_file():
+        raise RuntimeError("approved_carvamo_brand_assets_missing")
     transport = OVHTransport()
     while True:
         job = transport.claim()
