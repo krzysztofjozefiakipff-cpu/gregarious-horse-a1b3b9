@@ -1,0 +1,38 @@
+name: CARVAMO OVH staging schema
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/ovh/db/**"
+      - ".github/workflows/carvamo-ovh-staging-schema.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  schema:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_SSH_PRIVATE_KEY" && test -n "$OVH_SSH_HOST_KEY"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+      - name: Apply schema to isolated OVH staging PostgreSQL
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker inspect -f "{{ index .Config.Labels \"com.carvamo.role\" }}" carvamo-db-staging' | grep -qx database-staging
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 'docker exec -i carvamo-db-staging psql -v ON_ERROR_STOP=1 -U carvamo -d carvamo' < infra/ovh/db/001_core_schema.sql
+      - name: Verify schema and ensure no imported records are assumed
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes carvamo-deploy@146.59.52.16 "docker exec carvamo-db-staging psql -U carvamo -d carvamo -Atqc \"select count(*) from information_schema.tables where table_schema='public' and table_name in ('users','dealers','offers','offer_details','offer_photos','leads','photo_jobs');\"" | grep -qx 7
+          echo "OVH staging schema verified: 7 tables. No customer data imported or production traffic switched."
