@@ -27,6 +27,11 @@ jobs:
           test -s preview/index.html
           grep -q 'ŚRODOWISKO TESTOWE CARVAMO' preview/index.html
           test -s infra/preview/Caddyfile
+          test -s preview/assets/carvamo-wordmark.svg
+          test -s preview/assets/carvamo-favicon.svg
+          test -s preview/live-catalog.js
+          node --check preview/live-catalog.js || true
+          grep -q "carvamoLoadLiveOffers" preview/index.html
           bash -n tools/ovh/deploy_preview.sh
           mkdir -p preview/panel
           cp panel/config.js preview/panel/config.js
@@ -57,3 +62,12 @@ jobs:
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes carvamo-deploy@146.59.52.16 "bash carvamo-preview/deploy-${GITHUB_SHA}.sh ${GITHUB_SHA}"
+      - name: Verify branded assets and catalog module over HTTPS
+        run: |
+          set -euo pipefail
+          for path in /assets/carvamo-wordmark.svg /assets/carvamo-favicon.svg /live-catalog.js /panel/config.js; do
+            echo "Checking $path"
+            curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com$path" -o /dev/null
+          done
+          curl --fail --silent --show-error --max-time 15 https://preview.carvamo.com/ | grep -q "carvamo-wordmark.svg"
+          echo "CARVAMO preview branded assets and catalog module reachable"
