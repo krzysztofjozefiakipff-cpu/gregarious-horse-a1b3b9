@@ -397,10 +397,10 @@ def create_offer(actor):
 @app.patch("/api/offers/<uuid:offer_id>/publish")
 @account
 def publish_offer(actor, offer_id):
-    """Dealer publishes own offer without CARVAMO approval."""
+    """Unknown dealer-entered trims require CARVAMO review before publication."""
     with conn() as db:
         row = db.execute(
-            "SELECT id,dealer_id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE",
+            "SELECT id,dealer_id,status,brand,model,trim_name FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE",
             (offer_id,)
         ).fetchone()
         if not row:
@@ -412,6 +412,15 @@ def publish_offer(actor, offer_id):
             return fail("Brak uprawnień", 403)
         if row["status"] not in {"draft", "pending", "rejected"}:
             return fail("Oferty nie można opublikować", 409)
+        if actor["role"] not in {"admin", "staff"} and row["trim_name"]:
+            known = db.execute(
+                "SELECT 1 FROM vehicle_catalog WHERE lower(brand)=lower(%s) AND lower(model)=lower(%s) "
+                "AND lower(trim_name)=lower(%s) LIMIT 1",
+                (row["brand"], row["model"], row["trim_name"])
+            ).fetchone()
+            if not known:
+                db.execute("UPDATE offers SET status='pending',updated_at=now() WHERE id=%s", (offer_id,))
+                return jsonify({"ok": True, "status": "pending", "requires_approval": True})
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
         db.execute("UPDATE offers SET status='published',updated_at=now() WHERE id=%s", (offer_id,))
     return jsonify({"ok": True, "status": "published"})
@@ -551,3 +560,23 @@ def add_vehicle_catalog(actor):
     except psycopg.Error:
         return fail("Nie udało się zapisać katalogu", 500)
 
+
+@app.patch("/api/offers/<uuid:offer_id>/review")
+@account
+def review_offer(actor, offer_id):
+    if actor["role"] not in {"admin", "staff"}:
+        return fail("Zatwierdzanie ofert jest zastrzeżone dla CARVAMO", 403)
+    data = request.get_json(silent=True)
+    decision = data.get("decision") if isinstance(data, dict) else None
+    if decision not in {"approve", "reject"}:
+        return fail("Wybierz approve lub reject")
+    with conn() as db:
+        offer = db.execute("SELECT id,status FROM offers WHERE id=%s AND deletion_pending=false FOR UPDATE", (offer_id,)).fetchone()
+        if not offer:
+            return fail("Nie znaleziono oferty", 404)
+        if offer["status"] != "pending":
+            return fail("Oferta nie oczekuje na zatwierdzenie", 409)
+        status = "published" if decision == "approve" else "rejected"
+        db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(actor["id"]),))
+        db.execute("UPDATE offers SET status=%s,updated_at=now() WHERE id=%s", (status,offer_id))
+    return jsonify({"ok": True, "status": status})
