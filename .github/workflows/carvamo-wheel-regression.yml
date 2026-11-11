@@ -4,6 +4,8 @@ on:
     paths:
       - 'tools/carvelo-photo-ai/studio_compose.py'
       - 'tools/carvelo-photo-ai/tests/test_wheel_contacts.py'
+      - 'tools/carvelo-photo-ai/tests/test_real_photo_qa.py'
+      - 'tools/carvelo-photo-ai/real_photo_qa.py'
       - '.github/workflows/carvamo-wheel-regression.yml'
   workflow_dispatch:
 permissions:
@@ -20,4 +22,4 @@ jobs:
       - name: Install deterministic test dependencies
         run: python -m pip install Pillow==12.1.0 numpy==2.3.5 cairosvg==2.8.2
       - name: Run synthetic wheel contact regression tests
-        run: python -m unittest discover -s tools/carvelo-photo-ai/tests -p 'test_wheel_contacts.py' -v
+        run: python -m unittest discover -s tools/carvelo-photo-ai/tests -p 'test_*.py' -v
