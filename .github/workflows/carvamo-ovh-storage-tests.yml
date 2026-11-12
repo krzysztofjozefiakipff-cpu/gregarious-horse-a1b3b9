@@ -1,0 +1,30 @@
+name: CARVAMO OVH Photo Storage Tests
+
+on:
+  pull_request:
+    paths:
+      - "tools/carvelo-photo-ai/ovh_storage.py"
+      - "tools/carvelo-photo-ai/tests/test_ovh_storage.py"
+      - ".github/workflows/carvamo-ovh-storage-tests.yml"
+  push:
+    branches:
+      - "feat/carvamo-ovh-photo-storage"
+    paths:
+      - "tools/carvelo-photo-ai/ovh_storage.py"
+      - "tools/carvelo-photo-ai/tests/test_ovh_storage.py"
+      - ".github/workflows/carvamo-ovh-storage-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-storage-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run OVH storage unit tests (no live credentials)
+        run: python -m unittest discover -s tools/carvelo-photo-ai/tests -p 'test_ovh_storage.py' -v
