@@ -81,6 +81,37 @@ jobs:
               assert response.status_code in (401, 403), f'Unexpected response: {response.status_code}'
           print('OVH importer route deployed and authentication enforced; PDF extraction not tested')
           PY
+      - name: Verify public lead API and PostgreSQL on OVH
+        run: |
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            carvamo-deploy@146.59.52.16 'docker exec -i carvamo-accounts-staging python -' <<'PY'
+          from uuid import UUID
+          from app import app, conn
+          with app.test_client() as client:
+              invalid = client.post('/api/public/leads', json={'consent': False})
+              assert invalid.status_code == 400, f'Validation failed: {invalid.status_code}'
+              with conn() as db:
+                  row = db.execute(
+                      "SELECT o.id FROM offers o JOIN dealers d ON d.id=o.dealer_id "
+                      "WHERE o.status='published' AND o.deletion_pending=false AND d.active=true LIMIT 1"
+                  ).fetchone()
+              if not row:
+                  print('BLOCKED: no published offer from an active dealer; end-to-end lead test not possible')
+                  raise SystemExit(2)
+              payload = {'offer_id': str(row['id']), 'full_name': 'CARVAMO Test',
+                         'email': 'carvamo-test@example.invalid', 'phone': '500000000',
+                         'message': 'Automated staging verification; synthetic data', 'consent': True}
+              response = client.post('/api/public/leads', json=payload,
+                                     headers={'Origin': 'https://preview.carvamo.com'})
+              assert response.status_code == 201, f'Lead creation failed: {response.status_code}: {response.get_json()}'
+              reference = response.get_json()['reference']
+              UUID(reference)
+              with conn() as db:
+                  lead = db.execute('SELECT id,offer_id,email,status FROM leads WHERE id=%s', (reference,)).fetchone()
+                  assert lead and str(lead['offer_id']) == str(row['id']) and lead['email'] == payload['email'] and lead['status'] == 'new', 'Lead not persisted correctly'
+              print('PASS: OVH lead endpoint inserted and PostgreSQL returned the expected record:', reference)
+              print('NOTICE: synthetic staging lead retained for panel visibility verification')
+          PY
       - name: Check SMTP connectivity from OVH
         run: |
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
