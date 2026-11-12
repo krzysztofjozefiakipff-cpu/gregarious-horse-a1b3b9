@@ -39,12 +39,21 @@ const label=elem("label","Wiadomość (opcjonalnie)");label.htmlFor="lead-messag
 const consent=elem("label",undefined,"consent");const checkbox=elem("input");checkbox.type="checkbox";checkbox.required=true;checkbox.name="consent";consent.append(checkbox,elem("span","Wyrażam zgodę na kontakt w sprawie tej oferty. Zapoznałem/am się z informacją o przetwarzaniu danych."));form.append(consent);
 const honeypot=elem("input");honeypot.name="website";honeypot.tabIndex=-1;honeypot.autocomplete="off";honeypot.setAttribute("aria-hidden","true");honeypot.style.cssText="position:absolute;left:-9999px";form.append(honeypot);
 const submit=elem("button",isDemo?"Formularz niedostępny dla oferty demonstracyjnej":"Zapytaj o tę ofertę");submit.type="submit";submit.disabled=isDemo;form.append(submit);
-const note=elem("p","Formularz pozostaje wyłączony do czasu uruchomienia zapisu zapytań na OVH.","detail-notice");form.append(note);
+const note=elem("p","Zapytanie zostanie zapisane w systemie CARVAMO na OVH.","detail-notice");form.append(note);
 const status=elem("div",undefined,"detail-status detail-hidden");status.role="status";form.append(status);
-// Lead submission is deliberately unavailable until the OVH endpoint is deployed.
-submit.disabled=true;
-submit.textContent="Zapytania chwilowo niedostępne";
-status.textContent="Przygotowujemy bezpieczny formularz zapytań na serwerze OVH.";
-status.classList.remove("detail-hidden");
+form.addEventListener("submit",async event=>{
+event.preventDefault();
+if(isDemo||!form.reportValidity())return;
+submit.disabled=true;status.classList.add("detail-hidden");
+try{
+const values=new FormData(form);
+const payload={offer_id:o.id,full_name:String(values.get("full_name")||""),email:String(values.get("email")||""),phone:String(values.get("phone")||""),message:String(values.get("message")||""),consent:values.get("consent")==="on",website:String(values.get("website")||"")};
+const response=await fetch("/api/public/leads",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"omit",body:JSON.stringify(payload)});
+const result=await response.json().catch(()=>({}));
+if(!response.ok||!result.ok)throw Error(result.error||"Nie udało się zapisać zgłoszenia");
+form.reset();status.textContent="Zapytanie zapisano. Numer: "+(result.reference||"—");status.classList.remove("error");
+}catch(error){status.textContent="Nie udało się wysłać zapytania. "+(error.message||"Spróbuj ponownie.");status.classList.add("error")}
+finally{status.classList.remove("detail-hidden");submit.disabled=isDemo}
+});
 right.append(form);grid.append(left,right);shell.append(grid);node.append(shell);document.title=val(o.brand)+" "+val(o.model)+" — oferta CARVAMO"}
 load();
