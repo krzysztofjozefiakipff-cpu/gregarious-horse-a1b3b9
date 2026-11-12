@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Python and shell
         run: |
-          python -m py_compile services/accounts/app.py
+          python -m py_compile services/accounts/app.py services/accounts/public_leads.py
           bash -n tools/ovh/deploy_accounts_staging.sh
           bash -n tools/ovh/activate_first_admin.sh
       - name: Configure SSH
@@ -44,7 +44,7 @@ jobs:
           SSH="ssh -i $HOME/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes"
           SCP="scp -i $HOME/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes"
           $SSH carvamo-deploy@146.59.52.16 'install -d -m 700 ~/carvamo-backend/accounts-src'
-          $SCP services/accounts/app.py services/accounts/requirements.txt services/accounts/Dockerfile carvamo-deploy@146.59.52.16:carvamo-backend/accounts-src/
+          $SCP services/accounts/app.py services/accounts/public_leads.py services/accounts/requirements.txt services/accounts/Dockerfile carvamo-deploy@146.59.52.16:carvamo-backend/accounts-src/
           $SCP tools/ovh/deploy_accounts_staging.sh carvamo-deploy@146.59.52.16:carvamo-backend/deploy_accounts_staging.sh
           $SCP tools/ovh/activate_first_admin.sh carvamo-deploy@146.59.52.16:carvamo-backend/activate_first_admin.sh
           if [[ -n "$RESET_SMTP_PASSWORD" ]]; then
