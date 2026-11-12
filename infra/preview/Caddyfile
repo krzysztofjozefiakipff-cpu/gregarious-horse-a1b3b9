@@ -3,7 +3,7 @@ preview.carvamo.com {
     encode zstd gzip
     @dynamicFiles path /panel/* /accounts/* /catalog/* /offer-detail.js /leads-admin.js /live-catalog.js
     header @dynamicFiles Cache-Control "no-store, max-age=0"
-    @accountsAPI path /api/auth/* /api/accounts /api/accounts/* /api/dealers /api/vehicle-catalog /api/vehicle-catalog/* /api/public/offers/* /api/offers /api/offers/* /api/leads /api/leads/* /api/health
+    @accountsAPI path /api/auth/* /api/accounts /api/accounts/* /api/dealers /api/vehicle-catalog /api/vehicle-catalog/* /api/public/offers /api/public/offers/* /api/public/leads /api/offers /api/offers/* /api/leads /api/leads/* /api/health
     handle @accountsAPI {
         reverse_proxy carvamo-accounts-staging:8000
     }
@@ -13,6 +13,6 @@ preview.carvamo.com {
         X-Content-Type-Options "nosniff"
         Referrer-Policy "no-referrer"
         X-Frame-Options "DENY"
-        Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://rgnqsrllgemsyumvjwax.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     }
 }
