@@ -58,6 +58,18 @@ jobs:
             echo "::notice::RESET_SMTP_PASSWORD is not configured in GitHub Actions."
           fi
           $SSH carvamo-deploy@146.59.52.16 'bash ~/carvamo-backend/deploy_accounts_staging.sh'
+      - name: Verify deployed PDF importer route and authentication
+        run: |
+          ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            carvamo-deploy@146.59.52.16 'docker exec -i carvamo-accounts-staging python -' <<'PY'
+          from app import app
+          routes = {(rule.rule, method) for rule in app.url_map.iter_rules() for method in rule.methods}
+          assert ('/api/offers/import-specification', 'POST') in routes, 'PDF importer route missing'
+          with app.test_client() as client:
+              response = client.post('/api/offers/import-specification')
+              assert response.status_code in (401, 403), f'Unexpected response: {response.status_code}'
+          print('OVH importer route deployed and authentication enforced; PDF extraction not tested')
+          PY
       - name: Check SMTP connectivity from OVH
         run: |
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
