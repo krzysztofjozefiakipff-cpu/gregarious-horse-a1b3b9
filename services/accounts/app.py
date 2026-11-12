@@ -713,6 +713,10 @@ def import_offer_specification(actor):
     if coded_equipment:
         equipment = list(dict.fromkeys(item["description"] for item in coded_equipment if item["description"]))
     model_header = re.search(r"(?i)\b(Jaecoo|Omoda|MG|BYD|Toyota|Lexus|Maxus)\s+(\d+[A-Za-z]?)\s*(Hybrid|HEV|PHEV|MHEV|Comfort|Premium|Luxury|Executive|Prestige)?", raw)
+    # Prefer explicit generic labels over brand-specific headline guesses.
+    labelled_brand = match(r"(?im)^\s*(?:marka|producent|manufacturer|make)\s*[:\-]\s*([^\n:]{2,70})")
+    labelled_model = match(r"(?im)^\s*(?:model|model pojazdu)\s*[:\-]\s*([^\n:]{1,90})")
+    labelled_trim = match(r"(?im)^\s*(?:wersja(?: wyposażenia)?|odmiana|trim|variant)\s*[:\-]\s*([^\n:]{1,90})")
     vehicle_type = match(r"(?im)^\s*Typ\s*:\s*([A-Z0-9]+)")
     paint = match(r"(?im)^\s*Lakier\s*:\s*([^\n]+)")
     upholstery = match(r"(?im)^\s*Tapicerka\s*:\s*([^\n]+)")
@@ -721,7 +725,14 @@ def import_offer_specification(actor):
                   "fuel": fuel, "transmission_type": transmission, "drive_type": drive}
     if model_header:
         candidates.update({"brand": model_header.group(1).upper(), "model": model_header.group(2), "trim_name": (model_header.group(3) or "").strip()})
-    return jsonify({"candidates": candidates, "equipment": equipment[:150], "equipment_codes": coded_equipment[:150],
+    for key, value in (("brand", labelled_brand), ("model", labelled_model), ("trim_name", labelled_trim)):
+        if value:
+            candidates[key] = re.sub(r"\s+", " ", value).strip()
+    candidate_sources = {key: ("explicit_label" if (key == "brand" and labelled_brand) or
+                          (key == "model" and labelled_model) or
+                          (key == "trim_name" and labelled_trim) else "heuristic")
+                         for key, value in candidates.items() if value is not None}
+    return jsonify({"candidates": candidates, "candidate_sources": candidate_sources, "equipment": equipment[:150], "equipment_codes": coded_equipment[:150],
                     "other_details": {k:v for k,v in {"Typ pojazdu":vehicle_type,"Lakier (kod)":paint,"Tapicerka":upholstery}.items() if v},
                     "source_text": raw[:30000], "pages": len(reader.pages),
                     "warning": "Wartości rozpoznane automatycznie wymagają weryfikacji. Nie zapisano oferty ani pliku."})
