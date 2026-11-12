@@ -737,6 +737,20 @@ def import_offer_specification(actor):
                     "source_text": raw[:30000], "pages": len(reader.pages),
                     "warning": "Wartości rozpoznane automatycznie wymagają weryfikacji. Nie zapisano oferty ani pliku."})
 
+@app.get("/api/public/offers")
+def public_offers():
+    """Public catalog: published offers from active dealers only."""
+    with conn() as db:
+        rows = db.execute(
+            "SELECT o.id,o.brand,o.model,o.body,o.fuel,o.gross_price,o.special,"
+            "o.trim_name,o.engine_name,o.power_hp,o.drive_type,o.transmission_type,"
+            "d.name AS dealer_name "
+            "FROM offers o JOIN dealers d ON d.id=o.dealer_id "
+            "WHERE o.status='published' AND o.deletion_pending=false AND d.active=true "
+            "ORDER BY o.created_at DESC LIMIT 100"
+        ).fetchall()
+    return jsonify({"offers": rows})
+
 def public_offer_data(offer_id):
     with conn() as db:
         row = db.execute(
