@@ -1,4 +1,4 @@
-import {SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY} from "./panel/config.js";
+// Offer details are served by the private CARVAMO OVH backend through same-origin HTTPS.
 const ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const allowedParams=["utm_source","utm_medium","utm_campaign","utm_content","utm_term","gclid","fbclid","msclkid"];
 const params=new URLSearchParams(location.search);
@@ -17,16 +17,12 @@ if(!id)return;
 list.classList.add("detail-hidden");hero.classList.add("detail-hidden");node.classList.remove("detail-hidden");
 if(!ID.test(id)){if(id.startsWith("demo-")){const demo=[["demo-omoda5","OMODA","OMODA 5",109900],["demo-jaecoo7","JAECOO","JAECOO 7",139900],["demo-mghs","MG","MG HS Hybrid+",149900],["demo-omoda9","OMODA","OMODA 9",199900],["demo-maxus9","MAXUS","MAXUS Deliver 9",119900],["demo-jaecoo5","JAECOO","JAECOO 5",114900]].find(x=>x[0]===id);if(demo){render({id:demo[0],brand:demo[1],model:demo[2],gross_price:demo[3]},{name:"Salon do potwierdzenia"},{},true);return}}showError("Nieprawidłowy adres oferty.");return}
 try{
-const api=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/";
-const heads={apikey:SUPABASE_PUBLISHABLE_KEY,Accept:"application/json"};
-const res=await fetch(api+"cv_offers?select=id,brand,model,body,fuel,gross_price,dealer_id,status,special&id=eq."+encodeURIComponent(id)+"&status=eq.published&limit=1",{headers:heads,cache:"no-store"});
+const res=await fetch("/api/public/offers/"+encodeURIComponent(id),{headers:{Accept:"application/json"},credentials:"omit",cache:"no-store"});
 if(!res.ok)throw Error("Nie udało się pobrać oferty");
-const rows=await res.json();const o=rows[0];if(!o){showError("Ta oferta nie jest już dostępna w katalogu.");return}
-const dr=await fetch(api+"cv_dealers?select=id,name&active=eq.true&id=eq."+encodeURIComponent(o.dealer_id)+"&limit=1",{headers:heads,cache:"no-store"});
-if(!dr.ok)throw Error("Nie udało się zweryfikować dealera");
-const dealers=await dr.json();if(!dealers[0]){showError("Oferta nie jest obecnie dostępna.");return}
-let details={};try{const mr=await fetch(api+"cv_preview_offer_details?select=version_name,discount_terms,purchase_terms,financing_terms,pickup_city,availability_confirmed,availability_confirmed_at,availability_confirmed_by&offer_id=eq."+encodeURIComponent(id)+"&limit=1",{headers:heads,cache:"no-store"});if(mr.ok){const m=await mr.json();details=m[0]||{}}}catch(e){console.warn("Offer details unavailable")}
-render(o,dealers[0],details);
+const payload=await res.json();
+const o=payload.offer;
+if(!o){showError("Ta oferta nie jest już dostępna w katalogu.");return}
+render(o,{name:o.dealer_name||"Autoryzowany dealer"},{version_name:o.trim_name||"",availability_confirmed:false});
 }catch(e){showError("Nie można teraz pobrać oferty. Spróbuj ponownie później.")}}
 function render(o,dealer,details,isDemo=false){
 node.replaceChildren();
@@ -43,13 +39,12 @@ const label=elem("label","Wiadomość (opcjonalnie)");label.htmlFor="lead-messag
 const consent=elem("label",undefined,"consent");const checkbox=elem("input");checkbox.type="checkbox";checkbox.required=true;checkbox.name="consent";consent.append(checkbox,elem("span","Wyrażam zgodę na kontakt w sprawie tej oferty. Zapoznałem/am się z informacją o przetwarzaniu danych."));form.append(consent);
 const honeypot=elem("input");honeypot.name="website";honeypot.tabIndex=-1;honeypot.autocomplete="off";honeypot.setAttribute("aria-hidden","true");honeypot.style.cssText="position:absolute;left:-9999px";form.append(honeypot);
 const submit=elem("button",isDemo?"Formularz niedostępny dla oferty demonstracyjnej":"Zapytaj o tę ofertę");submit.type="submit";submit.disabled=isDemo;form.append(submit);
-const note=elem("p","Dane testowe zostaną zapisane w wydzielonej tabeli zgłoszeń CARVAMO Preview. Nie są automatycznie przekazywane dealerowi.","detail-notice");form.append(note);
+const note=elem("p","Formularz pozostaje wyłączony do czasu uruchomienia zapisu zapytań na OVH.","detail-notice");form.append(note);
 const status=elem("div",undefined,"detail-status detail-hidden");status.role="status";form.append(status);
-form.addEventListener("submit",async e=>{e.preventDefault();if(!form.reportValidity())return;submit.disabled=true;status.classList.add("detail-hidden");try{
-const f=new FormData(form);const payload={offer_id:o.id,full_name:String(f.get("full_name")||""),email:String(f.get("email")||""),phone:String(f.get("phone")||""),message:String(f.get("message")||""),consent:f.get("consent")==="on",website:String(f.get("website")||""),attribution:source()};
-const response=await fetch(SUPABASE_URL.replace(/\/$/,"")+"/functions/v1/carvamo-preview-lead",{method:"POST",headers:{"content-type":"application/json",apikey:SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
-const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw Error(data.error||"Nie udało się zapisać zapytania");
-form.reset();status.textContent="Zapytanie zostało zapisane. Numer: "+data.reference;status.classList.remove("detail-hidden");status.classList.remove("error");
-}catch(err){status.textContent="Nie udało się wysłać zapytania. Spróbuj ponownie później.";status.classList.remove("detail-hidden");status.classList.add("error")}finally{submit.disabled=false}});
+// Lead submission is deliberately unavailable until the OVH endpoint is deployed.
+submit.disabled=true;
+submit.textContent="Zapytania chwilowo niedostępne";
+status.textContent="Przygotowujemy bezpieczny formularz zapytań na serwerze OVH.";
+status.classList.remove("detail-hidden");
 right.append(form);grid.append(left,right);shell.append(grid);node.append(shell);document.title=val(o.brand)+" "+val(o.model)+" — oferta CARVAMO"}
 load();
