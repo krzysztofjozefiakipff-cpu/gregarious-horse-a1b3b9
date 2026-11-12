@@ -98,3 +98,10 @@ class OVHPhotoStorage:
             Body=data,
             ContentType=content_type,
         )
+
+    def delete_processed(self, key: str) -> None:
+        """Remove an uncommitted output when finalizing its job fails."""
+        self.client.delete_object(
+            Bucket=self.config.bucket_processed,
+            Key=validate_key(key),
+        )
