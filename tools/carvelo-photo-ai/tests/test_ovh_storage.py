@@ -29,6 +29,9 @@ class FakeClient:
     def put_object(self, **kwargs):
         self.calls.append(("put", kwargs))
 
+    def delete_object(self, **kwargs):
+        self.calls.append(("delete", kwargs))
+
 
 class StorageTests(unittest.TestCase):
     def test_key_validation(self):
@@ -52,6 +55,15 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(operation, "put")
         self.assertEqual(params["Bucket"], "processed")
         self.assertEqual(params["ContentType"], "image/webp")
+
+    def test_delete_processed(self):
+        client = FakeClient()
+        storage = OVHPhotoStorage(CONFIG, client)
+        storage.delete_processed("offer/photo/ai/result.png")
+        operation, params = client.calls[-1]
+        self.assertEqual(operation, "delete")
+        self.assertEqual(params["Bucket"], "processed")
+        self.assertEqual(params["Key"], "offer/photo/ai/result.png")
 
     def test_missing_configuration(self):
         with patch.dict(os.environ, {}, clear=True):
