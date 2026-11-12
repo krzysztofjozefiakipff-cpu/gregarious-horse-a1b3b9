@@ -32,7 +32,7 @@ class FakeClient:
 
 class StorageTests(unittest.TestCase):
     def test_key_validation(self):
-        for key in ("", "/photo", "folder//photo", "../photo", "a/../b", "a/./b", "a\n"):
+        for key in ("", "/photo", "folder//photo", "../photo", "a/../b", "a/./b", "a\\b", "a\n"):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 validate_key(key)
         self.assertEqual(validate_key("dealer/offer/photo.webp"), "dealer/offer/photo.webp")
@@ -67,9 +67,14 @@ class StorageTests(unittest.TestCase):
             "CARVAMO_OVH_S3_ACCESS_KEY": "fake",
             "CARVAMO_OVH_S3_SECRET_KEY": "fake",
         }
-        with patch.dict(os.environ, env, clear=True):
-            with self.assertRaisesRegex(ValueError, "ovh_storage_endpoint_must_use_https"):
-                StorageConfig.from_env()
+        for endpoint in ("http://insecure.example", "https://user:pass@host.example",
+                         "https://host.example/path", "https://host.example?token=secret",
+                         "https://"):
+            with self.subTest(endpoint=endpoint):
+                env["CARVAMO_OVH_S3_ENDPOINT"] = endpoint
+                with patch.dict(os.environ, env, clear=True):
+                    with self.assertRaisesRegex(ValueError, "ovh_storage_endpoint_must_use_https"):
+                        StorageConfig.from_env()
 
 
 if __name__ == "__main__":
