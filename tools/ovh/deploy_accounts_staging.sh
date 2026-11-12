@@ -26,6 +26,7 @@ GRANT SELECT ON users, dealers TO carvamo_accounts;
 GRANT SELECT, INSERT, UPDATE ON vehicle_catalog TO carvamo_accounts;
 GRANT SELECT, INSERT, UPDATE ON offer_specifications TO carvamo_accounts;
 GRANT SELECT, INSERT, UPDATE ON offers TO carvamo_accounts;
+GRANT SELECT, INSERT ON leads TO carvamo_accounts;
 GRANT SELECT, INSERT, UPDATE ON offer_photos TO carvamo_accounts;
 GRANT INSERT, UPDATE ON users TO carvamo_accounts;
 GRANT SELECT, INSERT ON account_audit TO carvamo_accounts;
