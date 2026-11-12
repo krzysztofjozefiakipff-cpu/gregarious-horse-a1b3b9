@@ -58,6 +58,15 @@ jobs:
             echo "::notice::RESET_SMTP_PASSWORD is not configured in GitHub Actions."
           fi
           $SSH carvamo-deploy@146.59.52.16 'bash ~/carvamo-backend/deploy_accounts_staging.sh'
+      - name: Verify OVH deployed source matches this GitHub commit
+        run: |
+          set -euo pipefail
+          expected=$(sha256sum services/accounts/app.py | awk '{print $1}')
+          actual=$(ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            carvamo-deploy@146.59.52.16 \
+            'docker exec carvamo-accounts-staging sha256sum /app/app.py' | awk '{print $1}')
+          test "$expected" = "$actual" || { echo 'OVH running app.py differs from GitHub commit' >&2; exit 1; }
+          echo "OVH running app.py matches GitHub commit $GITHUB_SHA"
       - name: Verify deployed PDF importer route and authentication
         run: |
           ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
