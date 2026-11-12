@@ -6,10 +6,9 @@ No production traffic is switched until the worker and job queue are migrated.
 """
 from __future__ import annotations
 
-import io
 import os
 from dataclasses import dataclass
-from typing import BinaryIO
+from urllib.parse import urlsplit
 
 
 @dataclass(frozen=True)
@@ -35,7 +34,9 @@ class StorageConfig:
         missing = [keys[field] for field, value in values.items() if not value]
         if missing:
             raise ValueError("missing_ovh_storage_configuration:" + ",".join(missing))
-        if not values["endpoint"].startswith("https://"):
+        parsed = urlsplit(values["endpoint"])
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+                or parsed.query or parsed.fragment or parsed.path not in ("", "/")):
             raise ValueError("ovh_storage_endpoint_must_use_https")
         return cls(**values)
 
@@ -47,7 +48,7 @@ def validate_key(key: str) -> str:
     parts = key.split("/")
     if any(part in ("", ".", "..") for part in parts):
         raise ValueError("invalid_object_key")
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in key):
+    if any(ch == "\\" or ord(ch) < 32 or ord(ch) == 127 for ch in key):
         raise ValueError("invalid_object_key")
     return key
 
