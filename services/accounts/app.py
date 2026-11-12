@@ -327,7 +327,7 @@ def list_offers(actor):
                 "FROM offers WHERE dealer_id=%s AND deletion_pending=false ORDER BY created_at DESC LIMIT 200",
                 (actor["dealer_id"],)
             ).fetchall()
-    return jsonify({"offers": rows})
+    return jsonify({"offers": [{**row, "id": str(row["id"])} for row in rows]})
 
 
 @app.post("/api/offers")
