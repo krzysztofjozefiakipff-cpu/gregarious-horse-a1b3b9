@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ovh_storage import OVHPhotoStorage, StorageConfig, validate_key
+from test_worker_ovh_integration import WorkerStorageIntegrationTests  # Include in OVH CI suite
 
 
 CONFIG = StorageConfig(
