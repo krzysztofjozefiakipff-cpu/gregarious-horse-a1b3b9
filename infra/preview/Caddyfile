@@ -7,6 +7,8 @@ preview.carvamo.com {
     handle @accountsAPI {
         reverse_proxy carvamo-accounts-staging:8000
     }
+    redir /panel /accounts/ 302
+    redir /panel/* /accounts/ 302
     file_server
     header {
         X-Robots-Tag "noindex, nofollow, noarchive"
