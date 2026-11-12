@@ -480,6 +480,9 @@ def withdraw_offer(actor, offer_id):
 
 
 # Lead access is scoped in SQL, not merely hidden in the browser.
+from public_leads import register_public_leads
+register_public_leads(app, conn, fail)
+
 @app.get("/api/leads")
 @account
 def list_leads(actor):
