@@ -85,11 +85,11 @@ jobs:
           done
           curl --fail --silent --show-error --max-time 15 https://preview.carvamo.com/ -o /tmp/carvamo-home-check.html
           grep -q "carvamo-wordmark.svg" /tmp/carvamo-home-check.html
-          curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/panel/?check=${GITHUB_SHA}" -o /tmp/carvamo-panel-check.html
-          grep -q "Panel CARVAMO" /tmp/carvamo-panel-check.html
-          ! grep -qi "carvelo" /tmp/carvamo-panel-check.html
-          curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/panel/config.js?check=${GITHUB_SHA}" -o /tmp/carvamo-panel-config.js
-          echo "Verified: live CARVAMO panel branding; legacy panel backend migration is tracked separately"
+          curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/accounts/" -o /tmp/carvamo-accounts-check.html
+          grep -q "CARVAMO" /tmp/carvamo-accounts-check.html
+          code=$(curl --silent --output /dev/null --write-out "%{http_code}" --max-time 15 "https://preview.carvamo.com/panel/")
+          test "$code" = 302 || { echo "Legacy panel is not redirected to OVH accounts: $code"; exit 1; }
+          echo "Verified: legacy panel redirects to OVH accounts workspace"
           curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/api/public/offers" -o /tmp/carvamo-offers.json
           python3 -c 'import json; d=json.load(open("/tmp/carvamo-offers.json")); assert isinstance(d.get("offers"), list)'
           echo "CARVAMO preview branded assets and OVH public catalog reachable"
