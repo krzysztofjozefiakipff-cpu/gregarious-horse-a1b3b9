@@ -74,6 +74,7 @@ jobs:
           from app import app
           routes = {(rule.rule, method) for rule in app.url_map.iter_rules() for method in rule.methods}
           assert ('/api/offers/import-specification', 'POST') in routes, 'PDF importer route missing'
+          assert ('/api/public/offers', 'GET') in routes, 'Public catalog route missing'
           with app.test_client() as client:
               response = client.post('/api/offers/import-specification')
               assert response.status_code in (401, 403), f'Unexpected response: {response.status_code}'
