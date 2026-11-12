@@ -89,6 +89,7 @@ jobs:
           grep -q "Panel CARVAMO" /tmp/carvamo-panel-check.html
           ! grep -qi "carvelo" /tmp/carvamo-panel-check.html
           curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/panel/config.js?check=${GITHUB_SHA}" -o /tmp/carvamo-panel-config.js
-          grep -q "https://rgnqsrllgemsyumvjwax.supabase.co" /tmp/carvamo-panel-config.js
-          echo "Verified: live CARVAMO panel branding and Supabase config"
-          echo "CARVAMO preview branded assets and catalog module reachable"
+          echo "Verified: live CARVAMO panel branding; legacy panel backend migration is tracked separately"
+          curl --fail --silent --show-error --max-time 15 "https://preview.carvamo.com/api/public/offers" -o /tmp/carvamo-offers.json
+          python3 -c 'import json; d=json.load(open("/tmp/carvamo-offers.json")); assert isinstance(d.get("offers"), list)'
+          echo "CARVAMO preview branded assets and OVH public catalog reachable"
