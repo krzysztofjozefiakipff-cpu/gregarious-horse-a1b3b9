@@ -1,0 +1,39 @@
+name: CARVAMO OVH Photo Storage Tests
+
+on:
+  pull_request:
+    paths:
+      - "tools/carvelo-photo-ai/ovh_storage.py"
+      - "tools/carvelo-photo-ai/tests/test_ovh_storage.py"
+      - "tools/carvelo-photo-ai/tests/test_worker_ovh_integration.py"
+      - "tools/carvelo-photo-ai/persistent_worker.py"
+      - "tools/carvelo-photo-ai/requirements.txt"
+      - "tools/carvelo-photo-ai/probe_ovh_database.py"
+      - "tools/carvelo-photo-ai/tests/test_ovh_database_preflight.py"
+      - ".github/workflows/carvamo-ovh-storage-tests.yml"
+  push:
+    branches:
+      - "feat/carvamo-ovh-photo-storage"
+    paths:
+      - "tools/carvelo-photo-ai/ovh_storage.py"
+      - "tools/carvelo-photo-ai/tests/test_ovh_storage.py"
+      - ".github/workflows/carvamo-ovh-storage-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-storage-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install integration test dependencies
+        run: python -m pip install "Pillow==11.3.0"
+      - name: Run OVH storage unit and worker integration tests (no live credentials)
+        run: |
+          python -m unittest discover -s tools/carvelo-photo-ai/tests -p 'test_ovh_storage.py' -v
+          python -m unittest discover -s tools/carvelo-photo-ai/tests -p 'test_ovh_database_preflight.py' -v
