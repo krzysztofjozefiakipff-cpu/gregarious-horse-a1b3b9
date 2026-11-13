@@ -97,50 +97,57 @@ def render_scene(scene_path: Path, size: tuple[int, int]) -> Image.Image:
 
 
 def _contact_centers(alpha: Image.Image) -> tuple[float, ...]:
-    """Find wheel-foot candidates from the lower silhouette across ALL x.
+    """Detect distinct downward tire lobes without assuming left/right halves.
 
-    Three-quarter vehicles may show three tires and both principal tires may
-    occupy one half of the image. Never fabricate fixed left/right contacts.
-    A broad bumper/rocker plateau is not a tire: require a local downward
-    protrusion of meaningful width and prominence.
+    Group contiguous bottom-profile protrusions before ranking them. The former
+    per-pixel peak selector could pick multiple points from the SAME wide tire,
+    while discarding a second shallower tire. This still fails closed for flat
+    silhouettes and must be verified against real segmentation masks.
     """
     arr = np.asarray(alpha.convert("L"), dtype=np.uint8) >= 175
     h, w = arr.shape
+    if not arr.any():
+        raise ValueError("wheel_detection_low_confidence")
     ys = np.where(arr, np.arange(h)[:, None], -1)
     bottom = ys.max(axis=0).astype(np.float32)
-    window = max(7, int(w * .035) | 1)
-    kernel = np.ones(window, dtype=np.float32) / window
-    smooth = np.convolve(np.maximum(bottom, 0), kernel, mode="same")
-    # Reject the roof, bumpers and tiny isolated matte fragments.
-    floor = max(int(h * .66), int(np.percentile(bottom[bottom >= 0], 55))
-                if (bottom >= 0).any() else h)
-    candidates = []
-    min_gap = max(15, int(w * .13))
-    prominence_span = max(16, int(w * .095))
-    for x in range(max(window, int(w*.035)), min(w-window, int(w*.965))):
+    window = max(7, int(w * .025) | 1)
+    smooth = np.convolve(np.maximum(bottom, 0),
+                         np.ones(window, dtype=np.float32) / window, mode="same")
+    span = max(18, int(w * .095))
+    threshold = max(6., h * .028)
+    floor = max(h * .66, float(np.percentile(bottom[bottom >= 0], 55)))
+    # A candidate must be deeper than the surrounding rocker on BOTH sides.
+    prominence = np.zeros(w, dtype=np.float32)
+    for x in range(max(window, span), min(w-window, w-span)):
         if smooth[x] < floor:
             continue
-        l = max(0, x-prominence_span)
-        r = min(w, x+prominence_span+1)
-        if smooth[x] < smooth[l:r].max()-max(2,h*.008):
-            continue
-        left_base = np.percentile(smooth[l:x+1], 20)
-        right_base = np.percentile(smooth[x:r], 20)
-        prominence = smooth[x] - max(left_base, right_base)
-        if prominence < h*.028:
-            continue
-        candidates.append((float(prominence), int(x), float(smooth[x])))
-    candidates.sort(reverse=True)
+        left = float(np.percentile(smooth[x-span:x], 20))
+        right = float(np.percentile(smooth[x+1:x+span+1], 20))
+        prominence[x] = smooth[x] - max(left, right)
+    active = prominence >= threshold
+    regions = []
+    start = None
+    for x in range(w + 1):
+        on = x < w and bool(active[x])
+        if on and start is None:
+            start = x
+        if not on and start is not None:
+            end = x
+            if end - start >= max(5, int(w * .014)):
+                peak = start + int(np.argmax(prominence[start:end]))
+                regions.append((float(prominence[peak]), peak))
+            start = None
+    regions.sort(reverse=True)
     selected = []
-    for prominence, x, depth in candidates:
-        if all(abs(x - prev[1]) >= min_gap for prev in selected):
-            selected.append((prominence, x, depth))
+    min_gap = max(15, int(w * .13))
+    for confidence, x in regions:
+        if all(abs(x - prev) >= min_gap for prev in selected):
+            selected.append(x)
         if len(selected) >= 3:
             break
     if len(selected) < 2:
         raise ValueError("wheel_detection_low_confidence")
-    selected.sort(key=lambda row: row[1])
-    return tuple(x/w for _, x, _ in selected)
+    return tuple(x / w for x in sorted(selected))
 
 
 def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_photo: Image.Image | None = None) -> tuple[Image.Image, dict]:
