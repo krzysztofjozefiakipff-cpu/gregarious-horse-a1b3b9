@@ -14,7 +14,7 @@ This branch is preparation, not a completed infrastructure migration. Do not dep
 Install `tools/carvelo-photo-ai/requirements-ovh.txt`. Set host secrets using the existing secret mechanism, never in Git:
 
 - `CARVAMO_STORAGE_BACKEND=ovh_s3`
-- `CARVELO_DATABASE_URL`
+- `CARVAMO_DATABASE_URL`
 - `CARVAMO_S3_ENDPOINT` (HTTPS), `CARVAMO_S3_REGION`
 - `CARVAMO_S3_ORIGINALS_BUCKET`, `CARVAMO_S3_RESULTS_BUCKET` (distinct private buckets)
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (standard boto3 credential chain)
@@ -35,3 +35,7 @@ S3 mode does not require Supabase credentials. The default backend remains uncha
 ## Outstanding
 
 Live PostgreSQL and Object Storage verification, data transfer, OVH queue implementation, actual vehicle photos and end-to-end rendering remain blocked on authenticated infrastructure/data access. No live service was changed or disabled.
+
+## Naming compatibility
+
+CARVAMO is the current brand. The worker accepts CARVAMO_DATABASE_URL, CARVAMO_SHOWROOM_3D_DIR, CARVAMO_SHOWROOM_3D_ENABLED and CARVAMO_POLL_SECONDS first; old CARVELO names remain fallback aliases during migration. Existing asset paths, bucket names and queue identifiers are legacy storage references, not the target brand. Renaming them requires verified data migration; current scene/logo assets must also be replaced with approved CARVAMO artwork before acceptance.
