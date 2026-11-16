@@ -23,7 +23,7 @@ S3 mode does not require Supabase credentials. The default backend remains uncha
 
 ## Required gates before switching
 
-1. Obtain authenticated OVH access. This session has no SSH key, DB DSN or S3 configuration; OVH Manager shows the sign-in form.
+1. OVH Manager authentication succeeded. The sole visible Public Cloud project shows no Object Storage service and the managed-database onboarding page. This does not establish whether PostgreSQL is running on the dedicated server. This session still has no SSH key, database DSN or S3 credentials; dedicated-host access remains required.
 2. Back up the actual database and inventory storage. Inspect the live schema and deployed app before writing migrations.
 3. Implement and validate the OVH queue contract against the actual schema; do not blindly run Supabase migrations, which have provider-specific dependencies.
 4. Run `python tools/carvelo-photo-ai/ovh_preflight.py` on the candidate host. It is read-only and checks the expected RPC signatures plus private bucket configuration. A pass does not prove upload permissions or full queue semantics. Unsupported public-access-block APIs fail closed and require independent privacy verification.
@@ -34,7 +34,7 @@ S3 mode does not require Supabase credentials. The default backend remains uncha
 
 ## Outstanding
 
-Live PostgreSQL and Object Storage verification, data transfer, OVH queue implementation, actual vehicle photos and end-to-end rendering remain blocked on authenticated infrastructure/data access. No live service was changed or disabled.
+OVH control-plane inventory was verified after sign-in: Object Storage is not created in the visible Public Cloud project; managed Databases shows its initial onboarding screen. Dedicated-server PostgreSQL verification, storage provisioning, data transfer, OVH queue implementation, actual vehicle photos and end-to-end rendering remain outstanding. OS/database access is still missing. No paid resources were ordered. No live service was changed or disabled.
 
 ## Naming compatibility
 
