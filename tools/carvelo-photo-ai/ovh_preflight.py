@@ -7,7 +7,7 @@ def main():
     report = {'database': 'not_checked', 'storage': 'not_checked'}
     try:
         import psycopg
-        with psycopg.connect(os.environ['CARVELO_DATABASE_URL'], connect_timeout=10,
+        with psycopg.connect((os.getenv('CARVAMO_DATABASE_URL') or os.environ['CARVELO_DATABASE_URL']), connect_timeout=10,
                               options='-c default_transaction_read_only=on') as conn:
             with conn.cursor() as cur:
                 cur.execute("""SELECT to_regprocedure('public.cv_ai_claim(text)') IS NOT NULL,
