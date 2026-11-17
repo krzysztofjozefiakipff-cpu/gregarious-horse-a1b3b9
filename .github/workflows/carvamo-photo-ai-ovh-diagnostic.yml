@@ -1,0 +1,65 @@
+name: CARVAMO Photo AI OVH diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: carvamo-photo-ai-ovh-diagnostic
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4864c75fb14bb970303ff16dcb9ccb3d85778cc0
+      - name: Prepare pinned SSH
+        env:
+          KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$KEY" && test -n "$KNOWN"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN" > "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -P '' -f "$HOME/.ssh/id_ed25519" >/dev/null
+      - name: Run read-only OVH checks and prepare V52 reviewer
+        env:
+          HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+          USER: ${{ secrets.OVH_DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          # Read source from this exact checked-out workflow commit; never
+          # run an unreviewed remote git pull or alter the deployed app.
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'set -eu; test -f /tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v51/manifest_v51.json; test -f /tmp/carvamo-photo-ai-test/v40_verified_contacts.json; test -f /tmp/carvamo-photo-ai-test/results/v36-cameras/empty_rear_v36.png; echo CARVAMO_OVH_INPUTS_OK' \
+            | tee diagnostic/connection.txt
+          # Pull committed V52 script using SSH stdin. No code changes to
+          # the application directory, no fal calls, no production deployment.
+          git show HEAD:tools/carvelo-photo-ai/contact_review_v52.py |
+            ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+              'cat > /tmp/carvamo-photo-ai-test/contact_review_v52.py && /tmp/carvamo-v24-venv/bin/python /tmp/carvamo-photo-ai-test/contact_review_v52.py --v47-dir /tmp/carvamo-photo-ai-test/results/v47-inpainting --view rear' \
+            | tee diagnostic/v52-run.txt
+          scp -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$USER@$HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v52/v52_report.json" diagnostic/
+          scp -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$USER@$HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v52/v52_contact_review.png" diagnostic/
+          scp -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$USER@$HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v52/v52_contact_reviewer.html" diagnostic/
+      - name: Upload diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-v52-ovh-diagnostic
+          path: diagnostic/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Cleanup SSH identity
+        if: always()
+        run: rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
