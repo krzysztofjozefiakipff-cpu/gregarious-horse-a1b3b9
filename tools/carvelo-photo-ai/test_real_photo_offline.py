@@ -26,6 +26,8 @@ def main():
                         help="Known source camera azimuth, degrees (-90 to +90)")
     parser.add_argument("--analyze-wheels", action="store_true",
                         help="Optional wheel-centre candidates from photo; requires OpenCV")
+    parser.add_argument("--export-wheel-review", action="store_true",
+                        help="Export labeled candidate crops and human-review JSON; implies --analyze-wheels")
     parser.add_argument("--analyze-perspective", action="store_true",
                         help="Optional image-derived line cues; requires OpenCV")
     parser.add_argument("--floor-anchors", type=Path,
@@ -68,7 +70,7 @@ def main():
         from photo_perspective import analyze_vehicle_lines
         perspective = analyze_vehicle_lines(photo, foreground)
     wheels = None
-    if args.analyze_wheels:
+    if args.analyze_wheels or args.export_wheel_review:
         from photo_wheels import detect_wheel_candidates
         wheels = detect_wheel_candidates(photo, foreground)
     background = load_background(args.showroom_dir, args.azimuth, photo.size)
@@ -119,6 +121,36 @@ def main():
             pen.ellipse((x-radius, y-radius, x+radius, y+radius),
                         outline=(30, 230, 70), width=5)
         diagnostic.save(args.output_dir / "wheel_candidates_diagnostic.png")
+        if args.export_wheel_review:
+            # Export ORIGINAL pixels, not the overlaid diagnostic. No label
+            # is inferred: a human must mark wheel / not_wheel / uncertain.
+            review_dir = args.output_dir / "wheel_review"
+            review_dir.mkdir(parents=True, exist_ok=True)
+            records = []
+            for idx, candidate in enumerate(wheels["candidates"], start=1):
+                x, y, radius = (candidate[k] for k in ("x", "y", "radius"))
+                extent = int(round(radius * 1.45))
+                bounds = (max(0, x-extent), max(0, y-extent),
+                          min(photo.width, x+extent+1),
+                          min(photo.height, y+extent+1))
+                filename = f"candidate_{idx:02d}.png"
+                photo.crop(bounds).convert("RGB").save(review_dir / filename)
+                records.append({
+                    "index": idx, "crop": filename, "bounds_xyxy": list(bounds),
+                    "circle_xy_radius": [x, y, radius],
+                    "label": "unreviewed",
+                    "label_options": ["wheel", "not_wheel", "uncertain"],
+                })
+            (review_dir / "annotations.json").write_text(
+                json.dumps({
+                    "schema": "carvamo_wheel_review_v1",
+                    "source_photo": args.photo.name,
+                    "human_verified": False,
+                    "candidates": records,
+                    "notes": "Manual labels required; missing wheels must be annotated separately.",
+                    "missed_wheels_xy_radius": []
+                }, indent=2), encoding="utf-8")
+
     if perspective is not None:
         placement["image_perspective"] = perspective
     placement["floor_calibration"] = qa
