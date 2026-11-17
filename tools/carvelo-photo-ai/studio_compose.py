@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v11-perspective-footprints"
+SCENE_VERSION = "studio-v12-handheld-geometry-qa"
 GROUND_Y = 0.85
 
 
@@ -240,6 +240,21 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     if any(cy > ground_y + round(h * .025) or cy < ground_y - round(h * .18) for _, cy in contact_points):
         raise ValueError("wheel_contact_not_on_floor")
 
+    # Handheld photos vary in camera height, focal length and roll.
+    # Silhouette geometry cannot recover the physical ground plane.
+    # Preserve contacts and report scale-independent geometry diagnostics.
+    wheel_span_px = max(cx for cx, _ in contact_points) - min(cx for cx, _ in contact_points)
+    contact_slope = ((contact_points[-1][1] - contact_points[0][1])
+                     / max(1, contact_points[-1][0] - contact_points[0][0]))
+    normalized_contact_spread = (
+        (max(cy for _, cy in contact_points) - min(cy for _, cy in contact_points))
+        / max(1, vh)
+    )
+    camera_geometry_review = (
+        abs(contact_slope) > .22 or normalized_contact_spread > .18
+        or len(contact_points) != 2
+    )
+
     # Do not project the original photograph's floor into the new studio.
     # Its rectangular image footprint creates a visible patch on the showroom
     # floor. The contact, ambient, directional and underbody shadows below
@@ -368,6 +383,11 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
         "wheel_contact_spread_px": contact_spread,
+        "wheel_contact_spread_relative_to_vehicle": round(normalized_contact_spread, 4),
+        "wheel_baseline_slope": round(contact_slope, 5),
+        "wheel_baseline_span_px": wheel_span_px,
+        "camera_calibration": "unverified",
+        "handheld_camera_geometry_review_required": camera_geometry_review,
         "wheel_perspective_review_required": contact_spread > round(h * .055),
         "visual_qa_required": True,
         "contact_shadow_version": "per-wheel-v4-perspective-scaled",
