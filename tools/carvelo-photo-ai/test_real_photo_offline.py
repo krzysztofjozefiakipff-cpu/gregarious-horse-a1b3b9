@@ -104,6 +104,15 @@ def main():
             raise ValueError("wheel_ground_plane_unreliable")
     if wheels is not None:
         placement["image_wheel_candidates"] = wheels
+        diagnostic = photo.convert("RGB").copy()
+        pen = ImageDraw.Draw(diagnostic)
+        for idx, candidate in enumerate(wheels["candidates"], start=1):
+            x, y, radius = (candidate[k] for k in ("x", "y", "radius"))
+            pen.ellipse((x-radius, y-radius, x+radius, y+radius),
+                        outline=(255, 40, 40), width=4)
+            pen.text((x+radius+3, y-10), str(idx), fill=(255, 255, 0),
+                     stroke_width=2, stroke_fill=(0, 0, 0))
+        diagnostic.save(args.output_dir / "wheel_candidates_diagnostic.png")
     if perspective is not None:
         placement["image_perspective"] = perspective
     placement["floor_calibration"] = qa
