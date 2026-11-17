@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v10-contact-qa"
+SCENE_VERSION = "studio-v11-perspective-footprints"
 GROUND_Y = 0.85
 
 
@@ -272,8 +272,11 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     contact = Image.new("L", (w, h), 0)
     touch = ImageDraw.Draw(contact)
     for cx, cy in contact_points:
-        dx = max(7, round(vw * .022))
-        dy = max(2, round(h * .005))
+        # Farther wheels appear smaller; use their image-space depth instead
+        # of imposing the near wheel footprint size on every contact.
+        depth_ratio = max(.60, min(1.0, (cy + 1) / (ground_y + 1)))
+        dx = max(5, round(vw * .022 * depth_ratio))
+        dy = max(2, round(h * .005 * depth_ratio))
         touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy+max(3,round(h*.008))), fill=238)
     contact = contact.filter(ImageFilter.GaussianBlur(max(1, round(h * .002))))
 
@@ -295,8 +298,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         # Two-layer tire footprint: an almost-black, very tight contact seam
         # and a softer ground-level penumbra. Do not shift the seam toward the
         # global ground line: perspective can place each tire at a different y.
-        rx = max(5, round(vw * .020))
-        ry = max(2, round(h * .004))
+        depth_ratio = max(.60, min(1.0, (cy + 1) / (ground_y + 1)))
+        rx = max(4, round(vw * .020 * depth_ratio))
+        ry = max(2, round(h * .004 * depth_ratio))
         # Shift the contact patch a few pixels below the opaque tire edge:
         # a centered ellipse is mostly hidden behind the wheel silhouette.
         fd.ellipse((cx-rx, cy, cx+rx, cy+max(3, round(h*.006))), fill=225)
@@ -340,9 +344,11 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     seam = Image.new("L", (w, h), 0)
     seam_draw = ImageDraw.Draw(seam)
     for cx, cy in contact_points:
-        seam_draw.ellipse((cx-max(5,round(vw*.019)), cy,
-                           cx+max(5,round(vw*.019)),
-                           cy+max(3,round(h*.007))), fill=235)
+        depth_ratio = max(.60, min(1.0, (cy + 1) / (ground_y + 1)))
+        seam_radius = max(4, round(vw * .019 * depth_ratio))
+        seam_draw.ellipse((cx-seam_radius, cy,
+                           cx+seam_radius,
+                           cy+max(2,round(h*.007*depth_ratio))), fill=235)
     seam = seam.filter(ImageFilter.GaussianBlur(max(1,round(h*.001))))
     shadow = ImageChops.lighter(shadow, seam)
     # The rear/far tire in a three-quarter view has a higher image-space
@@ -364,7 +370,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "wheel_contact_spread_px": contact_spread,
         "wheel_perspective_review_required": contact_spread > round(h * .055),
         "visual_qa_required": True,
-        "contact_shadow_version": "per-wheel-v3-tight",
+        "contact_shadow_version": "per-wheel-v4-perspective-scaled",
         "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
