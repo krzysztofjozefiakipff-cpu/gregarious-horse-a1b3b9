@@ -1,0 +1,66 @@
+name: CARVAMO four-view wheel calibration diagnostics
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/carvamo-four-view-wheel-qa.yml
+permissions:
+  contents: read
+jobs:
+  multi-view:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --user pillow
+      - name: Set up private OVH SSH
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Find real vehicle masks by perspective
+        run: |
+          set -euo pipefail
+          mkdir -p wheel_qa
+          cp photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png wheel_qa/showroom.png
+          for view in front rear left right; do
+            src=$(ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "find /tmp/carvamo-photo-ai-test/results -type f -path '*/$view/*' -name original_car_rgba.png -print -quit 2>/dev/null" || true)
+            if [ -n "$src" ]; then
+              scp -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST:$src" "wheel_qa/$view.png"
+            else
+              echo "MISSING_SOURCE_VIEW=$view" | tee "wheel_qa/$view-missing.txt"
+            fi
+          done
+      - name: Generate calibration overlays from actual images
+        run: |
+          set -euo pipefail
+          count=0
+          for view in front rear left right; do
+            if [ -s "wheel_qa/$view.png" ]; then
+              if python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --view "$view" --vehicle "wheel_qa/$view.png" --background wheel_qa/showroom.png --output-dir "wheel_qa/$view"; then
+                count=$((count+1))
+              else
+                echo "DETECTION_FAILED=$view" | tee "wheel_qa/$view-failed.txt"
+              fi
+            fi
+          done
+          echo "VIEWS_WITH_DIAGNOSTICS=$count" | tee wheel_qa/summary.txt
+          test "$count" -ge 1
+      - name: Upload diagnostic overlays for human wheel calibration
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-four-view-wheel-diagnostics
+          path: wheel_qa/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove private SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
