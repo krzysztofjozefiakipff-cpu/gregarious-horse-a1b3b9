@@ -8,6 +8,8 @@ Usage:
 Only use approved HTTPS image URLs; do not commit tokens. Pilot results require visual approval.
 """
 import argparse
+import base64
+from pathlib import Path
 import json
 import os
 import sys
@@ -22,20 +24,29 @@ SCENE = ("Photorealistic premium automotive showroom with deep navy walls, "
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--image-url", required=True, help="Approved public HTTPS vehicle photo URL")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--image-url", help="Approved public HTTPS vehicle photo URL")
+    source.add_argument("--image-file", help="Local authorized JPEG/PNG/WEBP file")
     p.add_argument("--execute", action="store_true", help="Actually call paid/external API")
     p.add_argument("--dry-run", action="store_true", help="Validate and print safe request preview")
     p.add_argument("--output", default="bria_pilot_result.json")
     a = p.parse_args()
-    parsed = urllib.parse.urlparse(a.image_url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        p.error("Image URL must be an HTTPS URL without credentials")
+    if a.image_url:
+        parsed = urllib.parse.urlparse(a.image_url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            p.error("Image URL must be an HTTPS URL without credentials")
+    else:
+        image_path = Path(a.image_file)
+        if image_path.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+            p.error("Expected JPEG, PNG or WEBP image")
+        if not image_path.is_file() or not 0 < image_path.stat().st_size <= 12 * 1024 * 1024:
+            p.error("Image must exist and be at most 12 MB")
     if not a.execute and not a.dry_run:
         p.error("Choose --dry-run or --execute explicitly")
     if a.execute and a.dry_run:
         p.error("Choose only one mode")
     payload = {
-        "image_url": a.image_url,
+        **({"image_url": a.image_url} if a.image_url else {"file": base64.b64encode(image_path.read_bytes()).decode("ascii")}),
         "mode": "high_control",
         "scene_description": SCENE,
         "placement_type": "original",
@@ -45,8 +56,9 @@ def main():
         "sync": True,
     }
     if a.dry_run:
+        safe_payload = {k: ("<base64 image omitted>" if k == "file" else v) for k, v in payload.items()}
         print(json.dumps({"mode": "DRY_RUN", "endpoint": ENDPOINT,
-                          "payload": payload, "cost": "No API call made"}, indent=2))
+                          "payload": safe_payload, "cost": "No API call made"}, indent=2))
         return
     token = os.environ.get("BRIA_API_TOKEN")
     if not token:
