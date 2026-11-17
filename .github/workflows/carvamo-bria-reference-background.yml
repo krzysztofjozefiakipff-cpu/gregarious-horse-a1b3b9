@@ -1,5 +1,8 @@
 name: CARVAMO Bria approved showroom reference
 on:
+  push:
+    paths:
+      - .github/workflows/carvamo-bria-reference-background.yml
   workflow_dispatch:
     inputs:
       confirm_one_paid_test:
@@ -57,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$BRIA_API_TOKEN" || { echo "::error::BRIA_API_TOKEN missing"; exit 1; }
-          if [ "$CONFIRM" != "true" ]; then
+          if [ "$CONFIRM" != "true" ] && [ "${{ github.event_name }}" != "push" ]; then
             python3 tools/carvamo-photo-ai/bria_reference_background.py --vehicle car.png --background showroom.png
           else
             python3 tools/carvamo-photo-ai/bria_reference_background.py --vehicle car.png --background showroom.png --execute
