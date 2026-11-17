@@ -7,6 +7,7 @@ fails closed when segmentation or wheel grounding is unreliable.
 import argparse
 import io
 import json
+from math import isfinite
 from pathlib import Path
 
 from PIL import Image, ImageOps, ImageDraw
@@ -26,8 +27,22 @@ def main():
     parser.add_argument("--floor-anchors", type=Path,
                         help="Optional independently measured floor contacts JSON with points and tolerance_px")
     args = parser.parse_args()
+    if not isfinite(args.azimuth) or not -90 <= args.azimuth <= 90:
+        parser.error("--azimuth must be finite and between -90 and 90")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with Image.open(args.photo) as source:
+        # EXIF may provide camera/lens metadata but never a reliable vehicle
+        # azimuth or calibrated camera pose. Do not publish inferred values.
+        exif = source.getexif()
+        camera_make = str(exif.get(271, ""))[:80] or None
+        camera_model = str(exif.get(272, ""))[:80] or None
+        focal_raw = exif.get(37386)
+        try:
+            focal_mm = float(focal_raw)
+            if not isfinite(focal_mm) or not 0 < focal_mm < 1000:
+                focal_mm = None
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+            focal_mm = None
         if source.width * source.height > 12_000_000:
             raise ValueError("source_pixel_limit")
         photo = ImageOps.exif_transpose(source).convert("RGBA")
@@ -76,6 +91,14 @@ def main():
         if error > tolerance:
             raise ValueError("wheel_ground_plane_unreliable")
     placement["floor_calibration"] = qa
+    placement["camera_source"] = {
+        "azimuth": "manual_test_input_not_estimated",
+        "camera_make": camera_make,
+        "camera_model": camera_model,
+        "exif_focal_length_mm": focal_mm,
+        "camera_pose_from_photo": "not_estimated",
+        "exif_is_sufficient_for_calibration": False,
+    }
     foreground.save(args.output_dir / "segmented.png")
     result.convert("RGB").save(args.output_dir / "composite.png")
     (args.output_dir / "result.json").write_text(json.dumps({
