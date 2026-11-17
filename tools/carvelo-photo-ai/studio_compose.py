@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v7"
+SCENE_VERSION = "studio-v8-contact"
 GROUND_Y = 0.85
 
 
@@ -247,7 +247,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
 
     # Reflection is clipped to the floor and fades quickly; no mirror-image
     # floating above the tiles. Keep original vehicle pixels untouched.
-    floor_y = max(0, min(h-1, min(cy for _, cy in contact_points)))
+    # A reflection starting at the far tire creates a false glossy strip under\n    # the body. Anchor it to the nearest visible wheel instead.\n    floor_y = max(0, min(h-1, max(cy for _, cy in contact_points)))
     reflect_h = max(0, min(round(vh * .20), h - floor_y - 3))
     if reflect_h > 4:
         reflection = ImageOps.flip(car).resize((vw, reflect_h), Image.Resampling.BILINEAR)
@@ -270,19 +270,19 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     ax0, ay0 = left_contact
     ax1, ay1 = right_contact
     span = max(1, ax1 - ax0)
-    depth = max(8, round(h * .030))
+    depth = max(5, round(h * .018))
     painter.polygon([
         (ax0-round(span*.11), ay0-depth),
         (ax1+round(span*.11), ay1-depth),
         (ax1+round(span*.13), ay1+depth),
         (ax0-round(span*.13), ay0+depth),
-    ], fill=120)
-    ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .017))))
+    ], fill=88)
+    ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .020))))
 
     contact = Image.new("L", (w, h), 0)
     touch = ImageDraw.Draw(contact)
     for cx, cy in contact_points:
-        dx = max(9, round(vw * .038))
+        dx = max(8, round(vw * .029))
         dy = max(3, round(h * .008))
         touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy+max(3,round(h*.008))), fill=238)
     contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .003))))
@@ -294,7 +294,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         (ax1, ay1),
         (ax1-round(span*.20), ay1+round(h*.060)),
         (ax0-round(span*.23), ay0+round(h*.046))
-    ], fill=42)
+    ], fill=28)
     directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h*.024))))
     # Tire grounding must be visible even on reflective light tiles.
     # A two-scale footprint creates an opaque seam directly under each tire
@@ -328,8 +328,8 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         cy = round(left_y * (1-t) + right_y*t)
         taper = .65 + .35 * (1-abs(2*t-1))
         rx = max(5, round(wheel_span * .046 * taper))
-        ry = max(5, round(h * .042 * taper))
-        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=210)
+        ry = max(4, round(h * .023 * taper))
+        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=135)
     underbody = underbody.filter(ImageFilter.GaussianBlur(max(4, round(h*.012))))
     core = Image.new("L", (w, h), 0)
     cd = ImageDraw.Draw(core)
@@ -338,8 +338,8 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         cx = round(left_x * (1-t) + right_x*t)
         cy = round(left_y * (1-t) + right_y*t)
         rx = max(4, round(wheel_span*.025))
-        ry = max(3, round(h*.011))
-        cd.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=231)
+        ry = max(3, round(h*.007))
+        cd.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=174)
     core = core.filter(ImageFilter.GaussianBlur(max(2,round(h*.004))))
     underbody = ImageChops.lighter(underbody,core)
     shadow = ImageChops.lighter(
@@ -354,7 +354,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
                            cx+max(5,round(vw*.019)),
                            cy+max(3,round(h*.007))), fill=235)
     seam = seam.filter(ImageFilter.GaussianBlur(max(1,round(h*.001))))
-    shadow = ImageChops.lighter(shadow, seam)
+    shadow = ImageChops.lighter(shadow, seam)\n    # The rear/far tire in a three-quarter view has a higher image-space\n    # contact point. Never force it onto the near tire horizontal baseline.\n    # Keep contact patches independent, and report their spread for QA.\n    contact_spread = max(cy for _, cy in contact_points) - min(cy for _, cy in contact_points)
     layer = Image.new("RGBA", (w, h), (25, 25, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
@@ -366,7 +366,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "vehicle_bounds": [x, y, x + vw, y + vh],
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
-        "wheel_contact_points": contact_points,
+        "wheel_contact_points": contact_points,\n        "wheel_contact_spread_px": contact_spread,\n        "contact_shadow_version": "per-wheel-v2",
         "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
