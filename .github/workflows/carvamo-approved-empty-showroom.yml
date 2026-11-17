@@ -1,4 +1,4 @@
-name: CARVAMO V2 isolated reference acceptance QA
+name: CARVAMO V2 reference camera and turquoise wash QA
 on:
   push:
     branches: [main]
