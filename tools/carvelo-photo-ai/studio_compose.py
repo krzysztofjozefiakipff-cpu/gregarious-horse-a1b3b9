@@ -247,7 +247,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
 
     # Reflection is clipped to the floor and fades quickly; no mirror-image
     # floating above the tiles. Keep original vehicle pixels untouched.
-    # A reflection starting at the far tire creates a false glossy strip under\n    # the body. Anchor it to the nearest visible wheel instead.\n    floor_y = max(0, min(h-1, max(cy for _, cy in contact_points)))
+    # A reflection starting at the far tire creates a false glossy strip under
+    # the body. Anchor it to the nearest visible wheel instead.
+    floor_y = max(0, min(h-1, max(cy for _, cy in contact_points)))
     reflect_h = max(0, min(round(vh * .20), h - floor_y - 3))
     if reflect_h > 4:
         reflection = ImageOps.flip(car).resize((vw, reflect_h), Image.Resampling.BILINEAR)
@@ -370,7 +372,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "vehicle_bounds": [x, y, x + vw, y + vh],
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
-        "wheel_contact_points": contact_points,\n        "wheel_contact_spread_px": contact_spread,\n        "contact_shadow_version": "per-wheel-v2",
+        "wheel_contact_points": contact_points,
+        "wheel_contact_spread_px": contact_spread,
+        "contact_shadow_version": "per-wheel-v2",
         "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
