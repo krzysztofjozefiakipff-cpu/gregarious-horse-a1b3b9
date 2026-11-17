@@ -75,25 +75,23 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("Neutral satin stone floor", (.27, .28, .29), .04, .68)
+    floor = material("CARVAMO matte graphite floor", (.115, .125, .135), .02, .88)
     grout = material("Floor joints", (.19, .20, .21), 0, .88)
-    wall = material("Soft graphite walls", (.14, .15, .17), .0, .78)
-    ceiling = material("Ceiling charcoal", (.20, .21, .22), 0, .82)
-    wood = material("Warm walnut slats", (.24, .12, .065), 0, .52)
+    wall = material("CARVAMO neutral graphite walls", (.19, .205, .22), 0, .85)
+    ceiling = material("Ceiling charcoal", (.12, .13, .145), 0, .88)
+    wood = material("Warm walnut slats", (.17, .11, .075), 0, .78)
     led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
     white = material("CARVAMO white letters", (.88, .9, .89), .1, .3)
     red = material("CARVAMO red V", (.76, .055, .075), .05, .3)
 
     cube("Floor slab", (0, 0, -.13), (19, 17, .26), floor)
-    # Tile seams are physical geometry, so perspective is rendered correctly.
-    for i in range(-9, 10):
-        cube("Tile seam X %s" % i, (i, 0, .002), (.009, 17, .003), grout)
-    for j in range(-8, 9):
-        cube("Tile seam Y %s" % j, (0, j, .002), (19, .009, .003), grout)
+    # Seamless photo-studio floor avoids high-contrast grout lines under vehicles.
     cube("Back wall", (0, 7.7, 2.8), (19, .2, 5.6), wall)
     # The 180-degree camera orbit passes the side elevations.
-    # Open camera-facing sides: side-on orbit views must not look through walls.\n    # Side glazing is deliberately omitted until visibility-safe 3D architecture is validated.
+    # Actual side walls eliminate black voids at the +/-90 degree views.
+    cube("Left studio wall", (-9.4, 0, 2.8), (.2, 17, 5.6), wall)
+    cube("Right studio wall", (9.4, 0, 2.8), (.2, 17, 5.6), wall)
     cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)
 
     # Architectural vertical wood slats on the rear wall.
@@ -124,19 +122,20 @@ def build():
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     sign.data.materials.append(logo_material)
 
-    for x in (-6.9, -3.5, 0, 3.5, 6.9):
-        for y in (-5.8, -.8, 4.2):
-            cube("Recessed light", (x, y, 5.525), (2.25, .11, .015), led)
-            area_light("Ceiling softbox", (x, y, 5.45), 900, (2.2, .8),
+    # Fewer broad, lower-energy softboxes reduce floor blowout and hard contrast.
+    for x in (-5.0, 0, 5.0):
+        for y in (-3.0, 3.0):
+            cube("Recessed light", (x, y, 5.525), (2.5, .11, .015), led)
+            area_light("Ceiling softbox", (x, y, 5.45), 260, (3.6, 2.0),
                        (x, y, 0))
-    area_light("Front fill", (0, -6.5, 4.4), 1300, (8, 3), (0, 0, 1))
-    area_light("Right fill", (7.8, -1, 3.8), 850, (3, 5), (0, 0, 1))
-    area_light("Left fill", (-7.8, -1, 3.8), 850, (3, 5), (0, 0, 1))
+    area_light("Front fill", (0, -6.5, 4.4), 380, (8, 4), (0, 0, 1))
+    area_light("Right fill", (7.8, -1, 3.8), 250, (4, 5), (0, 0, 1))
+    area_light("Left fill", (-7.8, -1, 3.8), 250, (4, 5), (0, 0, 1))
 
     world = bpy.context.scene.world
     world.color = (.2, .2, .2)
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = .45
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = .22
     bpy.ops.object.camera_add()
     camera = bpy.context.object
     camera.name = "CARVAMO calibrated orbit camera"
@@ -147,6 +146,7 @@ def build():
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.samples = args.samples
+    # OVH Blender build lacks OpenImageDenoiser; do not enable it here.
     bpy.context.view_layer.cycles.use_denoising = False
     scene.render.resolution_x = args.width
     scene.render.resolution_y = args.height
@@ -154,17 +154,19 @@ def build():
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
+    scene.view_settings.look = "Medium High Contrast"
+    scene.view_settings.exposure = -0.65
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    target = Vector((0, 0, 1.0))
+    target = Vector((0, 0, 1.25))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
         # Keep every camera in front of the back wall, even at +/-90 degrees.
         # A pure semicircle placed cameras sideways into empty black space.
-        camera.location = (5.6*math.sin(rad), -5.6 - 2.0*math.cos(rad), 1.35)
+        camera.location = (4.6*math.sin(rad), -6.3 - 1.0*math.cos(rad), 1.35)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -186,11 +188,11 @@ def build():
             "empty": True,
         })
     # Persist the actual calibrated camera pose, not the unpositioned camera.
-    camera.location = (0, -7.6, 1.35)
+    camera.location = (0, -7.3, 1.35)
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
-        json.dumps({"scene": "CARVAMO 180 3D v1",
+        json.dumps({"scene": "CARVAMO 180 3D v5 studio test",
                     "camera_views": metadata}, indent=2), encoding="utf-8")
     print("CARVAMO 3D scene and %d camera views generated" % len(metadata))
 
