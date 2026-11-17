@@ -49,7 +49,7 @@ jobs:
             for source in wheel_qa/${view}_*.png; do
               [ -f "$source" ] || continue
               name=$(basename "$source" .png)
-              if python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --view "$view" --car-width 0.69 --floor-y 0.77 --floor-reflection water_mirror --vehicle "$source" --background wheel_qa/showroom.png --output-dir "wheel_qa/$name"; then
+              if python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --view "$view" --car-width 0.60 --floor-y 0.77 --floor-reflection water_mirror --vehicle "$source" --background wheel_qa/showroom.png --output-dir "wheel_qa/$name"; then
                 count=$((count+1))
               else
                 echo "DETECTION_FAILED=$name" | tee "wheel_qa/$name-failed.txt"
