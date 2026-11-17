@@ -1,4 +1,4 @@
-name: CARVAMO Bria one-photo OVH test
+name: CARVAMO Bria front-view second test
 on:
   workflow_dispatch:
   push:
@@ -27,12 +27,22 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-      - name: Retrieve one existing test vehicle from OVH
+      - name: Retrieve front-view JAECOO test vehicle from OVH
         run: |
           set -euo pipefail
           test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v51/original_car_rgba.png" car_source.png
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST" 'bash -s' <<'SH'
+          set -euo pipefail
+          for p in /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v40/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/original_car_rgba.png; do
+            if test -s "$p"; then printf '%s' "$p"; exit 0; fi
+          done
+          echo "Front image candidates not found" >&2
+          exit 2
+          SH
+          SRC=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST" 'for p in /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v40/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/original_car_rgba.png; do if test -s "$p"; then printf "%s" "$p"; exit 0; fi; done; exit 2')
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:$SRC" car_source.png
           file car_source.png
+          sha256sum car_source.png
           test -s car_source.png
       - name: Generate one Bria AI candidate
         run: |
@@ -59,10 +69,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: carvamo-bria-ovh-test
+          name: carvamo-bria-front-second-test
           path: |
             bria_result.jpg
             bria_pilot_result.json
+            car_source.png
           retention-days: 7
           if-no-files-found: warn
       - name: Clean SSH key
