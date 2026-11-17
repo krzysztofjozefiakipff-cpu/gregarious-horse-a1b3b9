@@ -1,4 +1,4 @@
-name: CARVAMO V2 reference camera and turquoise wash QA
+name: CARVAMO V2 LED continuity and denoising QA
 on:
   push:
     branches: [main]
