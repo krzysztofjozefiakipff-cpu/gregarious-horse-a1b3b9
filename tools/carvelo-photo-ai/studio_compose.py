@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v9-no-reflection"
+SCENE_VERSION = "studio-v10-contact-qa"
 GROUND_Y = 0.85
 
 
@@ -272,10 +272,10 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     contact = Image.new("L", (w, h), 0)
     touch = ImageDraw.Draw(contact)
     for cx, cy in contact_points:
-        dx = max(8, round(vw * .029))
-        dy = max(3, round(h * .008))
+        dx = max(7, round(vw * .022))
+        dy = max(2, round(h * .005))
         touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy+max(3,round(h*.008))), fill=238)
-    contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .003))))
+    contact = contact.filter(ImageFilter.GaussianBlur(max(1, round(h * .002))))
 
     directional = Image.new("L", (w, h), 0)
     dr = ImageDraw.Draw(directional)
@@ -295,12 +295,12 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         # Two-layer tire footprint: an almost-black, very tight contact seam
         # and a softer ground-level penumbra. Do not shift the seam toward the
         # global ground line: perspective can place each tire at a different y.
-        rx = max(6, round(vw * .025))
+        rx = max(5, round(vw * .020))
         ry = max(2, round(h * .004))
         # Shift the contact patch a few pixels below the opaque tire edge:
         # a centered ellipse is mostly hidden behind the wheel silhouette.
-        fd.ellipse((cx-rx, cy-1, cx+rx, cy+max(4, round(h*.010))), fill=247)
-    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0012))))
+        fd.ellipse((cx-rx, cy, cx+rx, cy+max(3, round(h*.006))), fill=225)
+    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .001))))
 
     # The source studio has a broad dark occlusion zone below the rocker
     # panel. A thin line between tire centers leaves the underside bright
@@ -318,9 +318,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         cy = round(left_y * (1-t) + right_y*t)
         taper = .65 + .35 * (1-abs(2*t-1))
         rx = max(5, round(wheel_span * .046 * taper))
-        ry = max(4, round(h * .023 * taper))
-        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=135)
-    underbody = underbody.filter(ImageFilter.GaussianBlur(max(4, round(h*.012))))
+        ry = max(3, round(h * .016 * taper))
+        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=105)
+    underbody = underbody.filter(ImageFilter.GaussianBlur(max(3, round(h*.009))))
     core = Image.new("L", (w, h), 0)
     cd = ImageDraw.Draw(core)
     for i in range(37):
@@ -363,7 +363,8 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "wheel_contact_points": contact_points,
         "wheel_contact_spread_px": contact_spread,
         "wheel_perspective_review_required": contact_spread > round(h * .055),
-        "contact_shadow_version": "per-wheel-v2",
+        "visual_qa_required": True,
+        "contact_shadow_version": "per-wheel-v3-tight",
         "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
