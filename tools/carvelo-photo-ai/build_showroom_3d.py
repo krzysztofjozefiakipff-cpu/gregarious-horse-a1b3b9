@@ -75,10 +75,10 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("CARVAMO mirror graphite floor", (.095, .105, .125), .42, .16) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
+    floor = material("CARVAMO mirror graphite floor", (.18, .19, .205), .62, .12) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
     grout = material("Floor joints", (.19, .20, .21), 0, .88)
-    wall = material("CARVAMO neutral graphite walls", (.145, .16, .19) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
-    ceiling = material("Ceiling charcoal", (.17, .18, .19), 0, .88)
+    wall = material("CARVAMO neutral graphite walls", (.46, .47, .48) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
+    ceiling = material("Architectural light ceiling", (.53, .54, .55), 0, .75)
     wood = material("Warm walnut slats", (.17, .11, .075), 0, .78)
     led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
@@ -98,8 +98,8 @@ def build():
     # Legacy layout remains selectable for before/after QA.
     if args.studio_style == "mirror-premium":
         cool_led = material("CARVAMO cool white LED", (.82, .9, 1.0), 0, .28)
-        for x in (-7.6, -4.8, -2.0, 1.0, 7.7):
-            cube("Rear vertical LED %.1f" % x, (x, 7.52, 2.85), (.035, .06, 4.85), cool_led)
+        for x in (-8.2, -6.2, -4.2, -2.2, -.2, 1.8, 3.8, 5.8, 7.8):
+            cube("Rear vertical LED %.1f" % x, (x, 7.48, 2.85), (.045, .11, 5.10), cool_led)
             area_light("Rear LED glow %.1f" % x, (x, 7.1, 3.0), 75, (.22, 4.4), (x, 0, 2.0))
         for x in (-9.25, 9.25):
             for y in (-4.5, .0, 4.5):
@@ -112,7 +112,8 @@ def build():
     # Continuous architectural recess: a single, repeatable studio for all brands.
     cube("Rear shadow band", (0, 7.47, .16), (18.5, .10, .32), ceiling)
     cube("Rear upper shadow band", (0, 7.47, 5.37), (18.5, .10, .18), ceiling)
-    cube("Brand fascia", (4.3, 7.48, 3.3), (7.3, .16, 2.2), wall, .04)
+    if args.logo_png:
+        cube("Brand fascia", (4.3, 7.48, 3.3), (7.3, .16, 2.2), wall, .04)
     # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
     logo_png = Path(args.logo_png) if args.logo_png else None
     if args.logo_png and not logo_png.is_file():
@@ -143,8 +144,11 @@ def build():
     # A reflection is not evidence of correct tire contact: physical QA remains separate.
     if args.studio_style == "mirror-premium":
         luminous = material("CARVAMO ceiling luminous panel", (.82, .87, .94), 0, .35)
-        cube("Large luminous ceiling panel", (0, -1.1, 5.515), (10.5, 6.0, .018), luminous)
-        area_light("Large ceiling softbox", (0, -1.1, 5.42), 650, (10.0, 5.8), (0, 0, 0))
+        cube("Large luminous ceiling panel", (0, -1.1, 5.515), (12.5, 7.5, .018), luminous)
+        area_light("Large ceiling softbox", (0, -1.1, 5.42), 1100, (12.0, 7.0), (0, 0, 0))
+    if args.studio_style == "mirror-premium":
+        for x in (-4.5, 0, 4.5):
+            area_light("Focused cinematic key %.1f" % x, (x, 1.5, 5.2), 450, (1.2, 1.2), (x*.3, 0, .8))
     # Fewer broad, lower-energy softboxes reduce floor blowout and hard contrast.
     for x in (-5.0, 0, 5.0):
         for y in (-3.0, 3.0):
@@ -182,7 +186,7 @@ def build():
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
-    scene.view_settings.exposure = -0.20
+    scene.view_settings.exposure = 0.15
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
