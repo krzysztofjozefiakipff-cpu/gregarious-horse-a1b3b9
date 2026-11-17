@@ -43,8 +43,10 @@ def main():
     req=urllib.request.Request(url,headers={"User-Agent":"CARVAMO-Bria-Pilot"})
     with urllib.request.urlopen(req,timeout=120) as r: data=r.read(12*1024*1024+1)
     if not 0<len(data)<=12*1024*1024:raise RuntimeError("Invalid output size")
-    (out/"candidate.png").write_bytes(data)
-    print("Saved unapproved candidate",out/"candidate.png")
+    suffix=".png" if data.startswith(b"\\x89PNG") else ".jpg" if data.startswith(b"\\xff\\xd8") else ".webp" if data.startswith(b"RIFF") else None
+    if not suffix: raise RuntimeError("Bria returned unrecognized image bytes")
+    (out/("candidate"+suffix)).write_bytes(data)
+    print("Saved unapproved candidate",out/("candidate"+suffix))
 if __name__=="__main__":
     try:main()
     except Exception as e:print(type(e).__name__+": "+str(e),file=sys.stderr);sys.exit(1)
