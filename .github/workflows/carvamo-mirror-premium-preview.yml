@@ -1,5 +1,5 @@
 name: CARVAMO Mirror Premium OVH preview
-# Brand Book 2.0 marine/navy palette render QA; official logo still required for final branding.
+# Brand Book 2.0 QA: canonical logo discovery and measured silhouette alignment; production remains unchanged.
 on:
   push:
     branches: [main]
