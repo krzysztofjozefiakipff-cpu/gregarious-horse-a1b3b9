@@ -154,7 +154,6 @@ def build():
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
-    scene.view_settings.look = "Medium High Contrast"
     scene.view_settings.exposure = -0.65
     scene.render.image_settings.color_mode = "RGB"
 
