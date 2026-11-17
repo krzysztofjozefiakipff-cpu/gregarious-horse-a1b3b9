@@ -8,7 +8,7 @@ def main():
  p=argparse.ArgumentParser()
  p.add_argument("--vehicle",required=True);p.add_argument("--background",required=True)
  p.add_argument("--output-dir",default="carvamo_fixed_studio_result")
- p.add_argument("--car-width",type=float,default=.69)
+ p.add_argument("--car-width",type=float,default=.60)
  p.add_argument("--floor-y",type=float,default=.77)
  p.add_argument("--view",choices=["front","rear","left","right"],default="front")
  p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
@@ -21,7 +21,7 @@ def main():
  bb=source.getchannel("A").point(lambda v:255 if v>=32 else 0).getbbox()
  if not bb:raise ValueError("Missing vehicle transparency")
  car=source.crop(bb)
- scale=min(W*a.car_width/car.width,H*.68/car.height)
+ scale=min(W*a.car_width/car.width,H*.61/car.height)
  car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS)
  cw,ch=car.size;x=(W-cw)//2;alpha=car.getchannel("A")
  # Wheel regions are orientation-specific. We sample the bottom of the alpha
@@ -112,7 +112,7 @@ def main():
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
  "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
+ "estimated_contact_points":points,"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"logo_visible_natural_scale_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "wheel_ground_contact_verified":calibrated,"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
