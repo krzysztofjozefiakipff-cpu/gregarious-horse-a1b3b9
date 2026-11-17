@@ -1,0 +1,54 @@
+{
+  "reference": "CARVAMO accepted 1536x865 reference image, supplied in conversation",
+  "scene_profile": "premium-studio-v2-independent-qa",
+  "image": "preview/approved-empty-showroom.png",
+  "image_dimensions": [
+    1280,
+    720
+  ],
+  "band_median_rgb": [
+    [
+      20,
+      30,
+      33
+    ],
+    [
+      25,
+      43,
+      47
+    ],
+    [
+      10,
+      21,
+      24
+    ]
+  ],
+  "reference_band_median_rgb": [
+    [
+      38,
+      77,
+      84
+    ],
+    [
+      8,
+      52,
+      61
+    ],
+    [
+      29,
+      64,
+      72
+    ]
+  ],
+  "checks": {
+    "G1_png_dimensions": true,
+    "G2_not_overexposed": true,
+    "G2_bright_ceiling_rails": true,
+    "G2_dark_floor": true,
+    "G3_canonical_logo_present": false
+  },
+  "G4_visual_comparison": "PENDING — requires actual side-by-side inspection",
+  "ready_for_vehicle_compositing": false,
+  "acceptance": "REJECTED",
+  "notes": "Reference includes vehicle; band medians are diagnostics, not pixel-match targets."
+}
