@@ -65,6 +65,32 @@ jobs:
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/poc/jaecoo8_mirror_poc.png" preview/
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/poc/mirror_poc_report.json" preview/
           printf '%s\n' 'Mirror-floor POC only: physical wheel contact and reflection perspective NOT verified' > preview/qa-status.txt
+      - name: Validate Brand Book 2.0 render and publication gates
+        if: success()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("preview")
+          scene=json.loads((root/"scene_qa.json").read_text())
+          report=json.loads((root/"mirror_poc_report.json").read_text())
+          for name in ("empty_+000.png","empty_-090.png","empty_+090.png","jaecoo8_mirror_poc.png"):
+              p=root/name
+              assert p.is_file() and p.stat().st_size>10000, "Missing image: "+name
+              with p.open("rb") as stream:
+                  assert stream.read(8)==bytes.fromhex("89504e470d0a1a0a"), "Invalid PNG: "+name
+          assert scene.get("brand_book")=="CARVAMO Brand Book 2.0"
+          assert scene.get("slogan")=="Dobra cena. Prosto od dealera."
+          assert scene.get("palette",{}).get("navy")=="#102A34"
+          logo=bool(scene.get("official_logo_included"))
+          contact=bool(report.get("wheel_ground_contact_verified",False))
+          ready=logo and contact and bool(report.get("ready_for_publication",False))
+          status={"render_files_valid":True,"canonical_logo_present":logo,
+                  "wheel_ground_contact_verified":contact,"ready_for_publication":ready}
+          (root/"qa-status.json").write_text(json.dumps(status,indent=2))
+          print(json.dumps(status,indent=2))
+          PY
       - name: Publish image for iPhone viewing inside GitHub repository
         if: success()
         env:
