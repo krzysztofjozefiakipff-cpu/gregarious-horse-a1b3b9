@@ -52,7 +52,7 @@ jobs:
         run: |
           python3 -m pip install --quiet pillow numpy
           python3 tools/carvamo-photo-ai/qa_premium_studio_v2.py --image preview/approved-empty-showroom.png --scene-qa preview/scene_qa.json --output preview/studio-v2-qa.json
-      - name: Publish isolated preview to repository
+      - name: Publish isolated preview and QA to repository
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
@@ -61,36 +61,23 @@ jobs:
           import base64,json,os,urllib.request,urllib.error
           from pathlib import Path
           repo=os.environ["GH_REPOSITORY"]
-          path="photo-ai-preview/studio-v2-candidate.png"
-          url="https://api.github.com/repos/"+repo+"/contents/"+path
           headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"carvamo-showroom-qa"}
-          sha=None
-          try:
-              with urllib.request.urlopen(urllib.request.Request(url+"?ref=main",headers=headers)) as response:
-                  sha=json.load(response)["sha"]
-          except urllib.error.HTTPError as e:
-              if e.code!=404: raise
-          payload={"message":"CARVAMO: publish V2 candidate (not approved)","content":base64.b64encode(Path("preview/approved-empty-showroom.png").read_bytes()).decode(),"branch":"main"}
-          if sha: payload["sha"]=sha
-          req=urllib.request.Request(url,method="PUT",headers={**headers,"Content-Type":"application/json"},data=json.dumps(payload).encode())
-          with urllib.request.urlopen(req,timeout=120) as response:
-              print(json.load(response)["content"]["html_url"])
-          # Publish the QA verdict separately; a generated preview is not approval.
-          python3 - <<'PY'
-          import base64,json,os,urllib.request,urllib.error
-          from pathlib import Path
-          repo=os.environ["GH_REPOSITORY"]
-          path="photo-ai-preview/studio-v2-qa.json"
-          url="https://api.github.com/repos/"+repo+"/contents/"+path
-          headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github+json","User-Agent":"carvamo-qa"}
-          sha=None
-          try:
-              with urllib.request.urlopen(urllib.request.Request(url+"?ref=main",headers=headers)) as resp: sha=json.load(resp)["sha"]
-          except urllib.error.HTTPError as e:
-              if e.code!=404: raise
-          payload={"message":"CARVAMO: publish V2 measured QA and blockers","content":base64.b64encode(Path("preview/studio-v2-qa.json").read_bytes()).decode(),"branch":"main"}
-          if sha: payload["sha"]=sha
-          with urllib.request.urlopen(urllib.request.Request(url,method="PUT",headers={**headers,"Content-Type":"application/json"},data=json.dumps(payload).encode()),timeout=120) as resp: print(resp.status)
+          for path,local in (
+              ("photo-ai-preview/studio-v2-candidate.png","preview/approved-empty-showroom.png"),
+              ("photo-ai-preview/studio-v2-qa.json","preview/studio-v2-qa.json")
+          ):
+              url="https://api.github.com/repos/"+repo+"/contents/"+path
+              sha=None
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url+"?ref=main",headers=headers)) as response:
+                      sha=json.load(response)["sha"]
+              except urllib.error.HTTPError as e:
+                  if e.code!=404: raise
+              payload={"message":"CARVAMO: publish V2 candidate and QA (not approved)","content":base64.b64encode(Path(local).read_bytes()).decode(),"branch":"main"}
+              if sha: payload["sha"]=sha
+              request=urllib.request.Request(url,method="PUT",headers={**headers,"Content-Type":"application/json"},data=json.dumps(payload).encode())
+              with urllib.request.urlopen(request,timeout=120) as response:
+                  print(json.load(response)["content"]["html_url"])
           PY
       - uses: actions/upload-artifact@v4
         if: always()
