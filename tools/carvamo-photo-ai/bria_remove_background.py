@@ -19,7 +19,7 @@ def main():
  if not token:p.error("Missing BRIA_API_TOKEN")
  boundary="----CARVAMO"+uuid.uuid4().hex
  mime=mimetypes.guess_type(src.name)[0] or "application/octet-stream"
- payload=(f'--{boundary}\\r\\nContent-Disposition: form-data; name="file"; filename="{src.name}"\\r\\nContent-Type: {mime}\\r\\n\\r\\n'.encode()+src.read_bytes()+f'\\r\\n--{boundary}--\\r\\n'.encode())
+ payload=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{src.name}"\r\nContent-Type: {mime}\r\n\r\n'.encode()+src.read_bytes()+f'\r\n--{boundary}--\r\n'.encode())
  req=urllib.request.Request(ENDPOINT,data=payload,headers={"api_token":token,"Content-Type":f"multipart/form-data; boundary={boundary}"},method="POST")
  try:
   with urllib.request.urlopen(req,timeout=180) as response:
