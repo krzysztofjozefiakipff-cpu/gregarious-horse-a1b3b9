@@ -26,7 +26,7 @@ def main():
  car=source.crop(bb)
  target_width=.76 if a.view in ("left","right") else (.63 if a.view in ("front","rear") else .60)
  scale=min(W*target_width/car.width,H*(.59 if a.view in ("left","right") else .61)/car.height)
- # Never upscale the source cutout: synthetic sharpening cannot restore detail.
+ # Avoid unnecessary enlargement; the limiting constraint is the output canvas.\n # Never upscale the source cutout: synthetic sharpening cannot restore detail.
  scale=min(scale,1.0)
  car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS) if scale<.999 else car.copy()
  cw,ch=car.size;x=(W-cw)//2;alpha=car.getchannel("A")
@@ -66,7 +66,7 @@ def main():
  # Fit the visible wheel geometry into the actual floor plane before placement.
  # A distant wheel in a 45-degree photo can be far above the lowest alpha pixel.
  floor_seam=round(H*a.floor_seam_y)
- reserve=round(H*(.16 if a.view in ("front","rear") else .10))
+ reserve=round(H*(.065 if a.view in ("front","rear") else .055))
  margin=round(H*.012)
  min_contact=min(yy for xx,yy in contacts_local)
  required_depth=ch-min_contact
@@ -81,7 +81,7 @@ def main():
   alpha=car.getchannel("A")
   x=(W-cw)//2
   contacts_local=[(min(cw-1,round(xx*cw/old_cw)),min(ch-1,round(yy*ch/old_ch))) for xx,yy in contacts_local]
- baseline=round(H*(a.floor_y+a.ground_drop))
+ baseline=round(H*(a.floor_y+min(a.ground_drop,.015)))
  y=baseline-max(yy for xx,yy in contacts_local)
  # Keep every wheel contact on the visible floor; reserve reflection space.
  floor_seam=round(H*a.floor_seam_y)
@@ -128,7 +128,7 @@ def main():
   anchors=sorted(points)
   (x1,y1),(x2,y2)=anchors[0],anchors[-1]
   if x2==x1:raise ValueError("Wheel contacts must have different x coordinates")
-  opacity=185 if a.floor_reflection=="water_mirror" else 42
+  opacity=215 if a.floor_reflection=="water_mirror" else 42
   refl=Image.new("RGBA",(W,H),(0,0,0,0))
   for col in range(cw):
    gx=x+col
@@ -152,6 +152,21 @@ def main():
     fade.putpixel((0,rr),round(opacity*(1-rr/max(1,length-1))**1.45))
    strip.putalpha(ImageChops.multiply(fa,fade))
    refl.paste(strip,(gx,axis))
+  # In head-on views the photographed wheels may be hidden by the body.
+  # Add subtle schematic tire silhouettes ONLY inside the reflection,
+  # never on the original vehicle. These are placeholders, not reconstructed rims.
+  if frontal and a.floor_reflection=="water_mirror":
+   tire_layer=Image.new("RGBA",(W,H),(0,0,0,0))
+   td=ImageDraw.Draw(tire_layer)
+   tire_top=max(y+ch+gap_px, floor_seam+1)
+   tire_h=min(round(H*.07),max(0,H-tire_top-3))
+   if tire_h>=9:
+    for center in (x+round(cw*.145),x+round(cw*.855)):
+     rx=max(5,round(cw*.052))
+     td.ellipse((center-rx,tire_top,center+rx,tire_top+tire_h),fill=(12,15,19,112))
+     td.ellipse((center-round(rx*.48),tire_top+round(tire_h*.16),center+round(rx*.48),tire_top+round(tire_h*.72)),fill=(76,81,85,52))
+    tire_layer=tire_layer.filter(ImageFilter.GaussianBlur(max(2,round(W*.002))))
+    refl=Image.alpha_composite(refl,tire_layer)
   refl=refl.filter(ImageFilter.GaussianBlur(max(2,round(W*(.0015 if a.floor_reflection=="water_mirror" else .004)))))
   refl.putalpha(ImageChops.multiply(refl.getchannel("A"),floor_mask))
   scene=Image.alpha_composite(scene,refl)
@@ -170,7 +185,7 @@ def main():
  "method":"fixed_background_perspective_contact_shadows_v5","view":a.view,
  "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"vehicle_bbox":[x,y,x+cw,y+ch],
  "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"lower_vehicle_three_wheel_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
- "frontal_reflected_side_wheels_synthesized":False,"wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
+ "frontal_reflected_side_wheels_synthesized":frontal and a.floor_reflection=="water_mirror","wheel_reflection_type":"schematic_unverified","wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
  print("Candidate:",candidate,"contacts:",points,"publication blocked pending visual QA")
