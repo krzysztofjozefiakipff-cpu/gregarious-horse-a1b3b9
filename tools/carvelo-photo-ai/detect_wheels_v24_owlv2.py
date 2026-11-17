@@ -34,7 +34,7 @@ def run(args):
         with torch.inference_mode():
             outputs = model(**inputs)
         target_sizes = torch.tensor([photo.size[::-1]])
-        result = processor.post_process_object_detection(
+        result = processor.post_process_grounded_object_detection(
             outputs, threshold=args.threshold, target_sizes=target_sizes)[0]
         boxes = result["boxes"].detach().cpu().tolist()
         scores = result["scores"].detach().cpu().tolist()
