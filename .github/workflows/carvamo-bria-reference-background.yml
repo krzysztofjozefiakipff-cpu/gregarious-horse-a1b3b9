@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
-          ASSET="photo-ai-preview/approved-showroom.png"
+          ASSET="photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png"
           if [ ! -f "$ASSET" ]; then
             echo "::error::Upload approved-showroom.png into photo-ai-preview/ on GitHub first"
             exit 1
@@ -42,7 +42,7 @@ jobs:
           python3 - <<'PY'
           import struct
           from pathlib import Path
-          b=Path('photo-ai-preview/approved-showroom.png').read_bytes()
+          b=Path('photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png').read_bytes()
           assert b[:8] == bytes([137,80,78,71,13,10,26,10]), 'Invalid PNG'
           assert struct.unpack('>II',b[16:24]) == (1671,941), 'Wrong reference dimensions'
           PY
