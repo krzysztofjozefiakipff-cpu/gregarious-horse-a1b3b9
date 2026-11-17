@@ -75,15 +75,15 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("CARVAMO mirror graphite floor", (.18, .19, .205), .62, .12) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
+    floor = material("CARVAMO mirror graphite floor", (.055, .13, .16), .62, .12) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
     grout = material("Floor joints", (.19, .20, .21), 0, .88)
-    wall = material("CARVAMO neutral graphite walls", (.46, .47, .48) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
-    ceiling = material("Architectural light ceiling", (.53, .54, .55), 0, .75)
+    wall = material("CARVAMO neutral graphite walls", (.063, .165, .204) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
+    ceiling = material("CARVAMO marine ceiling", (.085, .19, .23), 0, .75)
     wood = material("Warm walnut slats", (.17, .11, .075), 0, .78)
-    led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
+    led = material("Neutral white LED diffuser", (.85, .96, .97), 0, .3)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
     white = material("CARVAMO white letters", (.88, .9, .89), .1, .3)
-    red = material("CARVAMO red V", (.76, .055, .075), .05, .3)
+    mint = material("CARVAMO mint #31E7D0", (.031, .80, .68), 0, .3)
 
     cube("Floor slab", (0, 0, -.13), (19, 17, .26), floor)
     # Seamless photo-studio floor avoids high-contrast grout lines under vehicles.
@@ -113,7 +113,9 @@ def build():
     cube("Rear shadow band", (0, 7.47, .16), (18.5, .10, .32), ceiling)
     cube("Rear upper shadow band", (0, 7.47, 5.37), (18.5, .10, .18), ceiling)
     if args.logo_png:
-        cube("Brand fascia", (4.3, 7.48, 3.3), (7.3, .16, 2.2), wall, .04)
+        # Brand Book 2.0: canonical logo on a light protective field.
+        brand_field = material("CARVAMO protective light field #F1F6F5", (.88, .94, .93), 0, .72)
+        cube("Brand Book 2.0 logo panel", (0, 7.44, 4.05), (7.2, .16, 1.65), brand_field, .04)
     # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
     logo_png = Path(args.logo_png) if args.logo_png else None
     if args.logo_png and not logo_png.is_file():
@@ -129,16 +131,18 @@ def build():
         logo_material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
         logo_material.node_tree.links.new(texture.outputs["Alpha"], bsdf.inputs["Alpha"])
         logo_material.blend_method = "BLEND"
-        bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 7.34, 4.05),
                                          rotation=(math.pi / 2, 0, 0))
         sign = bpy.context.object
         sign.name = "Official CARVAMO SVG wall sign"
-        sign.dimensions = (5.7, 1.45, 1)
+        sign.dimensions = (5.7, 1.18, 1)
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
         sign.data.materials.append(logo_material)
 
+        text_object("Dobra cena. Prosto od dealera.", "CARVAMO brand slogan",
+                    (0, 7.28, 2.98), .34, white)
     else:
-        print("CARVAMO logo PNG absent: rendering unbranded QA scene; no substitute logo")
+        print("CARVAMO Brand Book 2.0 logo absent: unbranded QA only, not final studio")
 
     # Reference 2: broad softboxes and cinematic side fills; reflected by mirror floor.
     # A reflection is not evidence of correct tire contact: physical QA remains separate.
@@ -232,6 +236,9 @@ def build():
         "reason": "Physical tire contact, geometric floor reflection and official logo require separate validation",
         "angles_rendered": len(metadata),
         "official_logo_included": bool(args.logo_png),
+        "brand_book": "CARVAMO Brand Book 2.0",
+        "slogan": "Dobra cena. Prosto od dealera.",
+        "palette": {"navy": "#102A34", "teal": "#008F83", "mint": "#31E7D0", "light": "#F1F6F5"},
         "scene_file": "carvamo_showroom_180.blend"
     }, indent=2), encoding="utf-8")
     print("CARVAMO 3D scene and %d camera views generated" % len(metadata))
