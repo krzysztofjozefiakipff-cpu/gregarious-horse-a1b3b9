@@ -1,0 +1,58 @@
+name: CARVAMO fixed approved showroom composite
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/carvamo-fixed-showroom-composite.yml'
+permissions:
+  contents: read
+jobs:
+  fixed-studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install image compositor
+        run: python3 -m pip install --user pillow
+      - name: Prepare OVH SSH
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Retrieve approved background and existing isolated vehicle
+        env:
+          REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+          REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p fixed_studio_input
+          test -s photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png
+          cp photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png fixed_studio_input/showroom.png
+          SRC=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST" 'for p in /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v40/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v51/original_car_rgba.png; do if test -s "$p"; then printf "%s" "$p"; exit 0; fi; done; exit 2')
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:$SRC" fixed_studio_input/car.png
+      - name: Composite car without altering showroom reference
+        run: |
+          set -euo pipefail
+          python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --vehicle fixed_studio_input/car.png --background fixed_studio_input/showroom.png --output-dir fixed_studio_result
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          q=json.loads(Path("fixed_studio_result/qa.json").read_text())
+          assert q["background_preserved"] and not q["ready_for_publication"]
+          assert Path("fixed_studio_result/candidate.png").stat().st_size>100000
+          PY
+      - name: Upload isolated visual candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-fixed-showroom-candidate
+          path: fixed_studio_result/
+          retention-days: 7
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
