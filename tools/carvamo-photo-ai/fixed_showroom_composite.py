@@ -10,6 +10,7 @@ def main():
  p.add_argument("--output-dir",default="carvamo_fixed_studio_result")
  p.add_argument("--car-width",type=float,default=.60)
  p.add_argument("--floor-y",type=float,default=.89)
+ p.add_argument("--view",choices=["front","rear","left","right"],default="front")
  a=p.parse_args()
  if not .35<=a.car_width<=.8 or not .75<=a.floor_y<=.96:raise ValueError("Invalid composition settings")
  out=Path(a.output_dir);out.mkdir(parents=True,exist_ok=True)
@@ -34,7 +35,9 @@ def main():
   cutoff=ys[max(0,int(len(ys)*.90)-1)]
   chosen=[(xx,yy) for xx,yy in samples if yy>=cutoff]
   return (round(sum(xx for xx,yy in chosen)/len(chosen)),max(yy for xx,yy in chosen))
- contacts_local=[tire_contact(.30,.49),tire_contact(.88,.99)]
+ bands={"front":[(.30,.49),(.88,.99)],"rear":[(.12,.32),(.65,.89)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
+ contacts_local=[tire_contact(*band) for band in bands[a.view]]
+ if abs(contacts_local[0][0]-contacts_local[1][0])<cw*.18:raise ValueError("Wheel contacts overlap")
  baseline=round(H*a.floor_y)
  y=baseline-max(yy for xx,yy in contacts_local)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
@@ -46,7 +49,7 @@ def main():
  for i,(px,py) in enumerate(points):
   rx=round(cw*(.057 if i==0 else .037))
   ry=max(3,round(rx*.20))
-  d.ellipse((px-rx,py-ry,px+rx,py+ry),fill=230)
+  d.ellipse((px-rx,py-ry,px+rx,py+ry),fill=245)
  contact_mask=contact_mask.filter(ImageFilter.GaussianBlur(max(3,round(W*.003))))
  # Long diffuse shadow beneath chassis, lighter than the contact patches.
  diffuse=Image.new("L",(W,H),0);d=ImageDraw.Draw(diffuse)
@@ -78,9 +81,9 @@ def main():
  scene=Image.alpha_composite(scene,layer)
  candidate=out/"candidate.png";scene.convert("RGB").save(candidate,optimize=True)
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
- "method":"fixed_background_perspective_contact_shadows_v3",
+ "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
  "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"assumed_front_floor_y":baseline,
+ "estimated_contact_points":points,"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "wheel_ground_contact_verified":False,"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
