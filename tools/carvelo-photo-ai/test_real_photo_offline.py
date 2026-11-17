@@ -24,6 +24,8 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--azimuth", type=float, required=True,
                         help="Known source camera azimuth, degrees (-90 to +90)")
+    parser.add_argument("--analyze-wheels", action="store_true",
+                        help="Optional wheel-centre candidates from photo; requires OpenCV")
     parser.add_argument("--analyze-perspective", action="store_true",
                         help="Optional image-derived line cues; requires OpenCV")
     parser.add_argument("--floor-anchors", type=Path,
@@ -65,6 +67,10 @@ def main():
     if args.analyze_perspective:
         from photo_perspective import analyze_vehicle_lines
         perspective = analyze_vehicle_lines(photo, foreground)
+    wheels = None
+    if args.analyze_wheels:
+        from photo_wheels import detect_wheel_candidates
+        wheels = detect_wheel_candidates(photo, foreground)
     background = load_background(args.showroom_dir, args.azimuth, photo.size)
     result, placement = compose_grounded_vehicle(foreground, background, source_photo=photo)
     if not placement.get("wheel_grounded"):
@@ -96,6 +102,8 @@ def main():
         diagnostic.save(args.output_dir / "floor_alignment_diagnostic.png")
         if error > tolerance:
             raise ValueError("wheel_ground_plane_unreliable")
+    if wheels is not None:
+        placement["image_wheel_candidates"] = wheels
     if perspective is not None:
         placement["image_perspective"] = perspective
     placement["floor_calibration"] = qa
