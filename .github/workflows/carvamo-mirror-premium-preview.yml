@@ -5,7 +5,7 @@ on:
     paths: [.github/workflows/carvamo-mirror-premium-preview.yml]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: carvamo-mirror-premium-preview
   cancel-in-progress: false
@@ -63,6 +63,40 @@ jobs:
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/poc/jaecoo8_mirror_poc.png" preview/
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/poc/mirror_poc_report.json" preview/
           printf '%s\n' 'Mirror-floor POC only: physical wheel contact and reflection perspective NOT verified' > preview/qa-status.txt
+      - name: Publish image for iPhone viewing inside GitHub repository
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,json,os,urllib.request,urllib.error
+          from pathlib import Path
+          repo=os.environ["GH_REPOSITORY"]
+          token=os.environ["GH_TOKEN"]
+          for filename in ("jaecoo8_mirror_poc.png","empty_+000.png"):
+              local=Path("preview")/filename
+              if not local.is_file(): raise SystemExit("Missing preview image: "+str(local))
+              path="photo-ai-preview/"+filename
+              url="https://api.github.com/repos/"+repo+"/contents/"+path
+              headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
+                       "X-GitHub-Api-Version":"2022-11-28","User-Agent":"carvamo-photo-ai-preview"}
+              sha=None
+              try:
+                  req=urllib.request.Request(url+"?ref=main",headers=headers)
+                  with urllib.request.urlopen(req,timeout=30) as response:
+                      sha=json.load(response)["sha"]
+              except urllib.error.HTTPError as e:
+                  if e.code!=404: raise
+              payload={"message":"CARVAMO Photo AI: refresh unapproved mirror-floor QA preview",
+                       "content":base64.b64encode(local.read_bytes()).decode("ascii"),"branch":"main"}
+              if sha: payload["sha"]=sha
+              req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={**headers,"Content-Type":"application/json"},method="PUT")
+              with urllib.request.urlopen(req,timeout=90) as response:
+                  result=json.load(response)
+              print("Preview available in GitHub:",result["content"]["html_url"])
+          PY
       - name: Upload renders and logs
         if: always()
         uses: actions/upload-artifact@v4
