@@ -112,6 +112,12 @@ def main():
                         outline=(255, 40, 40), width=4)
             pen.text((x+radius+3, y-10), str(idx), fill=(255, 255, 0),
                      stroke_width=2, stroke_fill=(0, 0, 0))
+        pair_indices = wheels.get("wheel_pair_candidate_indices") or []
+        for index in pair_indices:
+            candidate = wheels["candidates"][index-1]
+            x, y, radius = (candidate[k] for k in ("x", "y", "radius"))
+            pen.ellipse((x-radius, y-radius, x+radius, y+radius),
+                        outline=(30, 230, 70), width=5)
         diagnostic.save(args.output_dir / "wheel_candidates_diagnostic.png")
     if perspective is not None:
         placement["image_perspective"] = perspective
