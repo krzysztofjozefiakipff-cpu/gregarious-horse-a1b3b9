@@ -85,6 +85,33 @@ def detect_wheel_candidates(photo, foreground, max_candidates=8):
         if gap > max(15, r*.48):
             continue
         filtered.append(c)
+    # Wheel rubber is typically darker than the adjacent body panel.
+    # Compare the inner tyre annulus against a local exterior annulus.
+    # Use robust medians to reduce sensitivity to bright alloy spokes.
+    def ring_median(x, y, r, fractions):
+        values = []
+        for fraction in fractions:
+            for theta in np.linspace(0, 2*math.pi, 64, endpoint=False):
+                xx = int(round(x + r*fraction*math.cos(theta)))
+                yy = int(round(y + r*fraction*math.sin(theta)))
+                if 0 <= xx < w and 0 <= yy < h and opaque[yy, xx]:
+                    values.append(float(gray[yy, xx]))
+        return float(np.median(values)) if len(values) >= 24 else None
+
+    for c in filtered:
+        x, y, r = c["x"], c["y"], c["radius"]
+        tyre = ring_median(x, y, r, (.78, .88, .96))
+        exterior = ring_median(x, y, r, (1.18, 1.28))
+        c["tyre_annulus_luma"] = round(tyre, 1) if tyre is not None else None
+        c["exterior_annulus_luma"] = round(exterior, 1) if exterior is not None else None
+        c["dark_ring_contrast"] = (
+            round(exterior-tyre, 1)
+            if tyre is not None and exterior is not None else None
+        )
+        # No contrast evidence => keep as uncertain, not a verified wheel.
+        c["dark_ring_supported"] = (
+            c["dark_ring_contrast"] is not None and c["dark_ring_contrast"] >= 12
+        )
     filtered.sort(key=lambda c: (c["silhouette_bottom_gap_radius_ratio"],
                                   -c["radius"]))
     # Non-maximum suppression: a single wheel may produce nested circles.
@@ -96,13 +123,36 @@ def detect_wheel_candidates(photo, foreground, max_candidates=8):
         selected.append(c)
         if len(selected) >= max_candidates:
             break
+    # A pair hypothesis requires horizontal separation, reasonable wheel
+    # scale consistency, and dark-tyre evidence on BOTH candidates.
+    # This deliberately fails closed when the far wheel is partly occluded.
+    pairs = []
+    for i, a in enumerate(selected):
+        for b in selected[i+1:]:
+            if not (a["dark_ring_supported"] and b["dark_ring_supported"]):
+                continue
+            dx = abs(a["x"] - b["x"])
+            ratio = min(a["radius"], b["radius"]) / max(a["radius"], b["radius"])
+            if dx < .32*body_w or ratio < .42:
+                continue
+            score = (dx/body_w + .4*ratio
+                     - .15*(a["silhouette_bottom_gap_radius_ratio"]
+                             + b["silhouette_bottom_gap_radius_ratio"]))
+            pairs.append((score, i, selected.index(b)))
+    pairs.sort(reverse=True)
     candidates = selected
+    pair = None
+    if pairs:
+        _, i, j = pairs[0]
+        pair = [i+1, j+1]  # 1-based indices for diagnostic overlay
     return {
         "status": "silhouette_filtered_candidates" if candidates else "no_reliable_candidates",
         "candidates": candidates,
         "candidate_count": len(candidates),
         "raw_candidate_count": len(filtered),
-        "selection_method": "lower_silhouette_gap_and_circle_suppression",
+        "wheel_pair_candidate_indices": pair,
+        "wheel_pair_status": "hypothesis_only" if pair else "unresolved",
+        "selection_method": "lower_silhouette_plus_tyre_ring_contrast",
         "wheel_centres_verified": False,
         "vehicle_azimuth_deg": None,
         "camera_pose_verified": False,
