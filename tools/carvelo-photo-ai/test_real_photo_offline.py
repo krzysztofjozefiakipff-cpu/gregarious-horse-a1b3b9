@@ -9,7 +9,7 @@ import io
 import json
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw
 from rembg import remove, new_session
 
 from showroom_3d_adapter import load_background
@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--azimuth", type=float, required=True,
                         help="Known source camera azimuth, degrees (-90 to +90)")
+    parser.add_argument("--floor-anchors", type=Path,
+                        help="Optional independently measured floor contacts JSON with points and tolerance_px")
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with Image.open(args.photo) as source:
@@ -46,6 +48,34 @@ def main():
     result, placement = compose_grounded_vehicle(foreground, background, source_photo=photo)
     if not placement.get("wheel_grounded"):
         raise ValueError("wheel_grounding_unsafe")
+    # Silhouette contacts are hypotheses, not independent floor calibration.
+    qa = {"floor_alignment": "unverified", "independent_anchors": False}
+    if args.floor_anchors is not None:
+        from showroom_camera import floor_alignment_error
+        calibration = json.loads(args.floor_anchors.read_text(encoding="utf-8"))
+        anchors = calibration["points"]
+        tolerance = float(calibration.get("tolerance_px", 12))
+        observed = placement["wheel_contact_points"]
+        if len(anchors) != len(observed) or not 0 < tolerance <= 100:
+            raise ValueError("floor_anchor_metadata_invalid")
+        if any(len(p) != 2 or not all(isinstance(v, (int, float)) for v in p)
+               for p in anchors):
+            raise ValueError("floor_anchor_metadata_invalid")
+        error = floor_alignment_error(observed, anchors)
+        qa = {"floor_alignment": "pass" if error <= tolerance else "fail",
+              "independent_anchors": True,
+              "floor_alignment_rms_px": round(error, 2),
+              "floor_alignment_tolerance_px": tolerance}
+        diagnostic = result.convert("RGB").copy()
+        pen = ImageDraw.Draw(diagnostic)
+        for (mx, my), (ax, ay) in zip(observed, anchors):
+            pen.line((mx, my, ax, ay), fill=(255, 170, 0), width=3)
+            pen.ellipse((ax-6, ay-6, ax+6, ay+6), outline=(0, 230, 80), width=3)
+            pen.ellipse((mx-5, my-5, mx+5, my+5), outline=(255, 40, 40), width=3)
+        diagnostic.save(args.output_dir / "floor_alignment_diagnostic.png")
+        if error > tolerance:
+            raise ValueError("wheel_ground_plane_unreliable")
+    placement["floor_calibration"] = qa
     foreground.save(args.output_dir / "segmented.png")
     result.convert("RGB").save(args.output_dir / "composite.png")
     (args.output_dir / "result.json").write_text(json.dumps({
