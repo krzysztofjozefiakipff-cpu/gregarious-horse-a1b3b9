@@ -25,7 +25,9 @@ def main():
  car=source.crop(bb)
  target_width=.76 if a.view in ("left","right") else (.63 if a.view in ("front","rear") else .60)
  scale=min(W*target_width/car.width,H*(.59 if a.view in ("left","right") else .61)/car.height)
- car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS)
+ # Never upscale the source cutout: synthetic sharpening cannot restore detail.
+ scale=min(scale,1.0)
+ car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS) if scale<.999 else car.copy()
  cw,ch=car.size;x=(W-cw)//2;alpha=car.getchannel("A")
  # Wheel regions are orientation-specific. We sample the bottom of the alpha
  # silhouette, then keep a distinct screen-space floor point for each wheel.
@@ -68,7 +70,9 @@ def main():
  if a.view in ("front","rear") and max(yy for xx,yy in contacts_local)-min(yy for xx,yy in contacts_local)>ch*.15:
   y+=max(0,floor_seam-(y+min(yy for xx,yy in contacts_local)))
  # Keep the whole vehicle and near contact inside the image.
- y=min(y,H-ch-2)
+ # Reserve visible floor below the bumper for the reflection, rather than clipping it.
+ reserve=round(H*(.16 if a.view in ("front","rear") else .10))
+ y=min(y,H-ch-reserve)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
  scene=bg.convert("RGBA")
  # Perspective-aware, multi-scale contact shadows. The rear tire lies higher
@@ -110,13 +114,15 @@ def main():
    t=max(0.,min(1.,(gx-x1)/(x2-x1)))
    axis=round(y1+(y2-y1)*t)+gap_px
    if frontal:axis=max(axis,y+ch+gap_px)
-   local_axis=max(0,min(ch-1,axis-y))
+   # For head-on views the bumper is visible but the tire sidewalls are not.
+   # Mirror the original pixels; do not hallucinate new wheels in this pass.
+   local_axis=(ch-1) if frontal else max(0,min(ch-1,axis-y))
    available=H-axis
    if available<2 or local_axis<2:continue
    # The pixel immediately above the contact line is the first reflected
    # pixel below it. Do not flip the entire car about a different baseline.
    strip=car.crop((col,0,col+1,local_axis+1)).transpose(Image.Transpose.FLIP_TOP_BOTTOM)
-   length=max(1,min(available,round(strip.height*.82)))
+   length=max(1,min(available,round(strip.height*(.68 if frontal else .82))))
    strip=strip.resize((1,length),Image.Resampling.BICUBIC)
    fa=strip.getchannel("A")
    fade=Image.new("L",(1,length),0)
@@ -138,10 +144,10 @@ def main():
   marker.text((px+rr,py-rr),"Wheel "+str(idx+1),fill=(255,255,255))
  diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
- "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
+ "method":"fixed_background_perspective_contact_shadows_v5","view":a.view,
  "background_preserved":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"vehicle_bbox":[x,y,x+cw,y+ch],
  "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"lower_vehicle_three_wheel_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
- "wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
+ "frontal_reflected_side_wheels_synthesized":False,"wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
  print("Candidate:",candidate,"contacts:",points,"publication blocked pending visual QA")
