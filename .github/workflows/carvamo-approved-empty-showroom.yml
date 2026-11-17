@@ -35,7 +35,7 @@ jobs:
           REMOTE="$USER@$HOST"
           $SSH "$REMOTE" 'mkdir -p /tmp/carvamo-approved-empty-studio'
           $SCP tools/carvamo-photo-ai/premium_studio_v2.py "$REMOTE:/tmp/carvamo-approved-empty-studio/premium_studio_v2.py"
-          $SSH "$REMOTE" 'blender -b -t 2 --python /tmp/carvamo-approved-empty-studio/build_showroom_3d.py -- --output-dir /tmp/carvamo-approved-empty-studio/render --studio-style mirror-premium --step 90 --samples 16 --width 1280 --height 720' > preview/render-log.txt 2>&1 || { tail -n 90 preview/render-log.txt; exit 1; }
+          $SSH "$REMOTE" 'blender -b -t 2 --python /tmp/carvamo-approved-empty-studio/premium_studio_v2.py -- --output-dir /tmp/carvamo-approved-empty-studio/render --studio-style mirror-premium --step 90 --samples 16 --width 1280 --height 720' > preview/render-log.txt 2>&1 || { tail -n 90 preview/render-log.txt; exit 1; }
           $SCP "$REMOTE:/tmp/carvamo-approved-empty-studio/render/empty_+000.png" preview/approved-empty-showroom.png
           $SCP "$REMOTE:/tmp/carvamo-approved-empty-studio/render/scene_qa.json" preview/
           python3 - <<'PY'
@@ -45,7 +45,7 @@ jobs:
           assert p.stat().st_size>10000
           assert p.read_bytes()[:8]==bytes.fromhex("89504e470d0a1a0a")
           q=json.loads(Path("preview/scene_qa.json").read_text())
-          assert q["scene_profile"]=="premium-studio-v2-independent-qa"
+          assert q["scene_profile"]=="premium-studio-v2-independent-qa", f"Wrong scene profile: {q.get('scene_profile')!r}"
           print("Verified empty studio PNG and scene profile. Visual comparison still required.")
           PY
       - name: Quantitative QA with explicit acceptance blockers
