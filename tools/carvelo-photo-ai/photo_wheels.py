@@ -123,36 +123,42 @@ def detect_wheel_candidates(photo, foreground, max_candidates=8):
         selected.append(c)
         if len(selected) >= max_candidates:
             break
-    # A pair hypothesis requires horizontal separation, reasonable wheel
-    # scale consistency, and dark-tyre evidence on BOTH candidates.
-    # This deliberately fails closed when the far wheel is partly occluded.
+    # V17: V16's mandatory dark annulus gate rejected both genuine side
+    # wheels (bright alloy spokes make the ring-median unreliable).
+    # Use geometry as a conservative cue instead; keep contrast diagnostic.
+    # The tight vertical agreement requirement targets side-like photos.
+    # Three-quarter views are explicitly unresolved, not falsely certified.
     pairs = []
     for i, a in enumerate(selected):
-        for b in selected[i+1:]:
-            if not (a["dark_ring_supported"] and b["dark_ring_supported"]):
-                continue
+        for j in range(i+1, len(selected)):
+            b = selected[j]
             dx = abs(a["x"] - b["x"])
-            ratio = min(a["radius"], b["radius"]) / max(a["radius"], b["radius"])
-            if dx < .32*body_w or ratio < .42:
+            radius_ratio = min(a["radius"], b["radius"]) / max(a["radius"], b["radius"])
+            mean_radius = (a["radius"] + b["radius"]) / 2
+            vertical_delta = abs(a["y"] - b["y"])
+            if dx < .38*body_w or radius_ratio < .72:
                 continue
-            score = (dx/body_w + .4*ratio
-                     - .15*(a["silhouette_bottom_gap_radius_ratio"]
+            if vertical_delta > .55*mean_radius:
+                continue
+            score = (dx/body_w + .5*radius_ratio
+                     - .5*vertical_delta/mean_radius
+                     - .12*(a["silhouette_bottom_gap_radius_ratio"]
                              + b["silhouette_bottom_gap_radius_ratio"]))
-            pairs.append((score, i, selected.index(b)))
+            pairs.append((score, i, j))
     pairs.sort(reverse=True)
     candidates = selected
     pair = None
     if pairs:
         _, i, j = pairs[0]
-        pair = [i+1, j+1]  # 1-based indices for diagnostic overlay
+        pair = [i+1, j+1]  # 1-based diagnostic overlay indices
     return {
         "status": "silhouette_filtered_candidates" if candidates else "no_reliable_candidates",
         "candidates": candidates,
         "candidate_count": len(candidates),
         "raw_candidate_count": len(filtered),
         "wheel_pair_candidate_indices": pair,
-        "wheel_pair_status": "hypothesis_only" if pair else "unresolved",
-        "selection_method": "lower_silhouette_plus_tyre_ring_contrast",
+        "wheel_pair_status": "side_view_geometry_hypothesis_only" if pair else "unresolved",
+        "selection_method": "v17_side_view_pair_geometry_contrast_diagnostic_only",
         "wheel_centres_verified": False,
         "vehicle_azimuth_deg": None,
         "camera_pose_verified": False,
