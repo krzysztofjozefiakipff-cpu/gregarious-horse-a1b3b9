@@ -32,25 +32,29 @@ jobs:
           mkdir -p wheel_qa
           cp photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png wheel_qa/showroom.png
           for view in front rear left right; do
-            src=$(ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "find /tmp/carvamo-photo-ai-test/results -type f -path '*/$view/*' -name original_car_rgba.png -print -quit 2>/dev/null" || true)
-            if [ -n "$src" ]; then
-              scp -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST:$src" "wheel_qa/$view.png"
-            else
-              echo "MISSING_SOURCE_VIEW=$view" | tee "wheel_qa/$view-missing.txt"
-            fi
+            ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "find /tmp/carvamo-photo-ai-test/results -type f -path '*/$view/*' -name original_car_rgba.png 2>/dev/null | head -n 3" > "wheel_qa/$view-sources.txt" || true
+            idx=0
+            while IFS= read -r src; do
+              [ -n "$src" ] || continue
+              idx=$((idx+1))
+              scp -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST:$src" "wheel_qa/${view}_${idx}.png"
+            done < "wheel_qa/$view-sources.txt"
+            if [ "$idx" -eq 0 ]; then echo "MISSING_SOURCE_VIEW=$view" | tee "wheel_qa/$view-missing.txt"; fi
           done
-      - name: Generate calibration overlays from actual images
+      - name: Generate multi-image water-mirror and wheel diagnostics
         run: |
           set -euo pipefail
           count=0
           for view in front rear left right; do
-            if [ -s "wheel_qa/$view.png" ]; then
-              if python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --view "$view" --vehicle "wheel_qa/$view.png" --background wheel_qa/showroom.png --output-dir "wheel_qa/$view"; then
+            for source in wheel_qa/${view}_*.png; do
+              [ -f "$source" ] || continue
+              name=$(basename "$source" .png)
+              if python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --view "$view" --car-width 0.69 --floor-y 0.77 --floor-reflection water_mirror --vehicle "$source" --background wheel_qa/showroom.png --output-dir "wheel_qa/$name"; then
                 count=$((count+1))
               else
-                echo "DETECTION_FAILED=$view" | tee "wheel_qa/$view-failed.txt"
+                echo "DETECTION_FAILED=$name" | tee "wheel_qa/$name-failed.txt"
               fi
-            fi
+            done
           done
           echo "VIEWS_WITH_DIAGNOSTICS=$count" | tee wheel_qa/summary.txt
           test "$count" -ge 1
