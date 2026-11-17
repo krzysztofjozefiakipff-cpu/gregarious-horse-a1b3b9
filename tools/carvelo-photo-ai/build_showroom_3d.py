@@ -75,9 +75,9 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
+    floor = material("CARVAMO mirror graphite floor", (.095, .105, .125), .42, .16) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
     grout = material("Floor joints", (.19, .20, .21), 0, .88)
-    wall = material("CARVAMO neutral graphite walls", (.245, .255, .265), 0, .82)
+    wall = material("CARVAMO neutral graphite walls", (.145, .16, .19) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
     ceiling = material("Ceiling charcoal", (.17, .18, .19), 0, .88)
     wood = material("Warm walnut slats", (.17, .11, .075), 0, .78)
     led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
@@ -94,11 +94,21 @@ def build():
     cube("Right studio wall", (9.4, 0, 2.8), (.2, 17, 5.6), wall)
     cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)
 
-    # Architectural vertical wood slats on the rear wall.
-    for k in range(23):
-        x = -8.6 + k*.24
-        cube("Walnut slat %02d" % k, (x, 7.54, 2.9),
-             (.10, .09, 5.1), wood, .012)
+    # Reference 1: minimalist graphite architecture with vertical LED strips.
+    # Legacy layout remains selectable for before/after QA.
+    if args.studio_style == "mirror-premium":
+        cool_led = material("CARVAMO cool white LED", (.82, .9, 1.0), 0, .28)
+        for x in (-7.6, -4.8, -2.0, 1.0, 7.7):
+            cube("Rear vertical LED %.1f" % x, (x, 7.52, 2.85), (.035, .06, 4.85), cool_led)
+            area_light("Rear LED glow %.1f" % x, (x, 7.1, 3.0), 75, (.22, 4.4), (x, 0, 2.0))
+        for x in (-9.25, 9.25):
+            for y in (-4.5, .0, 4.5):
+                cube("Side wall LED", (x, y, 2.8), (.04, .035, 4.7), cool_led)
+    else:
+        for k in range(23):
+            x = -8.6 + k*.24
+            cube("Walnut slat %02d" % k, (x, 7.54, 2.9),
+                 (.10, .09, 5.1), wood, .012)
     cube("Brand fascia", (4.3, 7.48, 3.3), (7.3, .16, 2.2), wall, .04)
     # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
     logo_png = Path(args.logo_png)
@@ -122,6 +132,12 @@ def build():
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     sign.data.materials.append(logo_material)
 
+    # Reference 2: broad softboxes and cinematic side fills; reflected by mirror floor.
+    # A reflection is not evidence of correct tire contact: physical QA remains separate.
+    if args.studio_style == "mirror-premium":
+        luminous = material("CARVAMO ceiling luminous panel", (.82, .87, .94), 0, .35)
+        cube("Large luminous ceiling panel", (0, -1.1, 5.515), (10.5, 6.0, .018), luminous)
+        area_light("Large ceiling softbox", (0, -1.1, 5.42), 650, (10.0, 5.8), (0, 0, 0))
     # Fewer broad, lower-energy softboxes reduce floor blowout and hard contrast.
     for x in (-5.0, 0, 5.0):
         for y in (-3.0, 3.0):
@@ -145,6 +161,10 @@ def build():
     camera.data.sensor_width = 36
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
+    if args.studio_style == "mirror-premium":
+        scene.cycles.max_bounces = 8
+        scene.cycles.diffuse_bounces = 3
+        scene.cycles.glossy_bounces = 4
     scene.cycles.samples = args.samples
     # OVH Blender build lacks OpenImageDenoiser; do not enable it here.
     bpy.context.view_layer.cycles.use_denoising = False
@@ -191,13 +211,14 @@ def build():
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
-        json.dumps({"scene": "CARVAMO 180 3D v5 studio test",
+        json.dumps({"scene": "CARVAMO 180 3D studio", "studio_style": args.studio_style, "reflection_requires_vehicle_for_validation": True,
                     "camera_views": metadata}, indent=2), encoding="utf-8")
     print("CARVAMO 3D scene and %d camera views generated" % len(metadata))
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, required=True)
+parser.add_argument("--studio-style", choices=("legacy", "mirror-premium"), default="mirror-premium", help="Premium graphite mirror floor + architectural LED + softbox; legacy for QA comparison")
 parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVAMO SVG")
 parser.add_argument("--step", type=int, default=15)
 parser.add_argument("--samples", type=int, default=24)
