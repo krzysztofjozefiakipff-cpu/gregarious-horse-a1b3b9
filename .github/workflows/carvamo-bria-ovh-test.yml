@@ -1,0 +1,70 @@
+name: CARVAMO Bria one-photo OVH test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/carvamo-bria-ovh-test.yml
+permissions:
+  contents: read
+jobs:
+  bria-ovh-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BRIA_API_TOKEN: ${{ secrets.BRIA_API_TOKEN }}
+      REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure private SSH access
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Retrieve one existing test vehicle from OVH
+        run: |
+          set -euo pipefail
+          test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v51/original_car_rgba.png" car_source.png
+          file car_source.png
+          test -s car_source.png
+      - name: Generate one Bria AI candidate
+        run: |
+          set -euo pipefail
+          test -n "$BRIA_API_TOKEN" || { echo "::error::Missing BRIA_API_TOKEN"; exit 1; }
+          python3 tools/carvamo-photo-ai/bria_pilot.py --image-file car_source.png --execute --output bria_pilot_result.json
+      - name: Save generated image for visual comparison
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request
+          from pathlib import Path
+          data=json.loads(Path("bria_pilot_result.json").read_text())["response"]
+          result=data.get("result") or []
+          if not result or not isinstance(result[0],list) or not result[0][0].startswith("https://"):
+              raise RuntimeError("Bria returned no usable image URL")
+          req=urllib.request.Request(result[0][0],headers={"User-Agent":"CARVAMO-Bria-Pilot"})
+          with urllib.request.urlopen(req,timeout=120) as r:
+              payload=r.read(12*1024*1024+1)
+          if not 0<len(payload)<=12*1024*1024: raise RuntimeError("Invalid generated image size")
+          Path("bria_result.jpg").write_bytes(payload)
+          print("Bria candidate downloaded, bytes:",len(payload))
+          PY
+      - name: Upload private test images and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-bria-ovh-test
+          path: |
+            bria_result.jpg
+            bria_pilot_result.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Clean SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
