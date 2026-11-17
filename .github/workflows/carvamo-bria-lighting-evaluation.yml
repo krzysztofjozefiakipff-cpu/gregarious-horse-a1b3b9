@@ -1,0 +1,77 @@
+name: CARVAMO Bria lighting isolated evaluation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/carvamo-bria-lighting-evaluation.yml
+permissions:
+  contents: read
+jobs:
+  bria-lighting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BRIA_API_TOKEN: ${{ secrets.BRIA_API_TOKEN }}
+      REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH for existing private vehicle
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Retrieve JAECOO source from OVH
+        run: |
+          set -euo pipefail
+          test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
+          SRC=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST" 'for p in /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v40/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/original_car_rgba.png; do if test -s "$p"; then printf "%s" "$p"; exit 0; fi; done; exit 2')
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:$SRC" car_source.png
+          test -s car_source.png
+      - name: Generate one Bria isolated lighting candidate
+        run: |
+          set -euo pipefail
+          test -n "$BRIA_API_TOKEN"
+          python3 tools/carvamo-photo-ai/bria_pilot.py --image-file car_source.png --execute --output bria_lighting_result.json
+      - name: Download Bria candidate and enforce nonpublication
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,urllib.request
+          from pathlib import Path
+          data=json.loads(Path("bria_lighting_result.json").read_text())
+          assert data["ready_for_publication"] is False
+          result=data["response"].get("result") or []
+          if not result or not isinstance(result[0],list) or not result[0] or not result[0][0].startswith("https://"):
+              raise RuntimeError("Bria response does not include a supported image URL")
+          req=urllib.request.Request(result[0][0],headers={"User-Agent":"CARVAMO-QA"})
+          with urllib.request.urlopen(req,timeout=120) as response: image=response.read(12*1024*1024+1)
+          if not 0<len(image)<=12*1024*1024: raise RuntimeError("Invalid image payload")
+          Path("bria_lighting_candidate.jpg").write_bytes(image)
+          Path("bria_qa.json").write_text(json.dumps({
+              "status":"AWAITING_VISUAL_QA","ready_for_publication":False,
+              "background_matches_approved_reference":False,
+              "vehicle_identity_verified":False,"wheel_ground_contact_verified":False,
+              "next_step":"Compare Bria candidate against original car; do not deploy until visual acceptance."
+          },indent=2))
+          PY
+      - name: Upload private evaluation images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-bria-lighting-evaluation
+          path: |
+            car_source.png
+            bria_lighting_candidate.jpg
+            bria_qa.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
