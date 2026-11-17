@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: c4acc96f7d4c27ed3cfa2a662ca4c2f8322bded8
+          ref: main
       - name: Prepare SSH
         env:
           KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
@@ -51,6 +51,7 @@ jobs:
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_-090.png" preview/ || true
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_+090.png" preview/ || true
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/camera_manifest.json" preview/
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/scene_qa.json" preview/
           # No logo substitution: QA render is intentionally unbranded until official asset is provided.
           # Create isolated, explicitly non-publishable JAECOO 8 mirror POC.
           $SSH "$REMOTE" 'set -eu
