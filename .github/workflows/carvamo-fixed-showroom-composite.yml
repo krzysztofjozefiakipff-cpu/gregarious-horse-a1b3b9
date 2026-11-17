@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/carvamo-fixed-showroom-composite.yml'
+      - 'tools/carvamo-photo-ai/fixed_showroom_composite.py'
 permissions:
   contents: read
 jobs:
