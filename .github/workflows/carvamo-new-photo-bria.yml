@@ -1,0 +1,90 @@
+name: CARVAMO new-photo BRIA regression
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'photo-ai-test-input/carvamo_pakiet_testowy_10_zdjec.zip'
+      - '.github/workflows/carvamo-new-photo-bria.yml'
+permissions:
+  contents: read
+jobs:
+  new-photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BRIA_API_TOKEN: ${{ secrets.BRIA_API_TOKEN }}
+      REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate uploaded test package
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          p=Path("photo-ai-test-input/carvamo_pakiet_testowy_10_zdjec.zip")
+          if not p.is_file():
+              raise SystemExit("Upload the test ZIP to photo-ai-test-input/ before running this workflow")
+          with ZipFile(p) as z:
+              names=z.namelist()
+              images=[n for n in names if n.startswith("input/") and n.lower().endswith((".jpg",".jpeg",".png"))]
+              if len(images)!=10: raise SystemExit(f"Expected 10 test images, found {len(images)}")
+              if any(n.startswith("/") or ".." in Path(n).parts for n in names): raise SystemExit("Unsafe ZIP path")
+              z.extractall("new_photo_qa")
+          print("Validated images:",len(images))
+          PY
+      - name: Prepare image processing
+        run: python3 -m pip install --user pillow
+      - name: Configure private OVH access
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Transfer originals to private OVH test directory
+        run: |
+          set -euo pipefail
+          test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
+          ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" 'mkdir -p /tmp/carvamo-new-photo-regression/input'
+          scp -o BatchMode=yes new_photo_qa/input/* "$REMOTE_USER@$REMOTE_HOST:/tmp/carvamo-new-photo-regression/input/"
+      - name: Run BRIA removal and CARVAMO composition on full-vehicle images
+        run: |
+          set -euo pipefail
+          test -n "$BRIA_API_TOKEN"
+          cp photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png new_photo_qa/showroom.png
+          # File identifiers are fixed by the supplied manifest; detail and interior
+          # shots are intentionally excluded from full-vehicle replacement.
+          for pair in "IMG_9322.jpeg:left" "IMG_9319.jpeg:front" "IMG_9318.jpeg:front" "IMG_9315.jpeg:rear" "IMG_9314.jpeg:front" "IMG_9313.jpeg:front"; do
+            file="${pair%%:*}"; view="${pair##*:}"; base="${file%.jpeg}"
+            python3 tools/carvamo-photo-ai/bria_pilot.py --image-file "new_photo_qa/input/$file" --execute --output "new_photo_qa/$base-bria.json"
+            python3 - "$base" <<'PY'
+          import json,sys,urllib.request
+          from pathlib import Path
+          base=sys.argv[1]
+          data=json.loads(Path(f"new_photo_qa/{base}-bria.json").read_text())
+          result=data.get("response",{}).get("result") or []
+          if not result or not isinstance(result[0],list) or not result[0] or not str(result[0][0]).startswith("https://"):
+              raise RuntimeError(f"Bria returned no downloadable image for {base}")
+          with urllib.request.urlopen(result[0][0],timeout=120) as response:
+              payload=response.read(15*1024*1024+1)
+          if not 0<len(payload)<=15*1024*1024:raise RuntimeError("Unexpected Bria image size")
+          Path(f"new_photo_qa/{base}-cutout.png").write_bytes(payload)
+          PY
+            python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --view "$view" --car-width 0.60 --floor-y 0.77 --floor-reflection water_mirror --vehicle "new_photo_qa/$base-cutout.png" --background new_photo_qa/showroom.png --output-dir "new_photo_qa/$base-result"
+          done
+      - name: Upload private diagnostic images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-new-photos-bria-regression
+          path: new_photo_qa/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove private SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
