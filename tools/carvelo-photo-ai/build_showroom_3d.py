@@ -94,16 +94,39 @@ def build():
     cube("Right studio wall", (9.4, 0, 2.8), (.2, 17, 5.6), wall)
     cube("Ceiling", (0, 0, 5.65), (19, 17, .22), ceiling)
 
-    # Reference 1: minimalist graphite architecture with vertical LED strips.
-    # Legacy layout remains selectable for before/after QA.
+    # Approved CARVAMO Premium Studio: architectural wall columns and long
+    # front-to-back ceiling strips. These are actual 3D emissive objects,
+    # not a single oversized ceiling panel or a postprocessing overlay.
     if args.studio_style == "mirror-premium":
-        cool_led = material("CARVAMO cool white LED", (.82, .9, 1.0), 0, .28)
-        for x in (-8.2, -6.2, -4.2, -2.2, -.2, 1.8, 3.8, 5.8, 7.8):
-            cube("Rear vertical LED %.1f" % x, (x, 7.48, 2.85), (.045, .11, 5.10), cool_led)
-            area_light("Rear LED glow %.1f" % x, (x, 7.1, 3.0), 75, (.22, 4.4), (x, 0, 2.0))
+        teal = material("CARVAMO teal #008F83", (.0, .56, .51), 0, .45)
+        strip = material("Continuous neutral LED", (.91, .97, 1.0), 0, .3)
+        for light_mat, strength in ((strip, 8.0), (teal, 3.0)):
+            nodes = light_mat.node_tree.nodes
+            links = light_mat.node_tree.links
+            bsdf = nodes.get("Principled BSDF")
+            bsdf.inputs["Emission Color"].default_value = (*light_mat.diffuse_color[:3], 1)
+            bsdf.inputs["Emission Strength"].default_value = strength
+        # Vertical strips in the rear wall, matching the approved rhythm.
+        for x in (-8.4, -6.6, -4.8, -3.0, 3.0, 4.8, 6.6, 8.4):
+            cube("Back wall architectural LED %.1f" % x,
+                 (x, 7.48, 2.85), (.035, .09, 5.35), strip)
+        # Side wall strips continue the visual grid into depth.
+        for x in (-9.27, 9.27):
+            for y in (-6.0, -2.8, .4, 3.6, 6.8):
+                cube("Side wall architectural LED %.1f %.1f" % (x,y),
+                     (x, y, 2.85), (.045, .045, 5.35), strip)
+        # The approved reference uses parallel, uninterrupted light rails
+        # running towards the back wall (along Y), not a broad glowing slab.
+        for x in (-7.8, -5.2, -2.6, 0, 2.6, 5.2, 7.8):
+            cube("Longitudinal ceiling LED %.1f" % x,
+                 (x, -.1, 5.515), (.065, 15.4, .024), strip)
+            area_light("Ceiling LED soft illumination %.1f" % x,
+                       (x, -.1, 5.39), 125, (.38, 12.5), (x, 0, 0))
+        # Teal cove accents along the bottom of all three walls.
+        cube("Rear turquoise wall wash", (0, 7.46, .16), (18.2, .07, .055), teal)
         for x in (-9.25, 9.25):
-            for y in (-4.5, .0, 4.5):
-                cube("Side wall LED", (x, y, 2.8), (.04, .035, 4.7), cool_led)
+            cube("Side turquoise wall wash %.1f" % x,
+                 (x, 0, .16), (.07, 15.2, .055), teal)
     else:
         for k in range(23):
             x = -8.6 + k*.24
@@ -144,21 +167,11 @@ def build():
     else:
         print("CARVAMO Brand Book 2.0 logo absent: unbranded QA only, not final studio")
 
-    # Reference 2: broad softboxes and cinematic side fills; reflected by mirror floor.
-    # A reflection is not evidence of correct tire contact: physical QA remains separate.
-    if args.studio_style == "mirror-premium":
-        luminous = material("CARVAMO ceiling luminous panel", (.82, .87, .94), 0, .35)
-        cube("Large luminous ceiling panel", (0, -1.1, 5.515), (12.5, 7.5, .018), luminous)
-        area_light("Large ceiling softbox", (0, -1.1, 5.42), 1100, (12.0, 7.0), (0, 0, 0))
-    if args.studio_style == "mirror-premium":
-        for x in (-4.5, 0, 4.5):
-            area_light("Focused cinematic key %.1f" % x, (x, 1.5, 5.2), 450, (1.2, 1.2), (x*.3, 0, .8))
-    # Fewer broad, lower-energy softboxes reduce floor blowout and hard contrast.
-    for x in (-5.0, 0, 5.0):
-        for y in (-3.0, 3.0):
-            cube("Recessed light", (x, y, 5.525), (2.5, .11, .015), led)
-            area_light("Ceiling softbox", (x, y, 5.45), 260, (3.6, 2.0),
-                       (x, y, 0))
+    # Cinematic vehicle lighting: soft sources remain invisible in the room
+    # geometry; only the seven architectural rails are visible on the ceiling.
+    area_light("Long soft key", (0, -2.0, 5.25), 850, (11, 5), (0, 0, .7))
+    area_light("Left studio key", (-6.8, -.5, 4.6), 300, (4, 5), (0, 0, 1))
+    area_light("Right studio key", (6.8, -.5, 4.6), 300, (4, 5), (0, 0, 1))
     area_light("Front fill", (0, -6.5, 4.4), 380, (8, 4), (0, 0, 1))
     area_light("Right fill", (7.8, -1, 3.8), 250, (4, 5), (0, 0, 1))
     area_light("Left fill", (-7.8, -1, 3.8), 250, (4, 5), (0, 0, 1))
@@ -230,7 +243,7 @@ def build():
         json.dumps({"scene": "CARVAMO 180 3D studio", "studio_style": args.studio_style, "reflection_requires_vehicle_for_validation": True,
                     "camera_views": metadata}, indent=2), encoding="utf-8")
     (args.output_dir/"scene_qa.json").write_text(json.dumps({
-        "brand": "CARVAMO", "scene_profile": "mirror-premium",
+        "brand": "CARVAMO", "scene_profile": "approved-architectural-led-studio-v2",
         "status": "background_ready_for_visual_review",
         "vehicle_compositing_approved": False,
         "reason": "Physical tire contact, geometric floor reflection and official logo require separate validation",
