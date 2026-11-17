@@ -113,7 +113,7 @@ jobs:
           from pathlib import Path
           repo=os.environ["GH_REPOSITORY"]
           token=os.environ["GH_TOKEN"]
-          for filename in ("jaecoo8_mirror_poc.png","empty_+000.png"):
+          for filename in ("jaecoo8_mirror_poc.png","empty_+000.png","qa-status.json"):
               local=Path("preview")/filename
               if not local.is_file(): raise SystemExit("Missing preview image: "+str(local))
               path="photo-ai-preview/"+filename
