@@ -1,0 +1,67 @@
+name: CARVAMO Mirror Premium OVH preview
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/carvamo-mirror-premium-preview.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: carvamo-mirror-premium-preview
+  cancel-in-progress: false
+jobs:
+  render-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: de4b3b1a9f219c89128a406aff1a70b0cbe57f53
+      - name: Prepare SSH
+        env:
+          KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY" && test -n "$KNOWN"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN" > "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -P '' -f "$HOME/.ssh/id_ed25519" >/dev/null
+      - name: Render isolated premium showroom on OVH
+        env:
+          HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+          USER: ${{ secrets.OVH_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p preview
+          REMOTE="$USER@$HOST"
+          SSH="ssh -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          SCP="scp -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          # Only /tmp; no app deployment, no Supabase, no paid API.
+          $SSH "$REMOTE" 'mkdir -p /tmp/carvamo-mirror-premium-preview'
+          $SCP tools/carvelo-photo-ai/build_showroom_3d.py "$REMOTE:/tmp/carvamo-mirror-premium-preview/build_showroom_3d.py"
+          $SSH "$REMOTE" 'set -eu
+            BASE=/tmp/carvamo-mirror-premium-preview
+            LOGO=$(find /tmp/carvamo-photo-ai-test /opt/carvamo/app -type f \( -iname "*carvamo*logo*.png" -o -iname "*logo*carvamo*.png" \) -print -quit 2>/dev/null || true)
+            if [ -z "$LOGO" ]; then echo "BLOCKED: official CARVAMO PNG not found; refusing substitute logo"; exit 3; fi
+            blender -b -t 2 --python "$BASE/build_showroom_3d.py" -- --output-dir "$BASE/render" --logo-png "$LOGO" --studio-style mirror-premium --step 90 --samples 8 --width 1280 --height 720
+          ' > preview/render-log.txt 2>&1 || { tail -n 70 preview/render-log.txt; exit 1; }
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_+000.png" preview/ || true
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_-090.png" preview/ || true
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_+090.png" preview/ || true
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/camera_manifest.json" preview/
+          # Preserve existing vehicle imagery; this run tests only the room.
+          printf '%s\n' 'Showroom-only preview: wheel contact and car reflections NOT verified' > preview/qa-status.txt
+      - name: Upload renders and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-mirror-premium-ovh-preview
+          path: preview/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
