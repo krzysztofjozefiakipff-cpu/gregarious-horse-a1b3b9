@@ -1,0 +1,43 @@
+name: CARVAMO Bria pilot (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: "HTTPS URL to an authorized vehicle image (JPG/PNG/WEBP)"
+        required: true
+        type: string
+      execute_paid_api:
+        description: "Explicitly authorize one Bria API generation"
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  bria-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate input and secret presence
+        env:
+          BRIA_API_TOKEN: ${{ secrets.BRIA_API_TOKEN }}
+          IMAGE_URL: ${{ inputs.image_url }}
+          EXECUTE: ${{ inputs.execute_paid_api }}
+        run: |
+          set -euo pipefail
+          if [ "$EXECUTE" = "true" ] && [ -z "$BRIA_API_TOKEN" ]; then
+            echo "::error::BRIA_API_TOKEN missing in GitHub Actions secrets"
+            exit 1
+          fi
+          if [ "$EXECUTE" = "true" ]; then
+            python3 tools/carvamo-photo-ai/bria_pilot.py --image-url "$IMAGE_URL" --execute --output bria_pilot_result.json
+          else
+            python3 tools/carvamo-photo-ai/bria_pilot.py --image-url "$IMAGE_URL" --dry-run > bria_pilot_result.json
+          fi
+      - name: Archive pilot result (private workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-bria-pilot-result
+          path: bria_pilot_result.json
+          retention-days: 7
