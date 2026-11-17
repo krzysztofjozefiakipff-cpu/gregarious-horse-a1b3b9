@@ -354,7 +354,11 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
                            cx+max(5,round(vw*.019)),
                            cy+max(3,round(h*.007))), fill=235)
     seam = seam.filter(ImageFilter.GaussianBlur(max(1,round(h*.001))))
-    shadow = ImageChops.lighter(shadow, seam)\n    # The rear/far tire in a three-quarter view has a higher image-space\n    # contact point. Never force it onto the near tire horizontal baseline.\n    # Keep contact patches independent, and report their spread for QA.\n    contact_spread = max(cy for _, cy in contact_points) - min(cy for _, cy in contact_points)
+    shadow = ImageChops.lighter(shadow, seam)
+    # The rear/far tire in a three-quarter view has a higher image-space
+    # contact point. Never force it onto the near tire horizontal baseline.
+    # Keep contact patches independent, and report their spread for QA.
+    contact_spread = max(cy for _, cy in contact_points) - min(cy for _, cy in contact_points)
     layer = Image.new("RGBA", (w, h), (25, 25, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
