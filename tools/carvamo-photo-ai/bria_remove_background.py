@@ -2,7 +2,7 @@
 """Remove a vehicle background with BRIA, preserving its original geometry.
 Never generate a replacement vehicle or a replacement showroom.
 """
-import argparse,base64,json,os,urllib.request,urllib.error
+import argparse,json,os,urllib.request,urllib.error,uuid,mimetypes
 from pathlib import Path
 from PIL import Image
 import io
@@ -17,8 +17,10 @@ def main():
  if not src.is_file() or not 0<src.stat().st_size<=12*1024*1024: p.error("Missing or oversized source image")
  token=os.getenv("BRIA_API_TOKEN")
  if not token:p.error("Missing BRIA_API_TOKEN")
- payload=json.dumps({"file":base64.b64encode(src.read_bytes()).decode("ascii")}).encode()
- req=urllib.request.Request(ENDPOINT,data=payload,headers={"api_token":token,"Content-Type":"application/json"},method="POST")
+ boundary="----CARVAMO"+uuid.uuid4().hex
+ mime=mimetypes.guess_type(src.name)[0] or "application/octet-stream"
+ payload=(f"--{boundary}\\r\\nContent-Disposition: form-data; name=\\"file\\"; filename=\\"{src.name}\\"\\r\\nContent-Type: {mime}\\r\\n\\r\\n".encode()+src.read_bytes()+f"\\r\\n--{boundary}--\\r\\n".encode())
+ req=urllib.request.Request(ENDPOINT,data=payload,headers={"api_token":token,"Content-Type":f"multipart/form-data; boundary={boundary}"},method="POST")
  try:
   with urllib.request.urlopen(req,timeout=180) as response:
    raw=response.read(20*1024*1024)
