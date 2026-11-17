@@ -63,6 +63,24 @@ def main():
    if alpha.getpixel((xx,yy))<80:raise ValueError("Calibrated contact outside vehicle alpha")
   calibrated=True
  if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
+ # Fit the visible wheel geometry into the actual floor plane before placement.
+ # A distant wheel in a 45-degree photo can be far above the lowest alpha pixel.
+ floor_seam=round(H*a.floor_seam_y)
+ reserve=round(H*(.16 if a.view in ("front","rear") else .10))
+ margin=round(H*.012)
+ min_contact=min(yy for xx,yy in contacts_local)
+ required_depth=ch-min_contact
+ available_depth=H-reserve-floor_seam-margin
+ if required_depth>available_depth:
+  factor=min(1.,available_depth/max(1,required_depth)*.985)
+  if factor<.40:
+   raise ValueError("Vehicle geometry cannot fit safely on the floor; manual calibration required")
+  old_cw,old_ch=cw,ch
+  car=car.resize((max(1,round(cw*factor)),max(1,round(ch*factor))),Image.Resampling.LANCZOS)
+  cw,ch=car.size
+  alpha=car.getchannel("A")
+  x=(W-cw)//2
+  contacts_local=[(min(cw-1,round(xx*cw/old_cw)),min(ch-1,round(yy*ch/old_ch))) for xx,yy in contacts_local]
  baseline=round(H*(a.floor_y+a.ground_drop))
  y=baseline-max(yy for xx,yy in contacts_local)
  # Keep every wheel contact on the visible floor; reserve reflection space.
