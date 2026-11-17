@@ -1,0 +1,62 @@
+name: CARVAMO Bria approved showroom reference
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_one_paid_test:
+        description: "Run one Bria API request (may incur charges)"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  reference-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BRIA_API_TOKEN: ${{ secrets.BRIA_API_TOKEN }}
+      REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Fetch approved reference and test car from OVH
+        run: |
+          set -euo pipefail
+          test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:/opt/carvamo/assets/approved-showroom.png" showroom.png
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png" car.png
+          file showroom.png car.png
+      - name: Generate candidate only with explicit authorization
+        env:
+          CONFIRM: ${{ inputs.confirm_one_paid_test }}
+        run: |
+          set -euo pipefail
+          test -n "$BRIA_API_TOKEN" || { echo "::error::BRIA_API_TOKEN missing"; exit 1; }
+          if [ "$CONFIRM" != "true" ]; then
+            python3 tools/carvamo-photo-ai/bria_reference_background.py --vehicle car.png --background showroom.png
+          else
+            python3 tools/carvamo-photo-ai/bria_reference_background.py --vehicle car.png --background showroom.png --execute
+          fi
+      - name: Archive unapproved candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-bria-reference-candidate
+          path: |
+            bria_reference_result/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
