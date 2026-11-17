@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build the CARVELO 180-degree showroom as a real Blender scene.
+"""Build the CARVAMO 180-degree showroom as a real Blender scene.
 
 Usage:
-  blender -b -t 2 --python tools/carvelo-photo-ai/build_showroom_3d.py -- \
-    --output-dir /tmp/carvelo-3d --samples 24 --step 15
+  blender -b -t 2 --python tools/carvamo-photo-ai/build_showroom_3d.py -- \
+    --output-dir /tmp/carvamo-3d --samples 24 --step 15
 
 Creates an editable .blend, empty camera-angle renders and camera metadata.
 The room, lights, floor, camera and branded wall are genuine 3D geometry.
@@ -41,7 +41,8 @@ def cube(name, location, scale, mat, bevel=0):
         mod = ob.modifiers.new("Soft edges", "BEVEL")
         mod.width = bevel
         mod.segments = 2
-        ob.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
+        # Bevel geometry is sufficient; Blender 4.x warns when weighted normals
+        # are used without legacy Auto Smooth.
     return ob
 
 
@@ -74,15 +75,15 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("Warm pearl stone floor", (.47, .46, .43), .08, .28)
-    grout = material("Floor joints", (.23, .23, .22), 0, .85)
-    wall = material("Graphite walls", (.055, .064, .071), .04, .7)
-    ceiling = material("Ceiling charcoal", (.085, .092, .097), 0, .75)
+    floor = material("Neutral satin stone floor", (.27, .28, .29), .04, .68)
+    grout = material("Floor joints", (.19, .20, .21), 0, .88)
+    wall = material("Soft graphite walls", (.14, .15, .17), .0, .78)
+    ceiling = material("Ceiling charcoal", (.20, .21, .22), 0, .82)
     wood = material("Warm walnut slats", (.24, .12, .065), 0, .52)
     led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
-    white = material("CARVELO white letters", (.88, .9, .89), .1, .3)
-    red = material("CARVELO red V", (.76, .055, .075), .05, .3)
+    white = material("CARVAMO white letters", (.88, .9, .89), .1, .3)
+    red = material("CARVAMO red V", (.76, .055, .075), .05, .3)
 
     cube("Floor slab", (0, 0, -.13), (19, 17, .26), floor)
     # Tile seams are physical geometry, so perspective is rendered correctly.
@@ -104,9 +105,9 @@ def build():
     # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
     logo_png = Path(args.logo_png)
     if not logo_png.is_file():
-        raise FileNotFoundError("official_carvelo_logo_png_missing: " + str(logo_png))
+        raise FileNotFoundError("official_carvamo_logo_png_missing: " + str(logo_png))
     logo_image = bpy.data.images.load(str(logo_png), check_existing=True)
-    logo_material = bpy.data.materials.new("Official CARVELO logo PNG")
+    logo_material = bpy.data.materials.new("Official CARVAMO logo PNG")
     logo_material.use_nodes = True
     nodes = logo_material.node_tree.nodes
     bsdf = nodes.get("Principled BSDF")
@@ -118,7 +119,7 @@ def build():
     bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
                                      rotation=(math.pi / 2, 0, 0))
     sign = bpy.context.object
-    sign.name = "Official CARVELO SVG wall sign"
+    sign.name = "Official CARVAMO SVG wall sign"
     sign.dimensions = (5.7, 1.45, 1)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     sign.data.materials.append(logo_material)
@@ -138,7 +139,7 @@ def build():
     world.node_tree.nodes["Background"].inputs["Strength"].default_value = .45
     bpy.ops.object.camera_add()
     camera = bpy.context.object
-    camera.name = "CARVELO calibrated orbit camera"
+    camera.name = "CARVAMO calibrated orbit camera"
     bpy.context.scene.camera = camera
     camera.data.type = "PERSP"
     camera.data.lens = 40
@@ -146,13 +147,13 @@ def build():
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.samples = args.samples
-    bpy.context.view_layer.cycles.use_denoising = False
+    bpy.context.view_layer.cycles.use_denoising = True
     scene.render.resolution_x = args.width
     scene.render.resolution_y = args.height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
-    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.view_transform = "AgX"
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -161,7 +162,9 @@ def build():
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
-        camera.location = (5.6*math.sin(rad), -5.6*math.cos(rad), 1.20)
+        # Keep every camera in front of the back wall, even at +/-90 degrees.
+        # A pure semicircle placed cameras sideways into empty black space.
+        camera.location = (5.6*math.sin(rad), -5.6 - 2.0*math.cos(rad), 1.35)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -177,24 +180,24 @@ def build():
             "resolution": [args.width, args.height],
             "floor_z_m": 0.0,
             "hero_vehicle_target_frame_width_fraction": 0.85,
-            "camera_orbit_radius_m": 5.6,
+            "camera_orbit_radius_m": round(math.hypot(camera.location.x, camera.location.y), 4),
             "composition_note": "Camera is framed for a foreground vehicle; empty background renders alone cannot verify actual vehicle occupancy.",
             "target_m": list(target),
             "empty": True,
         })
     # Persist the actual calibrated camera pose, not the unpositioned camera.
-    camera.location = (0, -5.6, 1.20)
+    camera.location = (0, -7.6, 1.35)
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvelo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
-        json.dumps({"scene": "CARVELO 180 3D v1",
+        json.dumps({"scene": "CARVAMO 180 3D v1",
                     "camera_views": metadata}, indent=2), encoding="utf-8")
-    print("CARVELO 3D scene and %d camera views generated" % len(metadata))
+    print("CARVAMO 3D scene and %d camera views generated" % len(metadata))
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, required=True)
-parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVELO SVG")
+parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVAMO SVG")
 parser.add_argument("--step", type=int, default=15)
 parser.add_argument("--samples", type=int, default=24)
 parser.add_argument("--width", type=int, default=1280)
