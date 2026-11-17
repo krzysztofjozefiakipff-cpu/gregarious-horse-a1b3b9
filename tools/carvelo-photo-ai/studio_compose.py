@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v8-contact"
+SCENE_VERSION = "studio-v9-no-reflection"
 GROUND_Y = 0.85
 
 
@@ -245,22 +245,10 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     # floor. The contact, ambient, directional and underbody shadows below
     # are generated directly in studio coordinates and have feathered edges.
 
-    # Reflection is clipped to the floor and fades quickly; no mirror-image
-    # floating above the tiles. Keep original vehicle pixels untouched.
-    # A reflection starting at the far tire creates a false glossy strip under
-    # the body. Anchor it to the nearest visible wheel instead.
-    floor_y = max(0, min(h-1, max(cy for _, cy in contact_points)))
-    reflect_h = max(0, min(round(vh * .20), h - floor_y - 3))
-    if reflect_h > 4:
-        reflection = ImageOps.flip(car).resize((vw, reflect_h), Image.Resampling.BILINEAR)
-        a = reflection.getchannel("A")
-        fade = Image.new("L", (vw, reflect_h), 0)
-        fade.putdata([round(px * .13 * (1 - iy / max(1, reflect_h-1))**2.3)
-                      for iy in range(reflect_h)
-                      for px in a.crop((0, iy, vw, iy+1)).getdata()])
-        reflection.putalpha(fade)
-        reflection = reflection.filter(ImageFilter.GaussianBlur(max(2, round(h * .005))))
-        canvas.alpha_composite(reflection, (x, floor_y + 2))
+    # Disabled: flipping a photographed vehicle creates blurred vertical
+    # artifacts on matte showroom floors. Re-enable only with calibrated
+    # floor reflectance and perspective-aware projection.
+    reflect_h = 0
 
     # Layered, grounded shadows: broad ambient occlusion, tight tire contact,
     # and a soft directional floor shadow away from the window wall.
@@ -374,11 +362,12 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
         "wheel_contact_spread_px": contact_spread,
+        "wheel_perspective_review_required": contact_spread > round(h * .055),
         "contact_shadow_version": "per-wheel-v2",
         "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
-        "subtle_floor_reflection": bool(reflect_h > 4),
+        "subtle_floor_reflection": False,
     }
 
 
