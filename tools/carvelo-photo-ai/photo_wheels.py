@@ -9,6 +9,39 @@ import math
 import numpy as np
 
 
+def select_side_wheel_pair(candidates, body_width):
+    """Return 1-based candidate indices only for a near-level side-view pair.
+
+    A high horizontal pair on a bumper or door must not override lower
+    circles. This is a conservative side-view hypothesis, not pose calibration.
+    """
+    if not candidates or body_width <= 0:
+        return None
+    lowest_y = max(c["y"] for c in candidates)
+    largest_radius = max(c["radius"] for c in candidates)
+    plausible = [
+        (i, c) for i, c in enumerate(candidates)
+        if c["y"] >= lowest_y - .60 * largest_radius
+    ]
+    scored = []
+    for k, (i, a) in enumerate(plausible):
+        for j, b in plausible[k+1:]:
+            dx = abs(a["x"] - b["x"])
+            ratio = min(a["radius"], b["radius"]) / max(a["radius"], b["radius"])
+            mean_radius = (a["radius"] + b["radius"]) / 2
+            dy = abs(a["y"] - b["y"])
+            if dx < .38 * body_width or ratio < .72 or dy > .22 * mean_radius:
+                continue
+            gap = (a.get("silhouette_bottom_gap_radius_ratio", 0) +
+                   b.get("silhouette_bottom_gap_radius_ratio", 0))
+            scored.append((dx / body_width + ratio - dy / mean_radius - .15*gap, i, j))
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    _, i, j = scored[0]
+    return [i + 1, j + 1]
+
+
 def detect_wheel_candidates(photo, foreground, max_candidates=8):
     try:
         import cv2
@@ -123,34 +156,8 @@ def detect_wheel_candidates(photo, foreground, max_candidates=8):
         selected.append(c)
         if len(selected) >= max_candidates:
             break
-    # V17: V16's mandatory dark annulus gate rejected both genuine side
-    # wheels (bright alloy spokes make the ring-median unreliable).
-    # Use geometry as a conservative cue instead; keep contrast diagnostic.
-    # The tight vertical agreement requirement targets side-like photos.
-    # Three-quarter views are explicitly unresolved, not falsely certified.
-    pairs = []
-    for i, a in enumerate(selected):
-        for j in range(i+1, len(selected)):
-            b = selected[j]
-            dx = abs(a["x"] - b["x"])
-            radius_ratio = min(a["radius"], b["radius"]) / max(a["radius"], b["radius"])
-            mean_radius = (a["radius"] + b["radius"]) / 2
-            vertical_delta = abs(a["y"] - b["y"])
-            if dx < .38*body_w or radius_ratio < .72:
-                continue
-            if vertical_delta > .55*mean_radius:
-                continue
-            score = (dx/body_w + .5*radius_ratio
-                     - .5*vertical_delta/mean_radius
-                     - .12*(a["silhouette_bottom_gap_radius_ratio"]
-                             + b["silhouette_bottom_gap_radius_ratio"]))
-            pairs.append((score, i, j))
-    pairs.sort(reverse=True)
     candidates = selected
-    pair = None
-    if pairs:
-        _, i, j = pairs[0]
-        pair = [i+1, j+1]  # 1-based diagnostic overlay indices
+    pair = select_side_wheel_pair(candidates, body_w)
     return {
         "status": "silhouette_filtered_candidates" if candidates else "no_reliable_candidates",
         "candidates": candidates,
@@ -158,7 +165,7 @@ def detect_wheel_candidates(photo, foreground, max_candidates=8):
         "raw_candidate_count": len(filtered),
         "wheel_pair_candidate_indices": pair,
         "wheel_pair_status": "side_view_geometry_hypothesis_only" if pair else "unresolved",
-        "selection_method": "v17_side_view_pair_geometry_contrast_diagnostic_only",
+        "selection_method": "v18_low_wheel_side_pair_geometry_contrast_diagnostic_only",
         "wheel_centres_verified": False,
         "vehicle_azimuth_deg": None,
         "camera_pose_verified": False,
