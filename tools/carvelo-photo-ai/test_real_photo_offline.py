@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--azimuth", type=float, required=True,
                         help="Known source camera azimuth, degrees (-90 to +90)")
-    parser.add_argument("--floor-anchors", type=Path,
+    parser.add_argument("--analyze-perspective", action="store_true",\n                        help="Optional image-derived line cues; requires OpenCV")\n    parser.add_argument("--floor-anchors", type=Path,
                         help="Optional independently measured floor contacts JSON with points and tolerance_px")
     args = parser.parse_args()
     if not isfinite(args.azimuth) or not -90 <= args.azimuth <= 90:
@@ -59,7 +59,7 @@ def main():
     covered = float((matte > 48).mean())
     if covered < .12 or covered > .86 or float((matte > 238).mean()) < .08:
         raise ValueError("mask_quality_unreliable")
-    background = load_background(args.showroom_dir, args.azimuth, photo.size)
+    perspective = None\n    if args.analyze_perspective:\n        from photo_perspective import analyze_vehicle_lines\n        perspective = analyze_vehicle_lines(photo, foreground)\n    background = load_background(args.showroom_dir, args.azimuth, photo.size)
     result, placement = compose_grounded_vehicle(foreground, background, source_photo=photo)
     if not placement.get("wheel_grounded"):
         raise ValueError("wheel_grounding_unsafe")
@@ -90,7 +90,7 @@ def main():
         diagnostic.save(args.output_dir / "floor_alignment_diagnostic.png")
         if error > tolerance:
             raise ValueError("wheel_ground_plane_unreliable")
-    placement["floor_calibration"] = qa
+    if perspective is not None:\n        placement["image_perspective"] = perspective\n    placement["floor_calibration"] = qa
     placement["camera_source"] = {
         "azimuth": "manual_test_input_not_estimated",
         "camera_make": camera_make,
