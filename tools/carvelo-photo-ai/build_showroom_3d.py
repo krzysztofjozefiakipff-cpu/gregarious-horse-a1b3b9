@@ -75,10 +75,10 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("CARVAMO matte graphite floor", (.115, .125, .135), .02, .88)
+    floor = material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
     grout = material("Floor joints", (.19, .20, .21), 0, .88)
-    wall = material("CARVAMO neutral graphite walls", (.19, .205, .22), 0, .85)
-    ceiling = material("Ceiling charcoal", (.12, .13, .145), 0, .88)
+    wall = material("CARVAMO neutral graphite walls", (.245, .255, .265), 0, .82)
+    ceiling = material("Ceiling charcoal", (.17, .18, .19), 0, .88)
     wood = material("Warm walnut slats", (.17, .11, .075), 0, .78)
     led = material("Warm LED diffuser", (1, .77, .44), 0, .3)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
@@ -135,7 +135,7 @@ def build():
     world = bpy.context.scene.world
     world.color = (.2, .2, .2)
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = .22
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = .40
     bpy.ops.object.camera_add()
     camera = bpy.context.object
     camera.name = "CARVAMO calibrated orbit camera"
@@ -154,7 +154,7 @@ def build():
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
-    scene.view_settings.exposure = -0.65
+    scene.view_settings.exposure = -0.20
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
