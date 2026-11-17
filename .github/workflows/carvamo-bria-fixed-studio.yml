@@ -1,0 +1,87 @@
+name: CARVAMO Bria plus approved showroom integration
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/carvamo-bria-fixed-studio.yml'
+      - 'tools/carvamo-photo-ai/bria_reference_relight.py'
+permissions:
+  contents: read
+jobs:
+  isolated-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BRIA_API_TOKEN: ${{ secrets.BRIA_API_TOKEN }}
+      REMOTE_HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.OVH_DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install image processing dependency
+        run: python3 -m pip install --user pillow
+      - name: Configure OVH SSH
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Fetch original JAECOO and approved showroom
+        run: |
+          set -euo pipefail
+          mkdir -p integration_input
+          cp photo-ai-preview/a_clean_modern_showroom_style_background_for_ai_c.png integration_input/showroom.png
+          test -s integration_input/showroom.png
+          SRC=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST" 'for p in /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v40/original_car_rgba.png /tmp/carvamo-photo-ai-test/results/v47-inpainting/front/original_car_rgba.png; do if test -s "$p"; then printf "%s" "$p"; exit 0; fi; done; exit 2')
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:$SRC" integration_input/original.png
+      - name: Generate one Bria lighting reference
+        run: |
+          set -euo pipefail
+          test -n "$BRIA_API_TOKEN"
+          python3 tools/carvamo-photo-ai/bria_pilot.py --image-file integration_input/original.png --execute --output integration_input/bria_response.json
+      - name: Download Bria reference image
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request
+          from pathlib import Path
+          d=json.loads(Path("integration_input/bria_response.json").read_text())
+          assert d["ready_for_publication"] is False
+          result=d["response"].get("result") or []
+          if not result or not isinstance(result[0],list) or not result[0] or not result[0][0].startswith("https://"):
+              raise RuntimeError("Missing HTTPS Bria image result")
+          with urllib.request.urlopen(result[0][0],timeout=120) as response:
+              data=response.read(12*1024*1024+1)
+          if not 0<len(data)<=12*1024*1024:raise RuntimeError("Unexpected Bria image size")
+          Path("integration_input/bria_reference.jpg").write_bytes(data)
+          PY
+      - name: Preserve original vehicle shape and use Bria only for lighting reference
+        run: |
+          set -euo pipefail
+          python3 tools/carvamo-photo-ai/bria_reference_relight.py --original integration_input/original.png --bria integration_input/bria_reference.jpg --output integration_input/relit_vehicle.png --report integration_result/relight_qa.json
+          python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --vehicle integration_input/relit_vehicle.png --background integration_input/showroom.png --output-dir integration_result
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("integration_result/relight_qa.json").read_text())
+          b=json.loads(Path("integration_result/qa.json").read_text())
+          assert a["original_alpha_preserved"] and not a["bria_generated_background_used"]
+          assert b["background_preserved"] and not b["ready_for_publication"]
+          assert Path("integration_result/candidate.png").stat().st_size>100000
+          PY
+      - name: Upload candidate for visual QA (never publish automatically)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-bria-fixed-showroom-candidate
+          path: |
+            integration_result/
+            integration_input/bria_reference.jpg
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
