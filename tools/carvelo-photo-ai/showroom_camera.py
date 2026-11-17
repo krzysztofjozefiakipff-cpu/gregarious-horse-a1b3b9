@@ -1,4 +1,4 @@
-"""Camera calibration primitives for a future 180-degree CARVELO 3D studio.
+"""Camera calibration primitives for a 180-degree CARVAMO 3D studio.
 
 Not connected to the production worker until real empty renders and
 independently measured wheel landmarks pass image-level validation.
@@ -96,3 +96,74 @@ def best_camera_from_contacts(observed, world_contacts, candidates, max_error_px
     if error > max_error_px:
         raise ValueError("wheel_ground_plane_unreliable")
     return camera, error
+
+
+def fit_handheld_camera(observed, world_contacts, *, image_size,
+                        azimuths=range(-80, 81, 10),
+                        heights=(1.0, 1.35, 1.7, 2.0),
+                        pitches=(-12, -6, 0, 6, 12),
+                        focal_factors=(0.8, 1.2, 1.8),
+                        max_error_fraction=.018,
+                        ambiguity_fraction=.005):
+    """Conservative pose search for *independently measured* 3D ground anchors.
+
+    Different handheld camera heights, focal lengths, and pitch angles are
+    considered. Two wheel contacts alone do NOT uniquely identify a camera:
+    return 'ambiguous' rather than presenting a plausible fit as calibrated.
+    No scene change or publication is authorized by this diagnostic.
+    """
+    from math import isfinite
+    width, height = image_size
+    if width <= 0 or height <= 0 or len(observed) < 2:
+        raise ValueError("invalid_camera_fit_input")
+    if len(observed) != len(world_contacts):
+        raise ValueError("insufficient_tire_landmarks")
+    if any(len(p) != 2 or not all(isfinite(float(v)) for v in p)
+           for p in (*observed, *world_contacts)):
+        raise ValueError("invalid_camera_fit_input")
+    if not (0 < max_error_fraction < .2 and 0 < ambiguity_fraction < .2):
+        raise ValueError("invalid_camera_fit_threshold")
+    ranked = []
+    for azimuth in azimuths:
+        for camera_height in heights:
+            for pitch in pitches:
+                for factor in focal_factors:
+                    camera = Camera(float(azimuth), float(camera_height),
+                                    float(width * factor), width / 2, height / 2,
+                                    float(pitch))
+                    try:
+                        predicted = [project_floor(camera, *point)
+                                     for point in world_contacts]
+                        error = floor_alignment_error(observed, predicted)
+                    except ValueError:
+                        continue
+                    ranked.append((error, camera))
+    if not ranked:
+        return {"status": "no_valid_projection", "camera": None}
+    ranked.sort(key=lambda item: item[0])
+    best_error, best_camera = ranked[0]
+    acceptable = [(err, cam) for err, cam in ranked
+                  if err <= best_error + ambiguity_fraction * height]
+    # Different poses can project the same two points: this is a degeneracy,
+    # not evidence that the image was taken at any one of those poses.
+    distinct = {(round(cam.azimuth_deg), round(cam.height_m, 2),
+                 round(cam.pitch_deg), round(cam.focal_px))
+                for _, cam in acceptable}
+    if best_error > max_error_fraction * height:
+        status = "poor_fit"
+    elif len(distinct) > 1 or len(observed) < 4:
+        status = "ambiguous"
+    else:
+        status = "candidate_only"
+    return {
+        "status": status,
+        "rms_px": round(best_error, 3),
+        "candidate_count": len(distinct),
+        "camera": {
+            "azimuth_deg": best_camera.azimuth_deg,
+            "height_m": best_camera.height_m,
+            "pitch_deg": best_camera.pitch_deg,
+            "focal_px": best_camera.focal_px,
+        },
+        "validated": False,
+    }
