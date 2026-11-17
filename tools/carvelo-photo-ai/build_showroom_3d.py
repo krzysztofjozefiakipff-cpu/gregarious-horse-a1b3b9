@@ -75,10 +75,10 @@ def text_object(body, name, location, size, mat):
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    floor = material("CARVAMO mirror graphite floor", (.055, .13, .16), .62, .12) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
+    floor = material("CARVAMO mirror graphite floor", (.012, .022, .027), .72, .075) if args.studio_style == "mirror-premium" else material("CARVAMO matte graphite floor", (.17, .18, .19), .02, .84)
     grout = material("Floor joints", (.19, .20, .21), 0, .88)
-    wall = material("CARVAMO neutral graphite walls", (.063, .165, .204) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
-    ceiling = material("CARVAMO marine ceiling", (.085, .19, .23), 0, .75)
+    wall = material("CARVAMO neutral graphite walls", (.008, .045, .055) if args.studio_style == "mirror-premium" else (.245, .255, .265), 0, .72)
+    ceiling = material("CARVAMO marine ceiling", (.018, .052, .061), 0, .78)
     wood = material("Warm walnut slats", (.17, .11, .075), 0, .78)
     led = material("Neutral white LED diffuser", (.85, .96, .97), 0, .3)
     glass = material("Blue-gray glazing", (.14, .20, .24), .2, .16)
@@ -169,23 +169,23 @@ def build():
 
     # Cinematic vehicle lighting: soft sources remain invisible in the room
     # geometry; only the seven architectural rails are visible on the ceiling.
-    area_light("Long soft key", (0, -2.0, 5.25), 850, (11, 5), (0, 0, .7))
-    area_light("Left studio key", (-6.8, -.5, 4.6), 300, (4, 5), (0, 0, 1))
-    area_light("Right studio key", (6.8, -.5, 4.6), 300, (4, 5), (0, 0, 1))
-    area_light("Front fill", (0, -6.5, 4.4), 380, (8, 4), (0, 0, 1))
-    area_light("Right fill", (7.8, -1, 3.8), 250, (4, 5), (0, 0, 1))
-    area_light("Left fill", (-7.8, -1, 3.8), 250, (4, 5), (0, 0, 1))
+    area_light("Long soft key", (0, -2.0, 5.25), 350, (11, 5), (0, 0, .7))
+    area_light("Left studio key", (-6.8, -.5, 4.6), 140, (4, 5), (0, 0, 1))
+    area_light("Right studio key", (6.8, -.5, 4.6), 140, (4, 5), (0, 0, 1))
+    area_light("Front fill", (0, -6.5, 4.4), 140, (8, 4), (0, 0, 1))
+    area_light("Right fill", (7.8, -1, 3.8), 100, (4, 5), (0, 0, 1))
+    area_light("Left fill", (-7.8, -1, 3.8), 100, (4, 5), (0, 0, 1))
 
     world = bpy.context.scene.world
     world.color = (.2, .2, .2)
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = .40
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = .15
     bpy.ops.object.camera_add()
     camera = bpy.context.object
     camera.name = "CARVAMO calibrated orbit camera"
     bpy.context.scene.camera = camera
     camera.data.type = "PERSP"
-    camera.data.lens = 40
+    camera.data.lens = 25
     camera.data.sensor_width = 36
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
@@ -203,18 +203,18 @@ def build():
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
-    scene.view_settings.exposure = 0.15
+    scene.view_settings.exposure = -0.65
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    target = Vector((0, 0, 1.25))
+    target = Vector((0, 2.8, 2.45))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
         # Keep every camera in front of the back wall, even at +/-90 degrees.
         # A pure semicircle placed cameras sideways into empty black space.
-        camera.location = (4.6*math.sin(rad), -6.3 - 1.0*math.cos(rad), 1.35)
+        camera.location = (3.0*math.sin(rad), -8.0 - .5*math.cos(rad), 2.55)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -236,7 +236,7 @@ def build():
             "empty": True,
         })
     # Persist the actual calibrated camera pose, not the unpositioned camera.
-    camera.location = (0, -7.3, 1.35)
+    camera.location = (0, -8.5, 2.55)
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvamo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
