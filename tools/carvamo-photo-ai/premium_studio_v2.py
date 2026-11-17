@@ -122,6 +122,15 @@ def build():
                  (x, -.1, 5.515), (.065, 15.4, .024), strip)
             area_light("Ceiling LED soft illumination %.1f" % x,
                        (x, -.1, 5.39), 125, (.38, 12.5), (x, 0, 0))
+        # Soft turquoise gradient on the walls, not only narrow LED tubes.
+        for x in (-7.3, -3.6, 0, 3.6, 7.3):
+            area_light("Rear turquoise wall wash %.1f" % x,
+                       (x, 6.85, .33), 145, (3.4, .65), (x, 7.62, 1.45))
+        for x in (-9.02, 9.02):
+            for y in (-4.8, 0.0, 4.8):
+                area_light("Side turquoise wall wash %.1f %.1f" % (x, y),
+                           (x, y, .38), 110, (2.4, .65),
+                           (-9.38 if x < 0 else 9.38, y, 1.5))
         # Teal cove accents along the bottom of all three walls.
         cube("Rear turquoise wall wash", (0, 7.46, .16), (18.2, .07, .055), teal)
         for x in (-9.25, 9.25):
@@ -133,7 +142,7 @@ def build():
             cube("Walnut slat %02d" % k, (x, 7.54, 2.9),
                  (.10, .09, 5.1), wood, .012)
     # Continuous architectural recess: a single, repeatable studio for all brands.
-    cube("Rear shadow band", (0, 7.47, .16), (18.5, .10, .32), ceiling)
+    cube("Rear shadow band", (0, 7.53, .10), (18.5, .05, .12), ceiling)
     cube("Rear upper shadow band", (0, 7.47, 5.37), (18.5, .10, .18), ceiling)
     if args.logo_png:
         # Brand Book 2.0: canonical logo on a light protective field.
@@ -185,7 +194,7 @@ def build():
     camera.name = "CARVAMO calibrated orbit camera"
     bpy.context.scene.camera = camera
     camera.data.type = "PERSP"
-    camera.data.lens = 20
+    camera.data.lens = 27
     camera.data.shift_y = 0.0
     camera.data.sensor_width = 36
     scene = bpy.context.scene
@@ -195,6 +204,7 @@ def build():
         scene.cycles.diffuse_bounces = 3
         scene.cycles.glossy_bounces = 4
     scene.cycles.samples = args.samples
+    scene.cycles.use_adaptive_sampling = True
     scene.render.image_settings.color_depth = "8"
     # OVH Blender build lacks OpenImageDenoiser; do not enable it here.
     bpy.context.view_layer.cycles.use_denoising = False
@@ -204,18 +214,18 @@ def build():
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
-    scene.view_settings.exposure = -0.95
+    scene.view_settings.exposure = -0.65
     scene.render.image_settings.color_mode = "RGB"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    target = Vector((0, 1.8, 2.55))
+    target = Vector((0, 4.2, 2.85))
     metadata = []
     # Camera orbit: each render comes from a new 3D camera position.
     for angle in range(-90, 91, args.step):
         rad = math.radians(angle)
         # Keep every camera in front of the back wall, even at +/-90 degrees.
         # A pure semicircle placed cameras sideways into empty black space.
-        camera.location = (3.0*math.sin(rad), -7.8 - .5*math.cos(rad), 2.85)
+        camera.location = (2.2*math.sin(rad), -7.4 - .5*math.cos(rad), 2.85)
         direction = target-camera.location
         camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         path = args.output_dir/("empty_%+04d.png" % angle)
@@ -237,7 +247,7 @@ def build():
             "empty": True,
         })
     # Persist the actual calibrated camera pose, not the unpositioned camera.
-    camera.location = (0, -8.3, 2.85)
+    camera.location = (0, -7.9, 2.85)
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output_dir/"carvamo_showroom_180.blend"))
     (args.output_dir/"camera_manifest.json").write_text(
