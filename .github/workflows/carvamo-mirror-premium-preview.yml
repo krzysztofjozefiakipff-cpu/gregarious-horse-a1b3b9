@@ -1,4 +1,5 @@
 name: CARVAMO Mirror Premium OVH preview
+# Architectural LED + reflective floor redesign QA; not production-approved.
 on:
   push:
     branches: [main]
