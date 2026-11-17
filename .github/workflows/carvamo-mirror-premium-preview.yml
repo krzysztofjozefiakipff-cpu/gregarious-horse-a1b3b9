@@ -44,9 +44,19 @@ jobs:
           $SSH "$REMOTE" 'mkdir -p /tmp/carvamo-mirror-premium-preview'
           $SCP tools/carvelo-photo-ai/build_showroom_3d.py "$REMOTE:/tmp/carvamo-mirror-premium-preview/build_showroom_3d.py"
           $SCP tools/carvelo-photo-ai/mirror_poc_v53.py "$REMOTE:/tmp/carvamo-mirror-premium-preview/mirror_poc_v53.py"
+          # Search only known local canonical logo locations; never substitute a generated logo.
           $SSH "$REMOTE" 'set -eu
             BASE=/tmp/carvamo-mirror-premium-preview
-            blender -b -t 2 --python "$BASE/build_showroom_3d.py" -- --output-dir "$BASE/render" --studio-style mirror-premium --step 90 --samples 8 --width 1280 --height 720
+            LOGO=""
+            for p in /opt/carvamo/app/public/carvamo_official_logo.png /opt/carvamo/app/public/brand/carvamo_official_logo.png /opt/carvamo/app/public/brand/carvamo-logo.png /tmp/carvamo-photo-ai-test/carvamo_official_logo.png; do
+              if test -s "$p"; then LOGO="$p"; break; fi
+            done
+            if test -n "$LOGO"; then
+              blender -b -t 2 --python "$BASE/build_showroom_3d.py" -- --output-dir "$BASE/render" --logo-png "$LOGO" --studio-style mirror-premium --step 90 --samples 8 --width 1280 --height 720
+            else
+              echo "OFFICIAL_LOGO_NOT_ON_OVH: scene remains unbranded, no substitution" >&2
+              blender -b -t 2 --python "$BASE/build_showroom_3d.py" -- --output-dir "$BASE/render" --studio-style mirror-premium --step 90 --samples 8 --width 1280 --height 720
+            fi
           ' > preview/render-log.txt 2>&1 || { tail -n 70 preview/render-log.txt; exit 1; }
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_+000.png" preview/ || true
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_-090.png" preview/ || true
