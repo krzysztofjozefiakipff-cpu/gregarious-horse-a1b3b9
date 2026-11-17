@@ -8,20 +8,20 @@ def main():
  p=argparse.ArgumentParser()
  p.add_argument("--vehicle",required=True);p.add_argument("--background",required=True)
  p.add_argument("--output-dir",default="carvamo_fixed_studio_result")
- p.add_argument("--car-width",type=float,default=.60)
- p.add_argument("--floor-y",type=float,default=.89)
+ p.add_argument("--car-width",type=float,default=.69)
+ p.add_argument("--floor-y",type=float,default=.77)
  p.add_argument("--view",choices=["front","rear","left","right"],default="front")
  p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
  p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="water_mirror")
  a=p.parse_args()
- if not .35<=a.car_width<=.8 or not .75<=a.floor_y<=.96:raise ValueError("Invalid composition settings")
+ if not .35<=a.car_width<=.8 or not .68<=a.floor_y<=.92:raise ValueError("Invalid composition settings")
  out=Path(a.output_dir);out.mkdir(parents=True,exist_ok=True)
  bg=Image.open(a.background).convert("RGB");W,H=bg.size
  source=Image.open(a.vehicle).convert("RGBA")
  bb=source.getchannel("A").point(lambda v:255 if v>=32 else 0).getbbox()
  if not bb:raise ValueError("Missing vehicle transparency")
  car=source.crop(bb)
- scale=min(W*a.car_width/car.width,H*.61/car.height)
+ scale=min(W*a.car_width/car.width,H*.68/car.height)
  car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS)
  cw,ch=car.size;x=(W-cw)//2;alpha=car.getchannel("A")
  # Wheel regions are orientation-specific. We sample the bottom of the alpha
@@ -85,10 +85,10 @@ def main():
   local_axis=max(0,min(ch-1,reflection_start-y))
   reflected=car.crop((0,0,cw,local_axis+1)).transpose(Image.Transpose.FLIP_TOP_BOTTOM)
   avail=H-reflection_start
-  compressed=max(1,min(avail,round(reflected.height*.64)))
+  compressed=max(1,min(avail,round(reflected.height*.82)))
   reflected=reflected.resize((cw,compressed),Image.Resampling.BICUBIC)
   fa=reflected.getchannel("A")
-  opacity=105 if a.floor_reflection=="water_mirror" else 28
+  opacity=185 if a.floor_reflection=="water_mirror" else 42
   fade=Image.new("L",(cw,compressed),0);draw=ImageDraw.Draw(fade)
   for row in range(compressed):
    strength=round(opacity*(1-row/max(1,compressed-1))**1.45)
@@ -96,7 +96,7 @@ def main():
   reflected.putalpha(ImageChops.multiply(fa,fade))
   refl=Image.new("RGBA",(W,H),(0,0,0,0))
   refl.paste(reflected,(x,reflection_start))
-  refl=refl.filter(ImageFilter.GaussianBlur(max(2,round(W*(.0025 if a.floor_reflection=="water_mirror" else .004)))))
+  refl=refl.filter(ImageFilter.GaussianBlur(max(2,round(W*(.0015 if a.floor_reflection=="water_mirror" else .004)))))
   scene=Image.alpha_composite(scene,refl)
  layer=Image.new("RGBA",(W,H),(0,0,0,0))
  layer.paste(car,(x,y))
@@ -112,7 +112,7 @@ def main():
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
  "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
+ "estimated_contact_points":points,"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "wheel_ground_contact_verified":calibrated,"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
