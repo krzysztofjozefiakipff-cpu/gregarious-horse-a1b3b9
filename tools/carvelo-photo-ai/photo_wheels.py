@@ -62,12 +62,47 @@ def detect_wheel_candidates(photo, foreground, max_candidates=8):
                 continue
             candidates.append({"x": x, "y": y, "radius": r,
                                "mask_ring_fraction": round(inside/24, 3)})
-    candidates.sort(key=lambda c: (c["y"], c["radius"]), reverse=True)
-    candidates = candidates[:max_candidates]
+    # Estimate the bottom of the visible vehicle at each x coordinate.
+    # A genuine tyre should approach this lower silhouette, unlike a lamp
+    # or a circular detail on a door. This is a ranking cue, not proof.
+    bottom_by_x = np.full(w, -1, dtype=int)
+    for x in range(int(x0), int(x1) + 1):
+        rows = np.flatnonzero(opaque[:, x])
+        if rows.size:
+            bottom_by_x[x] = int(rows[-1])
+    filtered = []
+    for c in candidates:
+        x, y, r = c["x"], c["y"], c["radius"]
+        local = bottom_by_x[max(0, x-r//2):min(w, x+r//2+1)]
+        local = local[local >= 0]
+        if not local.size:
+            continue
+        bottom = float(np.median(local))
+        gap = abs((y + r) - bottom)
+        c["silhouette_bottom_gap_px"] = round(gap, 1)
+        c["silhouette_bottom_gap_radius_ratio"] = round(gap / r, 3)
+        # Do not accept candidates far above the lower vehicle silhouette.
+        if gap > max(15, r*.48):
+            continue
+        filtered.append(c)
+    filtered.sort(key=lambda c: (c["silhouette_bottom_gap_radius_ratio"],
+                                  -c["radius"]))
+    # Non-maximum suppression: a single wheel may produce nested circles.
+    selected = []
+    for c in filtered:
+        if any(math.hypot(c["x"]-p["x"], c["y"]-p["y"]) <
+               .8*max(c["radius"], p["radius"]) for p in selected):
+            continue
+        selected.append(c)
+        if len(selected) >= max_candidates:
+            break
+    candidates = selected
     return {
-        "status": "candidates_only" if candidates else "no_reliable_candidates",
+        "status": "silhouette_filtered_candidates" if candidates else "no_reliable_candidates",
         "candidates": candidates,
         "candidate_count": len(candidates),
+        "raw_candidate_count": len(filtered),
+        "selection_method": "lower_silhouette_gap_and_circle_suppression",
         "wheel_centres_verified": False,
         "vehicle_azimuth_deg": None,
         "camera_pose_verified": False,
