@@ -90,7 +90,25 @@ def main():
  min_y=floor_seam+round(H*.012)-min_contact
  max_y=H-ch-reserve
  if min_y>max_y:
-  raise ValueError("Vehicle too tall for floor plane and reflection clearance; reduce scale or adjust calibration")
+  # Refit after integer resizing: rounding and silhouette geometry can leave
+  # a few pixels of overflow even when the initial scale estimate passed.
+  # Preserve the same proportions and rescale contacts with the image.
+  available=H-reserve-floor_seam-round(H*.012)
+  depth=max(1,ch-min_contact)
+  factor=min(.985,available/depth*.975)
+  if factor<=0 or factor>=1:
+   factor=.97
+  old_cw,old_ch=cw,ch
+  car=car.resize((max(1,round(cw*factor)),max(1,round(ch*factor))),Image.Resampling.LANCZOS)
+  cw,ch=car.size
+  alpha=car.getchannel("A")
+  x=(W-cw)//2
+  contacts_local=[(min(cw-1,round(xx*cw/old_cw)),min(ch-1,round(yy*ch/old_ch))) for xx,yy in contacts_local]
+  min_contact=min(yy for xx,yy in contacts_local)
+  min_y=floor_seam+round(H*.012)-min_contact
+  max_y=H-ch-reserve
+  if min_y>max_y:
+   raise ValueError("Floor fit still impossible after adaptive rescaling; manual wheel calibration required")
  y=max(y,min_y)
  y=min(y,max_y)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
