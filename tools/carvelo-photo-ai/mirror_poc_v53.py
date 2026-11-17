@@ -23,6 +23,18 @@ def main():
  if not (0<=x0<x1<=w and 0<=y0<y1<=h):p.error("Invalid vehicle bbox")
  # The V51 bbox bottom is only a provisional silhouette baseline, NOT wheel contact.
  floor=int(m["floor_row_px"])
+ # Silhouette-floor alignment; does not verify both wheel contact patches.
+ ab=car.getchannel("A").point(lambda v: 255 if v>=128 else 0).getbbox()
+ if ab is None: p.error("Empty vehicle alpha")
+ bottom=ab[3]-1
+ dy=floor-bottom
+ if abs(dy)>150: p.error("Unsafe vertical offset")
+ shifted=Image.new("RGBA",(w,h),(0,0,0,0))
+ shifted.alpha_composite(car,(0,dy))
+ car=shifted
+ y0=max(0,y0+dy)
+ y1=min(h,y1+dy)
+ if y1<=y0:p.error("Vehicle outside image after alignment")
  crop=car.crop((x0,y0,x1,y1))
  reflected=crop.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
  # Gentle, strongly attenuated mirror-floor reflection, clipped to visible canvas.
@@ -50,6 +62,8 @@ def main():
  out.save(a.output_dir/"jaecoo8_mirror_poc.png")
  report={"status":"visual_poc_only","vehicle_pixels":"original V51 layer preserved by compositing",
  "reflection":"2D vertically flipped approximate reflection; NOT perspective calibrated",
+ "silhouette_floor_alignment_px":dy,"silhouette_bottom_row_before":bottom,
+ "floor_row_px":floor,
  "wheel_ground_contact_verified":False,"ready_for_publication":False,"paid_api_calls":0,
  "source_car":str(a.car),"background":str(a.background)}
  (a.output_dir/"mirror_poc_report.json").write_text(json.dumps(report,indent=2))
