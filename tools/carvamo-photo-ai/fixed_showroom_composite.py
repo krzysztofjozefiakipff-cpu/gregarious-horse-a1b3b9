@@ -13,9 +13,9 @@ def main():
  p.add_argument("--view",choices=["front","rear","left","right"],default="front")
  p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
  p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="water_mirror")
- p.add_argument("--ground-drop",type=float,default=.045,help="Move car and its contact-linked reflection down as a unit")
+ p.add_argument("--ground-drop",type=float,default=.075,help="Move car and its contact-linked reflection down as a unit")
  a=p.parse_args()
- if not .35<=a.car_width<=.8 or not .68<=a.floor_y<=.92 or not 0<=a.ground_drop<=.065:raise ValueError("Invalid composition settings")
+ if not .35<=a.car_width<=.8 or not .68<=a.floor_y<=.92 or not 0<=a.ground_drop<=.10:raise ValueError("Invalid composition settings")
  out=Path(a.output_dir);out.mkdir(parents=True,exist_ok=True)
  bg=Image.open(a.background).convert("RGB");W,H=bg.size
  source=Image.open(a.vehicle).convert("RGBA")
@@ -38,8 +38,13 @@ def main():
   cutoff=ys[max(0,int(len(ys)*.90)-1)]
   chosen=[(xx,yy) for xx,yy in samples if yy>=cutoff]
   return (round(sum(xx for xx,yy in chosen)/len(chosen)),max(yy for xx,yy in chosen))
- bands={"front":[(.50,.70),(.88,.99)],"rear":[(.02,.17),(.30,.51)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
- contacts_local=[tire_contact(*band) for band in bands[a.view]]
+ bands={"front":[(.08,.25),(.50,.70),(.88,.99)],"rear":[(.02,.17),(.30,.51),(.78,.96)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
+ contacts_local=[]
+ for band in bands[a.view]:
+  try:contacts_local.append(tire_contact(*band))
+  except ValueError:
+   if len(bands[a.view])<=2:raise
+   pass
  calibrated=False
  if a.calibration:
   config=json.loads(Path(a.calibration).read_text(encoding="utf-8"))
@@ -121,7 +126,7 @@ def main():
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
  "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"lower_vehicle_logo_visible_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
+ "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"lower_vehicle_three_wheel_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
