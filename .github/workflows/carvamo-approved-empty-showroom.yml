@@ -23,7 +23,7 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
           ssh-keygen -y -P '' -f ~/.ssh/id_ed25519 >/dev/null
-      - name: Render empty approved studio on OVH
+      - name: Render V2 empty studio on OVH
         env:
           HOST: ${{ secrets.OVH_DEPLOY_HOST }}
           USER: ${{ secrets.OVH_DEPLOY_USER }}
@@ -50,7 +50,7 @@ jobs:
           PY
       - name: Quantitative QA with explicit acceptance blockers
         run: |
-          python3 -m pip install --quiet --break-system-packages pillow numpy
+          python3 -m pip install --quiet pillow numpy
           python3 tools/carvamo-photo-ai/qa_premium_studio_v2.py --image preview/approved-empty-showroom.png --scene-qa preview/scene_qa.json --output preview/studio-v2-qa.json
       - name: Publish isolated preview to repository
         env:
