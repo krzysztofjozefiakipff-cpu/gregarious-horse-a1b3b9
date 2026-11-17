@@ -1,0 +1,65 @@
+name: CARVAMO OVH connection verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/carvamo-showroom-v5-studio
+    paths:
+      - '.github/workflows/carvamo-ovh-verify.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carvamo-ovh-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: carvamo-preview
+    steps:
+      - name: Validate required secrets
+        env:
+          HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+          USER: ${{ secrets.OVH_DEPLOY_USER }}
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          for name in HOST USER SSH_KEY KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret: $name (OVH_DEPLOY_HOST, OVH_DEPLOY_USER, OVH_DEPLOY_SSH_KEY, OVH_SSH_KNOWN_HOSTS)"
+              exit 1
+            fi
+          done
+      - name: Install SSH identity and pinned host key
+        env:
+          SSH_KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -P '' -f "$HOME/.ssh/id_ed25519" >/dev/null
+      - name: Read-only OVH smoke test
+        env:
+          HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+          USER: ${{ secrets.OVH_DEPLOY_USER }}
+        run: |
+          set -eu
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$USER@$HOST" \
+            'set -eu; echo "CARVAMO_OVH_CONNECTION_OK"; test -d /opt/carvamo/app; test -d /tmp/carvamo-photo-ai-test; echo "CARVAMO_TEST_PATHS_OK"'
+      - name: Remove temporary SSH files
+        if: always()
+        run: rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
