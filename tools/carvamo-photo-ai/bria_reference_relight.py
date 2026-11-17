@@ -32,6 +32,7 @@ def main():
   "original_alpha_preserved":True,"original_vehicle_geometry_preserved":True,
   "bria_generated_background_used":False,
   "warning":"BRIA scene-wide statistics are not a physical lighting model; visually inspect paint color."}
+ Path(a.report).parent.mkdir(parents=True,exist_ok=True)
  Path(a.report).write_text(json.dumps(report,indent=2),encoding="utf-8")
  print("BRIA lighting reference applied conservatively; original alpha preserved.")
 if __name__=="__main__":main()
