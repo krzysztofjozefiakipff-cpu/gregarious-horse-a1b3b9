@@ -30,11 +30,25 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-      - name: Fetch approved reference and test car from OVH
+      - name: Upload approved showroom to OVH and fetch test car
         run: |
           set -euo pipefail
           test -n "$REMOTE_HOST" && test -n "$REMOTE_USER"
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:/opt/carvamo/assets/approved-showroom.png" showroom.png
+          ASSET="photo-ai-preview/approved-showroom.png"
+          if [ ! -f "$ASSET" ]; then
+            echo "::error::Upload approved-showroom.png into photo-ai-preview/ on GitHub first"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+          b=Path('photo-ai-preview/approved-showroom.png').read_bytes()
+          assert b[:8] == bytes([137,80,78,71,13,10,26,10]), 'Invalid PNG'
+          assert struct.unpack('>II',b[16:24]) == (1671,941), 'Wrong reference dimensions'
+          PY
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST" 'mkdir -p /opt/carvamo/assets'
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$ASSET" "$REMOTE_USER@$REMOTE_HOST:/opt/carvamo/assets/approved-showroom.png"
+          cp "$ASSET" showroom.png
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_HOST:/tmp/carvamo-photo-ai-test/results/v47-inpainting/front/v51/original_car_rgba.png" car.png
           file showroom.png car.png
       - name: Generate candidate only with explicit authorization
