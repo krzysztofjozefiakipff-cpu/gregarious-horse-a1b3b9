@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - name: Prepare pinned SSH
         env:
           KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
