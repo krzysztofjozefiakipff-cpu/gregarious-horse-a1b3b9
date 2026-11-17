@@ -14,9 +14,10 @@ def main():
  p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
  p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="water_mirror")
  p.add_argument("--reflection-gap",type=float,default=.025,help="Front/rear visual gap between bumper and first reflection")
+ p.add_argument("--floor-seam-y",type=float,default=.705,help="Top edge of visible showroom floor as fraction of image height")
  p.add_argument("--ground-drop",type=float,default=.075,help="Move car and its contact-linked reflection down as a unit")
  a=p.parse_args()
- if not .35<=a.car_width<=.8 or not .68<=a.floor_y<=.92 or not 0<=a.ground_drop<=.10:raise ValueError("Invalid composition settings")
+ if not .35<=a.car_width<=.8 or not .68<=a.floor_y<=.92 or not .55<=a.floor_seam_y<=.85 or not 0<=a.ground_drop<=.10:raise ValueError("Invalid composition settings")
  out=Path(a.output_dir);out.mkdir(parents=True,exist_ok=True)
  bg=Image.open(a.background).convert("RGB");W,H=bg.size
  source=Image.open(a.vehicle).convert("RGBA")
@@ -64,17 +65,20 @@ def main():
  if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
  baseline=round(H*(a.floor_y+a.ground_drop))
  y=baseline-max(yy for xx,yy in contacts_local)
- # The distant contact must remain on the floor, not above the rear-wall seam.
- # Shift the entire car down (without changing its proportions) if needed.
- floor_seam=round(H*.705)
- if a.view in ("front","rear") and max(yy for xx,yy in contacts_local)-min(yy for xx,yy in contacts_local)>ch*.15:
-  y+=max(0,floor_seam-(y+min(yy for xx,yy in contacts_local)))
- # Keep the whole vehicle and near contact inside the image.
- # Reserve visible floor below the bumper for the reflection, rather than clipping it.
+ # Keep every wheel contact on the visible floor; reserve reflection space.
+ floor_seam=round(H*a.floor_seam_y)
  reserve=round(H*(.16 if a.view in ("front","rear") else .10))
- y=min(y,H-ch-reserve)
+ min_contact=min(yy for xx,yy in contacts_local)
+ min_y=floor_seam+round(H*.012)-min_contact
+ max_y=H-ch-reserve
+ if min_y>max_y:
+  raise ValueError("Vehicle too tall for floor plane and reflection clearance; reduce scale or adjust calibration")
+ y=max(y,min_y)
+ y=min(y,max_y)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
  scene=bg.convert("RGBA")
+ floor_mask=Image.new("L",(W,H),0)
+ ImageDraw.Draw(floor_mask).rectangle((0,floor_seam,W,H),fill=255)
  # Perspective-aware, multi-scale contact shadows. The rear tire lies higher
  # in image coordinates; its shadow must be anchored to its OWN contact point.
  contact_mask=Image.new("L",(W,H),0)
@@ -91,7 +95,7 @@ def main():
  d.ellipse((min(fx,rx)-round(cw*.11),min(fy,ry)-round(ch*.05),
             max(fx,rx)+round(cw*.11),max(fy,ry)+round(ch*.07)),fill=72)
  diffuse=diffuse.filter(ImageFilter.GaussianBlur(max(12,round(W*.018))))
- combined=ImageChops.lighter(contact_mask,diffuse)
+ combined=ImageChops.multiply(ImageChops.lighter(contact_mask,diffuse),floor_mask)
  shadow=Image.new("RGBA",(W,H),(0,0,0,0));shadow.putalpha(combined)
  scene=Image.alpha_composite(scene,shadow)
  # Per-column reflection anchored to the perspective ground-contact line.
@@ -131,6 +135,7 @@ def main():
    strip.putalpha(ImageChops.multiply(fa,fade))
    refl.paste(strip,(gx,axis))
   refl=refl.filter(ImageFilter.GaussianBlur(max(2,round(W*(.0015 if a.floor_reflection=="water_mirror" else .004)))))
+  refl.putalpha(ImageChops.multiply(refl.getchannel("A"),floor_mask))
   scene=Image.alpha_composite(scene,refl)
  layer=Image.new("RGBA",(W,H),(0,0,0,0))
  layer.paste(car,(x,y))
@@ -145,7 +150,7 @@ def main():
  diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v5","view":a.view,
- "background_preserved":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"vehicle_bbox":[x,y,x+cw,y+ch],
+ "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"vehicle_bbox":[x,y,x+cw,y+ch],
  "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"lower_vehicle_three_wheel_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "frontal_reflected_side_wheels_synthesized":False,"wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
