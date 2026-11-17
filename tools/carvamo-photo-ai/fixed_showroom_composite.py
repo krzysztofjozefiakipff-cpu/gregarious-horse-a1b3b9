@@ -11,6 +11,7 @@ def main():
  p.add_argument("--car-width",type=float,default=.60)
  p.add_argument("--floor-y",type=float,default=.89)
  p.add_argument("--view",choices=["front","rear","left","right"],default="front")
+ p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
  a=p.parse_args()
  if not .35<=a.car_width<=.8 or not .75<=a.floor_y<=.96:raise ValueError("Invalid composition settings")
  out=Path(a.output_dir);out.mkdir(parents=True,exist_ok=True)
@@ -37,6 +38,18 @@ def main():
   return (round(sum(xx for xx,yy in chosen)/len(chosen)),max(yy for xx,yy in chosen))
  bands={"front":[(.30,.49),(.88,.99)],"rear":[(.12,.32),(.65,.89)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
  contacts_local=[tire_contact(*band) for band in bands[a.view]]
+ calibrated=False
+ if a.calibration:
+  config=json.loads(Path(a.calibration).read_text(encoding="utf-8"))
+  if config.get("view")!=a.view or config.get("coordinate_system")!="cropped_vehicle_normalized" or not config.get("verified_by"):
+   raise ValueError("Calibration must identify view, coordinate system and verifier")
+  pts=config.get("wheel_contacts")
+  if not isinstance(pts,list) or len(pts)!=2 or any(not isinstance(q,list) or len(q)!=2 or any(not isinstance(v,(int,float)) or not 0<=v<=1 for v in q) for q in pts):
+   raise ValueError("Expected two normalized wheel contact points")
+  contacts_local=[(round(q[0]*(cw-1)),round(q[1]*(ch-1))) for q in pts]
+  for xx,yy in contacts_local:
+   if alpha.getpixel((xx,yy))<80:raise ValueError("Calibrated contact outside vehicle alpha")
+  calibrated=True
  if abs(contacts_local[0][0]-contacts_local[1][0])<cw*.18:raise ValueError("Wheel contacts overlap")
  baseline=round(H*a.floor_y)
  y=baseline-max(yy for xx,yy in contacts_local)
@@ -80,11 +93,18 @@ def main():
  layer.paste(car,(x,y))
  scene=Image.alpha_composite(scene,layer)
  candidate=out/"candidate.png";scene.convert("RGB").save(candidate,optimize=True)
+ diagnostic=scene.convert("RGB").copy();marker=ImageDraw.Draw(diagnostic)
+ marker.line((0,baseline,W,baseline),fill=(255,195,0),width=max(2,W//400))
+ for idx,(px,py) in enumerate(points):
+  rr=max(7,W//90)
+  marker.ellipse((px-rr,py-rr,px+rr,py+rr),outline=(255,35,35),width=max(3,W//350))
+  marker.text((px+rr,py-rr),"Wheel "+str(idx+1),fill=(255,255,255))
+ diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
  "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
- "wheel_ground_contact_verified":False,"logo_visibility_verified":False,
+ "estimated_contact_points":points,"calibration_file_used":bool(a.calibration),"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
+ "wheel_ground_contact_verified":calibrated,"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
  print("Candidate:",candidate,"contacts:",points,"publication blocked pending visual QA")
