@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - .github/workflows/carvamo-fixed-showroom-new-photos.yml
+      - tools/carvamo-photo-ai/fixed_showroom_composite.py
+      - tools/carvamo-photo-ai/bria_remove_background.py
 permissions:
   contents: read
 jobs:
