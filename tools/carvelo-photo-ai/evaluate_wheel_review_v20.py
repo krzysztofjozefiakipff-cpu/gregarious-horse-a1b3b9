@@ -29,6 +29,7 @@ def evaluate(review_root, results_root):
             matched = any(abs(c["x"]-x) <= 2 and abs(c["y"]-y) <= 2
                           and abs(c["radius"]-radius) <= 2 for c in candidates)
             stats["matched" if matched else "unmatched"] += 1
+        summary["total"] += len(annotations["candidates"])
         summary["per_view"][view] = stats
         for key, value in stats.items():
             summary[key] += value
