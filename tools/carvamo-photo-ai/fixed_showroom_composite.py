@@ -37,7 +37,7 @@ def main():
   cutoff=ys[max(0,int(len(ys)*.90)-1)]
   chosen=[(xx,yy) for xx,yy in samples if yy>=cutoff]
   return (round(sum(xx for xx,yy in chosen)/len(chosen)),max(yy for xx,yy in chosen))
- bands={"front":[(.30,.49),(.88,.99)],"rear":[(.12,.32),(.65,.89)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
+ bands={"front":[(.50,.70),(.88,.99)],"rear":[(.02,.17),(.30,.51)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
  contacts_local=[tire_contact(*band) for band in bands[a.view]]
  calibrated=False
  if a.calibration:
