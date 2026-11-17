@@ -1,5 +1,5 @@
 name: CARVAMO Mirror Premium OVH preview
-# Architectural LED + reflective floor redesign QA; not production-approved.
+# Brand Book 2.0 marine/navy palette render QA; official logo still required for final branding.
 on:
   push:
     branches: [main]
