@@ -1,0 +1,82 @@
+name: CARVAMO approved empty showroom geometry QA
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/carvamo-approved-empty-showroom.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  empty-showroom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare OVH SSH
+        env:
+          KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          ssh-keygen -y -P '' -f ~/.ssh/id_ed25519 >/dev/null
+      - name: Render empty approved studio on OVH
+        env:
+          HOST: ${{ secrets.OVH_DEPLOY_HOST }}
+          USER: ${{ secrets.OVH_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p preview
+          SSH="ssh -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          SCP="scp -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          REMOTE="$USER@$HOST"
+          $SSH "$REMOTE" 'mkdir -p /tmp/carvamo-approved-empty-studio'
+          $SCP tools/carvelo-photo-ai/build_showroom_3d.py "$REMOTE:/tmp/carvamo-approved-empty-studio/build_showroom_3d.py"
+          $SSH "$REMOTE" 'blender -b -t 2 --python /tmp/carvamo-approved-empty-studio/build_showroom_3d.py -- --output-dir /tmp/carvamo-approved-empty-studio/render --studio-style mirror-premium --step 90 --samples 16 --width 1280 --height 720' > preview/render-log.txt 2>&1 || { tail -n 90 preview/render-log.txt; exit 1; }
+          $SCP "$REMOTE:/tmp/carvamo-approved-empty-studio/render/empty_+000.png" preview/approved-empty-showroom.png
+          $SCP "$REMOTE:/tmp/carvamo-approved-empty-studio/render/scene_qa.json" preview/
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("preview/approved-empty-showroom.png")
+          assert p.stat().st_size>10000
+          assert p.read_bytes()[:8]==bytes.fromhex("89504e470d0a1a0a")
+          q=json.loads(Path("preview/scene_qa.json").read_text())
+          assert q["scene_profile"]=="approved-architectural-led-studio-v2"
+          print("Verified empty studio PNG and scene profile. Visual comparison still required.")
+          PY
+      - name: Publish isolated preview to repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,os,urllib.request,urllib.error
+          from pathlib import Path
+          repo=os.environ["GH_REPOSITORY"]
+          path="photo-ai-preview/approved-empty-showroom.png"
+          url="https://api.github.com/repos/"+repo+"/contents/"+path
+          headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"carvamo-showroom-qa"}
+          sha=None
+          try:
+              with urllib.request.urlopen(urllib.request.Request(url+"?ref=main",headers=headers)) as response:
+                  sha=json.load(response)["sha"]
+          except urllib.error.HTTPError as e:
+              if e.code!=404: raise
+          payload={"message":"CARVAMO: publish approved architecture candidate for visual review","content":base64.b64encode(Path("preview/approved-empty-showroom.png").read_bytes()).decode(),"branch":"main"}
+          if sha: payload["sha"]=sha
+          req=urllib.request.Request(url,method="PUT",headers={**headers,"Content-Type":"application/json"},data=json.dumps(payload).encode())
+          with urllib.request.urlopen(req,timeout=120) as response:
+              print(json.load(response)["content"]["html_url"])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: carvamo-approved-empty-showroom-qa
+          path: preview/
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts
