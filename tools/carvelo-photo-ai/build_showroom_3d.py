@@ -147,7 +147,7 @@ def build():
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.samples = args.samples
-    bpy.context.view_layer.cycles.use_denoising = True
+    bpy.context.view_layer.cycles.use_denoising = False
     scene.render.resolution_x = args.width
     scene.render.resolution_y = args.height
     scene.render.resolution_percentage = 100
