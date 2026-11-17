@@ -1,4 +1,4 @@
-name: CARVAMO approved empty showroom framing and contrast QA
+name: CARVAMO V2 isolated reference acceptance QA
 on:
   push:
     branches: [main]
@@ -34,7 +34,7 @@ jobs:
           SCP="scp -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes"
           REMOTE="$USER@$HOST"
           $SSH "$REMOTE" 'mkdir -p /tmp/carvamo-approved-empty-studio'
-          $SCP tools/carvelo-photo-ai/build_showroom_3d.py "$REMOTE:/tmp/carvamo-approved-empty-studio/build_showroom_3d.py"
+          $SCP tools/carvamo-photo-ai/premium_studio_v2.py "$REMOTE:/tmp/carvamo-approved-empty-studio/premium_studio_v2.py"
           $SSH "$REMOTE" 'blender -b -t 2 --python /tmp/carvamo-approved-empty-studio/build_showroom_3d.py -- --output-dir /tmp/carvamo-approved-empty-studio/render --studio-style mirror-premium --step 90 --samples 16 --width 1280 --height 720' > preview/render-log.txt 2>&1 || { tail -n 90 preview/render-log.txt; exit 1; }
           $SCP "$REMOTE:/tmp/carvamo-approved-empty-studio/render/empty_+000.png" preview/approved-empty-showroom.png
           $SCP "$REMOTE:/tmp/carvamo-approved-empty-studio/render/scene_qa.json" preview/
@@ -45,9 +45,13 @@ jobs:
           assert p.stat().st_size>10000
           assert p.read_bytes()[:8]==bytes.fromhex("89504e470d0a1a0a")
           q=json.loads(Path("preview/scene_qa.json").read_text())
-          assert q["scene_profile"]=="approved-architectural-led-studio-v2"
+          assert q["scene_profile"]=="premium-studio-v2-independent-qa"
           print("Verified empty studio PNG and scene profile. Visual comparison still required.")
           PY
+      - name: Quantitative QA with explicit acceptance blockers
+        run: |
+          python3 -m pip install --quiet --break-system-packages pillow numpy
+          python3 tools/carvamo-photo-ai/qa_premium_studio_v2.py --image preview/approved-empty-showroom.png --scene-qa preview/scene_qa.json --output preview/studio-v2-qa.json
       - name: Publish isolated preview to repository
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,7 +61,7 @@ jobs:
           import base64,json,os,urllib.request,urllib.error
           from pathlib import Path
           repo=os.environ["GH_REPOSITORY"]
-          path="photo-ai-preview/approved-empty-showroom.png"
+          path="photo-ai-preview/studio-v2-candidate.png"
           url="https://api.github.com/repos/"+repo+"/contents/"+path
           headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"carvamo-showroom-qa"}
           sha=None
@@ -66,11 +70,27 @@ jobs:
                   sha=json.load(response)["sha"]
           except urllib.error.HTTPError as e:
               if e.code!=404: raise
-          payload={"message":"CARVAMO: publish approved architecture candidate for visual review","content":base64.b64encode(Path("preview/approved-empty-showroom.png").read_bytes()).decode(),"branch":"main"}
+          payload={"message":"CARVAMO: publish V2 candidate (not approved)","content":base64.b64encode(Path("preview/approved-empty-showroom.png").read_bytes()).decode(),"branch":"main"}
           if sha: payload["sha"]=sha
           req=urllib.request.Request(url,method="PUT",headers={**headers,"Content-Type":"application/json"},data=json.dumps(payload).encode())
           with urllib.request.urlopen(req,timeout=120) as response:
               print(json.load(response)["content"]["html_url"])
+          # Publish the QA verdict separately; a generated preview is not approval.
+          python3 - <<'PY'
+          import base64,json,os,urllib.request,urllib.error
+          from pathlib import Path
+          repo=os.environ["GH_REPOSITORY"]
+          path="photo-ai-preview/studio-v2-qa.json"
+          url="https://api.github.com/repos/"+repo+"/contents/"+path
+          headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github+json","User-Agent":"carvamo-qa"}
+          sha=None
+          try:
+              with urllib.request.urlopen(urllib.request.Request(url+"?ref=main",headers=headers)) as resp: sha=json.load(resp)["sha"]
+          except urllib.error.HTTPError as e:
+              if e.code!=404: raise
+          payload={"message":"CARVAMO: publish V2 measured QA and blockers","content":base64.b64encode(Path("preview/studio-v2-qa.json").read_bytes()).decode(),"branch":"main"}
+          if sha: payload["sha"]=sha
+          with urllib.request.urlopen(urllib.request.Request(url,method="PUT",headers={**headers,"Content-Type":"application/json"},data=json.dumps(payload).encode()),timeout=120) as resp: print(resp.status)
           PY
       - uses: actions/upload-artifact@v4
         if: always()
