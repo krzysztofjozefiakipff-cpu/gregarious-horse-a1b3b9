@@ -1,4 +1,4 @@
-name: CARVAMO approved empty showroom geometry QA
+name: CARVAMO approved empty showroom framing and contrast QA
 on:
   push:
     branches: [main]
