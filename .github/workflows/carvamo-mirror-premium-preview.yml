@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: de4b3b1a9f219c89128a406aff1a70b0cbe57f53
+          ref: 3776881a7c72e9b48aef9f0ffe2778df943461fd
       - name: Prepare SSH
         env:
           KEY: ${{ secrets.OVH_DEPLOY_SSH_KEY }}
@@ -42,6 +42,7 @@ jobs:
           # Only /tmp; no app deployment, no Supabase, no paid API.
           $SSH "$REMOTE" 'mkdir -p /tmp/carvamo-mirror-premium-preview'
           $SCP tools/carvelo-photo-ai/build_showroom_3d.py "$REMOTE:/tmp/carvamo-mirror-premium-preview/build_showroom_3d.py"
+          $SCP tools/carvelo-photo-ai/mirror_poc_v53.py "$REMOTE:/tmp/carvamo-mirror-premium-preview/mirror_poc_v53.py"
           $SSH "$REMOTE" 'set -eu
             BASE=/tmp/carvamo-mirror-premium-preview
             LOGO=$(find /tmp/carvamo-photo-ai-test /opt/carvamo/app -type f \( -iname "*carvamo*logo*.png" -o -iname "*logo*carvamo*.png" \) -print -quit 2>/dev/null || true)
@@ -52,8 +53,17 @@ jobs:
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_-090.png" preview/ || true
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/empty_+090.png" preview/ || true
           $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/render/camera_manifest.json" preview/
-          # Preserve existing vehicle imagery; this run tests only the room.
-          printf '%s\n' 'Showroom-only preview: wheel contact and car reflections NOT verified' > preview/qa-status.txt
+          # Create isolated, explicitly non-publishable JAECOO 8 mirror POC.
+          $SSH "$REMOTE" 'set -eu
+            BASE=/tmp/carvamo-mirror-premium-preview
+            CAR=/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v51/original_car_rgba.png
+            MANIFEST=/tmp/carvamo-photo-ai-test/results/v47-inpainting/rear/v51/manifest_v51.json
+            test -f "$CAR" && test -f "$MANIFEST"
+            /tmp/carvamo-v24-venv/bin/python "$BASE/mirror_poc_v53.py" --car "$CAR" --manifest "$MANIFEST" --background "$BASE/render/empty_+000.png" --output-dir "$BASE/poc"
+          ' > preview/composite-log.txt 2>&1 || { tail -n 60 preview/composite-log.txt; exit 1; }
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/poc/jaecoo8_mirror_poc.png" preview/
+          $SCP "$REMOTE:/tmp/carvamo-mirror-premium-preview/poc/mirror_poc_report.json" preview/
+          printf '%s\n' 'Mirror-floor POC only: physical wheel contact and reflection perspective NOT verified' > preview/qa-status.txt
       - name: Upload renders and logs
         if: always()
         uses: actions/upload-artifact@v4
