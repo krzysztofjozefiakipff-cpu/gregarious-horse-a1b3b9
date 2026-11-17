@@ -46,13 +46,13 @@ def main():
   if config.get("view")!=a.view or config.get("coordinate_system")!="cropped_vehicle_normalized" or not config.get("verified_by"):
    raise ValueError("Calibration must identify view, coordinate system and verifier")
   pts=config.get("wheel_contacts")
-  if not isinstance(pts,list) or len(pts)!=2 or any(not isinstance(q,list) or len(q)!=2 or any(not isinstance(v,(int,float)) or not 0<=v<=1 for v in q) for q in pts):
-   raise ValueError("Expected two normalized wheel contact points")
+  if not isinstance(pts,list) or len(pts) not in (2,3) or any(not isinstance(q,list) or len(q)!=2 or any(not isinstance(v,(int,float)) or not 0<=v<=1 for v in q) for q in pts):
+   raise ValueError("Expected two or three normalized wheel contact points")
   contacts_local=[(round(q[0]*(cw-1)),round(q[1]*(ch-1))) for q in pts]
   for xx,yy in contacts_local:
    if alpha.getpixel((xx,yy))<80:raise ValueError("Calibrated contact outside vehicle alpha")
   calibrated=True
- if abs(contacts_local[0][0]-contacts_local[1][0])<cw*.18:raise ValueError("Wheel contacts overlap")
+ if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
  baseline=round(H*(a.floor_y+a.ground_drop))
  y=baseline-max(yy for xx,yy in contacts_local)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
@@ -68,7 +68,8 @@ def main():
  contact_mask=contact_mask.filter(ImageFilter.GaussianBlur(max(3,round(W*.003))))
  # Long diffuse shadow beneath chassis, lighter than the contact patches.
  diffuse=Image.new("L",(W,H),0);d=ImageDraw.Draw(diffuse)
- (fx,fy),(rx,ry)=points
+ fx=min(px for px,py in points);rx=max(px for px,py in points)
+ fy=min(py for px,py in points);ry=max(py for px,py in points)
  d.ellipse((min(fx,rx)-round(cw*.11),min(fy,ry)-round(ch*.05),
             max(fx,rx)+round(cw*.11),max(fy,ry)+round(ch*.07)),fill=72)
  diffuse=diffuse.filter(ImageFilter.GaussianBlur(max(12,round(W*.018))))
@@ -80,12 +81,14 @@ def main():
  # own contact point, so tire and reflected tire meet without a visible gap.
  reflection_start=max(py for px,py in points)
  if a.floor_reflection!="off":
-  (x1,y1),(x2,y2)=sorted(points)
+  anchors=sorted(points)
+  (x1,y1),(x2,y2)=anchors[0],anchors[-1]
   if x2==x1:raise ValueError("Wheel contacts must have different x coordinates")
   opacity=185 if a.floor_reflection=="water_mirror" else 42
   refl=Image.new("RGBA",(W,H),(0,0,0,0))
   for col in range(cw):
    gx=x+col
+   (x1,y1),(x2,y2)=next(((l,r) for l,r in zip(anchors,anchors[1:]) if gx<=r[0]),(anchors[-2],anchors[-1]))
    t=max(0.,min(1.,(gx-x1)/(x2-x1)))
    axis=round(y1+(y2-y1)*t)
    local_axis=max(0,min(ch-1,axis-y))
@@ -118,8 +121,8 @@ def main():
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
  "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"logo_visible_natural_scale_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
- "wheel_ground_contact_verified":calibrated,"logo_visibility_verified":False,
+ "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"logo_visible_natural_scale_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
+ "wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
  print("Candidate:",candidate,"contacts:",points,"publication blocked pending visual QA")
