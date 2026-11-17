@@ -111,26 +111,30 @@ def build():
                  (.10, .09, 5.1), wood, .012)
     cube("Brand fascia", (4.3, 7.48, 3.3), (7.3, .16, 2.2), wall, .04)
     # Use the approved SVG rasterized externally; Blender font substitutes are forbidden.
-    logo_png = Path(args.logo_png)
-    if not logo_png.is_file():
+    logo_png = Path(args.logo_png) if args.logo_png else None
+    if args.logo_png and not logo_png.is_file():
         raise FileNotFoundError("official_carvamo_logo_png_missing: " + str(logo_png))
-    logo_image = bpy.data.images.load(str(logo_png), check_existing=True)
-    logo_material = bpy.data.materials.new("Official CARVAMO logo PNG")
-    logo_material.use_nodes = True
-    nodes = logo_material.node_tree.nodes
-    bsdf = nodes.get("Principled BSDF")
-    texture = nodes.new("ShaderNodeTexImage")
-    texture.image = logo_image
-    logo_material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
-    logo_material.node_tree.links.new(texture.outputs["Alpha"], bsdf.inputs["Alpha"])
-    logo_material.blend_method = "BLEND"
-    bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
-                                     rotation=(math.pi / 2, 0, 0))
-    sign = bpy.context.object
-    sign.name = "Official CARVAMO SVG wall sign"
-    sign.dimensions = (5.7, 1.45, 1)
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    sign.data.materials.append(logo_material)
+    if args.logo_png:
+        logo_image = bpy.data.images.load(str(logo_png), check_existing=True)
+        logo_material = bpy.data.materials.new("Official CARVAMO logo PNG")
+        logo_material.use_nodes = True
+        nodes = logo_material.node_tree.nodes
+        bsdf = nodes.get("Principled BSDF")
+        texture = nodes.new("ShaderNodeTexImage")
+        texture.image = logo_image
+        logo_material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
+        logo_material.node_tree.links.new(texture.outputs["Alpha"], bsdf.inputs["Alpha"])
+        logo_material.blend_method = "BLEND"
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(4.3, 7.37, 3.35),
+                                         rotation=(math.pi / 2, 0, 0))
+        sign = bpy.context.object
+        sign.name = "Official CARVAMO SVG wall sign"
+        sign.dimensions = (5.7, 1.45, 1)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        sign.data.materials.append(logo_material)
+
+    else:
+        print("CARVAMO logo PNG absent: rendering unbranded QA scene; no substitute logo")
 
     # Reference 2: broad softboxes and cinematic side fills; reflected by mirror floor.
     # A reflection is not evidence of correct tire contact: physical QA remains separate.
@@ -219,7 +223,7 @@ def build():
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, required=True)
 parser.add_argument("--studio-style", choices=("legacy", "mirror-premium"), default="mirror-premium", help="Premium graphite mirror floor + architectural LED + softbox; legacy for QA comparison")
-parser.add_argument("--logo-png", required=True, help="PNG rasterized from official CARVAMO SVG")
+parser.add_argument("--logo-png", default=None, help="Optional official CARVAMO logo PNG; omitted for unbranded QA render")
 parser.add_argument("--step", type=int, default=15)
 parser.add_argument("--samples", type=int, default=24)
 parser.add_argument("--width", type=int, default=1280)
