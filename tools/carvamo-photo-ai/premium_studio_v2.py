@@ -110,6 +110,14 @@ def build():
         for x in (-8.4, -6.6, -4.8, -3.0, 3.0, 4.8, 6.6, 8.4):
             cube("Back wall architectural LED %.1f" % x,
                  (x, 7.48, 2.85), (.035, .09, 5.35), strip)
+        # Continuous 90-degree illuminated transitions at the rear wall.
+        # Each ceiling rail reaches the rear wall and turns vertically;
+        # do not place unrelated vertical strips at different X coordinates.
+        for x in (-7.8, -5.2, -2.6, 0, 2.6, 5.2, 7.8):
+            cube("Connected rear LED drop %.1f" % x,
+                 (x, 7.48, 3.02), (.065, .09, 5.0), strip)
+            cube("Connected rear LED elbow %.1f" % x,
+                 (x, 7.46, 5.52), (.065, .30, .065), strip)
         # Side wall strips continue the visual grid into depth.
         for x in (-9.27, 9.27):
             for y in (-6.0, -2.8, .4, 3.6, 6.8):
@@ -203,11 +211,21 @@ def build():
         scene.cycles.max_bounces = 8
         scene.cycles.diffuse_bounces = 3
         scene.cycles.glossy_bounces = 4
-    scene.cycles.samples = args.samples
+    scene.cycles.samples = max(args.samples, 32)
     scene.cycles.use_adaptive_sampling = True
     scene.render.image_settings.color_depth = "8"
     # OVH Blender build lacks OpenImageDenoiser; do not enable it here.
+    # Denoise the final Cycles render via the compositor. This works on
+    # Blender builds without Intel OpenImageDenoise when OptiX is unavailable.
     bpy.context.view_layer.cycles.use_denoising = False
+    scene.use_nodes = True
+    comp = scene.node_tree
+    comp.nodes.clear()
+    render_layers = comp.nodes.new("CompositorNodeRLayers")
+    denoise = comp.nodes.new("CompositorNodeDenoise")
+    output = comp.nodes.new("CompositorNodeComposite")
+    comp.links.new(render_layers.outputs["Image"], denoise.inputs["Image"])
+    comp.links.new(denoise.outputs["Image"], output.inputs["Image"])
     scene.render.resolution_x = args.width
     scene.render.resolution_y = args.height
     scene.render.resolution_percentage = 100
