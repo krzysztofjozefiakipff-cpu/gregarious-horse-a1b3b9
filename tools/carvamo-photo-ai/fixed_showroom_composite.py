@@ -13,6 +13,7 @@ def main():
  p.add_argument("--view",choices=["front","rear","left","right"],default="front")
  p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
  p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="water_mirror")
+ p.add_argument("--reflection-gap",type=float,default=.025,help="Front/rear visual gap between bumper and first reflection")
  p.add_argument("--ground-drop",type=float,default=.075,help="Move car and its contact-linked reflection down as a unit")
  a=p.parse_args()
  if not .35<=a.car_width<=.8 or not .68<=a.floor_y<=.92 or not 0<=a.ground_drop<=.10:raise ValueError("Invalid composition settings")
@@ -22,7 +23,8 @@ def main():
  bb=source.getchannel("A").point(lambda v:255 if v>=32 else 0).getbbox()
  if not bb:raise ValueError("Missing vehicle transparency")
  car=source.crop(bb)
- scale=min(W*a.car_width/car.width,H*.61/car.height)
+ target_width=.76 if a.view in ("left","right") else (.63 if a.view in ("front","rear") else .60)
+ scale=min(W*target_width/car.width,H*(.59 if a.view in ("left","right") else .61)/car.height)
  car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS)
  cw,ch=car.size;x=(W-cw)//2;alpha=car.getchannel("A")
  # Wheel regions are orientation-specific. We sample the bottom of the alpha
@@ -60,6 +62,13 @@ def main():
  if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
  baseline=round(H*(a.floor_y+a.ground_drop))
  y=baseline-max(yy for xx,yy in contacts_local)
+ # The distant contact must remain on the floor, not above the rear-wall seam.
+ # Shift the entire car down (without changing its proportions) if needed.
+ floor_seam=round(H*.705)
+ if a.view in ("front","rear") and max(yy for xx,yy in contacts_local)-min(yy for xx,yy in contacts_local)>ch*.15:
+  y+=max(0,floor_seam-(y+min(yy for xx,yy in contacts_local)))
+ # Keep the whole vehicle and near contact inside the image.
+ y=min(y,H-ch-2)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
  scene=bg.convert("RGBA")
  # Perspective-aware, multi-scale contact shadows. The rear tire lies higher
@@ -85,6 +94,10 @@ def main():
  # Unlike a single horizontal flip, the distant wheel is reflected at its
  # own contact point, so tire and reflected tire meet without a visible gap.
  reflection_start=max(py for px,py in points)
+ # Frontal/rear shots have a bumper between the visible tires and camera.
+ # Their reflection must start below the bumper, not at a guessed wheel line.
+ frontal=a.view in ("front","rear") and cw/ch>1.05
+ gap_px=round(H*a.reflection_gap) if frontal else 0
  if a.floor_reflection!="off":
   anchors=sorted(points)
   (x1,y1),(x2,y2)=anchors[0],anchors[-1]
@@ -95,7 +108,8 @@ def main():
    gx=x+col
    (x1,y1),(x2,y2)=next(((l,r) for l,r in zip(anchors,anchors[1:]) if gx<=r[0]),(anchors[-2],anchors[-1]))
    t=max(0.,min(1.,(gx-x1)/(x2-x1)))
-   axis=round(y1+(y2-y1)*t)
+   axis=round(y1+(y2-y1)*t)+gap_px
+   if frontal:axis=max(axis,y+ch+gap_px)
    local_axis=max(0,min(ch-1,axis-y))
    available=H-axis
    if available<2 or local_axis<2:continue
@@ -125,7 +139,7 @@ def main():
  diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"fixed_background_perspective_contact_shadows_v4","view":a.view,
- "background_preserved":True,"vehicle_bbox":[x,y,x+cw,y+ch],
+ "background_preserved":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"vehicle_bbox":[x,y,x+cw,y+ch],
  "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"lower_vehicle_three_wheel_water_mirror","contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
