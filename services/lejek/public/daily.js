@@ -65,6 +65,32 @@ function renderPlans(records) {
   }).join('');
 }
 
+function renderQuote(text) {
+  const full=$('#quote');
+  if (full.textContent===text) return;
+  full.textContent=text;
+  const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  if (motion.matches) return;
+  const card=full.closest('.quote');
+  const animated=$('#quote-animated');
+  const letters=Array.from(text);
+  const interval=Math.min(42,1600/letters.length);
+  let started;
+  card.classList.add('is-typing');
+  animated.textContent='';
+  function frame(now) {
+    started ??= now;
+    const count=Math.floor((now-started)/interval);
+    if (count>=letters.length||motion.matches) {
+      card.classList.remove('is-typing');
+      return;
+    }
+    animated.textContent=letters.slice(0,count).join('');
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 function renderSeller(readOnly=false) {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
@@ -80,7 +106,7 @@ function renderSeller(readOnly=false) {
   const blocked=(next&&day!==next)||exception==='pending';
   const locked=Boolean(records[day]||exception==='zero'||exception==='leave'||exception==='training');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
-  $('#quote').textContent=quotes[dayIndex%quotes.length];
+  renderQuote(quotes[dayIndex%quotes.length]);
   renderPlans(records);
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;

@@ -13,6 +13,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .identity{display:flex;align-items:center;gap:14px;min-width:0}#salon{color:var(--muted)}footer{border-top:1px solid var(--line);font-size:.9rem}
 .layout{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(250px,1fr);gap:20px}.layout>*{min-width:0}h1,h2,p,blockquote{margin:0}h1,h2{letter-spacing:-.045em;line-height:1.12}h2{font-size:1.45rem;margin-bottom:12px}
 .quote{background:var(--yellow);padding:22px 25px;border-radius:16px;margin-bottom:24px}.eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}.quote blockquote{font:italic clamp(1.6rem,3vw,3.3rem)/1.12 Georgia,serif;margin-top:8px}
+.quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--blue)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
 .actions ul{list-style:none;padding:0;margin:0 0 18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.actions li,.cards section{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.actions li strong{color:var(--blue)}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 12px}.cards strong{display:block;font-size:clamp(1.3rem,3vw,2rem);line-height:1.15;font-variant-numeric:tabular-nums}
 .behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
@@ -29,7 +30,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <p id="load" role="status">Wczytywanie danych…</p>
 <div id="preview-bar" class="heading" hidden><strong>Podgląd handlowca · dane przykładowe</strong><button type="button" class="secondary" id="view-switch">Zarządzanie salonem</button></div><div id="daily" hidden class="layout">
 <article class="main">
-<div class="quote"><div class="eyebrow">Myśl dnia</div><blockquote id="quote"></blockquote></div>
+<div class="quote"><div class="eyebrow">Hasło dnia</div><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
 <section class="actions"><h2>Do zrobienia dziś</h2><ul id="tasks"></ul></section>
 <div class="cards" id="cards"></div>
 <div id="pace"></div>
