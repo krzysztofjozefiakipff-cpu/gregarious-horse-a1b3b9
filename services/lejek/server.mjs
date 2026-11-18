@@ -8,7 +8,7 @@ const origin = 'https://lejek.carvamo.com';
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
 const DB = {
