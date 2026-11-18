@@ -27,7 +27,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <header><div class="identity"><img id="logo" alt="" hidden><strong id="dealer">Mój dzień</strong><span id="salon"></span></div><span id="display-date"></span></header>
 <main>
 <p id="load" role="status">Wczytywanie danych…</p>
-<div id="daily" hidden class="layout">
+<div id="preview-bar" class="heading" hidden><strong>Podgląd handlowca · dane przykładowe</strong><button type="button" class="secondary" id="view-switch">Zarządzanie salonem</button></div><div id="daily" hidden class="layout">
 <article class="main">
 <div class="quote"><div class="eyebrow">Myśl dnia</div><blockquote id="quote"></blockquote></div>
 <section class="actions"><h2>Do zrobienia dziś</h2><ul id="tasks"></ul></section>
@@ -46,7 +46,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <aside class="sidebar"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></aside>
 </div>
-<section id="admin" hidden><h1>Panel salonu</h1><p><a href="/">Plany, wyniki i konta handlowców</a></p><div id="team"></div><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div>
+<section id="admin" hidden><h1>Panel salonu</h1><p><a href="/index.html">Plany, wyniki i konta handlowców</a></p><div id="team"></div><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div>
 <div id="settings" hidden>
 <form id="brand"><h2>Dane dealera</h2><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form>
 <form id="charity"><h2>Cel miesiąca</h2><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form>

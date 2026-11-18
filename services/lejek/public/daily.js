@@ -17,6 +17,7 @@ const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString(
 let data;
 let editDay;
 let busy=false;
+let preview=true;
 
 async function api(path,body) {
   const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
@@ -64,7 +65,7 @@ function renderPlans(records) {
   }).join('');
 }
 
-function renderSeller() {
+function renderSeller(readOnly=false) {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
   $('#dealer').textContent=brand?.name??salon;
@@ -87,13 +88,13 @@ function renderSeller() {
   $('#resolve').hidden=!next||day===next||waiting;
   for (const button of document.querySelectorAll('[data-kind]')) button.hidden=!next||day!==next||waiting;
   $('#reason').hidden=true;
-  $('#save').disabled=busy||Boolean(blocked)||locked;
+  $('#save').disabled=readOnly||busy||Boolean(blocked)||locked;
   const matrix=records[day]?.[5];
   const legacy=records[day]&&!matrix;
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(name=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr><th scope="row">'+name+'</th>'+columns.map((label,c)=>
-    '<td><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked?' disabled':'')+'></td>').join('')+'</tr>').join('');
-  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+    '<td><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
+  $('#status').textContent=readOnly?'Podgląd · zapis dostępny na koncie handlowca.':legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
   $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
   $('#cause-org').textContent=cause?.organization??'';
   $('#cause-description').textContent=cause?.description??'Organizacja i opis pojawią się po opublikowaniu celu.';
@@ -136,12 +137,34 @@ function renderAdmin() {
     $('#charity').elements.month.value ||= data.today.slice(0,7);
   }
 }
+function showView() {
+  $('#daily').hidden=true;
+  $('#admin').hidden=true;
+  if (data.role==='seller') {
+    renderSeller();
+    return;
+  }
+  $('#preview-bar').hidden=false;
+  $('#view-switch').textContent=preview?'Zarządzanie salonem':'Podgląd handlowca';
+  if (!preview) {
+    renderAdmin();
+    return;
+  }
+  const actual=data;
+  const [year,month]=actual.today.split('-').map(Number);
+  const quarterStart=Math.floor((month-1)/3)*3;
+  data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
+    plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
+    daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
+    cause:{title:'Wyprawki szkolne dla dzieci',organization:'Przykładowy cel',description:'Wsparcie zakupu przyborów szkolnych.'}};
+  try { renderSeller(true); } finally { data=actual; }
+}
+$('#view-switch').onclick=()=>{preview=!preview;showView();};
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
   $('#load').textContent='';
   $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
-  if(data.role==='seller') renderSeller();
-  else renderAdmin();
+  showView();
 }
 async function run(operation,openCookie=false) {
   if (busy) return;
@@ -166,6 +189,7 @@ async function run(operation,openCookie=false) {
 $('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows input')?.focus();};
 $('#entry').onsubmit=event=>{
   event.preventDefault();
+  if(data.role!=='seller') return;
   const day=editDay??data.today;
   const rows=sources.map((_,r)=>columns.map((__,c)=>Number(event.target.elements['v'+r+'_'+c].value)));
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows}),day===data.today);

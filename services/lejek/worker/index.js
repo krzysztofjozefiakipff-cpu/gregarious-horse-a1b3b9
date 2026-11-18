@@ -33,7 +33,7 @@ async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   if (!path.startsWith('/api/')) {
-    const asset = path==='/'?'/index.html':path;
+    const asset = path==='/'?'/daily.html':path;
     if (request.method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});
     return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8',
       'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'"}});
