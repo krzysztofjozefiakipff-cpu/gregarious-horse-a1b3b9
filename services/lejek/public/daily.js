@@ -137,6 +137,10 @@ function renderSeller(readOnly=false) {
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
+  $('#meme-actions').hidden=readOnly;
+  $('#meme-like').hidden=!data.meme;
+  $('#meme-like').disabled=Boolean(data.memeLiked);
+  $('#meme-like').textContent=data.memeLiked?'Rozbawiło mnie ✓':'Rozbawiło mnie';
   if (showMeme) {
     const [title,icon,caption]=data.meme??['Na dziś wszystkie memy są rozdane.', '🙂', 'Zajrzyj jutro po kolejną scenkę z salonu.'];
     $('#meme-title').textContent=title;
@@ -182,10 +186,29 @@ function renderAdmin() {
     const selected=form.elements.salon.value;
     form.elements.salon.replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
     if (selected) form.elements.salon.value=selected;
+    renderStoryQueue();
     $('#sidebar-settings').elements.mode.value=data.sidebarMode;
     $('#charity').elements.month.value ||= data.today.slice(0,7);
   }
 }
+function renderStoryQueue() {
+  const queue=$('#story-queue');
+  queue.replaceChildren();
+  if (!data.memeStories.length) queue.textContent='Brak nowych zgłoszeń.';
+  for (const {id,title,caption} of data.memeStories) {
+    const form=document.createElement('form');
+    form.innerHTML='<label>Tytuł <input name="title" maxlength="120" required></label><label>Historia <textarea name="caption" maxlength="500" required></textarea></label><div><button>Zatwierdź</button> <button type="button" class="secondary">Odrzuć</button></div>';
+    form.elements.title.value=title;
+    form.elements.caption.value=caption;
+    form.onsubmit=event=>{
+      event.preventDefault();
+      run(()=>api('/api/meme-review',{id,approve:true,...Object.fromEntries(new FormData(form))}));
+    };
+    form.querySelector('.secondary').onclick=()=>run(()=>api('/api/meme-review',{id,approve:false}));
+    queue.append(form);
+  }
+}
+
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
@@ -263,6 +286,41 @@ $('#brand').onsubmit=event=>{
     }):'';
     await api('/api/brand',{salon:salon.value,name:name.value,logo:encoded});
   });
+};
+$('#meme-like').onclick=async event=>{
+  const button=event.currentTarget;
+  button.disabled=true;
+  try {
+    await api('/api/meme-like',{});
+    data.memeLiked=true;
+    button.textContent='Rozbawiło mnie ✓';
+  } catch(error) {
+    $('#meme-status').textContent=error.message;
+    button.disabled=false;
+  }
+};
+$('#meme-suggest').onclick=event=>{
+  const form=$('#meme-form');
+  form.hidden=!form.hidden;
+  event.currentTarget.setAttribute('aria-expanded',String(!form.hidden));
+  if (!form.hidden) form.elements.title.focus();
+};
+$('#meme-form').onsubmit=async event=>{
+  event.preventDefault();
+  const form=event.currentTarget;
+  const submit=form.querySelector('button');
+  submit.disabled=true;
+  try {
+    await api('/api/meme-story',Object.fromEntries(new FormData(form)));
+    form.reset();
+    form.hidden=true;
+    $('#meme-suggest').setAttribute('aria-expanded','false');
+    $('#meme-status').textContent='Dzięki! Historia czeka na decyzję administratora.';
+  } catch(error) {
+    $('#meme-status').textContent=error.message;
+  } finally {
+    submit.disabled=false;
+  }
 };
 $('#sidebar-settings').onsubmit=event=>{
   event.preventDefault();

@@ -29,9 +29,12 @@ async function tracking(db,person) {
   return {missing,exceptions,progress:[month.filter(closed).length,month.length]};
 }
 
-const memeTitles=JSON.stringify(memes.map(([title])=>title));
+const memeKey=([title,,,key])=>key??title;
 async function memeFor(db,user,day) {
-  if (user.role!=='seller') return memes[Math.floor(Math.random()*memes.length)];
+  const published=await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='approved'");
+  const pool=memes.concat(published.map(({id,title,caption})=>[title,'💬',caption,'story:'+id]));
+  if (user.role!=='seller') return pool[Math.floor(Math.random()*pool.length)].slice(0,3);
+  const memeTitles=JSON.stringify(pool.map(memeKey));
   await db.prepare(`
     INSERT INTO meme_assignments(person,salon,day,title)
     SELECT ?,?,?,candidate.value
@@ -45,7 +48,7 @@ async function memeFor(db,user,day) {
     ON CONFLICT(person,day) DO NOTHING
   `).bind(user.id,user.salon,day,memeTitles,user.salon,user.id,day,day).run();
   const assigned=await db.prepare('SELECT title FROM meme_assignments WHERE person=? AND day=?').bind(user.id,day).first();
-  return memes.find(([title])=>title===assigned?.title)??null;
+  return pool.find(meme=>memeKey(meme)===assigned?.title)?.slice(0,3)??null;
 }
 
 async function handle(request, env) {
@@ -93,7 +96,9 @@ async function handle(request, env) {
       const today=localDay();
       const sidebarMode=sidebar?.mode??'cause';
       const meme=sidebarMode==='meme'?await memeFor(db,user,today):null;
-      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,today});
+      const memeLiked=personal&&meme?Boolean(await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()):false;
+      const memeStories=user.role==='admin'?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending' ORDER BY id LIMIT 50"):[];
+      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
@@ -121,6 +126,26 @@ async function handle(request, env) {
     await db.prepare('INSERT INTO dealer_brand VALUES (?,?,?) ON CONFLICT(salon) DO UPDATE SET name=excluded.name,logo=excluded.logo')
       .bind(body.salon.trim(),body.name.trim(),body.logo).run();
     return json({ok:true});
+  }
+  if (path==='/api/meme-like' && user.role==='seller') {
+    await db.prepare('INSERT INTO meme_reactions SELECT person,day FROM meme_assignments WHERE person=? AND day=? ON CONFLICT DO NOTHING')
+      .bind(user.id,localDay()).run();
+    return json({ok:true});
+  }
+  const storyValid=()=>textValid(body.title)&&typeof body.caption==='string'&&body.caption.trim().length>0&&body.caption.length<=500;
+  if (path==='/api/meme-story' && user.role==='seller') {
+    if (!storyValid()) return json({error:'Podaj tytuł i historię (do 500 znaków).'},400);
+    await db.prepare('INSERT INTO meme_stories(person,title,caption) VALUES (?,?,?)')
+      .bind(user.id,body.title.trim(),body.caption.trim()).run();
+    return json({ok:true});
+  }
+  if (path==='/api/meme-review' && user.role==='admin') {
+    if (!Number.isSafeInteger(body.id)||typeof body.approve!=='boolean'||(body.approve&&!storyValid()))
+      return json({error:'Sprawdź treść i decyzję.'},400);
+    const change=body.approve
+      ?await db.prepare("UPDATE meme_stories SET title=?,caption=?,status='approved' WHERE id=? AND status='pending'").bind(body.title.trim(),body.caption.trim(),body.id).run()
+      :await db.prepare("UPDATE meme_stories SET status='rejected' WHERE id=? AND status='pending'").bind(body.id).run();
+    return change.meta.changes?json({ok:true}):json({error:'Historia jest już rozpatrzona.'},409);
   }
   if (path==='/api/sidebar' && user.role==='admin') {
     if (!['cause','meme'].includes(body.mode)) return json({error:'Wybierz zawartość sekcji.'},400);
