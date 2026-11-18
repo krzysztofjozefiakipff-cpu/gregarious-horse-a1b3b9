@@ -1,0 +1,65 @@
+name: Lejek OVH
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/lejek/**"
+      - ".github/workflows/lejek-ovh.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lejek-ovh
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and deploy Lejek on OVH
+        env:
+          OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+          OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_SSH_PRIVATE_KEY"
+          test -n "$OVH_SSH_HOST_KEY"
+          bash -n services/lejek/deploy.sh
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_PRIVATE_KEY" > ~/.ssh/carvamo_deploy
+          printf '%s\n' "$OVH_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/carvamo_deploy ~/.ssh/known_hosts
+          tar -czf "/tmp/$GITHUB_SHA.tgz" -C services/lejek .
+          SSH=(ssh -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=10)
+          SCP=(scp -i ~/.ssh/carvamo_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes)
+          HOST=carvamo-deploy@146.59.52.16
+          "${SSH[@]}" "$HOST" 'install -d -m 700 "$HOME/carvamo-lejek"'
+          "${SCP[@]}" "/tmp/$GITHUB_SHA.tgz" "$HOST:carvamo-lejek/$GITHUB_SHA.tgz"
+          "${SCP[@]}" services/lejek/deploy.sh "$HOST:carvamo-lejek/deploy-$GITHUB_SHA.sh"
+          "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
+  dns:
+    needs: deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure leased subdomain
+        env:
+          OVH_APPLICATION_KEY: ${{ secrets.OVH_APPLICATION_KEY }}
+          OVH_APPLICATION_SECRET: ${{ secrets.OVH_APPLICATION_SECRET }}
+          OVH_CONSUMER_KEY: ${{ secrets.OVH_CONSUMER_KEY }}
+        run: python3 services/lejek/dns.py
+      - name: Verify HTTPS and protected application
+        run: |
+          set -euo pipefail
+          for attempt in {1..24}; do
+            if [ "$(curl -fsS --max-time 8 https://lejek.carvamo.com/healthz || true)" = lejek-ok ]; then
+              curl -fsS https://lejek.carvamo.com/login | grep -q 'Zaloguj się do lejka'
+              test "$(curl -sS -o /dev/null -w '%{http_code}' https://lejek.carvamo.com/api/state)" = 401
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
