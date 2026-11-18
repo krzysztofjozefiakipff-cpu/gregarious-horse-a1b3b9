@@ -59,9 +59,17 @@ const $ = selector => document.querySelector(selector);
 const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi'];
 const sourceDetails = {
   0:'Klient przyszedł do salonu bez umówienia',
+  1:'Wiadomość, komentarz lub zgłoszenie z reklamy na Facebooku',
   2:'E-mail lub formularz z naszej strony',
   3:'Karta kontaktu lub telefon do salonu',
-  8:'VEHIS i inne portale brokerskie'
+  4:'Zapytanie z ogłoszenia na OTOMOTO',
+  5:'Klient skierowany do salonu z polecenia',
+  6:'Kontakt z dotychczasowym klientem z bazy salonu',
+  7:'Zapytanie przekazane przez importera marki',
+  8:'VEHIS i inne portale brokerskie',
+  9:'Kontakt sprzedażowy z klientem serwisu',
+  10:'Kontakt z ekspozycji lub akcji w galerii handlowej',
+  11:'Kontakt pozyskany podczas targów'
 };
 // Keep the existing daily row positions. Slot 3 is the retired scheduled-drive count.
 const columns = [
