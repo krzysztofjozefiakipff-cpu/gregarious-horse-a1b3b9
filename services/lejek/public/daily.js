@@ -398,7 +398,8 @@ function renderSeller(readOnly=false) {
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
-  $('#meme-actions').hidden=readOnly;
+  $('#meme-actions').hidden=!showMeme;
+  $('#meme-status').textContent=showMeme&&readOnly?'Podgląd · oceny i historie zapisują się na koncie handlowca.':'';
   if (showMeme) {
     const [title,icon,caption]=data.meme??['Na dziś wszystkie memy są rozdane.', '🙂', 'Zajrzyj jutro po kolejną scenkę z salonu.'];
     $('#meme-title').hidden=false;
@@ -629,6 +630,10 @@ $('#brand').onsubmit=event=>{
   });
 };
 for (const button of voteButtons) button.onclick=async()=>{
+  if (data.role!=='seller') {
+    for (const control of voteButtons) control.setAttribute('aria-pressed',String(control===button));
+    return;
+  }
   const {today:day}=data;
   const source=memeVoteSource;
   const vote=Number(button.dataset.memeVote);
@@ -655,6 +660,10 @@ $('#meme-suggest').onclick=event=>{
 $('#meme-form').onsubmit=async event=>{
   event.preventDefault();
   const form=event.currentTarget;
+  if (data.role!=='seller') {
+    $('#meme-status').textContent='Podgląd · historię możesz wysłać z konta handlowca.';
+    return;
+  }
   const submit=form.querySelector('button');
   submit.disabled=true;
   try {
