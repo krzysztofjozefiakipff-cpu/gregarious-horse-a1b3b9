@@ -159,7 +159,7 @@ function renderPlans(records) {
     return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
       '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+'</div>';
   }).join('');
-  renderTodayTasks(metrics,data.previousDaily);
+  renderTodayTasks(metrics,data.previousDaily,data.today);
   renderMotivator(metrics,data.today);
 }
 
@@ -189,7 +189,31 @@ function dailyTarget(monthTarget,doneBeforeToday,daysLeft,isWorkday) {
   return isWorkday?Math.ceil(Math.max(0,monthTarget-doneBeforeToday)/Math.max(1,daysLeft)):0;
 }
 
-function renderTodayTasks(metrics,previous) {
+const dailyMotivators={
+  mixed:[
+    'Jeden odcinek masz z górki. Drugi jeszcze pod górę, więc przyda się bieg niżej.',
+    'Jest czym się pochwalić przy kawie. Po kawie wróć do miejsca, które odstaje.',
+    'Na jednym odcinku zielona fala, na drugim mały korek. Jest co odblokować.'
+  ],
+  behind:[
+    'Plan złapał korek. Jeden konkretny ruch i zacznie się rozjeżdżać.',
+    'Lejek zaciągnął ręczny. Pierwsze zadanie to dobry moment, żeby go zwolnić.',
+    'Samym patrzeniem na licznik daleko nie zajedziemy. Zacznij od jednego ruchu.'
+  ],
+  ahead:[
+    'Tempo masz jak na jeździe próbnej. Trzymaj je, jutro sobie podziękujesz.',
+    'Plan zostaje w lusterku. Jeszcze jeden dobry ruch i jutro ruszysz z przewagą.',
+    'Jest zapas, ale auto samo do mety nie dojedzie. Trzymaj tempo.'
+  ],
+  onPace:[
+    'Jedziesz zgodnie z planem. Nawigacja może odetchnąć, Ty odhacz następny krok.',
+    'Tempo jest w punkt. Jeszcze jeden dobry ruch i można spokojnie dopić kawę.',
+    'Wszystko jedzie według rozkładu. Pilnuj rytmu, a plan nie ucieknie.'
+  ]
+};
+
+function renderTodayTasks(metrics,previous,day) {
+  const variant=Math.floor(Date.parse(day)/86400000)%3;
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday)
     .sort((a,b)=>(a.goal?a.actual/a.goal:1)-(b.goal?b.actual/b.goal:1));
   const strongest=metrics.filter(metric=>metric.delta>0).sort((a,b)=>b.delta-a.delta)[0];
@@ -198,10 +222,9 @@ function renderTodayTasks(metrics,previous) {
   const hasPlan=metrics.some(({target})=>target!=null);
   const intro=$('#tasks-intro');
   intro.hidden=!hasPlan;
-  intro.textContent=weakest
-    ?(strongest?strongest.label+' ponad planem. ': 'Jesteś za tempem. ')+'Zacznij od obszaru z największą zaległością: '+weakest.label.toLowerCase()+'.'
-    :strongest?'Masz zapas. Utrzymaj tempo i przygotuj sobie łatwiejsze jutro.'
-    :'Trzymasz tempo. Każde domknięte zadanie przybliża Cię do celu.';
+  const tone=weakest?(strongest?'mixed':'behind'):(strongest?'ahead':'onPace');
+  const highlights=[strongest&&strongest.label+' ponad planem.',weakest&&weakest.label+' poniżej planu.'].filter(Boolean);
+  intro.textContent=[...highlights,dailyMotivators[tone][variant]].join(' ');
   $('#tasks').innerHTML=tasks.length?tasks.map(({index,doneToday,todayTarget})=>{
     const [verb,forms]=taskWording[index];
     const gap=todayTarget-doneToday;
