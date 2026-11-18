@@ -77,7 +77,32 @@ const columns = [
   [6,'Follow-up'],[7,'Zamówienia'],[10,'Wystawione faktury'],[8,'Rejestracje'],[9,'Opinie Google']
 ];
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
-const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
+const fortunes = [
+  "Szacunek widać najlepiej wtedy, gdy rozmowa nie idzie po naszej myśli.",
+  "Obiecuj tyle, ile możesz zrobić. Potem zrób to, co obiecałeś.",
+  "To, co robisz regularnie, ma większe znaczenie niż to, co robisz od święta.",
+  "Dobra praca zaczyna się od szacunku do czasu drugiego człowieka.",
+  "Jeśli nie znasz odpowiedzi, powiedz to i wróć z odpowiedzią, której jesteś pewien.",
+  "Ludzie pamiętają, czy potraktowałeś ich poważnie, także wtedy, gdy nic od Ciebie nie kupili.",
+  "Uczciwa odpowiedź bywa trudna przez chwilę. Unik zostawia problem na dłużej.",
+  "Z pracy wykonanej starannie korzysta też ktoś, kto przejmie ją po Tobie.",
+  "Małe sprawy domykane na bieżąco rzadko urastają do wielkich problemów.",
+  "Zanim komuś doradzisz, daj mu skończyć mówić.",
+  "Własny błąd najłatwiej naprawić, kiedy nazwiesz go wprost.",
+  "Pracowitość to również dokończenie sprawy, której nikt już dziś nie sprawdzi.",
+  "Dobre nawyki buduje się w zwyczajne dni.",
+  "Jeśli ktoś powierza Ci swój czas, odpłać mu uwagą.",
+  "Kiedy termin jest zagrożony, uprzedź człowieka, który na Ciebie czeka.",
+  "Rzetelność poznaje się po tym, czy jutro można polegać na tym, co zrobiłeś dziś.",
+  "Każdy ma prawo do spokojnego wyjaśnienia, nawet gdy zadaje pytanie po raz drugi.",
+  "Najwięcej zaufania budują drobne obietnice dotrzymane wiele razy.",
+  "Jedna sprawa dokończona z uwagą jest warta więcej niż trzy zaczęte w pośpiechu.",
+  "Gdy czyjaś praca Ci pomogła, powiedz mu o tym.",
+  "Jutro łatwiej będzie wrócić do sprawy, jeśli dziś zapiszesz, na czym stanęła.",
+  "W trudnej rozmowie możesz mówić wprost i zachować życzliwość.",
+  "Systematyczność przydaje się szczególnie wtedy, gdy ze swojej pracy jeszcze nie widzisz efektu.",
+  "Decyzję zostaw drugiemu człowiekowi. Zadbaj o to, by miał wszystkie potrzebne informacje."
+];
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
 const dateLabel = (day,options={day:'numeric',month:'long'}) => new Date(day+'T12:00:00Z').toLocaleDateString('pl-PL',options);
 const weekday = day => ![0,6].includes(new Date(day+'T12:00:00Z').getUTCDay());
