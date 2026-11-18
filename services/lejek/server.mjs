@@ -2,13 +2,14 @@ import {randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
+import {extractLessonText} from './scripts/lesson-text.mjs';
 import worker from './dist/server/index.js';
 
 const origin = 'https://lejek.carvamo.com';
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
@@ -89,15 +90,16 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY});
+  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText});
 }
 createServer(async (req,res)=>{
   try {
     const chunks=[];
     let bytes=0;
+    const maxBytes=req.method==='POST'&&req.url==='/api/lesson-import'?5_600_000:65_536;
     for await(const chunk of req) {
       bytes+=chunk.length;
-      if(bytes>65536){res.writeHead(413);res.end();return;}
+      if(bytes>maxBytes){res.writeHead(413);res.end();return;}
       chunks.push(chunk);
     }
     const request=new Request(origin+req.url,{method:req.method,headers:req.headers,

@@ -51,6 +51,23 @@ async function memeFor(db,user,day) {
   return pool.find(meme=>memeKey(meme)===assigned?.title)?.slice(0,3)??null;
 }
 
+function lessonDrafts(text) {
+  const sentences=paragraph=>Array.from(new Intl.Segmenter('pl',{granularity:'sentence'}).segment(paragraph),item=>item.segment.trim());
+  return text.replaceAll('\r','').split(/\n[ \t]*\n|\f+/)
+    .flatMap(block=>{
+      const lines=block.split('\n').map(line=>line.trim()).filter(Boolean);
+      if (!lines.length) return [];
+      const heading=lines.length>1&&lines[0].length<=100?lines.shift().replace(/[:;]$/,''):'';
+      const parts=sentences(lines.join(' ')).filter(part=>part.length>=20);
+      return parts.map((part,index)=>({
+        title:(heading?heading+(index?' · '+(index+1):''):part.split(/\s+/).slice(0,7).join(' ')).slice(0,120),
+        topic:part.slice(0,650),
+        remember:part.length<=220?part:part.slice(0,217).replace(/\s+\S*$/,'')+'…'
+      }));
+    }).slice(0,40);
+}
+const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -103,7 +120,11 @@ async function handle(request, env) {
       const giphy=trending?{key:env.GIPHY_API_KEY,id:assignedGif?.gif_id??null}:null;
       const memeLiked=personal&&meme?Boolean(await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()):false;
       const memeStories=user.role==='admin'?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending' ORDER BY id LIMIT 50"):[];
-      return json({role:user.role,sellers,plans,reviewPlans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),today});
+      const series=personal?await db.prepare('SELECT published_day,lessons FROM salon_lessons WHERE salon=?').bind(user.salon).first():null;
+      const lessons=series?JSON.parse(series.lessons):[];
+      const position=lessons.length?Math.max(0,lessonDay(today)-lessonDay(series.published_day))%lessons.length:0;
+      const lesson=lessons[position]??null;
+      return json({role:user.role,sellers,plans,reviewPlans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
@@ -117,6 +138,31 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
+  if (['/api/lesson-import','/api/lessons'].includes(path) && user.role!=='seller') {
+    const salon=user.role==='manager'?user.salon:body.salon;
+    if (!textValid(salon) || (user.role==='admin' && !await db.prepare('SELECT 1 FROM accounts WHERE salon=?').bind(salon).first()))
+      return json({error:'Wybierz salon.'},400);
+    if (path==='/api/lesson-import') {
+      if (typeof body.filename!=='string'||!/[.](pdf|docx|txt)$/i.test(body.filename)||
+          typeof body.file!=='string'||!body.file||body.file.length>5_592_408)
+        return json({error:'Wybierz PDF, DOCX lub TXT do 4 MB.'},400);
+      try {
+        const lessons=lessonDrafts(await env.extractLessonText(body.filename,body.file));
+        if (lessons.length) return json({lessons});
+        return json({error:'Brak tekstu do odczytania. Jeśli to skan, użyj pliku z rozpoznanym tekstem lub dodaj lekcję ręcznie.'},422);
+      } catch {
+        return json({error:'Nie udało się odczytać pliku. Sprawdź format lub dodaj lekcję ręcznie.'},422);
+      }
+    }
+    if (!Array.isArray(body.lessons)||body.lessons.length<1||body.lessons.length>40||
+        !body.lessons.every(lesson=>lesson&&textValid(lesson.title)&&typeof lesson.topic==='string'&&
+          lesson.topic.trim()&&lesson.topic.length<=650&&typeof lesson.remember==='string'&&lesson.remember.trim()&&lesson.remember.length<=220))
+      return json({error:'Uzupełnij tytuł, zagadnienie i „Zapamiętaj!” dla każdej lekcji.'},400);
+    const lessons=body.lessons.map(({title,topic,remember})=>({title:title.trim(),topic:topic.trim(),remember:remember.trim()}));
+    await db.prepare('INSERT INTO salon_lessons VALUES (?,?,?) ON CONFLICT(salon) DO UPDATE SET published_day=excluded.published_day,lessons=excluded.lessons')
+      .bind(salon,localDay(),JSON.stringify(lessons)).run();
+    return json({ok:true});
+  }
   if (path==='/api/accounts' && user.role==='admin') {
     if (!textValid(body.name)||!textValid(body.salon)||!['manager','seller'].includes(body.role)||
         !textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return json({error:'Uzupełnij poprawnie wszystkie pola.'},400);

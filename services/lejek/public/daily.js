@@ -282,6 +282,11 @@ function renderSeller(readOnly=false) {
   const locked=Boolean(records[day]||exception==='zero'||exception==='leave'||exception==='training');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
   renderQuote(quotes[dayIndex%quotes.length]);
+  const lesson=data.lesson;
+  $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
+  $('#lesson-topic').textContent=lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
+  $('#lesson-remember').hidden=!lesson;
+  $('#lesson-remember span').textContent=lesson?.remember??'';
   renderPlans(records);
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
@@ -355,6 +360,12 @@ function renderAdmin() {
     reviews.append(card);
   }
   $('#settings').hidden=data.role!=='admin';
+  const lessonSalon=$('#lesson-salon');
+  const selectedSalon=lessonSalon.value;
+  const lessonSalons=data.role==='admin'?data.salons.map(({salon})=>salon):[data.salon];
+  lessonSalon.replaceChildren(...lessonSalons.map(salon=>new Option(salon,salon)));
+  if (lessonSalons.includes(selectedSalon)) lessonSalon.value=selectedSalon;
+  $('#lesson-salon-label').hidden=data.role!=='admin';
   if (data.role==='admin') {
     const form=$('#brand');
     const selected=form.elements.salon.value;
@@ -403,7 +414,8 @@ function showView() {
   data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
     plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
     reviewPlans:[{month:actual.today.slice(0,7),target:5}],daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
-    sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy};
+    sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy,
+    lesson:{title:'Pierwszy kontakt',topic:'Przywitaj klienta, przedstaw się i zapytaj, czego potrzebuje.',remember:'Najpierw wysłuchaj, potem zaproponuj rozwiązanie.'}};
   try { renderSeller(true); } finally { data=actual; }
 }
 $('#view-switch').onclick=()=>{preview=!preview;showView();};
@@ -500,6 +512,57 @@ $('#meme-form').onsubmit=async event=>{
   } finally {
     submit.disabled=false;
   }
+};
+const lessonEditor=$('#lesson-editor');
+const lessonDraftList=$('#lesson-drafts');
+let lessonBusy=false;
+function updateLessonButtons() {
+  const total=lessonDraftList.children.length;
+  $('#lesson-publish').disabled=lessonBusy||total===0;
+  $('#lesson-add').disabled=lessonBusy||total>=40;
+  $('#lesson-import').disabled=lessonBusy;
+}
+function appendLesson({title='',topic='',remember=''}={}) {
+  const field=document.createElement('fieldset');
+  field.innerHTML='<legend>Lekcja</legend><label>Tytuł <input data-lesson="title" maxlength="120" required></label><label>Zagadnienie <textarea data-lesson="topic" maxlength="650" rows="3" required></textarea></label><label>Zapamiętaj! <textarea data-lesson="remember" maxlength="220" rows="2" required></textarea></label><button type="button" class="secondary">Usuń szkic</button>';
+  for (const [key,value] of Object.entries({title,topic,remember})) field.querySelector('[data-lesson="'+key+'"]').value=value;
+  field.querySelector('button').onclick=()=>{field.remove();updateLessonButtons();};
+  lessonDraftList.append(field);
+  updateLessonButtons();
+}
+$('#lesson-add').onclick=()=>appendLesson();
+$('#lesson-import').onclick=async ()=>{
+  const file=$('#lesson-file').files[0];
+  const status=$('#lesson-status');
+  if (!file||file.size>4*1024*1024) {status.textContent='Wybierz plik do 4 MB.';return;}
+  lessonBusy=true;
+  updateLessonButtons();
+  status.textContent='Odczytuję plik…';
+  try {
+    const encoded=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result).split(',')[1]);
+      reader.onerror=()=>reject(new Error('Nie udało się otworzyć pliku.'));
+      reader.readAsDataURL(file);
+    });
+    const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded});
+    lessonDraftList.replaceChildren();
+    for (const lesson of result.lessons) appendLesson(lesson);
+    status.textContent='Przygotowano '+result.lessons.length+' szkiców. Sprawdź i uzupełnij podsumowania przed publikacją.';
+  } catch(error) {status.textContent=error.message;}
+  finally {lessonBusy=false;updateLessonButtons();}
+};
+lessonEditor.onsubmit=async event=>{
+  event.preventDefault();
+  const status=$('#lesson-status');
+  const lessons=Array.from(lessonDraftList.children,field=>Object.fromEntries(Array.from(field.querySelectorAll('[data-lesson]'),input=>[input.dataset.lesson,input.value.trim()])));
+  lessonBusy=true;
+  updateLessonButtons();
+  try {
+    await api('/api/lessons',{salon:$('#lesson-salon').value,lessons});
+    status.textContent='Opublikowano serię. Pierwsza lekcja jest już widoczna w salonie.';
+  } catch(error) {status.textContent=error.message;}
+  finally {lessonBusy=false;updateLessonButtons();}
 };
 $('#sidebar-settings').onsubmit=event=>{
   event.preventDefault();
