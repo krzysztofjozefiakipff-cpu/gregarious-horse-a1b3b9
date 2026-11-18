@@ -118,39 +118,18 @@ function renderPlans(records) {
     return '<section><span>'+name+'</span><strong>'+value+' / '+(target??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
       (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
   }).join('');
-  const targets=salesGoal?sourceTargets(salesGoal):[];
   const funnel=data.funnelPlans?.find(row=>row.month===monthKey);
   const custom=funnel?JSON.parse(funnel.targets):[];
-  const actionNumbers=[0,2,3];
-  const actionTotal=index=>monthRecords.reduce((sum,[,values])=>sum+(values[index]??0),0);
-  const targetFor=index=>custom[actionNumbers.indexOf(index)]??null;
-  const todayTasks=[
-    {verb:'Skontaktuj się z', forms:['klientem','klientami','klientami'], col:1, index:0},
-    {verb:'Przeprowadź', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], col:4, index:2},
-    {verb:'Wyślij', forms:['ofertę','oferty','ofert'], col:5, index:3}
-  ].map(task=>({...task,gap:Math.max(0,targetFor(task.index)==null
-      ?targets.reduce((sum,row)=>sum+row[task.col],0)-(current[task.index]??0)
-      :Math.ceil(Math.max(0,targetFor(task.index)-actionTotal(task.index))/daysLeft))}))
-    .filter(task=>task.gap>0);
-  $('#tasks').innerHTML=todayTasks.length?todayTasks.map(({verb,forms,gap})=>
-    '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span></li>').join(''):
-    '<li class="task-message">'+(salesGoal==null&&!funnel?'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.':'Brawo! Dzisiejsze cele są zrealizowane.')+'</li>';
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
   const monthTargets=monthPlan?sourceTargets(monthPlan):[];
   const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target??null;
   // Keep the first three custom targets in the order used by existing saved plans.
   const customIndex={1:0,4:1,5:2,0:3,2:4,6:5,10:6,8:7};
-  const legacyIndex={1:0,4:2,5:3,7:4};
   const todayFraction=(elapsed+Number(weekday(data.today)))/daysMonth;
   $('#pace').hidden=false;
   const metrics=columns.map(([index,label])=>{
-    const actual=monthRecords.reduce((total,[,values])=>{
-      const matrix=values[5];
-      return total+(Array.isArray(matrix)
-        ?matrix.reduce((sum,row)=>sum+(row[index]??0),0)
-        :(values[legacyIndex[index]]??0));
-    },0);
+    const actual=monthRecords.reduce((total,[,values])=>total+activityCount(values,index),0);
     const defaultTarget=monthPlan!=null&&index<=7
       ?monthTargets.reduce((sum,row)=>sum+(row[index]??0),0)
       :null;
@@ -165,7 +144,54 @@ function renderPlans(records) {
     return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
       '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+'</div>';
   }).join('');
+  renderTodayTasks(metrics,current,data.previousDaily,salesGoal,daysLeft);
   renderMotivator(metrics,data.today);
+}
+
+function activityCount(values,index) {
+  const legacyIndex={1:0,4:2,5:3,7:4};
+  const matrix=values?.[5];
+  return Array.isArray(matrix)
+    ?matrix.reduce((sum,row)=>sum+(row[index]??0),0)
+    :values?.[legacyIndex[index]]??0;
+}
+
+const taskWording={
+  0:['Obsłuż',['nowe zapytanie','nowe zapytania','nowych zapytań']],
+  1:['Skontaktuj się z',['klientem','klientami','klientami']],
+  2:['Przeprowadź',['spotkanie','spotkania','spotkań']],
+  4:['Przeprowadź',['jazdę próbną','jazdy próbne','jazd próbnych']],
+  5:['Wyślij',['ofertę','oferty','ofert']],
+  6:['Zrób',['follow-up','follow-upy','follow-upów']],
+  7:['Domknij',['zamówienie','zamówienia','zamówień']],
+  8:['Zrealizuj',['wydanie auta','wydania aut','wydań aut']],
+  9:['Zdobądź',['opinię w Google','opinie w Google','opinii w Google']],
+  10:['Wystaw',['fakturę','faktury','faktur']]
+};
+
+function renderTodayTasks(metrics,current,previous,salesGoal,daysLeft) {
+  const previousOffers=previous?activityCount(JSON.parse(previous.counters),5):0;
+  const followups=Math.max(0,previousOffers-activityCount(current,6));
+  const tasks=metrics.flatMap(({index,actual,target,goal})=>{
+    const todayCount=activityCount(current,index);
+    const remaining=target==null?0:Math.max(0,target-actual);
+    const dailyShare=Math.max(0,Math.ceil((remaining+todayCount)/daysLeft)-todayCount);
+    const planGap=index===7?(salesGoal??0):Math.min(remaining,Math.max(dailyShare,(goal??0)-actual));
+    const gap=index===6?Math.max(planGap,followups):planGap;
+    if (!gap) return [];
+    const [verb,forms]=taskWording[index];
+    const note=index===6&&followups
+      ?'Wróć do ofert z '+dateLabel(previous.day)+'. Sprawdź, z którymi klientami trzeba się jeszcze skontaktować.'+
+        (planGap>followups?' Pozostałe rozmowy uzupełnią dzisiejszy plan.':'')
+      :index===7?'Tempo potrzebne do realizacji planu zamówień.'
+      :'Plan miesiąca: '+actual+' z '+target+'.';
+    return [{verb,forms,gap,note,priority:index===6&&followups?0:1}];
+  }).sort((a,b)=>a.priority-b.priority);
+  const hasPlan=salesGoal!=null||metrics.some(({target})=>target!=null);
+  $('#tasks').innerHTML=tasks.length?tasks.map(({verb,forms,gap,note})=>
+    '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
+    '<small class="task-note">'+note+'</small></li>').join(''):
+    '<li class="task-message">'+(hasPlan?'Brawo! Dzisiejsze cele są zrealizowane.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</li>';
 }
 
 const actionsByMetric={
