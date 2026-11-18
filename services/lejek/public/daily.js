@@ -4,12 +4,66 @@ const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
 const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
 const memes = [
-  ['„Tylko się rozejrzę”', '👀 🚗', 'Pięć minut później: „A jak zamówię dzisiaj, to kiedy odbiór?”'],
-  ['Kiedy klient mówi „biorę”', '🤝 🎉', 'Na zewnątrz: „Świetny wybór”. W środku: finał Ligi Mistrzów.'],
-  ['„Magazyn chwilowo niedostępny”', '📞 🛋️', 'Handlowiec: jeszcze tylko zadzwonię do kolegi, który zna kolegę z placu.'],
-  ['Klient chce tylko kawę', '☕ 🔑', 'Po jeździe próbnej pyta, czy kawę można dopisać do wyposażenia.'],
-  ['„Proszę o najlepszą cenę”', '🧮 👓', 'Kalkulator dostał dziś więcej pytań niż kierownik.'],
-  ['Piątek, minuta do zamknięcia', '🕔 🚙', '„Możemy porównać wszystkie wersje wyposażenia?”']
+  [
+    "„Pan poda najlepszą cenę, bo żona już czeka w aucie”",
+    "🚗 ⏳",
+    "Żona wysiada. Idzie prosto do auta demonstracyjnego: „Kochanie, ale ja tego koloru nie chcę”."
+  ],
+  [
+    "Auto w rozliczeniu. „Panie, igła”",
+    "🔍 🚙",
+    "Pytam o historię lakierniczą. Klient: „Każdy element ma swoją”."
+  ],
+  [
+    "„Czy ten samochód jest od ręki?”",
+    "🔑 📦",
+    "„Tak, stoi przed salonem”. „Super. To poproszę taki sam, tylko w innym kolorze, z innym silnikiem i na jutro”."
+  ],
+  [
+    "Piątek, 17:59. „Tylko jedno pytanie”",
+    "🕕 ☕",
+    "O 18:47 konfigurujemy już drugie auto. Pytanie było o parking."
+  ],
+  [
+    "„Gdzie indziej mam taniej”",
+    "🧾 👀",
+    "Porównujemy oferty. Faktycznie, tam jest o 8 tysięcy taniej. Wystarczy doliczyć VAT."
+  ],
+  [
+    "„Panie, ja się jeszcze prześpię z decyzją”",
+    "📱 🌙",
+    "22:46. SMS: „A ten czarny to jeszcze stoi?”"
+  ],
+  [
+    "Jazda próbna. „Ja tylko po bułki”",
+    "🥐 🛣️",
+    "Wracamy po 40 minutach. Bułek brak. Kupił wersję z większym silnikiem."
+  ],
+  [
+    "Koniec miesiąca w salonie",
+    "📊 📞",
+    "Kierownik: „Ile jeszcze możemy zamknąć?”. Handlowiec: „Drzwi. Za chwilę będzie 18”."
+  ],
+  [
+    "„Żadnych dodatków, biorę podstawę”",
+    "⚙️ 🚘",
+    "Dziesięć minut później: „A jest wersja podstawowa z panoramą, kamerą 360 i grzanymi fotelami?”"
+  ],
+  [
+    "„Kilometry? Głównie do kościoła”",
+    "⛪ 🛣️",
+    "Na liczniku 290 tysięcy. Parafia chyba w Portugalii."
+  ],
+  [
+    "„Proszę ofertę na maila. Decyzja dzisiaj”",
+    "📩 📅",
+    "To było w marcu. Jest listopad. Dzisiaj odpisał: „A rabat jeszcze aktualny?”"
+  ],
+  [
+    "„Widziałem w ogłoszeniu, że macie czerwony”",
+    "📸 🚗",
+    "„Mamy”. „To dobrze. Chcę go zobaczyć, żeby się upewnić, że wolę czarny”."
+  ]
 ];
 const pageMeme=memes[Math.floor(Math.random()*memes.length)];
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
