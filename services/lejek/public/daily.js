@@ -477,6 +477,7 @@ function showView() {
   const quarterStart=Math.floor((month-1)/3)*3;
   data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
     plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
+    ranking:{salon:{place:3,total:8},group:{place:7,total:24},percent:0},
     reviewPlans:[{month:actual.today.slice(0,7),target:5}],daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
     sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy,
     lesson:{title:'Pierwszy kontakt',topic:'Przywitaj klienta, przedstaw się i zapytaj, czego potrzebuje.',remember:'Najpierw wysłuchaj, potem zaproponuj rozwiązanie.'}};
