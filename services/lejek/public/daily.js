@@ -4,7 +4,7 @@ const reviewNotes = {
   above:['Google chyba już wie, gdzie pracujesz. Dobra robota!','Plan został w lusterku wstecznym. Możesz dopić kawę na ciepło.','Zrzut ekranu do rozmowy o podwyżce? Materiał jest.','Opinie przyjechały w komplecie i jeszcze przywiozły kolegów.']
 };
 const belowPlanNotes = {
-  "Kontakty": [
+  "Próby kontaktu": [
     "Telefon sam nie zadzwoni. Ma w tej sprawie bardzo konsekwentne stanowisko.",
     "Lista kontaktów czeka. Zacznij od osoby, której obiecałeś oddzwonić.",
     "Klient może być gotowy. Twój numer nadal ma ustawione «dzwoń pierwszy».",
@@ -73,7 +73,7 @@ const sourceDetails = {
 };
 // Keep the existing daily row positions. Slot 3 is the retired scheduled-drive count.
 const columns = [
-  [0,'Leady'],[1,'Kontakty'],[2,'Spotkania'],[4,'Jazdy próbne'],[5,'Oferty'],
+  [0,'Leady'],[1,'Próby kontaktu'],[2,'Spotkania'],[4,'Jazdy próbne'],[5,'Oferty'],
   [6,'Follow-up'],[7,'Zamówienia'],[10,'Wystawione faktury'],[8,'Rejestracje'],[9,'Opinie Google']
 ];
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
@@ -172,7 +172,7 @@ function activityCount(values,index) {
 
 const taskWording={
   0:['Obsłuż',['nowe zapytanie','nowe zapytania','nowych zapytań']],
-  1:['Skontaktuj się z',['klientem','klientami','klientami']],
+  1:['Wykonaj',['próbę kontaktu','próby kontaktu','prób kontaktu']],
   2:['Przeprowadź',['spotkanie','spotkania','spotkań']],
   4:['Przeprowadź',['jazdę próbną','jazdy próbne','jazd próbnych']],
   5:['Wyślij',['ofertę','oferty','ofert']],
@@ -377,7 +377,20 @@ function updateSourceStatuses() {
 sourceSelect.onchange=()=>showEntrySource(Number(sourceSelect.value));
 $('#entry-prev').onclick=()=>showEntrySource(Number(sourceSelect.value)-1);
 $('#entry-next').onclick=()=>showEntrySource(Number(sourceSelect.value)+1);
-$('#rows').addEventListener('input',updateSourceStatuses);
+const manuallyEditedWalkInFields=new WeakSet();
+$('#rows').addEventListener('input',event=>{
+  const input=event.target;
+  if (input.name==='v0_0'&&input.validity.valid) {
+    const row=input.closest('tr');
+    for (const name of ['v0_1','v0_2']) {
+      const field=row.querySelector('[name="'+name+'"]');
+      if (!manuallyEditedWalkInFields.has(field)) field.value=input.value;
+    }
+  } else if (input.name==='v0_1'||input.name==='v0_2') {
+    manuallyEditedWalkInFields.add(input);
+  }
+  updateSourceStatuses();
+});
 $('#entry').addEventListener('invalid',event=>{
   const row=event.target.closest('[data-source]');
   if (!row||!matchMedia('(max-width:1050px)').matches) return;
