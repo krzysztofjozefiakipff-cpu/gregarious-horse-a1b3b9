@@ -83,7 +83,7 @@ jobs:
           for pair in "IMG_9322.jpeg:left:side" "IMG_9321.jpeg:rear:straight" "IMG_9319.jpeg:front:straight" "IMG_9318.jpeg:front:three_quarter" "IMG_9315.jpeg:rear:three_quarter" "IMG_9314.jpeg:front:three_quarter" "IMG_9313.jpeg:front:three_quarter"; do
             file="${pair%%:*}"; angle="${pair##*:}"; view="${pair#*:}"; view="${view%%:*}"; base="${file%.jpeg}"
             echo "Processing $base ($view)"
-            if { test -s "fixed_qa/$base-cutout.png" || python3 tools/carvamo-photo-ai/bria_remove_background.py --image-file "fixed_qa/input/$file" --output "fixed_qa/$base-cutout.png"; } && python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --vehicle "fixed_qa/$base-cutout.png" --background fixed_qa/showroom.png --view "$view" --camera-angle "$angle" --car-width .60 --floor-y .77 --floor-reflection off --output-dir "fixed_qa/$base-final"; then
+            if { test -s "fixed_qa/$base-cutout.png" || python3 tools/carvamo-photo-ai/bria_remove_background.py --image-file "fixed_qa/input/$file" --output "fixed_qa/$base-cutout.png"; } && python3 tools/carvamo-photo-ai/fixed_showroom_composite.py --vehicle "fixed_qa/$base-cutout.png" --background fixed_qa/showroom.png --view "$view" --camera-angle "$angle" --car-width .60 --floor-y .77 --floor-reflection water_mirror --output-dir "fixed_qa/$base-final"; then
               echo "$base SUCCESS" >> fixed_qa/status.txt
               count=$((count+1))
             else
