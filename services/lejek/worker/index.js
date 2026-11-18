@@ -29,6 +29,25 @@ async function tracking(db,person) {
   return {missing,exceptions,progress:[month.filter(closed).length,month.length]};
 }
 
+const memeTitles=JSON.stringify(memes.map(([title])=>title));
+async function memeFor(db,user,day) {
+  if (user.role!=='seller') return memes[Math.floor(Math.random()*memes.length)];
+  await db.prepare(`
+    INSERT INTO meme_assignments(person,salon,day,title)
+    SELECT ?,?,?,candidate.value
+    FROM json_each(?) AS candidate
+    LEFT JOIN meme_assignments AS history ON history.salon=? AND history.title=candidate.value
+    WHERE NOT EXISTS (SELECT 1 FROM meme_assignments WHERE person=? AND day=?)
+    GROUP BY candidate.value
+    HAVING MAX(history.day) IS NULL OR MAX(history.day) < ?
+    ORDER BY MAX(history.day) ASC, random()
+    LIMIT 1
+    ON CONFLICT(person,day) DO NOTHING
+  `).bind(user.id,user.salon,day,memeTitles,user.salon,user.id,day,day).run();
+  const assigned=await db.prepare('SELECT title FROM meme_assignments WHERE person=? AND day=?').bind(user.id,day).first();
+  return memes.find(([title])=>title===assigned?.title)??null;
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -71,7 +90,10 @@ async function handle(request, env) {
       const approvals=personal?[]:await list(db,"SELECT person,day,reason FROM daily_exceptions WHERE kind='pending' AND "+scope+' ORDER BY day',...params);
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
-      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode:sidebar?.mode??'cause',today:localDay()});
+      const today=localDay();
+      const sidebarMode=sidebar?.mode??'cause';
+      const meme=sidebarMode==='meme'?await memeFor(db,user,today):null;
+      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
