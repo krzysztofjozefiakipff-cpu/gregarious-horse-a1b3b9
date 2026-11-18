@@ -248,6 +248,51 @@ const dailyMotivators={
   ]
 };
 
+const dailyClosings={
+  tasks:[
+    "Pierwszy punkt sam się nie odhaczy. Reszta pójdzie z górki.",
+    "Zacznij od konkretu. Kawa może robić za nagrodę.",
+    "Pierwszy ruch należy do Ciebie. CRM tylko patrzy.",
+    "Odhacz jedno. Lista od razu przestanie wyglądać jak poniedziałek.",
+    "Jeden krok teraz, jeden problem mniej przed zamknięciem salonu.",
+    "Klient nie zna Twojego planu. Zna za to swój numer telefonu.",
+    "Zacznij od góry. Lista nie ma trybu automatycznego.",
+    "Nie trzeba dziś wygrać rajdu. Wystarczy przejechać dzisiejszy odcinek.",
+    "Zrób pierwszy ruch, zanim kawa wystygnie.",
+    "Kliknięcie w CRM jest szybkie. Ruch przed kliknięciem robi wynik.",
+    "Plan lubi konkrety. Zacznij od pierwszego z listy.",
+    "Jeden dobry ruch i licznik przestanie udawać dekorację."
+  ],
+  followups:[
+    "Oferta wysłana. Teraz piłka znów jest u Ciebie.",
+    "Oferta w skrzynce to początek rozmowy. Zadzwoń i sprawdź ciąg dalszy.",
+    "Klient miał się zastanowić. Daj mu okazję powiedzieć, nad czym.",
+    "Skrzynka milczy? Telefon nadal działa.",
+    "Zamiast odświeżać skrzynkę, odśwież klientowi temat.",
+    "Dobra oferta zasługuje na ciąg dalszy. Ustal z klientem następny krok.",
+    "Oferta nie ma funkcji oddzwaniania. Na szczęście masz ją Ty.",
+    "Masz już ofertę. Teraz sprawdź, czego klient potrzebuje do decyzji.",
+    "Jedno pytanie do klienta może oszczędzić tydzień zgadywania.",
+    "Wysłane nie znaczy przeczytane. Sprawdź, czy oferta dotarła.",
+    "Oferta samotnie stoi w skrzynce. Dotrzymaj jej towarzystwa telefonem.",
+    "Zadzwoń w sprawie oferty. Może klient już wie więcej niż wczoraj."
+  ],
+  done:[
+    "Plan na dziś odhaczony. Kawa smakuje lepiej bez zaległych punktów.",
+    "Lista pusta. Nawet CRM może chwilę odpocząć.",
+    "Dzisiejszy odcinek zaliczony. Jutro ruszysz z rozpędu.",
+    "Plan zrobiony. Ten moment warto zapamiętać na następny poniedziałek.",
+    "Lista zgłasza brak uwag. To się jej rzadko zdarza.",
+    "Wszystko odhaczone. Kawa tym razem bez pośpiechu.",
+    "Dobra robota. Jutro licznik startuje od zera, Ty już z doświadczeniem.",
+    "Plan domknięty. Możesz spokojnie zgasić światła na ekspozycji.",
+    "Lejek mówi, że wystarczy. Dzisiaj warto go posłuchać.",
+    "Cel dzienny zaliczony. Zapisz wynik, zanim CRM zacznie tęsknić.",
+    "Lista jest pusta. To całkiem dobry widok na koniec dnia.",
+    "Dzisiejsza trasa za Tobą. Jutro kolejny odcinek."
+  ]
+};
+
 function renderTodayTasks(metrics,previous,day) {
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday)
     .sort((a,b)=>(a.goal?a.actual/a.goal:1)-(b.goal?b.actual/b.goal:1));
@@ -277,10 +322,10 @@ function renderTodayTasks(metrics,previous,day) {
     ?'Wróć do ofert z '+dateLabel(previous.day)+' ('+remaining+' do sprawdzenia). ' + (followups?.target!=null?'Rozmowy liczą się do planu.':'')
     :'';
   const closing=$('#tasks-closing');
-  closing.hidden=!hasPlan&&!remaining;
-  closing.textContent=tasks.length?'Pierwszy punkt sam się nie odhaczy. Reszta pójdzie z górki.'
-    :remaining?'Oferta wysłana. Teraz piłka znów jest u Ciebie.'
-    :'Dobra robota. Jutro też gramy do tej samej bramki.';
+  closing.hidden=!tasks.length&&!remaining&&!metrics.some(metric=>metric.todayTarget>0);
+  const endings=dailyClosings[tasks.length?'tasks':remaining?'followups':'done'];
+  const dayIndex=Math.floor(Date.parse(day)/86400000);
+  closing.textContent=endings[dayIndex%endings.length];
 }
 
 const actionsByMetric={
