@@ -193,27 +193,62 @@ const dailyMotivators={
   mixed:[
     'Jeden odcinek masz z górki. Drugi jeszcze pod górę, więc przyda się bieg niżej.',
     'Jest czym się pochwalić przy kawie. Po kawie wróć do miejsca, które odstaje.',
-    'Na jednym odcinku zielona fala, na drugim mały korek. Jest co odblokować.'
+    'Na jednym odcinku zielona fala, na drugim mały korek. Jest co odblokować.',
+    'Oferta poszła jak po maśle. Teraz odblokuj to, co jeszcze stoi w kolejce.',
+    'Jedna kontrolka świeci na zielono. Zerknij też na tę, która się dopomina.',
+    'Wynik ma i gaz, i hamulec. Zacznij od miejsca, w którym traci prędkość.',
+    'Jedna liczba już zasłużyła na kawę. Drugiej przyda się telefon.',
+    'W jednym miejscu kolejka się rozładowała. Czas ruszyć ten drugi korek.',
+    'Masz powód do uśmiechu i punkt do poprawy. Oba zmieszczą się przed lunchem.',
+    'Jedna rubryka wygląda jak z prezentacji dla szefa. Drugą weź teraz na warsztat.',
+    'Po jednej stronie salonu fanfary. Po drugiej wystarczy kilka konkretnych ruchów.',
+    'Dobra passa już jest. Przenieś ją tam, gdzie licznik stoi.'
   ],
   behind:[
     'Plan złapał korek. Jeden konkretny ruch i zacznie się rozjeżdżać.',
     'Lejek zaciągnął ręczny. Pierwsze zadanie to dobry moment, żeby go zwolnić.',
-    'Samym patrzeniem na licznik daleko nie zajedziemy. Zacznij od jednego ruchu.'
+    'Samym patrzeniem na licznik daleko nie zajedziemy. Zacznij od jednego ruchu.',
+    'Klient nie oddzwoni do wykresu. Zacznij od rozmowy, którą odkładasz.',
+    'CRM ma pamięć słonia. Przypomnij sobie, komu obiecałeś odpowiedź.',
+    'Kawa już zrobiła swoje. Teraz kolej na pierwszy punkt z listy.',
+    'Cel nie odbierze telefonu sam. Wybierz jeden numer i rusz z miejsca.',
+    'Dziś plan marudzi. Najszybciej uciszy go pierwsze wykonane zadanie.',
+    'Lista wygląda groźnie głównie przed pierwszym odhaczeniem. Sprawdźmy tę teorię.',
+    'Jeśli lejek stoi, zrób pierwszy ruch. Nawet ekspozycyjne auto kiedyś wyjeżdża.',
+    'Najtrudniej zacząć. Potem już tylko klient mówi, że musi się zastanowić.',
+    'Zaległość sama nie zniknie. Ale po jednym telefonie może być o jedną mniejsza.'
   ],
   ahead:[
     'Tempo masz jak na jeździe próbnej. Trzymaj je, jutro sobie podziękujesz.',
     'Plan zostaje w lusterku. Jeszcze jeden dobry ruch i jutro ruszysz z przewagą.',
-    'Jest zapas, ale auto samo do mety nie dojedzie. Trzymaj tempo.'
+    'Jest zapas, ale auto samo do mety nie dojedzie. Trzymaj tempo.',
+    'Masz przewagę. Zrób jeszcze jeden ruch, żeby jutrzejsza kawa była spokojniejsza.',
+    'Licznik wygląda dobrze. Utrzymaj rytm, zanim CRM uzna, że dziś święto.',
+    'Plan już macha z tyłu. Dokończ otwarte sprawy i zrób miejsce na jutro.',
+    'Dzisiaj to Ty nadajesz tempo. Wykorzystaj zapas na rozmowę, którą warto domknąć.',
+    'Plan dostał lekkiej zadyszki. Ty możesz jeszcze przygotować grunt na jutro.',
+    'Wynik wygląda, jakby wypił podwójne espresso. Dokończ dzień w swoim tempie.',
+    'Masz bufor. Zużyj go na jedno dobre przygotowanie, zanim kalendarz znów się zapełni.',
+    'Zapas jest po Twojej stronie. Dopnij jeden temat, żeby jutro wystartować z rozpędu.',
+    'Można już pomyśleć o kawie. Wcześniej pozamykaj sprawy, które jutro mogłyby wrócić.'
   ],
   onPace:[
     'Jedziesz zgodnie z planem. Nawigacja może odetchnąć, Ty odhacz następny krok.',
     'Tempo jest w punkt. Jeszcze jeden dobry ruch i można spokojnie dopić kawę.',
-    'Wszystko jedzie według rozkładu. Pilnuj rytmu, a plan nie ucieknie.'
+    'Wszystko jedzie według rozkładu. Pilnuj rytmu, a plan nie ucieknie.',
+    'Licznik i plan jadą równo. Pilnuj odstępu i odhacz kolejny punkt.',
+    'CRM jeszcze nie klaszcze, ale liczby już wyglądają dobrze. Trzymaj rytm.',
+    'Na razie plan się nie czepia. Dokończ następny punkt, żeby tak zostało.',
+    'Masz dobre tempo. Przy najbliższym postoju sprawdź, co jeszcze dziś zostało.',
+    'Kalendarz mówi, że jest dobrze. Lista poniżej wie, co zrobić dalej.',
+    'Dzień idzie według rozpiski. Jeden konkret przed kawą zrobi różnicę.',
+    'Jesteś na trasie. Żadnych nerwowych manewrów, po prostu kolejny ruch.',
+    'Plan jest zadowolony. Na wszelki wypadek odhacz następny punkt.',
+    'Wynik trzyma się planu jak klient dobrej oferty. Utrzymaj ten rytm.'
   ]
 };
 
 function renderTodayTasks(metrics,previous,day) {
-  const variant=Math.floor(Date.parse(day)/86400000)%3;
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday)
     .sort((a,b)=>(a.goal?a.actual/a.goal:1)-(b.goal?b.actual/b.goal:1));
   const strongest=metrics.filter(metric=>metric.delta>0).sort((a,b)=>b.delta-a.delta)[0];
@@ -224,7 +259,9 @@ function renderTodayTasks(metrics,previous,day) {
   intro.hidden=!hasPlan;
   const tone=weakest?(strongest?'mixed':'behind'):(strongest?'ahead':'onPace');
   const highlights=[strongest&&strongest.label+' ponad planem.',weakest&&weakest.label+' poniżej planu.'].filter(Boolean);
-  intro.textContent=[...highlights,dailyMotivators[tone][variant]].join(' ');
+  const messages=dailyMotivators[tone];
+  const variant=Math.floor(Date.parse(day)/86400000)%messages.length;
+  intro.textContent=[...highlights,messages[variant]].join(' ');
   $('#tasks').innerHTML=tasks.length?tasks.map(({index,doneToday,todayTarget})=>{
     const [verb,forms]=taskWording[index];
     const gap=todayTarget-doneToday;
