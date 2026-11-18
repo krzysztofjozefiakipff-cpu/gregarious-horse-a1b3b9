@@ -227,7 +227,7 @@ function renderGif(config,readOnly) {
     const image=$('#giphy-image');
     image.onload=()=>{
       if (request!==giphyRequest||$('#meme').hidden) return;
-      $('#meme-title').textContent='Popularne na GIPHY w Polsce';
+      $('#meme-title').hidden=true;
       icon.hidden=true;
       caption.hidden=true;
       card.hidden=false;
@@ -315,6 +315,7 @@ function renderSeller(readOnly=false) {
   $('#meme-like').textContent=data.memeLiked?'Rozbawiło mnie ✓':'Rozbawiło mnie';
   if (showMeme) {
     const [title,icon,caption]=data.meme??['Na dziś wszystkie memy są rozdane.', '🙂', 'Zajrzyj jutro po kolejną scenkę z salonu.'];
+    $('#meme-title').hidden=false;
     $('#meme-title').textContent=title;
     $('#meme-icon').textContent=icon;
     $('#meme-caption').textContent=caption;
