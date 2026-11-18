@@ -190,13 +190,22 @@ function dailyTarget(monthTarget,doneBeforeToday,daysLeft,isWorkday) {
 }
 
 function renderTodayTasks(metrics,previous) {
-  const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
+  const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday)
+    .sort((a,b)=>(a.goal?a.actual/a.goal:1)-(b.goal?b.actual/b.goal:1));
+  const strongest=metrics.filter(metric=>metric.delta>0).sort((a,b)=>b.delta-a.delta)[0];
+  const weakest=metrics.filter(metric=>metric.goal>0&&metric.delta<0)
+    .sort((a,b)=>a.actual/a.goal-b.actual/b.goal)[0];
   const hasPlan=metrics.some(({target})=>target!=null);
-  $('#tasks').innerHTML=tasks.length?tasks.map(({index,actual,target,doneToday,todayTarget})=>{
+  const intro=$('#tasks-intro');
+  intro.hidden=!hasPlan;
+  intro.textContent=weakest
+    ?(strongest?strongest.label+' ponad planem. ': 'Jesteś za tempem. ')+'Zacznij od obszaru z największą zaległością: '+weakest.label.toLowerCase()+'.'
+    :strongest?'Masz zapas. Utrzymaj tempo i przygotuj sobie łatwiejsze jutro.'
+    :'Trzymasz tempo. Każde domknięte zadanie przybliża Cię do celu.';
+  $('#tasks').innerHTML=tasks.length?tasks.map(({index,doneToday,todayTarget})=>{
     const [verb,forms]=taskWording[index];
     const gap=todayTarget-doneToday;
-    return '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
-      '<small class="task-note">Dziś: '+doneToday+' z '+todayTarget+' · Miesiąc: '+actual+' z '+target+'</small></li>';
+    return '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span></li>';
   }).join(''):'<li class="task-message">'+(hasPlan?'Na dziś nie zostały żadne zadania z planu.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</li>';
 
   const previousOffers=previous?activityCount(JSON.parse(previous.counters),5):0;
@@ -205,8 +214,13 @@ function renderTodayTasks(metrics,previous) {
   const reminder=$('#followup-reminder');
   reminder.hidden=!remaining;
   reminder.textContent=remaining
-    ?'Wróć do ofert z '+dateLabel(previous.day)+'. Do sprawdzenia: '+remaining+'. Rozmowy zaliczają się do planu follow-upów.'
+    ?'Wróć do ofert z '+dateLabel(previous.day)+' ('+remaining+' do sprawdzenia). ' + (followups?.target!=null?'Rozmowy liczą się do planu.':'')
     :'';
+  const closing=$('#tasks-closing');
+  closing.hidden=!hasPlan&&!remaining;
+  closing.textContent=tasks.length?'Pierwszy punkt sam się nie odhaczy. Reszta pójdzie z górki.'
+    :remaining?'Oferta wysłana. Teraz piłka znów jest u Ciebie.'
+    :'Dobra robota. Jutro też gramy do tej samej bramki.';
 }
 
 const actionsByMetric={

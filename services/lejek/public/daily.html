@@ -82,6 +82,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:#302038;color:#fff}
 #entry-grid .source-detail{display:block;margin-top:4px;font-size:.8rem;font-weight:500;line-height:1.35}
 #entry-grid input[readonly]{background:#f4eff5;color:#655969;cursor:default}
+#daily .actions li{padding:6px 0}
+#daily .task-action strong{font-size:1.65rem}
+#tasks-intro{margin:0 0 6px;background:#f4eff5;color:#302038}
+#tasks-closing{margin-top:8px;color:#655969;font-size:.9rem}
 </style>
 </head>
 <body>
@@ -103,7 +107,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <p id="lesson-topic"></p>
   <p id="lesson-remember" hidden><strong>Zapamiętaj!</strong> <span></span></p>
 </section>
-<section class="actions"><h2>Do zrobienia dziś</h2><ul id="tasks"></ul><p id="followup-reminder" class="task-note" hidden></p></section>
+<section class="actions"><h2>Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><ul id="tasks"></ul><p id="followup-reminder" class="task-note" hidden></p><p id="tasks-closing" hidden></p></section>
 <a class="entry-link" href="#wyniki">Wpisz wyniki</a>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 <section id="meme" hidden><div class="eyebrow">Z życia salonu</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
