@@ -1,3 +1,29 @@
+const abovePlanNotes = [
+  "Możesz iść na urlop. Kierownik pewnie poprosi tylko o datę powrotu.",
+  "Zasłużyłeś na przerwę. Tym razem kawa ma szansę być wypita na ciepło.",
+  "Złóż wniosek o podwyżkę. Załącznik już masz.",
+  "Kawa na koszt firmy? Zacznij negocjacje od dwóch.",
+  "CRM właśnie sprawdza, czy to na pewno Twój pierwszy bieg.",
+  "Plan miał być ambitny. Chyba nie przewidział Ciebie.",
+  "Zrób zrzut ekranu. Przy rozmowie o premii może się przydać.",
+  "Na dziś wolno Ci zamknąć Excela bez poczucia winy.",
+  "Premia sama się nie wynegocjuje. Chociaż te liczby próbują.",
+  "Ktoś tu zasłużył na kawę. Dopisz do wyposażenia standardowego.",
+  "Jeśli kierownik spyta, co się stało, powiedz: „To było w standardzie”.",
+  "Możesz złożyć wniosek o dodatkowy pączek. Uzasadnienie jest powyżej.",
+  "Ustaw status „na przerwie”. Tylko nie zapomnij wrócić po komplementy.",
+  "Kierownik może już odświeżać raport. Tym razem z ciekawości.",
+  "Pora na przerwę. Siadaj, zanim ktoś dopisze Ci kolejne zadanie.",
+  "Nie zmieściłeś się w planie. Z tej strony to akurat dobra wiadomość.",
+  "Ogłoś przerwę techniczną. Organizm domaga się kawy i oklasków.",
+  "Przy negocjacji podwyżki zacznij od: „Pokażę tylko jedną rzecz”.",
+  "Niech teraz ktoś spróbuje Ci sprzedać dodatkowe zadanie bez rabatu.",
+  "Na placu można odpalić klakson. W biurze wystarczy przybić piątkę.",
+  "Jeżeli to był tryb Eco, kierownik będzie chciał zobaczyć Sport.",
+  "Zrób miejsce na biurku. Chwalipięctwo najlepiej wygląda na czysto.",
+  "Dobra robota. Możesz wybrać, kto dziś stawia kawę.",
+  "Prośba o dzień wolny właśnie dostała solidne uzasadnienie."
+];
 const $ = selector => document.querySelector(selector);
 const sources = ['Salon (WALK)','Facebook','WWW','Karta kontaktu','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','VEHIS i inne portale','Serwis','Galerie','Targi'];
 const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne','Oferty','Follow-up','Zamówienia','Wydania'];
@@ -75,8 +101,10 @@ function renderPlans(records) {
   $('#pace-items').innerHTML=monthPlan==null?'':[['Kontakty',1,0],['Jazdy próbne',4,2],['Oferty',5,3]].map(([label,col,i])=>{
     const goal=Math.round(monthTargets.reduce((sum,row)=>sum+row[col],0)*(elapsed+Number(weekday(data.today)))/daysMonth);
     const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
-    const status=delta<0?'Brakuje '+Math.abs(delta):delta>0?'Ponad plan o '+delta:'Zgodnie z planem';
-    return '<span>'+label+' — <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+status+'</strong></span>';
+    const status=delta<0?'Brakuje '+Math.abs(delta):delta>0?'Jesteś ponad planem o '+delta:'Zgodnie z planem';
+    const dayIndex=Math.floor(Date.parse(data.today)/86400000);
+    const note=delta>0?'<small class="pace-note">'+abovePlanNotes[(dayIndex+i*7)%abovePlanNotes.length]+'</small>':'';
+    return '<div class="pace-item"><span>'+label+' — <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+status+'</strong></span>'+note+'</div>';
   }).join('');
 }
 
