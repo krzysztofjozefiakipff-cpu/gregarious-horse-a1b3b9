@@ -125,7 +125,12 @@ async function handle(request, env) {
       const meme=sidebarMode==='meme'?await memeFor(db,user,today):null;
       const assignedGif=trending&&personal?await db.prepare('SELECT gif_id FROM giphy_daily WHERE person=? AND day=?').bind(user.id,today).first():null;
       const giphy=trending?{key:env.GIPHY_API_KEY,id:assignedGif?.gif_id??null}:null;
-      const memeLiked=personal&&meme?Boolean(await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()):false;
+      const memeVotes=personal&&sidebarMode==='meme'
+        ?Object.fromEntries((await list(db,'SELECT source,vote FROM meme_votes WHERE person=? AND day=?',user.id,today)).map(row=>[row.source,row.vote]))
+        :{};
+      if (personal&&meme&&memeVotes.local==null&&await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()) {
+        memeVotes.local=1;
+      }
       const memeStories=user.role==='admin'?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending' ORDER BY id LIMIT 50"):[];
       const series=personal?await db.prepare('SELECT published_day,lessons FROM salon_lessons WHERE salon=?').bind(user.salon).first():null;
       const lessons=series?JSON.parse(series.lessons):[];
@@ -152,7 +157,7 @@ async function handle(request, env) {
         (SELECT group_concat(salon, char(10)) FROM dealer_group_salons WHERE group_name=g.name) AS salons,
         (SELECT group_concat(email, char(10)) FROM dealer_group_heads WHERE group_name=g.name) AS heads
         FROM dealer_groups g ORDER BY g.name`):[];
-      return json({role:user.role,sellers,plans,reviewPlans,funnelPlans,daily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeLiked,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({role:user.role,sellers,plans,reviewPlans,funnelPlans,daily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
@@ -234,10 +239,17 @@ async function handle(request, env) {
       .bind(body.salon.trim(),body.name.trim(),body.logo).run();
     return json({ok:true});
   }
-  if (path==='/api/meme-like' && user.role==='seller') {
-    await db.prepare('INSERT INTO meme_reactions SELECT person,day FROM meme_assignments WHERE person=? AND day=? ON CONFLICT DO NOTHING')
-      .bind(user.id,localDay()).run();
-    return json({ok:true});
+  if (path==='/api/meme-vote' && user.role==='seller') {
+    const {source,vote,day}=body;
+    if (!['local','giphy'].includes(source)||![-1,1].includes(vote)) return json({error:'Wybierz reakcję.'},400);
+    if (day!==localDay()) return json({error:'Odśwież stronę, aby zagłosować na dzisiejszy mem.'},409);
+    const assignment=source==='local'?'meme_assignments':'giphy_daily';
+    const result=await db.prepare(`
+      INSERT INTO meme_votes(person,day,source,vote)
+      SELECT person,day,?,? FROM ${assignment} WHERE person=? AND day=?
+      ON CONFLICT(person,day,source) DO UPDATE SET vote=excluded.vote
+    `).bind(source,vote,user.id,day).run();
+    return result.meta.changes?json({ok:true}):json({error:'Nie znaleziono dzisiejszego mema.'},409);
   }
   const storyValid=()=>textValid(body.title)&&typeof body.caption==='string'&&body.caption.trim().length>0&&body.caption.length<=500;
   if (path==='/api/meme-story' && user.role==='seller') {

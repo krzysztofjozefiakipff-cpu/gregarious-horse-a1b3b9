@@ -280,12 +280,22 @@ async function dailyGif(config,readOnly) {
   return items[0]??null;
 }
 
+const voteButtons=[...document.querySelectorAll('[data-meme-vote]')];
+let memeVoteSource='local';
+function renderMemeVotes(source) {
+  memeVoteSource=source;
+  $('#meme-votes').hidden=source==='local'&&!data.meme;
+  for (const button of voteButtons) {
+    button.setAttribute('aria-pressed',String(data.memeVotes?.[source]===Number(button.dataset.memeVote)));
+  }
+}
+
 function renderGif(config,readOnly) {
   const card=$('#giphy-card');
   const icon=$('#meme-icon');
   const caption=$('#meme-caption');
   card.hidden=true;
-  $('#meme-like').hidden=!data.meme;
+  renderMemeVotes('local');
   icon.hidden=false;
   caption.hidden=false;
   if (!config||matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -298,7 +308,7 @@ function renderGif(config,readOnly) {
       $('#meme-title').hidden=true;
       icon.hidden=true;
       caption.hidden=true;
-      $('#meme-like').hidden=true;
+      renderMemeVotes('giphy');
       card.hidden=false;
     };
     image.onerror=()=>{card.hidden=true;};
@@ -389,9 +399,6 @@ function renderSeller(readOnly=false) {
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
   $('#meme-actions').hidden=readOnly;
-  $('#meme-like').hidden=!data.meme;
-  $('#meme-like').disabled=Boolean(data.memeLiked);
-  $('#meme-like').textContent=data.memeLiked?'Rozbawiło mnie ✓':'Rozbawiło mnie';
   if (showMeme) {
     const [title,icon,caption]=data.meme??['Na dziś wszystkie memy są rozdane.', '🙂', 'Zajrzyj jutro po kolejną scenkę z salonu.'];
     $('#meme-title').hidden=false;
@@ -621,16 +628,22 @@ $('#brand').onsubmit=event=>{
     await api('/api/brand',{salon:salon.value,name:name.value,logo:encoded});
   });
 };
-$('#meme-like').onclick=async event=>{
-  const button=event.currentTarget;
-  button.disabled=true;
+for (const button of voteButtons) button.onclick=async()=>{
+  const {today:day}=data;
+  const source=memeVoteSource;
+  const vote=Number(button.dataset.memeVote);
+  for (const control of voteButtons) control.disabled=true;
   try {
-    await api('/api/meme-like',{});
-    data.memeLiked=true;
-    button.textContent='Rozbawiło mnie ✓';
+    await api('/api/meme-vote',{source,vote,day});
+    if (data.today===day) {
+      (data.memeVotes??={})[source]=vote;
+      renderMemeVotes(memeVoteSource);
+      $('#meme-status').textContent='Zapisano ocenę.';
+    }
   } catch(error) {
     $('#meme-status').textContent=error.message;
-    button.disabled=false;
+  } finally {
+    for (const control of voteButtons) control.disabled=false;
   }
 };
 $('#meme-suggest').onclick=event=>{

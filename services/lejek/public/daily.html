@@ -79,6 +79,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   body:has(#daily:not([hidden])){padding-bottom:calc(62px + env(safe-area-inset-bottom))}
   .seller-nav{position:fixed;z-index:2;bottom:0;left:0;right:0;margin:0;padding:6px 12px calc(6px + env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;box-shadow:0 -3px 14px #30203812}
 }
+#meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:#302038;color:#fff}
 </style>
 </head>
 <body>
@@ -104,7 +105,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <a class="entry-link" href="#wyniki">Wpisz wyniki</a>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 <section id="meme" hidden><div class="eyebrow">Z życia salonu</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
-<div id="meme-actions" hidden><button type="button" id="meme-like" class="secondary">Rozbawiło mnie</button><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
+<div id="meme-actions" hidden><div id="meme-votes" role="group" aria-label="Oceń mem"><button type="button" data-meme-vote="1" class="secondary" aria-pressed="false">👍 Podoba mi się</button> <button type="button" data-meme-vote="-1" class="secondary" aria-pressed="false">👎 Nie podoba mi się</button></div><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
 <form id="meme-form" hidden><p>Opisz sytuację bez nazwisk, numerów rejestracyjnych i danych klientów.</p><label>Tytuł <input name="title" maxlength="120" required></label><label>Historia <textarea name="caption" rows="4" maxlength="500" required></textarea></label><button>Wyślij do administratora</button></form>
 <p id="meme-status" role="status"></p></section></div>
 </div>
