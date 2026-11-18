@@ -3,6 +3,15 @@ const sources = ['Salon (WALK)','Facebook','WWW','Karta kontaktu','OTOMOTO','Pol
 const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne','Oferty','Follow-up','Zamówienia','Wydania'];
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
 const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
+const memes = [
+  ['„Tylko się rozejrzę”', '👀 🚗', 'Pięć minut później: „A jak zamówię dzisiaj, to kiedy odbiór?”'],
+  ['Kiedy klient mówi „biorę”', '🤝 🎉', 'Na zewnątrz: „Świetny wybór”. W środku: finał Ligi Mistrzów.'],
+  ['„Magazyn chwilowo niedostępny”', '📞 🛋️', 'Handlowiec: jeszcze tylko zadzwonię do kolegi, który zna kolegę z placu.'],
+  ['Klient chce tylko kawę', '☕ 🔑', 'Po jeździe próbnej pyta, czy kawę można dopisać do wyposażenia.'],
+  ['„Proszę o najlepszą cenę”', '🧮 👓', 'Kalkulator dostał dziś więcej pytań niż kierownik.'],
+  ['Piątek, minuta do zamknięcia', '🕔 🚙', '„Możemy porównać wszystkie wersje wyposażenia?”']
+];
+const pageMeme=memes[Math.floor(Math.random()*memes.length)];
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
 const dateLabel = (day,options={day:'numeric',month:'long'}) => new Date(day+'T12:00:00Z').toLocaleDateString('pl-PL',options);
 const weekday = day => ![0,6].includes(new Date(day+'T12:00:00Z').getUTCDay());
@@ -134,6 +143,15 @@ function renderSeller(readOnly=false) {
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr><th scope="row">'+name+'</th>'+columns.map((label,c)=>
     '<td><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
   $('#status').textContent=readOnly?'Podgląd · zapis dostępny na koncie handlowca.':legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+  const showMeme=data.sidebarMode==='meme';
+  $('#cause').hidden=showMeme;
+  $('#meme').hidden=!showMeme;
+  if (showMeme) {
+    const [title,icon,caption]=pageMeme;
+    $('#meme-title').textContent=title;
+    $('#meme-icon').textContent=icon;
+    $('#meme-caption').textContent=caption;
+  }
   $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
   $('#cause-org').textContent=cause?.organization??'';
   $('#cause-description').textContent=cause?.description??'Organizacja i opis pojawią się po opublikowaniu celu.';
@@ -173,6 +191,7 @@ function renderAdmin() {
     const selected=form.elements.salon.value;
     form.elements.salon.replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
     if (selected) form.elements.salon.value=selected;
+    $('#sidebar-settings').elements.mode.value=data.sidebarMode;
     $('#charity').elements.month.value ||= data.today.slice(0,7);
   }
 }
@@ -195,7 +214,7 @@ function showView() {
   data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
     plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
     daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
-    cause:{title:'Wyprawki szkolne dla dzieci',organization:'Przykładowy cel',description:'Wsparcie zakupu przyborów szkolnych.'}};
+    sidebarMode:actual.sidebarMode,cause:actual.cause};
   try { renderSeller(true); } finally { data=actual; }
 }
 $('#view-switch').onclick=()=>{preview=!preview;showView();};
@@ -253,6 +272,10 @@ $('#brand').onsubmit=event=>{
     }):'';
     await api('/api/brand',{salon:salon.value,name:name.value,logo:encoded});
   });
+};
+$('#sidebar-settings').onsubmit=event=>{
+  event.preventDefault();
+  run(()=>api('/api/sidebar',{mode:event.target.elements.mode.value}));
 };
 $('#charity').onsubmit=event=>{
   event.preventDefault();
