@@ -436,7 +436,7 @@ function renderSeller(readOnly=false) {
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
@@ -445,7 +445,7 @@ function renderSeller(readOnly=false) {
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
-  $('#status').textContent=readOnly?'Podgląd · zapis dostępny na koncie handlowca.':legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+  $('#status').textContent=readOnly?'Podgląd · możesz wpisać przykładowe wyniki. Zapis jest dostępny na koncie handlowca.':legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
