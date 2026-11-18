@@ -22,8 +22,9 @@ if docker container inspect "$service" >/dev/null 2>&1; then
   old_image=$(docker inspect -f '{{.Config.Image}}' "$service")
 fi
 run_service() {
+  local deployed_image="$1"
   docker run -d --name "$service" --label com.carvamo.role=lejek --restart unless-stopped \
-    --network carvamo_backend_private --read-only --tmpfs /tmp:rw,noexec,nosuid \
+    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" --read-only --tmpfs /tmp:rw,noexec,nosuid \
     --security-opt no-new-privileges --cap-drop ALL -v carvamo_lejek_data:/data "$1" >/dev/null
 }
 if [ -n "$old_image" ]; then docker rm -f "$service" >/dev/null; fi

@@ -1,144 +1,199 @@
-const metrics = [
-  ['Rozmowy z klientami', 'Przeprowadź rozmowy z klientami'],
-  ['Umówione jazdy próbne', 'Umów jazdy próbne'],
-  ['Odbyte jazdy próbne', 'Zrealizuj pozostałe jazdy próbne'],
-  ['Wysłane oferty', 'Przygotuj i wyślij oferty'],
-  ['Podpisane zamówienia', '']
-];
-const quotes = [
-  'Dobry dzień zaczyna się od jednej rzeczy zrobionej dobrze.',
-  'To, na co poświęcasz uwagę, z czasem zaczyna rosnąć.',
-  'Regularność pozwala zrobić więcej, niż podpowiada pierwszy zapał.',
-  'Dobra rozmowa zaczyna się od uważnego słuchania.',
-  'Małe kroki pozwalają ruszyć nawet w trudnym dniu.',
-  'Najwięcej uczymy się z rzeczy, do których wracamy z uwagą.',
-  'Daj sobie czas na naukę i powód, żeby spróbować ponownie.'
-];
-const date = document.querySelector('#date');
-const entry = document.querySelector('#entry');
-const load = document.querySelector('#load');
-const daily = document.querySelector('#daily');
-const status = document.querySelector('#status');
-const today = new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Warsaw'}).format(new Date());
-let state;
-let revision=0;
-date.value = today;
-date.max = today;
-
-
-function workdays(y, m, from, count) {
-  let total = 0;
-  for (let offset = 0; offset < count; offset++) {
-    const last = new Date(Date.UTC(y, m + offset + 1, 0)).getUTCDate();
-    for (let d = offset ? 1 : from; d <= last; d++) {
-      const weekday = new Date(Date.UTC(y,m + offset,d)).getUTCDay();
-      if (weekday > 0 && weekday < 6) total++;
-    }
+const $ = selector => document.querySelector(selector);
+const sources = ['Salon (WALK)','Facebook','WWW','Karta kontaktu','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','VEHIS i inne portale','Serwis','Galerie','Targi'];
+const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne','Oferty','Follow-up','Zamówienia','Wydania'];
+const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
+const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
+const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
+const dateLabel = (day,options={day:'numeric',month:'long'}) => new Date(day+'T12:00:00Z').toLocaleDateString('pl-PL',options);
+const weekday = day => ![0,6].includes(new Date(day+'T12:00:00Z').getUTCDay());
+const remainingDays = (start,end) => {
+  let count=0;
+  for (let at=Date.parse(start); at<Date.parse(end); at+=86400000) {
+    if (weekday(new Date(at).toISOString().slice(0,10))) count++;
   }
-  return total;
+  return count;
+};
+const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString().slice(0,10);
+let data;
+let editDay;
+let busy=false;
+
+async function api(path,body) {
+  const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
+  const result=await response.json();
+  if (!response.ok) throw new Error(result.error);
+  return result;
 }
 
-function render() {
-  const day = date.value;
-  if (!day) return;
-  const timestamp = new Date(day + 'T00:00:00Z');
-  const [year, month, number] = day.split('-').map(Number);
-  const qStart = Math.floor((month - 1) / 3) * 3;
-  const prefix = day.slice(0,7);
-  const records = Object.entries(state.days).filter(([d]) => d <= day);
-  const sumOrders = rows => rows.reduce((sum,[,v]) => sum + (v[4] ?? 0), 0);
-  const monthRows = records.filter(([d]) => d.startsWith(prefix));
-  const quarterRows = records.filter(([d]) => d.startsWith(String(year)) && +d.slice(5,7) > qStart);
-  const monthOrders = sumOrders(monthRows);
-  const quarterOrders = sumOrders(quarterRows);
-  const monthGoal = state.plans[prefix];
-  const quarterGoal = Object.keys(state.plans).length===3 ? Object.values(state.plans).reduce((a,b)=>a+b,0) : null;
-  const monthGap = monthGoal==null ? null : Math.max(0,monthGoal-monthOrders);
-  const quarterGap = quarterGoal==null ? null : Math.max(0,quarterGoal-quarterOrders);
-  const left = workdays(year,month-1,number,1);
-  const quarterLeft = workdays(year,month-1,number,qStart+4-month);
-  const pace = Math.max((monthGap??0)/Math.max(1,left),(quarterGap??0)/Math.max(1,quarterLeft));
-  const needed = Math.max(monthGap??0,quarterGap??0);
-  const planRows = needed ? sourceTargets(needed,state.person.name) : [];
-  const planPerOrder = index => needed ? planRows.reduce((sum,row)=>sum+row[index],0)/needed : 0;
-  const goals = [1,2,4,5].map(index=>Math.ceil(pace*planPerOrder(index))).concat(null);
-  const values = state.days[day] ?? [];
-  const tasks = goals.slice(0,4).map((goal,i) => ({i,gap:Math.max(0,goal-(values[i]??0))}))
-    .filter(task=>task.gap).reverse().slice(0,3);
-  document.querySelector('#quote').textContent = '„'+quotes[Math.floor(timestamp.getTime()/86400000)%quotes.length]+'”';
-  document.querySelector('#tasks').innerHTML = tasks.length ? tasks.map(({i,gap})=>'<li>'+metrics[i][1]+' — <strong>'+gap+'</strong>.</li>').join('') : monthGoal==null && quarterGoal==null ? '<li>Poproś kierownika o wpisanie planu.</li>' : '<li>Dzisiejsze cele są osiągnięte.</li>';
-  const completed = goals.slice(0,4).filter((goal,i)=>goal>0 && (values[i]??0)>=goal).length;
-  const cards = [['Dzisiaj',completed+' / '+goals.slice(0,4).filter(Boolean).length,'Celów osiągniętych'],['Miesiąc',monthOrders+' / '+(monthGoal??'—'),monthGap==null?'Brak planu':monthGap?'Brakuje '+monthGap+' · dni pracy '+left:'Plan osiągnięty'],['Kwartał',quarterOrders+' / '+(quarterGoal??'—'),quarterGap==null?'Niepełny plan':quarterGap?'Brakuje '+quarterGap+' · dni pracy '+quarterLeft:'Plan osiągnięty']];
-  document.querySelector('#cards').innerHTML = cards.map(([title,value,hint])=>'<section><span>'+title+'</span><strong>'+value+'</strong><small>'+hint+'</small></section>').join('');
-  document.querySelector('#rows').innerHTML = metrics.map(([label],i)=>{
-    const value = values[i];
-    const goal = goals[i];
-    const score = value == null || goal == null || value===goal ? '' : value<goal ? 'behind' : 'ahead';
-    const note = score==='behind'?'Poniżej celu':score==='ahead'?'Powyżej celu':value != null && goal != null?'Cel osiągnięty':'';
-    return '<tr><td>'+label+'</td><td>'+(goal??'—')+'</td><td><input aria-label="'+label+'" name="m'+i+'" type="number" min="0" max="99999" step="1" inputmode="numeric" value="'+(value??'')+'"><small style="display:block" class="'+score+'">'+note+'</small></td></tr>';
+function renderPlans(records) {
+  const [year,month]=data.today.split('-').map(Number);
+  const monthKey=data.today.slice(0,7);
+  const quarter=Math.floor((month-1)/3);
+  const monthEnd=monthStart(year,month);
+  const quarterEnd=monthStart(year,quarter*3+3);
+  const monthPlan=data.plans.find(row=>row.month===monthKey)?.target;
+  const quarterPlan=data.plans.length===3?data.plans.reduce((total,row)=>total+row.target,0):null;
+  const sales=entries=>entries.reduce((total,[,values])=>total+(values[4]??0),0);
+  const toDate=Object.entries(records).filter(([day])=>day<=data.today);
+  const monthRecords=toDate.filter(([day])=>day.startsWith(monthKey));
+  const monthSales=sales(monthRecords);
+  const quarterSales=sales(toDate);
+  const monthGap=monthPlan==null?0:Math.max(0,monthPlan-monthSales);
+  const quarterGap=quarterPlan==null?0:Math.max(0,quarterPlan-quarterSales);
+  const daysLeft=Math.max(1,remainingDays(data.today,monthEnd));
+  const salesGoal=monthPlan==null&&quarterPlan==null?null:Math.ceil(Math.max(monthGap/daysLeft,quarterGap/Math.max(1,remainingDays(data.today,quarterEnd))));
+  const current=records[data.today]??[];
+  const cards=[['Dzisiaj',current[4]??0,salesGoal==null?null:salesGoal+(current[4]??0)],['Miesiąc',monthSales,monthPlan],['Kwartał',quarterSales,quarterPlan]];
+  $('#cards').innerHTML=cards.map(([name,value,target])=>{
+    const gap=target==null?null:target-value;
+    return '<section><span>'+name+'</span><strong>'+value+' / '+(target??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
+      (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
+  }).join('');
+  const targets=salesGoal?sourceTargets(salesGoal):[];
+  const todayTasks=[['Skontaktuj się z klientami',1,0],['Umów jazdy próbne',2,1],['Wyślij oferty',5,3]]
+    .map(([label,col,i])=>[label,Math.max(0,targets.reduce((sum,row)=>sum+row[col],0)-(current[i]??0))]).filter(([,gap])=>gap>0);
+  $('#tasks').innerHTML=todayTasks.length?todayTasks.map(([label,gap])=>'<li><strong>'+gap+'</strong> · '+label+'</li>').join(''):
+    '<li>'+(salesGoal==null?'Poproś kierownika o ustawienie planu.':'Dzisiejsze cele są osiągnięte.')+'</li>';
+  const daysMonth=remainingDays(monthKey+'-01',monthEnd);
+  const elapsed=daysMonth-remainingDays(data.today,monthEnd);
+  const monthTargets=monthPlan?sourceTargets(monthPlan):[];
+  $('#pace').innerHTML=monthPlan==null?'':[['Kontakty',1,0],['Jazdy',4,2],['Oferty',5,3]].map(([label,col,i])=>{
+    const goal=Math.round(monthTargets.reduce((sum,row)=>sum+row[col],0)*(elapsed+Number(weekday(data.today)))/daysMonth);
+    const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
+    return '<span>'+label+' <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+(delta>0?'+':'')+delta+'</strong></span>';
   }).join('');
 }
-async function api(params, values) {
-  const response = await fetch('/api/daily'+params, values ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)} : {});
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error);
-  return data;
+
+function renderSeller() {
+  const {brand,personal,cause}=data;
+  const salon=data.sellers[0].salon;
+  $('#dealer').textContent=brand?.name??salon;
+  $('#salon').textContent=brand?salon:'';
+  $('#logo').hidden=!brand?.logo;
+  if (brand?.logo) $('#logo').src=brand.logo;
+  const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
+  const next=personal.missing[0];
+  const day=next&&editDay===next?editDay:data.today;
+  const exception=personal.exceptions[day];
+  const waiting=personal.exceptions[next]==='pending';
+  const blocked=(next&&day!==next)||exception==='pending';
+  const locked=Boolean(records[day]||exception==='zero'||exception==='leave'||exception==='training');
+  const dayIndex=Math.floor(Date.parse(data.today)/86400000);
+  $('#quote').textContent=quotes[dayIndex%quotes.length];
+  renderPlans(records);
+  $('#entry-date').textContent=dateLabel(day);
+  $('#backlog').hidden=!next;
+  $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
+  $('#resolve').hidden=!next||day===next||waiting;
+  for (const button of document.querySelectorAll('[data-kind]')) button.hidden=!next||day!==next||waiting;
+  $('#reason').hidden=true;
+  $('#save').disabled=busy||Boolean(blocked)||locked;
+  const matrix=records[day]?.[5];
+  const legacy=records[day]&&!matrix;
+  $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(name=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
+  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr><th scope="row">'+name+'</th>'+columns.map((label,c)=>
+    '<td><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked?' disabled':'')+'></td>').join('')+'</tr>').join('');
+  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+  $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
+  $('#cause-org').textContent=cause?.organization??'';
+  $('#cause-description').textContent=cause?.description??'Organizacja i opis pojawią się po opublikowaniu celu.';
+  const [done,expected]=personal.progress;
+  $('#progress-text').textContent=done+' z '+expected+' dni pracy rozliczonych do dziś';
+  $('#progress').max=expected||1;
+  $('#progress').value=done;
+  $('#fortune').textContent=records[data.today]?fortunes[dayIndex%fortunes.length]:'Otworzy się po zapisaniu dzisiejszych wyników.';
+  $('#daily').hidden=false;
 }
 
-async function refresh() {
-  const latest = ++revision;
-  daily.hidden=true;
-  load.textContent='Wczytywanie danych…';
-  try {
-    const data=await api('?month='+encodeURIComponent(date.value.slice(0,7)));
-    if (latest!==revision) return;
-    load.textContent='';
-    document.querySelector('.heading').hidden=false;
-    if (data.role!=='seller') {
-      entry.hidden=true;
-      document.querySelector('.actions').hidden=true;
-      document.querySelector('#quote').hidden=true;
-      const cards=document.querySelector('#cards');
-      cards.replaceChildren();
-      for (const person of data.sellers) {
-        const section=document.createElement('section');
-        const past=data.daily.filter(r=>r.person===person.id && r.day<=date.value);
-        const orders=rows=>rows.reduce((n,r)=>n+(JSON.parse(r.counters)[4]??0),0);
-        const month=date.value.slice(0,7);
-        const plan=data.plans.find(p=>p.person===person.id&&p.month===month)?.target;
-        const quarterPlans=data.plans.filter(p=>p.person===person.id);
-        const quarterPlan=quarterPlans.length===3?quarterPlans.reduce((n,p)=>n+p.target,0):'—';
-        section.textContent=person.name+' · '+person.salon+' | Miesiąc '+orders(past.filter(r=>r.day.startsWith(month)))+'/'+(plan??'—')+' | Kwartał '+orders(past)+'/'+quarterPlan;
-        cards.append(section);
-      }
-      if (!data.sellers.length) load.textContent='Brak przypisanych handlowców.';
-    } else {
-      document.querySelector('#panel').hidden=true;
-      state={person:data.sellers[0],plans:Object.fromEntries(data.plans.map(p=>[p.month,p.target])),
-        days:Object.fromEntries(data.daily.map(r=>[r.day,JSON.parse(r.counters)]))};
-      render();
+function renderAdmin() {
+  $('#dealer').textContent='Panel salonu';
+  $('#admin').hidden=false;
+  $('#team').textContent=data.sellers.length+' handlowców';
+  const reviews=$('#reviews');
+  reviews.replaceChildren();
+  if (!data.approvals.length) reviews.textContent='Brak zgłoszeń do rozpatrzenia.';
+  for (const review of data.approvals) {
+    const card=document.createElement('article');
+    const label=document.createElement('strong');
+    label.textContent=data.sellers.find(seller=>seller.id===review.person)?.name+' · '+dateLabel(review.day);
+    const note=document.createElement('p');
+    note.textContent=review.reason;
+    card.append(label,note);
+    for (const approve of [true,false]) {
+      const button=document.createElement('button');
+      button.textContent=approve?'Zatwierdź dzień bez aktywności':'Odrzuć';
+      button.onclick=()=>run(()=>api('/api/review',{person:review.person,day:review.day,approve}));
+      card.append(button);
     }
-    daily.hidden=false;
-  } catch(error) {
-    if (latest===revision) load.textContent=error.message;
+    reviews.append(card);
+  }
+  $('#settings').hidden=data.role!=='admin';
+  if (data.role==='admin') {
+    const form=$('#brand');
+    const selected=form.elements.salon.value;
+    form.elements.salon.replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
+    if (selected) form.elements.salon.value=selected;
+    $('#charity').elements.month.value ||= data.today.slice(0,7);
   }
 }
-date.addEventListener('change',()=>{if(date.value&&date.checkValidity())refresh();});
-entry.addEventListener('submit',async event=>{
-  event.preventDefault();
-  if (!date.value || !date.checkValidity()) return date.reportValidity();
-  const day=date.value;
-  const values=metrics.map((_,i)=>{const value=entry.elements['m'+i].value;return value===''?null:Number(value);});
-  const button=entry.querySelector('button');
-  button.disabled=true;
+async function refresh() {
+  data=await api('/api/daily?month='+today.slice(0,7));
+  $('#load').textContent='';
+  $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
+  if(data.role==='seller') renderSeller();
+  else renderAdmin();
+}
+async function run(operation,openCookie=false) {
+  if (busy) return;
+  busy=true;
+  $('#save').disabled=true;
   try {
-    await api('',{person:state.person.id,day,values});
-    if (day===date.value) {
-      state.days[day]=values;
-      render();
-      status.textContent='Zapisano wynik dnia.';
+    await operation();
+    editDay=null;
+    busy=false;
+    await refresh();
+    if (openCookie) $('#cookie').open=true;
+    if (data.role!=='seller') $('#load').textContent='Zapisano zmiany.';
+  } catch(error) {
+    $('#load').textContent=error.message;
+    if(data?.role==='seller') {
+      const day=editDay??data.today;
+      $('#status').textContent=error.message;
+      $('#save').disabled=Boolean(data.personal.missing[0]&&day!==data.personal.missing[0])||data.personal.exceptions[day]==='pending';
     }
-  } catch(error) {status.textContent=error.message;}
-  finally {button.disabled=false;}
-});
-refresh();
+  } finally {busy=false;}
+}
+$('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows input')?.focus();};
+$('#entry').onsubmit=event=>{
+  event.preventDefault();
+  const day=editDay??data.today;
+  const rows=sources.map((_,r)=>columns.map((__,c)=>Number(event.target.elements['v'+r+'_'+c].value)));
+  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows}),day===data.today);
+};
+for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{
+  const {kind}=button.dataset;
+  const reason=$('#reason');
+  if(kind==='pending'&&(!reason.value.trim()||reason.hidden)){reason.hidden=false;reason.focus();return;}
+  run(()=>api('/api/day-exception',{person:data.sellers[0].id,day:editDay,kind,reason:reason.value})).then(()=>{if(reason.hidden) reason.value='';});
+};
+$('#brand').onsubmit=event=>{
+  event.preventDefault();
+  const {salon,name,logo}=event.target.elements;
+  const file=logo.files[0];
+  if(file?.size>40960){$('#load').textContent='Logo może mieć maksymalnie 40 KB.';return;}
+  run(async ()=>{
+    const encoded=file?await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>reject(new Error('Nie udało się odczytać logo.'));
+      reader.readAsDataURL(file);
+    }):'';
+    await api('/api/brand',{salon:salon.value,name:name.value,logo:encoded});
+  });
+};
+$('#charity').onsubmit=event=>{
+  event.preventDefault();
+  const form=event.target;
+  run(()=>api('/api/cause',Object.fromEntries(new FormData(form))));
+};
+refresh().catch(error=>{$('#load').textContent=error.message;});

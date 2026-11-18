@@ -7,7 +7,7 @@ const origin = 'https://lejek.carvamo.com';
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
 const DB = {
@@ -41,7 +41,7 @@ async function handle(request) {
   const path=new URL(request.url).pathname;
   if (path==='/healthz' && request.method==='GET') {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
-    return reply('lejek-ok');
+    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local'});
   }
   if (path==='/login') {
     if (request.method==='GET') return html();
@@ -56,7 +56,7 @@ async function handle(request) {
     if (!result.ok) return html('Sprawdź e-mail i hasło.');
     const {token}=await result.json();
     if (typeof token!=='string'||!/^[\w.-]+$/.test(token)) return reply('Logowanie chwilowo niedostępne',503);
-    return redirect('/',{'Set-Cookie':cookie+'='+token+cookieOptions+'; Max-Age=28800'});
+    return redirect('/daily.html',{'Set-Cookie':cookie+'='+token+cookieOptions+'; Max-Age=28800'});
   }
   if(path==='/logout' && request.method==='POST' && request.headers.get('Origin')===origin) {
     return redirect('/login',{'Set-Cookie':cookie+'='+cookieOptions+'; Max-Age=0'});

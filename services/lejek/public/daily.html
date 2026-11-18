@@ -1,12 +1,57 @@
 <!doctype html>
-<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mój dzień · OMODA i JAECOO</title>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mój dzień · Bieg Wyżej</title>
 <style>
-[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:#f5f4ef;color:#202b25;font:16px/1.5 system-ui,sans-serif}header{background:#23392f;color:#fff}nav,main{max-width:870px;margin:auto;padding:16px 22px}nav{display:flex;justify-content:space-between;gap:8px;font-size:.85rem;font-weight:700}h1{font-size:clamp(2.4rem,7vw,4rem);line-height:1;margin:16px 0 8px;letter-spacing:-.06em}h2{font-size:1.2rem;margin:0 0 12px}p{margin:0}blockquote{margin:12px 0 20px;color:#44594e;font-family:Georgia,serif;font-size:1.2rem}section,form,details{background:#fff;border:1px solid #dddeda;border-radius:16px;padding:16px;margin-bottom:12px}.actions{background:#e1ebdf;border-color:#d3e0d2}.actions ul{margin:0;padding-left:20px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cards section{padding:13px}.cards strong{display:block;font-size:1.45rem}.hint,small{color:#49564e}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 4px;border-bottom:1px solid #e6e9e5}th:nth-child(2),td:nth-child(2){text-align:center}th:last-child,td:last-child{text-align:right}input{border:1px solid #a0afa5;border-radius:7px;padding:7px;width:76px;min-height:42px;font:inherit}input[type=date]{width:auto}.heading,.save{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.save{margin-top:12px}button{background:#284d3a;color:white;border:0;border-radius:9px;font:inherit;font-weight:700;padding:11px 20px;cursor:pointer}.behind{color:#a02429}.ahead{color:#216741}details label{display:flex;gap:12px;align-items:center;margin:10px 0}summary{cursor:pointer}@media(max-width:490px){nav,main{padding-inline:12px}.cards{gap:5px}.cards section{padding:8px;font-size:.84rem}.cards strong{font-size:1.2rem}th,td{font-size:.88rem}form,section{padding:12px}}
-</style></head><body>
-<header><nav><span>OMODA i JAECOO</span><span><a id="panel" href="/" style="color:white">Panel salonu</a></span></nav></header>
-<main><p id="load" role="status">Wczytywanie danych…</p><div class="heading"><h1>Mój dzień</h1><label>Dzień <input id="date" type="date" required></label></div><div id="daily" hidden>
-<blockquote id="quote"></blockquote>
-<section class="actions"><h2>Co zrobić, żeby domknąć plan</h2><ul id="tasks"></ul></section>
-<div class="cards" id="cards"></div><p class="hint" style="margin-bottom:12px"><small>Realizacja planu na podstawie wpisów dziennych.</small></p>
-<form id="entry"><h2>Wpisz dzisiejszy wynik</h2><table><thead><tr><th>Działanie</th><th>Cel</th><th>Wynik</th></tr></thead><tbody id="rows"></tbody></table><div class="save"><small id="status" role="status"></small><button>Zapisz dzień</button></div></form>
-</div><form method="post" action="/logout"><button>Wyloguj się</button></form></main><script src="workbook-plan.js"></script><script src="daily.js"></script></body></html>
+:root{--paper:#faf6ed;--ink:#17181c;--muted:#515360;--blue:#143ca6;--line:#d6d0c6;--yellow:#ffe59d}
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 system-ui,sans-serif}
+header,main,footer{max-width:1440px;margin:auto;padding:16px clamp(16px,3vw,46px)}
+header,footer,.heading,.save{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;letter-spacing:-.045em}#logo{max-height:42px;max-width:110px;object-fit:contain}
+.identity{display:flex;align-items:center;gap:14px;min-width:0}#salon{color:var(--muted)}footer{border-top:1px solid var(--line);font-size:.9rem}
+.layout{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(250px,1fr);gap:20px}.layout>*{min-width:0}h1,h2,p,blockquote{margin:0}h1,h2{letter-spacing:-.045em;line-height:1.12}h2{font-size:1.45rem;margin-bottom:12px}
+.quote{background:var(--yellow);padding:22px 25px;border-radius:16px;margin-bottom:24px}.eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}.quote blockquote{font:italic clamp(1.6rem,3vw,3.3rem)/1.12 Georgia,serif;margin-top:8px}
+.actions ul{list-style:none;padding:0;margin:0 0 18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.actions li,.cards section{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.actions li strong{color:var(--blue)}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 12px}.cards strong{display:block;font-size:clamp(1.3rem,3vw,2rem);line-height:1.15;font-variant-numeric:tabular-nums}
+.behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
+#cause{color:white;background:var(--blue);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--yellow)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
+#backlog{padding:13px;background:var(--yellow);border-radius:10px;margin:10px 0}#options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}#reason{width:100%;margin-top:8px}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:5px 3px;border-bottom:1px solid var(--line)}th{font-size:.78rem}td:first-child{min-width:115px;font-size:.86rem}input,select{font:inherit;border:1px solid #aca9a5;border-radius:6px;padding:5px 7px;background:white;color:var(--ink)}input[type=number]{width:100%;min-width:56px;min-height:32px;text-align:center}button{background:var(--blue);color:white;border:0;border-radius:8px;padding:8px 13px;font:inherit;font-weight:700;cursor:pointer}button:disabled{background:#dedad1;color:#53545a;cursor:default}button.secondary{background:transparent;color:var(--blue);border:1px solid currentColor}
+.save{margin-top:14px}a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
+@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.quote,.actions,.cards,#pace,#entry,#cause,#cookie{margin:0}.quote{order:0}.actions{order:1}#cause{order:2}.cards{order:3}#pace{order:4}#entry{order:5}#cookie{order:6}}
+</style>
+</head>
+<body>
+<header><div class="identity"><img id="logo" alt="" hidden><strong id="dealer">Mój dzień</strong><span id="salon"></span></div><span id="display-date"></span></header>
+<main>
+<p id="load" role="status">Wczytywanie danych…</p>
+<div id="daily" hidden class="layout">
+<article class="main">
+<div class="quote"><div class="eyebrow">Myśl dnia</div><blockquote id="quote"></blockquote></div>
+<section class="actions"><h2>Do zrobienia dziś</h2><ul id="tasks"></ul></section>
+<div class="cards" id="cards"></div>
+<div id="pace"></div>
+<form id="entry"><div class="heading"><h2>Wyniki dzienne</h2><strong id="entry-date"></strong></div>
+<div id="backlog" hidden><strong id="backlog-text"></strong><div id="options">
+<button type="button" id="resolve">Rozlicz dzień</button>
+<button type="button" data-kind="leave">Oznacz urlop</button>
+<button type="button" data-kind="training">Oznacz szkolenie</button>
+<button type="button" data-kind="pending">Zgłoś dzień bez aktywności</button>
+</div><input id="reason" placeholder="Krótki powód" aria-label="Powód dnia bez aktywności" maxlength="120" hidden></div>
+<div class="scroll"><table aria-label="Wyniki według źródeł"><thead id="columns"></thead><tbody id="rows"></tbody></table></div>
+<div class="save"><span id="status" role="status"></span><button id="save">Zapisz dzień</button></div></form>
+</article>
+<aside class="sidebar"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
+<details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></aside>
+</div>
+<section id="admin" hidden><h1>Panel salonu</h1><p><a href="/">Plany, wyniki i konta handlowców</a></p><div id="team"></div><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div>
+<div id="settings" hidden>
+<form id="brand"><h2>Dane dealera</h2><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form>
+<form id="charity"><h2>Cel miesiąca</h2><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form>
+</div></section>
+</main>
+<footer><strong>Bieg Wyżej</strong><form method="post" action="/logout"><button class="secondary">Wyloguj się</button></form></footer>
+<script src="workbook-plan.js"></script><script src="daily.js"></script>
+</body></html>
