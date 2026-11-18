@@ -26,6 +26,21 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #pace{display:block;border:1px solid var(--line);border-radius:14px;padding:14px 16px}.pace-intro h2{margin:0 0 4px}.pace-intro p{font-size:.9rem;color:var(--muted)}#pace-items{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:10px}#pace-items span{font-size:.95rem}
 .pace-item{flex:1 1 170px;min-width:0}.pace-note{display:block;margin-top:6px;padding:6px 9px;border-radius:7px;background:#e7f5eb;color:#194d30;font-size:.87rem;line-height:1.35}
 .pace-note-behind{background:#fff0df;color:#743b18}
+.mobile-entry,.entry-field-label{display:none}
+@media(max-width:1050px){
+  #mobile-entry{display:grid;gap:6px;margin:10px 0 12px}#mobile-entry label{font-weight:750}
+  #entry-source{min-height:44px;width:100%;font-size:1rem}#entry-help{color:var(--muted);font-size:.9rem}
+  #entry-grid{overflow:visible}#entry-grid thead,#entry-grid tbody tr:not(.active-source),#entry-grid th{display:none}
+  #entry-grid table,#entry-grid tbody{display:block}
+  #entry-grid tr.active-source{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:12px}
+  #entry-grid td{display:grid;gap:4px;padding:0;border:0;min-width:0}
+  .entry-field-label{display:block;font-weight:650;font-size:.87rem;overflow-wrap:anywhere}
+  #entry-grid input{min-height:44px;min-width:0;font-size:1rem}
+  #entry-navigation{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-top:10px}
+  #entry-navigation button{min-height:44px;padding-inline:7px;font-size:.9rem}
+  #entry-count{font-size:.85rem;color:var(--muted);white-space:nowrap}
+  #save{width:100%;min-height:44px}
+}
 </style>
 </head>
 <body>
@@ -52,7 +67,17 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <button type="button" data-kind="training">Oznacz szkolenie</button>
 <button type="button" data-kind="pending">Zgłoś dzień bez aktywności</button>
 </div><input id="reason" placeholder="Krótki powód" aria-label="Powód dnia bez aktywności" maxlength="120" hidden></div>
-<div class="scroll"><table aria-label="Wyniki według źródeł"><thead id="columns"></thead><tbody id="rows"></tbody></table></div>
+<div id="mobile-entry" class="mobile-entry" hidden>
+  <label for="entry-source">Źródło wyników</label>
+  <select id="entry-source" aria-describedby="entry-help"></select>
+  <p id="entry-help">Wpisz tylko wykonane działania. Puste pola zapiszą się jako 0.</p>
+</div>
+<div class="scroll" id="entry-grid"><table aria-label="Wyniki według źródeł"><thead id="columns"></thead><tbody id="rows"></tbody></table></div>
+<nav id="entry-navigation" class="mobile-entry" aria-label="Przejdź do innego źródła" hidden>
+  <button type="button" class="secondary" id="entry-prev">Poprzednie</button>
+  <span id="entry-count" aria-live="polite"></span>
+  <button type="button" class="secondary" id="entry-next">Następne</button>
+</nav>
 <div class="save"><span id="status" role="status"></span><button id="save">Zapisz dzień</button></div></form>
 </article>
 <aside class="sidebar"><div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>

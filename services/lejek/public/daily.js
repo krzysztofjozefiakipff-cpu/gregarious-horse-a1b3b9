@@ -216,6 +216,34 @@ function renderGif(config,readOnly) {
   });
 }
 
+const sourceSelect=$('#entry-source');
+function showEntrySource(index) {
+  sourceSelect.value=String(index);
+  for (const row of $('#rows').rows) row.classList.toggle('active-source',Number(row.dataset.source)===index);
+  $('#entry-prev').disabled=index===0;
+  $('#entry-next').disabled=index===sources.length-1;
+  $('#entry-count').textContent=(index+1)+' z '+sources.length;
+}
+
+function updateSourceStatuses() {
+  for (const [index,row] of Array.from($('#rows').rows).entries()) {
+    const inputs=Array.from(row.querySelectorAll('input'));
+    const hasResults=inputs.some(input=>Number(input.value)>0);
+    sourceSelect.options[index].textContent=sources[index]+(hasResults?' — wpisano wyniki':'');
+  }
+}
+
+sourceSelect.onchange=()=>showEntrySource(Number(sourceSelect.value));
+$('#entry-prev').onclick=()=>showEntrySource(Number(sourceSelect.value)-1);
+$('#entry-next').onclick=()=>showEntrySource(Number(sourceSelect.value)+1);
+$('#rows').addEventListener('input',updateSourceStatuses);
+$('#entry').addEventListener('invalid',event=>{
+  const row=event.target.closest('[data-source]');
+  if (!row||!matchMedia('(max-width:1050px)').matches) return;
+  const firstInvalid=$('#rows input:invalid');
+  if (event.target===firstInvalid) showEntrySource(Number(row.dataset.source));
+},true);
+
 function renderSeller(readOnly=false) {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
@@ -243,8 +271,18 @@ function renderSeller(readOnly=false) {
   const matrix=records[day]?.[5];
   const legacy=records[day]&&!matrix;
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(name=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
-  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr><th scope="row">'+name+'</th>'+columns.map((label,c)=>
-    '<td><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
+  const previousSource=$('#entry-grid').dataset.day===day?Number(sourceSelect.value):0;
+  $('#entry-grid').dataset.day=day;
+  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+'</th>'+columns.map((label,c)=>
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
+  $('#mobile-entry').hidden=Boolean(legacy);
+  $('#entry-navigation').hidden=Boolean(legacy);
+  $('#entry-grid').hidden=Boolean(legacy);
+  if (!legacy) {
+    sourceSelect.replaceChildren(...sources.map((name,i)=>new Option(name,String(i))));
+    showEntrySource(previousSource);
+    updateSourceStatuses();
+  }
   $('#status').textContent=readOnly?'Podgląd · zapis dostępny na koncie handlowca.':legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
@@ -372,7 +410,7 @@ async function run(operation,openCookie=false) {
     }
   } finally {busy=false;}
 }
-$('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows input')?.focus();};
+$('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows .active-source input')?.focus();};
 $('#entry').onsubmit=event=>{
   event.preventDefault();
   if(data.role!=='seller') return;
