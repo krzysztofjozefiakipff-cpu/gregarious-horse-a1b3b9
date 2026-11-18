@@ -253,22 +253,20 @@ function renderQuote(text) {
 }
 
 let giphyRequest;
-function giphyResults(config,assignedId) {
-  const params=new URLSearchParams({
-    key:config.key,client_key:'lejek-carvamo',country:'PL',locale:'pl_PL',
-    contentfilter:'high',media_filter:'tinygif'
+async function giphyResults(config,assignedId) {
+  const params=new URLSearchParams({api_key:config.key,rating:'g'});
+  if (!assignedId) params.set('limit','50');
+  const endpoint=assignedId?encodeURIComponent(assignedId):'trending';
+  const response=await fetch('https://api.giphy.com/v1/gifs/'+endpoint+'?'+params,{
+    cache:'no-store',signal:AbortSignal.timeout(6500)
   });
-  if (assignedId) params.set('ids',assignedId);
-  else params.set('limit','50');
-  const endpoint=assignedId?'posts':'featured';
-  return fetch('https://api.giphy.com/v2/'+endpoint+'?'+params,{cache:'no-store',signal:AbortSignal.timeout(6500)})
-    .then(response=>{
-      if (!response.ok) throw new Error('GIF niedostępny.');
-      return response.json();
-    }).then(({results})=>results.filter(item=>{
-      const url=URL.canParse(item?.media_formats?.tinygif?.url??'')?new URL(item.media_formats.tinygif.url):null;
-      return typeof item?.id==='string'&&url?.protocol==='https:'&&url.hostname.endsWith('.giphy.com');
-    }));
+  if (!response.ok) throw new Error('GIF niedostępny.');
+  const {data}=await response.json();
+  return (assignedId?[data]:data??[]).filter(item=>{
+    const media=item?.images?.fixed_width?.url;
+    const url=URL.canParse(media??'')?new URL(media):null;
+    return typeof item?.id==='string'&&url?.protocol==='https:'&&url.hostname.endsWith('.giphy.com');
+  });
 }
 
 async function dailyGif(config,readOnly) {
@@ -287,6 +285,7 @@ function renderGif(config,readOnly) {
   const icon=$('#meme-icon');
   const caption=$('#meme-caption');
   card.hidden=true;
+  $('#meme-like').hidden=!data.meme;
   icon.hidden=false;
   caption.hidden=false;
   if (!config||matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -299,11 +298,12 @@ function renderGif(config,readOnly) {
       $('#meme-title').hidden=true;
       icon.hidden=true;
       caption.hidden=true;
+      $('#meme-like').hidden=true;
       card.hidden=false;
     };
     image.onerror=()=>{card.hidden=true;};
     image.alt=item.content_description||item.title||'GIF dnia';
-    image.src=item.media_formats.tinygif.url;
+    image.src=item.images.fixed_width.url;
   });
 }
 

@@ -116,7 +116,12 @@ async function handle(request, env) {
       const today=localDay();
       const sidebarMode=sidebar?.mode??'cause';
       const pref=await db.prepare('SELECT enabled FROM giphy_preference WHERE id=1').bind().first();
-      const trending=sidebarMode==='meme'&&Boolean(env.GIPHY_API_KEY)&&(pref?.enabled??1);
+      const mixed=sidebarMode==='meme'&&Boolean(env.GIPHY_API_KEY)&&(pref?.enabled??1);
+      // Keep the source stable across reloads, with an independent choice per seller and Warsaw date.
+      const sourceSeed=mixed&&personal
+        ?new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(today+':'+user.id)))
+        :null;
+      const trending=mixed&&(!sourceSeed||sourceSeed[0]<128);
       const meme=sidebarMode==='meme'?await memeFor(db,user,today):null;
       const assignedGif=trending&&personal?await db.prepare('SELECT gif_id FROM giphy_daily WHERE person=? AND day=?').bind(user.id,today).first():null;
       const giphy=trending?{key:env.GIPHY_API_KEY,id:assignedGif?.gif_id??null}:null;
