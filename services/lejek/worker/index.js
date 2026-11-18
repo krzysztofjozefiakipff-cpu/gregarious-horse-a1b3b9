@@ -71,6 +71,9 @@ const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+  if (path==='/index.html'&&request.method==='GET') {
+    return new Response(null,{status:303,headers:{...headers,Location:'/zarzadzanie.html'}});
+  }
   if (!path.startsWith('/api/')) {
     const asset = path==='/'?'/daily.html':path;
     if (request.method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});

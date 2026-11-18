@@ -1,6 +1,6 @@
 const get = id => document.getElementById(id);
 let people = [], salons = [], accounts = [];
-const sources = ['WALK','Facebook','WWW','Karta kontaktu','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','VEHIS i inne portale','Serwis','Galerie','Targi'];
+const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi'];
 const fields = ['Leady','Skuteczne kontakty','Kwalifikacja','Oferty','Negocjacje','Sprzedaż','Umówione wizyty','Odbyte umówione wizyty','Jazdy próbne','Klienci z follow-upem','Interakcje follow-up'];
 const extras = [
   'Leady online z pomiarem czasu reakcji','Pierwsza reakcja do 15 min',
