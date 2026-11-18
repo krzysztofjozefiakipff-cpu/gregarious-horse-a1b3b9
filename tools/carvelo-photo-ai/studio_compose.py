@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageOps
 import cairosvg
 import numpy as np
 
-SCENE_VERSION = "studio-v7"
+SCENE_VERSION = "studio-v12-handheld-geometry-qa"
 GROUND_Y = 0.85
 
 
@@ -164,7 +164,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     # height limits made full-size SUVs look like miniatures in the showroom.
     # Fit generously but never crop bumpers, roof or wheels; keep the original
     # foreground aspect ratio and cap enlargement of smaller source vehicles.
-    scale = min(w * .94 / bw, h * .73 / bh, 1.35)
+    scale = min(w * .88 / bw, h * .68 / bh, 1.35)
     new_size = max(1, round(bw * scale)), max(1, round(bh * scale))
     cropped = original.crop(box)
     car = cropped.resize(new_size, Image.Resampling.LANCZOS)
@@ -240,71 +240,30 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     if any(cy > ground_y + round(h * .025) or cy < ground_y - round(h * .18) for _, cy in contact_points):
         raise ValueError("wheel_contact_not_on_floor")
 
-    # Transfer the *real* ground occlusion from the original studio photograph.
-    # The original already contains perspective-correct shadows under distant
-    # wheels. Estimate floor brightness from unobstructed side strips, then
-    # recover only darker floor pixels outside the car's segmentation matte.
-    # Keep the original car pixels and CARVELO showroom floor untouched.
-    if source_photo is not None and source_photo.size == original.size:
-        src = np.asarray(source_photo.convert("RGB"), dtype=np.float32)
-        alpha_src = np.asarray(original.getchannel("A"), dtype=np.uint8)
-        floor_start = max(0, min(original.height - 1, box[1] + round(bh * .60)))
-        sample_rows = src[floor_start:, :, :]
-        sample_alpha = alpha_src[floor_start:, :]
-        side = max(8, round(original.width * .075))
-        side_values = np.concatenate((sample_rows[:, :side, :].reshape(-1, 3),
-                                      sample_rows[:, -side:, :].reshape(-1, 3)), axis=0)
-        # Use upper quantile: shadows at the frame edges must not lower the
-        # estimated brightness of the unshadowed floor.
-        baseline = float(np.percentile(side_values.mean(axis=1), 70))
-        gray = src.mean(axis=2)
-        darkness = np.clip((baseline - gray - 8.) / max(30., baseline * .50), 0., 1.)
-        yy = np.arange(original.height, dtype=np.float32)[:, None]
-        vertical = np.clip((yy - floor_start) / max(1., original.height - floor_start), 0., 1.)
-        floor_only = (alpha_src < 40).astype(np.float32)
-        # Exclude very distant background and suppress sharp original
-        # wall/floor edges; the transferred matte is a soft contact shadow.
-        dark_alpha = np.uint8(np.clip(darkness * floor_only * vertical * 185., 0, 175))
-        # A car's real floor shadow extends *below and outside* its bounding
-        # box. The old crop(box) cut away precisely the ground contact region.
-        # Project the complete source floor at the same scale/translation as
-        # the segmented vehicle, clipping safely to the showroom canvas.
-        source_shadow = Image.fromarray(dark_alpha, "L")
-        projected_w = max(1, round(original.width * scale))
-        projected_h = max(1, round(original.height * scale))
-        source_shadow = source_shadow.resize(
-            (projected_w, projected_h), Image.Resampling.BILINEAR)
-        source_shadow = source_shadow.filter(
-            ImageFilter.GaussianBlur(max(2, round(h*.003))))
-        shadow_x = x - round(box[0] * scale)
-        shadow_y = y - round(box[1] * scale)
-        paste_x0 = max(0, shadow_x)
-        paste_y0 = max(0, shadow_y)
-        paste_x1 = min(w, shadow_x + projected_w)
-        paste_y1 = min(h, shadow_y + projected_h)
-        if paste_x1 > paste_x0 and paste_y1 > paste_y0:
-            region = source_shadow.crop((
-                paste_x0 - shadow_x, paste_y0 - shadow_y,
-                paste_x1 - shadow_x, paste_y1 - shadow_y))
-            ground_layer = Image.new(
-                "RGBA", region.size, (16, 17, 19, 0))
-            ground_layer.putalpha(region)
-            canvas.alpha_composite(ground_layer, (paste_x0, paste_y0))
+    # Handheld photos vary in camera height, focal length and roll.
+    # Silhouette geometry cannot recover the physical ground plane.
+    # Preserve contacts and report scale-independent geometry diagnostics.
+    wheel_span_px = max(cx for cx, _ in contact_points) - min(cx for cx, _ in contact_points)
+    contact_slope = ((contact_points[-1][1] - contact_points[0][1])
+                     / max(1, contact_points[-1][0] - contact_points[0][0]))
+    normalized_contact_spread = (
+        (max(cy for _, cy in contact_points) - min(cy for _, cy in contact_points))
+        / max(1, vh)
+    )
+    camera_geometry_review = (
+        abs(contact_slope) > .22 or normalized_contact_spread > .18
+        or len(contact_points) != 2
+    )
 
-    # Reflection is clipped to the floor and fades quickly; no mirror-image
-    # floating above the tiles. Keep original vehicle pixels untouched.
-    floor_y = max(0, min(h-1, min(cy for _, cy in contact_points)))
-    reflect_h = max(0, min(round(vh * .20), h - floor_y - 3))
-    if reflect_h > 4:
-        reflection = ImageOps.flip(car).resize((vw, reflect_h), Image.Resampling.BILINEAR)
-        a = reflection.getchannel("A")
-        fade = Image.new("L", (vw, reflect_h), 0)
-        fade.putdata([round(px * .13 * (1 - iy / max(1, reflect_h-1))**2.3)
-                      for iy in range(reflect_h)
-                      for px in a.crop((0, iy, vw, iy+1)).getdata()])
-        reflection.putalpha(fade)
-        reflection = reflection.filter(ImageFilter.GaussianBlur(max(2, round(h * .005))))
-        canvas.alpha_composite(reflection, (x, floor_y + 2))
+    # Do not project the original photograph's floor into the new studio.
+    # Its rectangular image footprint creates a visible patch on the showroom
+    # floor. The contact, ambient, directional and underbody shadows below
+    # are generated directly in studio coordinates and have feathered edges.
+
+    # Disabled: flipping a photographed vehicle creates blurred vertical
+    # artifacts on matte showroom floors. Re-enable only with calibrated
+    # floor reflectance and perspective-aware projection.
+    reflect_h = 0
 
     # Layered, grounded shadows: broad ambient occlusion, tight tire contact,
     # and a soft directional floor shadow away from the window wall.
@@ -316,22 +275,25 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     ax0, ay0 = left_contact
     ax1, ay1 = right_contact
     span = max(1, ax1 - ax0)
-    depth = max(8, round(h * .030))
+    depth = max(5, round(h * .018))
     painter.polygon([
         (ax0-round(span*.11), ay0-depth),
         (ax1+round(span*.11), ay1-depth),
         (ax1+round(span*.13), ay1+depth),
         (ax0-round(span*.13), ay0+depth),
-    ], fill=120)
-    ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .017))))
+    ], fill=88)
+    ambient = ambient.filter(ImageFilter.GaussianBlur(max(7, round(h * .020))))
 
     contact = Image.new("L", (w, h), 0)
     touch = ImageDraw.Draw(contact)
     for cx, cy in contact_points:
-        dx = max(9, round(vw * .038))
-        dy = max(3, round(h * .008))
+        # Farther wheels appear smaller; use their image-space depth instead
+        # of imposing the near wheel footprint size on every contact.
+        depth_ratio = max(.60, min(1.0, (cy + 1) / (ground_y + 1)))
+        dx = max(5, round(vw * .022 * depth_ratio))
+        dy = max(2, round(h * .005 * depth_ratio))
         touch.ellipse((cx-dx, cy-dy, cx+dx, cy+dy+max(3,round(h*.008))), fill=238)
-    contact = contact.filter(ImageFilter.GaussianBlur(max(2, round(h * .003))))
+    contact = contact.filter(ImageFilter.GaussianBlur(max(1, round(h * .002))))
 
     directional = Image.new("L", (w, h), 0)
     dr = ImageDraw.Draw(directional)
@@ -340,7 +302,7 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         (ax1, ay1),
         (ax1-round(span*.20), ay1+round(h*.060)),
         (ax0-round(span*.23), ay0+round(h*.046))
-    ], fill=42)
+    ], fill=28)
     directional = directional.filter(ImageFilter.GaussianBlur(max(8, round(h*.024))))
     # Tire grounding must be visible even on reflective light tiles.
     # A two-scale footprint creates an opaque seam directly under each tire
@@ -351,12 +313,13 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         # Two-layer tire footprint: an almost-black, very tight contact seam
         # and a softer ground-level penumbra. Do not shift the seam toward the
         # global ground line: perspective can place each tire at a different y.
-        rx = max(6, round(vw * .025))
-        ry = max(2, round(h * .004))
+        depth_ratio = max(.60, min(1.0, (cy + 1) / (ground_y + 1)))
+        rx = max(4, round(vw * .020 * depth_ratio))
+        ry = max(2, round(h * .004 * depth_ratio))
         # Shift the contact patch a few pixels below the opaque tire edge:
         # a centered ellipse is mostly hidden behind the wheel silhouette.
-        fd.ellipse((cx-rx, cy-1, cx+rx, cy+max(4, round(h*.010))), fill=247)
-    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .0012))))
+        fd.ellipse((cx-rx, cy, cx+rx, cy+max(3, round(h*.006))), fill=225)
+    footprint = footprint.filter(ImageFilter.GaussianBlur(max(1, round(h * .001))))
 
     # The source studio has a broad dark occlusion zone below the rocker
     # panel. A thin line between tire centers leaves the underside bright
@@ -374,9 +337,9 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         cy = round(left_y * (1-t) + right_y*t)
         taper = .65 + .35 * (1-abs(2*t-1))
         rx = max(5, round(wheel_span * .046 * taper))
-        ry = max(5, round(h * .042 * taper))
-        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=210)
-    underbody = underbody.filter(ImageFilter.GaussianBlur(max(4, round(h*.012))))
+        ry = max(3, round(h * .016 * taper))
+        ud.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=105)
+    underbody = underbody.filter(ImageFilter.GaussianBlur(max(3, round(h*.009))))
     core = Image.new("L", (w, h), 0)
     cd = ImageDraw.Draw(core)
     for i in range(37):
@@ -384,8 +347,8 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         cx = round(left_x * (1-t) + right_x*t)
         cy = round(left_y * (1-t) + right_y*t)
         rx = max(4, round(wheel_span*.025))
-        ry = max(3, round(h*.011))
-        cd.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=231)
+        ry = max(3, round(h*.007))
+        cd.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=174)
     core = core.filter(ImageFilter.GaussianBlur(max(2,round(h*.004))))
     underbody = ImageChops.lighter(underbody,core)
     shadow = ImageChops.lighter(
@@ -396,11 +359,17 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
     seam = Image.new("L", (w, h), 0)
     seam_draw = ImageDraw.Draw(seam)
     for cx, cy in contact_points:
-        seam_draw.ellipse((cx-max(5,round(vw*.019)), cy,
-                           cx+max(5,round(vw*.019)),
-                           cy+max(3,round(h*.007))), fill=235)
+        depth_ratio = max(.60, min(1.0, (cy + 1) / (ground_y + 1)))
+        seam_radius = max(4, round(vw * .019 * depth_ratio))
+        seam_draw.ellipse((cx-seam_radius, cy,
+                           cx+seam_radius,
+                           cy+max(2,round(h*.007*depth_ratio))), fill=235)
     seam = seam.filter(ImageFilter.GaussianBlur(max(1,round(h*.001))))
     shadow = ImageChops.lighter(shadow, seam)
+    # The rear/far tire in a three-quarter view has a higher image-space
+    # contact point. Never force it onto the near tire horizontal baseline.
+    # Keep contact patches independent, and report their spread for QA.
+    contact_spread = max(cy for _, cy in contact_points) - min(cy for _, cy in contact_points)
     layer = Image.new("RGBA", (w, h), (25, 25, 26, 0))
     layer.putalpha(shadow)
     canvas.alpha_composite(layer)
@@ -413,10 +382,19 @@ def compose_grounded_vehicle(vehicle: Image.Image, scene: Image.Image, source_ph
         "proportional_scale": round(scale, 5),
         "wheel_contacts": contact_xs,
         "wheel_contact_points": contact_points,
+        "wheel_contact_spread_px": contact_spread,
+        "wheel_contact_spread_relative_to_vehicle": round(normalized_contact_spread, 4),
+        "wheel_baseline_slope": round(contact_slope, 5),
+        "wheel_baseline_span_px": wheel_span_px,
+        "camera_calibration": "unverified",
+        "handheld_camera_geometry_review_required": camera_geometry_review,
+        "wheel_perspective_review_required": contact_spread > round(h * .055),
+        "visual_qa_required": True,
+        "contact_shadow_version": "per-wheel-v4-perspective-scaled",
         "wheel_grounded": all(ground_y-round(h*.18) <= pt_y <= ground_y+round(h*.025) for _,pt_y in contact_points),
         "ambient_shadow": True,
         "daylight_shadow": True,
-        "subtle_floor_reflection": bool(reflect_h > 4),
+        "subtle_floor_reflection": False,
     }
 
 

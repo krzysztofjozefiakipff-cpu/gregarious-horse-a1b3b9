@@ -1,4 +1,4 @@
-"""Production-safe adapter for calibrated CARVELO Blender showroom renders.
+"""Production-safe adapter for calibrated CARVAMO Blender showroom renders.
 
 Never guesses a source photograph's camera azimuth. A valid pose estimate and
 matching calibrated render are mandatory; otherwise the 3D path fails closed.
@@ -27,13 +27,13 @@ def load_views(directory: Path):
             raise ValueError("showroom_camera_metadata_invalid")
         if abs(float(item.get("floor_z_m", 999))) > 1e-5:
             raise ValueError("showroom_floor_metadata_invalid")
-        if abs(float(item["camera_location_m"][2]) - 1.2) > .001:
+        if abs(float(item["camera_location_m"][2]) - 1.35) > .001:
             raise ValueError("showroom_camera_height_mismatch")
         # Blender metadata stores an actual camera location and orientation.
         # Camera() uses a different pinhole convention; don't silently mix them.
         # Angle is used ONLY for discrete selection; geometry must be calibrated
         # separately before wheel-plane validation can be considered complete.
-        cam = Camera(float(item["azimuth_deg"]), 1.2,
+        cam = Camera(float(item["azimuth_deg"]), 1.35,
                      float(item["lens_mm"]) * width / float(item["sensor_width_mm"]),
                      width/2, height/2)
         views.append(CalibratedView(image, cam, "blender-180-v1"))
