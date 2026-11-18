@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify and deploy Lejek on OVH
         env:
+          GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
           OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
           OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
         run: |
@@ -38,7 +39,7 @@ jobs:
           "${SSH[@]}" "$HOST" 'install -d -m 700 "$HOME/carvamo-lejek"'
           "${SCP[@]}" "/tmp/$GITHUB_SHA.tgz" "$HOST:carvamo-lejek/$GITHUB_SHA.tgz"
           "${SCP[@]}" services/lejek/deploy.sh "$HOST:carvamo-lejek/deploy-$GITHUB_SHA.sh"
-          "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
+          printf '%s\n' "$GIPHY_API_KEY" | "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
   dns:
     needs: deploy
     runs-on: ubuntu-24.04

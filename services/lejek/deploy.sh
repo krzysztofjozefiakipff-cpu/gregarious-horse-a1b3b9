@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 release="$1"
+if [ ! -t 0 ]; then IFS= read -r GIPHY_API_KEY || true; fi
+export GIPHY_API_KEY
 [[ "$release" =~ ^[0-9a-f]{40}$ ]]
 test "$(id -un)" = carvamo-deploy
 proxy=carvamo-preview-web
@@ -24,7 +26,7 @@ fi
 run_service() {
   local deployed_image="$1"
   docker run -d --name "$service" --label com.carvamo.role=lejek --restart unless-stopped \
-    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" --read-only --tmpfs /tmp:rw,noexec,nosuid \
+    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY --read-only --tmpfs /tmp:rw,noexec,nosuid \
     --security-opt no-new-privileges --cap-drop ALL -v carvamo_lejek_data:/data "$1" >/dev/null
 }
 if [ -n "$old_image" ]; then docker rm -f "$service" >/dev/null; fi

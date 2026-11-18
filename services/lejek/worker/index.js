@@ -58,7 +58,7 @@ async function handle(request, env) {
     const asset = path==='/'?'/daily.html':path;
     if (request.method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});
     return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8',
-      'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'"}});
+      'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; object-src 'none'; base-uri 'none'; form-action 'self'"}});
   }
   const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
   if (!email || !request.headers.get('oai-authenticated-user-id')) return json({error:'Zaloguj się do konta CARVAMO.'},401);
@@ -95,10 +95,14 @@ async function handle(request, env) {
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
       const sidebarMode=sidebar?.mode??'cause';
+      const pref=await db.prepare('SELECT enabled FROM giphy_preference WHERE id=1').bind().first();
+      const trending=sidebarMode==='meme'&&Boolean(env.GIPHY_API_KEY)&&(pref?.enabled??1);
       const meme=sidebarMode==='meme'?await memeFor(db,user,today):null;
+      const assignedGif=trending&&personal?await db.prepare('SELECT gif_id FROM giphy_daily WHERE person=? AND day=?').bind(user.id,today).first():null;
+      const giphy=trending?{key:env.GIPHY_API_KEY,id:assignedGif?.gif_id??null}:null;
       const memeLiked=personal&&meme?Boolean(await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()):false;
       const memeStories=user.role==='admin'?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending' ORDER BY id LIMIT 50"):[];
-      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,today});
+      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
@@ -147,10 +151,28 @@ async function handle(request, env) {
       :await db.prepare("UPDATE meme_stories SET status='rejected' WHERE id=? AND status='pending'").bind(body.id).run();
     return change.meta.changes?json({ok:true}):json({error:'Historia jest już rozpatrzona.'},409);
   }
+  if (path==='/api/giphy-assign' && user.role==='seller' && env.GIPHY_API_KEY) {
+    const ids=body.ids;
+    if (!Array.isArray(ids)||ids.length<1||ids.length>50||!ids.every(id=>typeof id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(id)))
+      return json({error:'Brak odpowiednich GIF-ów.'},400);
+    const day=localDay();
+    await db.prepare(`
+      INSERT INTO giphy_daily(person,salon,day,gif_id)
+      SELECT ?,?,?,candidate.value FROM json_each(?) AS candidate
+      WHERE NOT EXISTS (SELECT 1 FROM giphy_daily WHERE salon=? AND day=? AND gif_id=candidate.value)
+      ORDER BY candidate.key LIMIT 1
+      ON CONFLICT(person,day) DO NOTHING
+    `).bind(user.id,user.salon,day,JSON.stringify(ids),user.salon,day).run();
+    const assigned=await db.prepare('SELECT gif_id FROM giphy_daily WHERE person=? AND day=?').bind(user.id,day).first();
+    return json({id:assigned?.gif_id??null});
+  }
   if (path==='/api/sidebar' && user.role==='admin') {
-    if (!['cause','meme'].includes(body.mode)) return json({error:'Wybierz zawartość sekcji.'},400);
-    await db.prepare('INSERT INTO dashboard_sidebar VALUES (1,?) ON CONFLICT(id) DO UPDATE SET mode=excluded.mode')
-      .bind(body.mode).run();
+    if (!['cause','meme','giphy'].includes(body.mode)||(body.mode==='giphy'&&!env.GIPHY_API_KEY))
+      return json({error:'Wybierz dostępną zawartość sekcji.'},400);
+    await db.batch([
+      db.prepare('INSERT INTO dashboard_sidebar VALUES (1,?) ON CONFLICT(id) DO UPDATE SET mode=excluded.mode').bind(body.mode==='giphy'?'meme':body.mode),
+      db.prepare('INSERT INTO giphy_preference VALUES (1,?) ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled').bind(Number(body.mode==='giphy'))
+    ]);
     return json({ok:true});
   }
   if (path==='/api/cause' && user.role==='admin') {

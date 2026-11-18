@@ -8,9 +8,10 @@ const origin = 'https://lejek.carvamo.com';
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
+const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
 const DB = {
   prepare(sql) {
     return {bind(...args) {
@@ -48,7 +49,7 @@ async function handle(request) {
   const path=new URL(request.url).pathname;
   if (path==='/healthz' && request.method==='GET') {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
-    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local'});
+    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing'});
   }
   if (path==='/login') {
     if (request.method==='GET') return loginForm();
@@ -88,7 +89,7 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  return worker.fetch(new Request(request,{headers:forwarded}),{DB});
+  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY});
 }
 createServer(async (req,res)=>{
   try {

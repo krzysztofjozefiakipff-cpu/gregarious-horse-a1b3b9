@@ -104,6 +104,61 @@ function renderQuote(text) {
   requestAnimationFrame(frame);
 }
 
+let giphyRequest;
+function giphyResults(config,assignedId) {
+  const params=new URLSearchParams({
+    key:config.key,client_key:'lejek-carvamo',country:'PL',locale:'pl_PL',
+    contentfilter:'high',media_filter:'tinygif'
+  });
+  if (assignedId) params.set('ids',assignedId);
+  else params.set('limit','50');
+  const endpoint=assignedId?'posts':'featured';
+  return fetch('https://api.giphy.com/v2/'+endpoint+'?'+params,{cache:'no-store',signal:AbortSignal.timeout(6500)})
+    .then(response=>{
+      if (!response.ok) throw new Error('GIF niedostępny.');
+      return response.json();
+    }).then(({results})=>results.filter(item=>{
+      const url=URL.canParse(item?.media_formats?.tinygif?.url??'')?new URL(item.media_formats.tinygif.url):null;
+      return typeof item?.id==='string'&&url?.protocol==='https:'&&url.hostname.endsWith('.giphy.com');
+    }));
+}
+
+async function dailyGif(config,readOnly) {
+  let items=await giphyResults(config,config.id);
+  if (!config.id&&!readOnly&&items.length) {
+    const {id}=await api('/api/giphy-assign',{ids:items.map(item=>item.id)});
+    if (!id) return null;
+    if (!items.some(item=>item.id===id)) items=await giphyResults(config,id);
+    return items.find(item=>item.id===id)??null;
+  }
+  return items[0]??null;
+}
+
+function renderGif(config,readOnly) {
+  const card=$('#giphy-card');
+  const icon=$('#meme-icon');
+  const caption=$('#meme-caption');
+  card.hidden=true;
+  icon.hidden=false;
+  caption.hidden=false;
+  if (!config||matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const request=giphyRequest??=dailyGif(config,readOnly).catch(()=>null);
+  request.then(item=>{
+    if (!item||$('#meme').hidden||request!==giphyRequest) return;
+    const image=$('#giphy-image');
+    image.onload=()=>{
+      if (request!==giphyRequest||$('#meme').hidden) return;
+      $('#meme-title').textContent='Popularne na GIPHY w Polsce';
+      icon.hidden=true;
+      caption.hidden=true;
+      card.hidden=false;
+    };
+    image.onerror=()=>{card.hidden=true;};
+    image.alt=item.content_description||item.title||'GIF dnia';
+    image.src=item.media_formats.tinygif.url;
+  });
+}
+
 function renderSeller(readOnly=false) {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
@@ -146,6 +201,7 @@ function renderSeller(readOnly=false) {
     $('#meme-title').textContent=title;
     $('#meme-icon').textContent=icon;
     $('#meme-caption').textContent=caption;
+    renderGif(data.giphy,readOnly);
   }
   $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
   $('#cause-org').textContent=cause?.organization??'';
@@ -187,7 +243,8 @@ function renderAdmin() {
     form.elements.salon.replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
     if (selected) form.elements.salon.value=selected;
     renderStoryQueue();
-    $('#sidebar-settings').elements.mode.value=data.sidebarMode;
+    $('#giphy-option').disabled=!data.giphyAvailable;
+    $('#sidebar-settings').elements.mode.value=data.giphy?'giphy':data.sidebarMode;
     $('#charity').elements.month.value ||= data.today.slice(0,7);
   }
 }
@@ -228,7 +285,7 @@ function showView() {
   data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
     plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
     daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
-    sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme};
+    sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy};
   try { renderSeller(true); } finally { data=actual; }
 }
 $('#view-switch').onclick=()=>{preview=!preview;showView();};
@@ -324,6 +381,7 @@ $('#meme-form').onsubmit=async event=>{
 };
 $('#sidebar-settings').onsubmit=event=>{
   event.preventDefault();
+  giphyRequest=undefined;
   run(()=>api('/api/sidebar',{mode:event.target.elements.mode.value}));
 };
 $('#charity').onsubmit=event=>{
