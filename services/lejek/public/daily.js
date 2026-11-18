@@ -63,9 +63,208 @@ const memes = [
     "„Widziałem w ogłoszeniu, że macie czerwony”",
     "📸 🚗",
     "„Mamy”. „To dobrze. Chcę go zobaczyć, żeby się upewnić, że wolę czarny”."
+  ],
+  [
+    "„Ile pali?”",
+    "⛽",
+    "Po jeździe próbnej już wiemy. Dwie odpowiedzi: moja i ta przy wciśniętym gazie."
+  ],
+  [
+    "„Proszę zarezerwować do jutra”",
+    "📅",
+    "Jutro, któremu właśnie stuknęły trzy tygodnie."
+  ],
+  [
+    "„Na pewno nie potrzebuję automatu”",
+    "⚙️",
+    "Po jeździe: „A można wycenić mojego manuala jeszcze dzisiaj?”"
+  ],
+  [
+    "„Ja nie potrzebuję dużego bagażnika”",
+    "📦",
+    "Wyjmuje miarkę. Potem z auta psa. To pies ma decydujący głos."
+  ],
+  [
+    "„Czy dywaniki są w cenie?”",
+    "🚙",
+    "Auto za 190 tysięcy. Negocjacje stanęły na czterech kawałkach gumy."
+  ],
+  [
+    "„Biorę, jak się zmieści w garażu”",
+    "📏",
+    "Auto weszło. Teraz negocjujemy, który regał idzie na OLX."
+  ],
+  [
+    "„Jestem już pod salonem”",
+    "📍",
+    "Na mapie: owszem. Pod salonem tej samej marki, 80 kilometrów dalej."
+  ],
+  [
+    "„Proszę mi wysłać jedną ostateczną ofertę”",
+    "📩",
+    "W folderze: OSTATECZNA_7_PO_ROZMOWIE_Z_ŻONĄ.pdf."
+  ],
+  [
+    "„Zakup na firmę, dane podam później”",
+    "🧾",
+    "O 16:58: „Fakturę proszę na inną firmę. I jeszcze z innym autem”."
+  ],
+  [
+    "„Dlaczego w ogłoszeniu jest od?”",
+    "💬",
+    "„Bo to cena wersji podstawowej”. „A do ilu jest to »od«?”"
+  ],
+  [
+    "„Czy można odebrać w sobotę o ósmej?”",
+    "🗓️",
+    "„Otwieramy o dziewiątej”. „Spokojnie, przyjadę dziesięć minut wcześniej”."
+  ],
+  [
+    "„Poproszę kawę, czarną”",
+    "☕",
+    "Jedyna rzecz, której kolor ustaliliśmy na pierwszym spotkaniu."
+  ],
+  [
+    "„Jestem zdecydowany na białe”",
+    "🎨",
+    "Pewność trwała do chwili, gdy na plac wjechało grafitowe."
+  ],
+  [
+    "„To będzie drugie auto, tylko na miasto”",
+    "🏙️",
+    "Konfiguracja końcowa: 4×4, hak i felgi 20 cali."
+  ],
+  [
+    "„Przyjadę z kimś, kto się zna”",
+    "👥",
+    "Przyjechali w cztery osoby. Każda ma innego faworyta."
+  ],
+  [
+    "„Czy ubezpieczenie można policzyć osobno?”",
+    "🧮",
+    "Można. Właśnie do oferty dołączył trzeci kalkulator i wujek z PZU."
+  ],
+  [
+    "„Podjadę tylko zostawić dokumenty”",
+    "📂",
+    "Godzinę później dokumenty nadal w samochodzie. Za to znamy cenę trzech wersji."
+  ],
+  [
+    "„Czy macie to auto jeszcze na placu?”",
+    "🌨️",
+    "„Tak, właśnie je odśnieżam”. „Super, proszę wysłać zdjęcie dachu”."
+  ],
+  [
+    "„Proszę mi policzyć ratę”",
+    "💳",
+    "„Jaka wpłata własna?”. „Najlepiej żadna. I rata też możliwie żadna”."
+  ],
+  [
+    "„Mam tylko 15 minut”",
+    "⏱️",
+    "Zdążyliśmy ustalić, którą z trzech hybryd zaczniemy omawiać."
+  ],
+  [
+    "„W samochodzie nigdy nie palono”",
+    "🔍",
+    "Po otwarciu drzwi rzeczoznawca zapytał, czy aby na pewno mówimy o papierosach, a nie o ognisku."
+  ],
+  [
+    "„Proszę tylko o numer VIN”",
+    "🔢",
+    "Dziesięć minut później klient zna historię auta. Ja nadal nie znam jego imienia."
+  ],
+  [
+    "„Chcę taki jak na zdjęciu”",
+    "📸",
+    "Na zdjęciu plakat producenta. Zgadza się marka i kolor nieba."
+  ],
+  [
+    "„Kiedy wejdzie nowy model?”",
+    "📆",
+    "„Za pół roku”. „A czy na ten za pół roku jest już rabat?”"
+  ],
+  [
+    "„Nie kupuję pod wpływem emocji”",
+    "❤️",
+    "Po odpaleniu silnika: „Ma pan od razu terminal?”"
+  ],
+  [
+    "„Zależy mi na niskim spalaniu”",
+    "⛽",
+    "Pierwsze pytanie po jeździe próbnej: „A da się wyłączyć ten tryb Eco na stałe?”"
+  ],
+  [
+    "„Czy mogę wpaść bez umawiania?”",
+    "📞",
+    "Pytanie zadaje, stojąc przy moim biurku."
+  ],
+  [
+    "„Mam już kupca na swoje auto”",
+    "🔑",
+    "Kupiec chce je obejrzeć w niedzielę. Koniecznie tę, w którą nie może."
+  ],
+  [
+    "„Proszę doliczyć zimówki”",
+    "🛞",
+    "„Na felgach czy same opony?”. „Panie, żeby zimą jechało, a nie żeby było dalsze pytanie”."
+  ],
+  [
+    "„Dostanę ofertę w PDF-ie?”",
+    "📎",
+    "Dostał. Wydrukował. Zrobił zdjęcie. Odesłał na WhatsAppie z pytaniem o cenę zaznaczoną na żółto."
+  ],
+  [
+    "„Najpierw zobaczę konkurencję”",
+    "🚗",
+    "Wraca po godzinie. „Mogę jeszcze raz dostać tę kawę? Samochód biorę”."
+  ],
+  [
+    "„Czy te felgi są standardowe?”",
+    "🛞",
+    "„Opcjonalne”. „To proszę je zostawić. Tylko standardowo”."
+  ],
+  [
+    "„Dzwonię w sprawie auta z ogłoszenia”",
+    "📱",
+    "„Którego?”. „No tego, co jest na początku internetu”."
+  ],
+  [
+    "„Chcę wysoki samochód, żeby łatwo wsiadać”",
+    "🚙",
+    "Wybraliśmy SUV-a. Przetestowała mama. Ostateczną decyzję podjął próg garażu."
+  ],
+  [
+    "„Samochód ma być dla żony”",
+    "👥",
+    "Żona wybiera kolor. Mąż od pół godziny konfiguruje sobie drugi komplet felg."
+  ],
+  [
+    "„A co pan by wybrał dla siebie?”",
+    "🤔",
+    "Odpowiadam. Klient: „Rozumiem. To ja poproszę ten drugi”."
   ]
 ];
-const pageMeme=memes[Math.floor(Math.random()*memes.length)];
+let pageMeme;
+function nextMeme() {
+  const key='lejek.memes.seen.v1';
+  let seen=[];
+  try {
+    const stored=JSON.parse(localStorage.getItem(key));
+    if (Array.isArray(stored)) seen=stored;
+  } catch {}
+  let remaining=memes.filter(([title])=>!seen.includes(title));
+  if (!remaining.length) {
+    const last=seen.findLast(title=>memes.some(([candidate])=>candidate===title));
+    remaining=memes.filter(([title])=>title!==last);
+    seen=[];
+  }
+  const selection=remaining[Math.floor(Math.random()*remaining.length)];
+  try {
+    localStorage.setItem(key,JSON.stringify([...seen,selection[0]]));
+  } catch {}
+  return selection;
+}
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
 const dateLabel = (day,options={day:'numeric',month:'long'}) => new Date(day+'T12:00:00Z').toLocaleDateString('pl-PL',options);
 const weekday = day => ![0,6].includes(new Date(day+'T12:00:00Z').getUTCDay());
@@ -201,7 +400,7 @@ function renderSeller(readOnly=false) {
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
   if (showMeme) {
-    const [title,icon,caption]=pageMeme;
+    const [title,icon,caption]=pageMeme ??= nextMeme();
     $('#meme-title').textContent=title;
     $('#meme-icon').textContent=icon;
     $('#meme-caption').textContent=caption;
