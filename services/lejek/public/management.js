@@ -286,7 +286,7 @@ function renderQuarter(scope) {
   get('editPlan').disabled=!scope.length;
   return report;
 }
-const funnelGoalLabels=['Kontakty','Jazdy próbne','Oferty','Leady','Spotkania','Follow-up','Wystawione faktury','Wydania'];
+const funnelGoalLabels=['Kontakty','Jazdy próbne','Oferty','Leady','Spotkania','Follow-up','Wystawione faktury','Rejestracje'];
 function loadPlanInputs() {
   const months=quarterMonths(get('month').value);
   get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+funnelGoalLabels.map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')).join('');

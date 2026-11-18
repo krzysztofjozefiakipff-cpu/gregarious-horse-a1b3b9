@@ -74,7 +74,7 @@ const sourceDetails = {
 // Keep the existing daily row positions. Slot 3 is the retired scheduled-drive count.
 const columns = [
   [0,'Leady'],[1,'Kontakty'],[2,'Spotkania'],[4,'Jazdy próbne'],[5,'Oferty'],
-  [6,'Follow-up'],[7,'Zamówienia'],[10,'Wystawione faktury'],[8,'Wydania'],[9,'Opinie Google']
+  [6,'Follow-up'],[7,'Zamówienia'],[10,'Wystawione faktury'],[8,'Rejestracje'],[9,'Opinie Google']
 ];
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
 const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
@@ -178,7 +178,7 @@ const taskWording={
   5:['Wyślij',['ofertę','oferty','ofert']],
   6:['Zrób',['follow-up','follow-upy','follow-upów']],
   7:['Domknij',['zamówienie','zamówienia','zamówień']],
-  8:['Zrealizuj',['wydanie auta','wydania aut','wydań aut']],
+  8:['Zarejestruj',['auto','auta','aut']],
   9:['Zdobądź',['opinię w Google','opinie w Google','opinii w Google']],
   10:['Wystaw',['fakturę','faktury','faktur']]
 };
@@ -217,7 +217,7 @@ const actionsByMetric={
   6:'Wróć do wysłanych ofert i ustal z klientami następny krok.',
   7:'Skontaktuj się z klientami, którzy są najbliżej podpisania zamówienia.',
   10:'Sprawdź, które transakcje mają komplet dokumentów do wystawienia faktury.',
-  8:'Potwierdź terminy odbiorów i sprawdź gotowość aut.',
+  8:'Sprawdź dokumenty aut do rejestracji.',
   9:'Po odbiorze zaproś klientów do podzielenia się szczerą opinią.'
 };
 const belowSummaryNotes=[
