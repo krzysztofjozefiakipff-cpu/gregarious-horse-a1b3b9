@@ -143,9 +143,9 @@ async function handle(request, env) {
     if (!textValid(salon) || (user.role==='admin' && !await db.prepare('SELECT 1 FROM accounts WHERE salon=?').bind(salon).first()))
       return json({error:'Wybierz salon.'},400);
     if (path==='/api/lesson-import') {
-      if (typeof body.filename!=='string'||!/[.](pdf|docx|txt)$/i.test(body.filename)||
+      if (typeof body.filename!=='string'||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
           typeof body.file!=='string'||!body.file||body.file.length>5_592_408)
-        return json({error:'Wybierz PDF, DOCX lub TXT do 4 MB.'},400);
+        return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 4 MB.'},400);
       try {
         const lessons=lessonDrafts(await env.extractLessonText(body.filename,body.file));
         if (lessons.length) return json({lessons});
