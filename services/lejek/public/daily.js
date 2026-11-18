@@ -144,9 +144,8 @@ function renderPlans(records) {
   const customIndex={1:0,4:1,5:2,0:3,2:4,6:5,10:6,8:7};
   const legacyIndex={1:0,4:2,5:3,7:4};
   const todayFraction=(elapsed+Number(weekday(data.today)))/daysMonth;
-  const dayIndex=Math.floor(Date.parse(data.today)/86400000);
   $('#pace').hidden=false;
-  $('#pace-items').innerHTML=columns.map(([index,label])=>{
+  const metrics=columns.map(([index,label])=>{
     const actual=monthRecords.reduce((total,[,values])=>{
       const matrix=values[5];
       return total+(Array.isArray(matrix)
@@ -159,15 +158,73 @@ function renderPlans(records) {
     const target=index===9?reviewTarget:index===7?(monthPlan??null):(custom[customIndex[index]]??defaultTarget);
     const goal=target==null?null:Math.round(target*todayFraction);
     const delta=goal==null?null:actual-goal;
+    return {index,label,actual,target,goal,delta};
+  });
+  $('#pace-items').innerHTML=metrics.map(({label,actual,target,goal,delta})=>{
     const style=delta<0?'behind':delta>0?'ahead':'';
     const status=delta==null?'Brak celu':delta<0?'Brakuje '+(-delta):delta>0?'Ponad planem o '+delta:'Zgodnie z planem';
-    const notes=index===9
-      ?(delta<0?reviewNotes.below:delta>0?reviewNotes.above:reviewNotes.on)
-      :(delta<0?belowPlanNotes[label]:delta>0?abovePlanNotes:null);
-    const note=delta!=null&&notes?.length?'<small class="pace-note'+(delta<0?' pace-note-behind':'')+'">'+notes[(dayIndex+index*7)%notes.length]+'</small>':'';
     return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
-      '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+note+'</div>';
+      '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+'</div>';
   }).join('');
+  renderMotivator(metrics,data.today);
+}
+
+const actionsByMetric={
+  0:'Wróć do nowych zapytań i uzupełnij leady.',
+  1:'Oddzwoń najpierw do klientów, którzy czekają na odpowiedź.',
+  2:'Zaproponuj zainteresowanym klientom konkretną godzinę spotkania.',
+  4:'Potwierdź z klientami terminy jazd i przygotuj auta.',
+  5:'Dokończ oferty dla klientów najbliżej decyzji i wyślij je.',
+  6:'Wróć do wysłanych ofert i ustal z klientami następny krok.',
+  7:'Skontaktuj się z klientami, którzy są najbliżej podpisania zamówienia.',
+  10:'Sprawdź, które transakcje mają komplet dokumentów do wystawienia faktury.',
+  8:'Potwierdź terminy odbiorów i sprawdź gotowość aut.',
+  9:'Po odbiorze zaproś klientów do podzielenia się szczerą opinią.'
+};
+const belowSummaryNotes=[
+  'Tu lejek włączył hamulec. Zacznij od pierwszego kroku poniżej.',
+  'Tu mamy korek. Najpierw odblokuj ten odcinek.',
+  'Temat nie zniknie po odświeżeniu raportu. Jeden konkretny ruch będzie lepszy.',
+  'Tu warto wrzucić bieg. Rozgrzewkę mamy już za sobą.'
+];
+
+function renderMotivator(metrics,day) {
+  const dayIndex=Math.floor(Date.parse(day)/86400000);
+  const ranked=metrics.filter(metric=>metric.goal>0)
+    .sort((a,b)=>b.actual/b.goal-a.actual/a.goal||b.delta-a.delta);
+  const strongest=ranked[0];
+  const gaps=ranked.filter(metric=>metric.delta<0).reverse();
+  const weakest=gaps[0]??ranked.at(-1);
+  const percent=metric=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(100*metric.actual/metric.goal)+'% celu na dziś';
+  const best=$('#motivation-best');
+  const low=$('#motivation-low');
+  best.hidden=!strongest||strongest===weakest&&strongest.delta<0;
+  low.hidden=!weakest||weakest===strongest&&weakest.delta>=0;
+  if (!best.hidden) {
+    const notes=strongest.index===9?reviewNotes.above:abovePlanNotes;
+    const note=strongest.delta>0?notes[dayIndex%notes.length]
+      :strongest.delta===0?'Tu jesteś na planie. Nawigacja nie musi przeliczać trasy.'
+      :'Tu jesteś najbliżej celu. Silnik pracuje, jeszcze kawałek drogi.';
+    best.textContent='Najmocniejszy punkt · '+strongest.label+' · '+percent(strongest)+'. '+note;
+  }
+  if (!low.hidden) {
+    const notes=weakest.index===9?reviewNotes.below:(belowPlanNotes[weakest.label]??belowSummaryNotes);
+    const note=weakest.delta<0?notes[dayIndex%notes.length]:'Tu masz najmniejszy zapas. Trzymaj tempo, a kawa może zostać w kubku.';
+    low.textContent=(weakest.delta<0?'Najdalej od celu':'Najmniejszy zapas')+' · '+weakest.label+' · '+percent(weakest)+'. '+note;
+  }
+  const list=$('#motivation-actions');
+  list.replaceChildren();
+  for (const metric of gaps.slice(0,3)) {
+    const li=document.createElement('li');
+    const head=document.createElement('strong');
+    head.textContent=metric.label+' · brakuje '+(-metric.delta);
+    li.append(head,' — '+actionsByMetric[metric.index]);
+    list.append(li);
+  }
+  const message=$('#motivation-message');
+  message.textContent=!ranked.length?'Ustal z kierownikiem cele, żeby Lejek mógł wskazać priorytety.'
+    :!gaps.length?'Dziś wszystkie mierzone obszary są na planie. Dobra robota — dopij kawę i utrzymaj tempo.'
+    :gaps.length>3?'Zacznij od tych trzech. Pozostałe braki widać w zestawieniu powyżej.':'Zacznij od pierwszego punktu i odhaczaj kolejne.';
 }
 
 function renderQuote(text) {

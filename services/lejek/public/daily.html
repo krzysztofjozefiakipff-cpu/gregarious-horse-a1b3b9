@@ -51,6 +51,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #seller-ranking{margin-top:12px;font-weight:750;color:#17336e}#salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
 .management-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px}.management-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:750}.management-nav a[aria-current=page]{background:var(--blue);color:white}.management-nav+section h1,#administration-view h1{margin-bottom:9px}
 #pace-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}#pace-items .pace-item{display:grid;align-content:start;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:white}#pace-items .pace-count{font-size:1.2rem}.pace-month{color:var(--muted)}
+#motivation{margin-top:14px;padding:12px;border:1px solid #cad9ff;border-radius:10px;background:#f3f6ff}#motivation h3{margin:0 0 8px;font-size:1.08rem}#motivation ol{margin:10px 0;padding-inline-start:23px}#motivation ol:empty{display:none}#motivation li+li{margin-top:6px}#motivation-message{margin-top:8px}
 </style>
 </head>
 <body>
@@ -76,6 +77,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań do dziś</h2><p>Wykonano od początku miesiąca / cel narastająco do dziś.</p></div>
   <div id="pace-items"></div>
+  <section id="motivation" aria-labelledby="motivation-title">
+    <h3 id="motivation-title">Podsumowanie i następny krok</h3>
+    <p id="motivation-best" class="pace-note" hidden></p>
+    <p id="motivation-low" class="pace-note pace-note-behind" hidden></p>
+    <ol id="motivation-actions"></ol>
+    <p id="motivation-message"></p>
+  </section>
 
 </section>
 <form id="entry"><div class="heading"><h2>Wyniki dzienne</h2><strong id="entry-date"></strong></div>
