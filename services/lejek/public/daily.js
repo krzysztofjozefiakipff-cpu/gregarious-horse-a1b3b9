@@ -97,9 +97,7 @@ function pluralForm(count,forms) {
 function renderPlans(records) {
   const [year,month]=data.today.split('-').map(Number);
   const monthKey=data.today.slice(0,7);
-  const quarter=Math.floor((month-1)/3);
   const monthEnd=monthStart(year,month);
-  const quarterEnd=monthStart(year,quarter*3+3);
   const monthPlan=data.plans.find(row=>row.month===monthKey)?.target;
   const quarterPlan=data.plans.length===3?data.plans.reduce((total,row)=>total+row.target,0):null;
   const sales=entries=>entries.reduce((total,[,values])=>total+(values[4]??0),0);
@@ -107,12 +105,12 @@ function renderPlans(records) {
   const monthRecords=toDate.filter(([day])=>day.startsWith(monthKey));
   const monthSales=sales(monthRecords);
   const quarterSales=sales(toDate);
-  const monthGap=monthPlan==null?0:Math.max(0,monthPlan-monthSales);
-  const quarterGap=quarterPlan==null?0:Math.max(0,quarterPlan-quarterSales);
-  const daysLeft=Math.max(1,remainingDays(data.today,monthEnd));
-  const salesGoal=monthPlan==null&&quarterPlan==null?null:Math.ceil(Math.max(monthGap/daysLeft,quarterGap/Math.max(1,remainingDays(data.today,quarterEnd))));
+  const daysLeft=remainingDays(data.today,monthEnd);
+  const isWorkday=weekday(data.today)&&!['leave','training'].includes(data.personal.exceptions[data.today]);
   const current=records[data.today]??[];
-  const cards=[['Dzisiaj',current[4]??0,salesGoal==null?null:salesGoal+(current[4]??0)],['Miesiąc',monthSales,monthPlan],['Kwartał',quarterSales,quarterPlan]];
+  const todayOrders=activityCount(current,7);
+  const orderGoal=dailyTarget(monthPlan,monthSales-todayOrders,daysLeft,isWorkday);
+  const cards=[['Dzisiaj',todayOrders,orderGoal],['Miesiąc',monthSales,monthPlan],['Kwartał',quarterSales,quarterPlan]];
   $('#cards').innerHTML=cards.map(([name,value,target])=>{
     const gap=target==null?null:target-value;
     return '<section><span>'+name+'</span><strong>'+value+' / '+(target??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
@@ -136,7 +134,9 @@ function renderPlans(records) {
     const target=index===9?reviewTarget:index===7?(monthPlan??null):(custom[customIndex[index]]??defaultTarget);
     const goal=target==null?null:Math.round(target*todayFraction);
     const delta=goal==null?null:actual-goal;
-    return {index,label,actual,target,goal,delta};
+    const doneToday=activityCount(current,index);
+    const todayTarget=dailyTarget(target,actual-doneToday,daysLeft,isWorkday);
+    return {index,label,actual,target,goal,delta,doneToday,todayTarget};
   });
   $('#pace-items').innerHTML=metrics.map(({label,actual,target,goal,delta})=>{
     const style=delta<0?'behind':delta>0?'ahead':'';
@@ -144,7 +144,7 @@ function renderPlans(records) {
     return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
       '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+'</div>';
   }).join('');
-  renderTodayTasks(metrics,current,data.previousDaily,salesGoal,daysLeft);
+  renderTodayTasks(metrics,data.previousDaily);
   renderMotivator(metrics,data.today);
 }
 
@@ -169,29 +169,29 @@ const taskWording={
   10:['Wystaw',['fakturę','faktury','faktur']]
 };
 
-function renderTodayTasks(metrics,current,previous,salesGoal,daysLeft) {
-  const previousOffers=previous?activityCount(JSON.parse(previous.counters),5):0;
-  const followups=Math.max(0,previousOffers-activityCount(current,6));
-  const tasks=metrics.flatMap(({index,actual,target,goal})=>{
-    const todayCount=activityCount(current,index);
-    const remaining=target==null?0:Math.max(0,target-actual);
-    const dailyShare=Math.max(0,Math.ceil((remaining+todayCount)/daysLeft)-todayCount);
-    const planGap=index===7?(salesGoal??0):Math.min(remaining,Math.max(dailyShare,(goal??0)-actual));
-    const gap=index===6?Math.max(planGap,followups):planGap;
-    if (!gap) return [];
+function dailyTarget(monthTarget,doneBeforeToday,daysLeft,isWorkday) {
+  if (monthTarget==null) return null;
+  return isWorkday?Math.ceil(Math.max(0,monthTarget-doneBeforeToday)/Math.max(1,daysLeft)):0;
+}
+
+function renderTodayTasks(metrics,previous) {
+  const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
+  const hasPlan=metrics.some(({target})=>target!=null);
+  $('#tasks').innerHTML=tasks.length?tasks.map(({index,actual,target,doneToday,todayTarget})=>{
     const [verb,forms]=taskWording[index];
-    const note=index===6&&followups
-      ?'Wróć do ofert z '+dateLabel(previous.day)+'. Sprawdź, z którymi klientami trzeba się jeszcze skontaktować.'+
-        (planGap>followups?' Pozostałe rozmowy uzupełnią dzisiejszy plan.':'')
-      :index===7?'Tempo potrzebne do realizacji planu zamówień.'
-      :'Plan miesiąca: '+actual+' z '+target+'.';
-    return [{verb,forms,gap,note,priority:index===6&&followups?0:1}];
-  }).sort((a,b)=>a.priority-b.priority);
-  const hasPlan=salesGoal!=null||metrics.some(({target})=>target!=null);
-  $('#tasks').innerHTML=tasks.length?tasks.map(({verb,forms,gap,note})=>
-    '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
-    '<small class="task-note">'+note+'</small></li>').join(''):
-    '<li class="task-message">'+(hasPlan?'Brawo! Dzisiejsze cele są zrealizowane.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</li>';
+    const gap=todayTarget-doneToday;
+    return '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
+      '<small class="task-note">Dziś: '+doneToday+' z '+todayTarget+' · Miesiąc: '+actual+' z '+target+'</small></li>';
+  }).join(''):'<li class="task-message">'+(hasPlan?'Na dziś nie zostały żadne zadania z planu.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</li>';
+
+  const previousOffers=previous?activityCount(JSON.parse(previous.counters),5):0;
+  const followups=metrics.find(({index})=>index===6);
+  const remaining=Math.max(0,previousOffers-(followups?.doneToday??0));
+  const reminder=$('#followup-reminder');
+  reminder.hidden=!remaining;
+  reminder.textContent=remaining
+    ?'Wróć do ofert z '+dateLabel(previous.day)+'. Do sprawdzenia: '+remaining+'. Rozmowy zaliczają się do planu follow-upów.'
+    :'';
 }
 
 const actionsByMetric={
