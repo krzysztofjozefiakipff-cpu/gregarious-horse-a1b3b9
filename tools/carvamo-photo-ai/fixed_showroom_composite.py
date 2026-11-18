@@ -45,11 +45,15 @@ def main():
   chosen=[(xx,yy) for xx,yy in samples if yy>=cutoff]
   return (round(sum(xx for xx,yy in chosen)/len(chosen)),max(yy for xx,yy in chosen))
  bands={"front":[(.08,.25),(.50,.70),(.88,.99)],"rear":[(.02,.17),(.30,.51),(.78,.96)],"left":[(.12,.38),(.67,.94)],"right":[(.12,.38),(.67,.94)]}
+ # Three-quarter photos have two reliable visible wheel regions. The outer
+ # third silhouette band usually samples a bumper/body corner, not a tire;
+ # its artificially high contact forced extreme downscaling.
+ selected_bands=bands[a.view][:2] if a.camera_angle=="three_quarter" else bands[a.view]
  contacts_local=[]
- for band in bands[a.view]:
+ for band in selected_bands:
   try:contacts_local.append(tire_contact(*band))
   except ValueError:
-   if len(bands[a.view])<=2:raise
+   if len(selected_bands)<=2:raise
    pass
  calibrated=False
  if a.calibration:
@@ -63,6 +67,7 @@ def main():
   for xx,yy in contacts_local:
    if alpha.getpixel((xx,yy))<80:raise ValueError("Calibrated contact outside vehicle alpha")
   calibrated=True
+ if len(contacts_local)<2:raise ValueError("At least two wheel contacts are required")
  if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
  # Fit the visible wheel geometry into the actual floor plane before placement.
  # A distant wheel in a 45-degree photo can be far above the lowest alpha pixel.
@@ -191,9 +196,9 @@ def main():
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"floor_contact_projection_v6","view":a.view,
  "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"visual_qa_required_for_upscaling":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"camera_angle_aware_floor_projection","camera_angle":a.camera_angle,"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
- "frontal_reflected_side_wheels_synthesized":False,"wheel_reflection_type":"source_pixels_only","wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
- "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
+ "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.camera_angle=="straight" and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"camera_angle_aware_floor_projection","camera_angle":a.camera_angle,"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
+ "frontal_reflected_side_wheels_synthesized":False,"wheel_reflection_type":"source_pixels_only","wheel_ground_contact_verified":calibrated and (len(points)==3 if a.camera_angle=="straight" and a.view in ("front","rear") else True),"logo_visibility_verified":False,
+ "notes":["Three-quarter views exclude misleading outer bumper silhouette contact","Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
  print("Candidate:",candidate,"contacts:",points,"publication blocked pending visual QA")
 if __name__=="__main__":main()
