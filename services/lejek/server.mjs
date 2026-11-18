@@ -1,3 +1,4 @@
+import {randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -29,14 +30,20 @@ const DB = {
 };
 const cookie='__Host-lejek';
 const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
-const loginPage=`<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logowanie · Lejek</title><style>body{font:18px system-ui;background:#f5f4ef;color:#23392f}main{max-width:390px;margin:12vh auto;padding:22px}input,button{display:block;width:100%;box-sizing:border-box;font:inherit;padding:10px;margin:4px 0 16px}button{background:#284d3a;color:white;border:0;border-radius:8px}</style><main><h1>Zaloguj się do lejka</h1><form method="post" action="/login"><label>E-mail <input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Hasło <input name="password" type="password" autocomplete="current-password" maxlength="512" required></label><button>Zaloguj się</button></form>ERROR</main></html>`;
+const loginPage=`<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logowanie · Lejek</title><style>body{font:18px system-ui;background:#f5f4ef;color:#23392f}main{max-width:390px;margin:12vh auto;padding:22px}input,button{display:block;width:100%;box-sizing:border-box;font:inherit;padding:10px;margin:4px 0 16px}button{background:#284d3a;color:white;border:0;border-radius:8px}</style><main><h1>Zaloguj się do lejka</h1><form method="post" action="/login"><input type="hidden" name="csrf" value="LOGIN_CSRF"><label>E-mail <input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Hasło <input name="password" type="password" autocomplete="current-password" maxlength="512" required></label><button>Zaloguj się</button></form>ERROR</main></html>`;
 const headers = {'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow','Referrer-Policy':'no-referrer'};
 const reply = (text,status=200,extra={})=>new Response(text,{status,headers:{...headers,...extra}});
 const redirect=(to,extra={})=>reply(null,303,{Location:to,...extra});
-const html=(error='')=>reply(loginPage.replace('ERROR',error?'<p role="alert">'+error+'</p>':''),error?401:200,{
-  'Content-Type':'text/html; charset=utf-8',
-  'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
-});
+const loginCsrfCookie='__Host-lejek-login';
+function loginForm(error='',status=200) {
+  const csrf=randomBytes(32).toString('hex');
+  const page=loginPage.replace('LOGIN_CSRF',csrf).replace('ERROR',error?'<p role="alert">'+error+'</p>':'');
+  return reply(page,status,{
+    'Content-Type':'text/html; charset=utf-8',
+    'Set-Cookie':loginCsrfCookie+'='+csrf+cookieOptions+'; Max-Age=1800',
+    'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
+  });
+}
 async function handle(request) {
   const path=new URL(request.url).pathname;
   if (path==='/healthz' && request.method==='GET') {
@@ -44,16 +51,21 @@ async function handle(request) {
     return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local'});
   }
   if (path==='/login') {
-    if (request.method==='GET') return html();
-    if (request.method!=='POST'||request.headers.get('Origin')!==origin) return reply('Niedozwolone żądanie',403);
+    if (request.method==='GET') return loginForm();
+    if (request.method!=='POST') return reply('Niedozwolone żądanie',405,{Allow:'GET, POST'});
     const form=new URLSearchParams(await request.text());
+    const csrf=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek-login=([a-f0-9]{64})(?:;|$)/)?.[1];
+    const source=request.headers.get('Origin');
+    if (!csrf || csrf!==form.get('csrf') || (source && source!=='null' && source!==origin)) {
+      return loginForm('Formularz wygasł. Zaloguj się ponownie.',403);
+    }
     const email=form.get('email')??'', password=form.get('password')??'';
-    if (!email||!password||email.length>254||password.length>512) return html('Sprawdź e-mail i hasło.');
+    if (!email||!password||email.length>254||password.length>512) return loginForm('Sprawdź e-mail i hasło.',401);
     const result=await fetch(accounts+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email,password}),signal:AbortSignal.timeout(8000)});
-    if (result.status===429) return html('Zbyt wiele prób. Spróbuj później.');
+    if (result.status===429) return loginForm('Zbyt wiele prób. Spróbuj później.',429);
     if (result.status>=500) return reply('Logowanie chwilowo niedostępne',503);
-    if (!result.ok) return html('Sprawdź e-mail i hasło.');
+    if (!result.ok) return loginForm('Sprawdź e-mail i hasło.',401);
     const {token}=await result.json();
     if (typeof token!=='string'||!/^[\w.-]+$/.test(token)) return reply('Logowanie chwilowo niedostępne',503);
     return redirect('/daily.html',{'Set-Cookie':cookie+'='+token+cookieOptions+'; Max-Age=28800'});
