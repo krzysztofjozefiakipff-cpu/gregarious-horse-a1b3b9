@@ -45,12 +45,12 @@ async function refresh() {
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
     get('roleLabel').textContent=get('role').selectedOptions[0].textContent;
-    get('accountPanel').hidden=data.role==='seller';
     document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
     get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola'],accounts.map(a=>[escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role]]));
     updateFilters(prior);
     if(firstView && data.role==='seller') { location.replace('/daily.html'); return; }
     firstView=false;
+    syncDetailedSection();
     get('dashboard').hidden=false;
     get('status').textContent=people.length?'':'Brak przypisanych handlowców.';
   } catch(error) {
@@ -341,10 +341,26 @@ get('accountForm').onsubmit=event=>saveForm(event,'/api/accounts',
 const benchmarks=benchmarksFromWorkbook.map(([contact,visit,drive,offer,follow,close],i)=>
   [sources[i],pct(contact,1),i===0?'—':pct(visit,1),pct(offer,1),pct(follow,1),pct(close,1)]);
 get('bench').innerHTML=table(['Źródło','Kontakt / lead','Odbyte / kontakt','Oferta / kontakt','Follow-up / oferta','Zamówienie / lead'],benchmarks);
-document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>{
-  document.querySelectorAll('nav button').forEach(b=>{b.setAttribute('aria-selected',String(b===button));get(b.dataset.tab).hidden=b!==button && !(get('role').value==='seller' && button.dataset.tab==='journey' && b.dataset.tab==='plan');});
-  get('heading').textContent=button.dataset.tab==='overview'?'Lejek sprzedaży':button.textContent;
-}));
+const reportTabs=Array.from(document.querySelectorAll('#report-tabs button'));
+let selectedReport='overview';
+function syncDetailedSection() {
+  const administration=location.hash==='#administracja'&&get('role').value!=='seller';
+  get('report-tabs').hidden=administration;
+  get('accountPanel').hidden=!administration;
+  get('detail-performance').setAttribute('aria-current',administration?'false':'page');
+  get('detail-admin').setAttribute('aria-current',administration?'page':'false');
+  for (const button of reportTabs) {
+    const active=button.dataset.tab===selectedReport;
+    button.setAttribute('aria-selected',String(active));
+    get(button.dataset.tab).hidden=administration||!active;
+  }
+  get('heading').textContent=administration?'Panel administracyjny':'Wykonanie planu';
+}
+for (const button of reportTabs) button.addEventListener('click',()=>{
+  selectedReport=button.dataset.tab;
+  syncDetailedSection();
+});
+window.addEventListener('hashchange',syncDetailedSection);
 const calc=()=>{
   const target=get('target'), rate=get('rate');
   get('needed').textContent=target.value && rate.value && target.validity.valid && rate.validity.valid ? nf.format(Math.ceil(target.valueAsNumber*100/rate.valueAsNumber)) : '—';

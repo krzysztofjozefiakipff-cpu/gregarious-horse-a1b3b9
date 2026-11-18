@@ -385,9 +385,20 @@ function renderSalonSummary() {
   if (!results.children.length) results.textContent='Brak przypisanych salonów.';
 }
 
+function selectManagementView() {
+  const administration=location.hash==='#administracja';
+  $('#performance-view').hidden=administration;
+  $('#administration-view').hidden=!administration;
+  $('#management-performance').setAttribute('aria-current',administration?'false':'page');
+  $('#management-admin').setAttribute('aria-current',administration?'page':'false');
+}
+window.addEventListener('hashchange',selectManagementView);
+
 function renderAdmin() {
   $('#dealer').textContent='Panel salonu';
   $('#admin').hidden=false;
+  selectManagementView();
+  $('#management-team-link').textContent=data.role==='group'?'Konta zespołu':'Konta zespołu i ustawienia planów';
   renderSalonSummary();
   $('#group-editor').hidden=data.role!=='admin';
   $('#group-list').textContent=data.groups.map(group=>group.name+' · '+(group.salons??'').replaceAll('\n',', ')+' · '+(group.heads??'').replaceAll('\n',', ')).join(' / ');

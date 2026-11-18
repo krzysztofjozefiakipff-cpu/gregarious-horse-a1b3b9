@@ -49,6 +49,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #lesson-topic{white-space:pre-wrap;overflow-wrap:anywhere}#lesson-drafts fieldset{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:8px}#lesson-drafts textarea{resize:vertical}
 @media(max-width:850px){#daily-lesson{margin:0}}
 #seller-ranking{margin-top:12px;font-weight:750;color:#17336e}#salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
+.management-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px}.management-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:750}.management-nav a[aria-current=page]{background:var(--blue);color:white}.management-nav+section h1,#administration-view h1{margin-bottom:9px}
 </style>
 </head>
 <body>
@@ -107,7 +108,20 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <p id="meme-status" role="status"></p></section></div>
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></aside>
 </div>
-<section id="admin" hidden><h1>Panel salonu</h1><p><a href="/index.html">Plany, wyniki i konta handlowców</a></p><div id="team"></div><section id="salon-summary"><h2>Realizacja planów zamówień</h2><div id="salon-results"></div></section>
+<section id="admin" hidden>
+<nav class="management-nav" aria-label="Zarządzanie salonem">
+  <a href="#wykonanie" id="management-performance">Wykonanie planu</a>
+  <a href="#administracja" id="management-admin">Panel administracyjny</a>
+</nav>
+<section id="performance-view">
+  <h1>Wykonanie planu</h1>
+  <p id="team"></p>
+  <section id="salon-summary"><h2>Realizacja planów zamówień</h2><div id="salon-results"></div></section>
+  <p><a href="/index.html">Szczegółowe wyniki i raport kwartalny</a></p>
+</section>
+<section id="administration-view" hidden>
+<h1>Panel administracyjny</h1>
+<p><a id="management-team-link" href="/index.html#administracja">Konta zespołu i ustawienia planów</a></p>
 <div id="absence-panel"><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div></div>
 <form id="group-editor" hidden><h2>Grupy dealerskie</h2>
 <p>Dodaj grupę lub przypisz do istniejącej grupy kolejne salony i szefa.</p>
@@ -130,7 +144,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <form id="brand"><h2>Dane dealera</h2><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form>
 <form id="sidebar-settings"><h2>Co pokazać handlowcom?</h2><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Losowy mem</option><option id="giphy-option" value="giphy">Popularne GIF-y z Polski (GIPHY)</option></select></label><button>Zapisz wybór</button></form>
 <form id="charity"><h2>Cel miesiąca</h2><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form>
-</div></section>
+</div></section></section>
 </main>
 <footer><strong>Bieg Wyżej</strong><form method="post" action="/logout"><button class="secondary">Wyloguj się</button></form></footer>
 <script src="workbook-plan.js"></script><script src="daily.js"></script>
