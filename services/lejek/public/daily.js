@@ -56,7 +56,13 @@ const abovePlanNotes = [
   "Prośba o dzień wolny właśnie dostała solidne uzasadnienie."
 ];
 const $ = selector => document.querySelector(selector);
-const sources = ['Salon (WALK)','Facebook','WWW','Karta kontaktu','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','VEHIS i inne portale','Serwis','Galerie','Targi'];
+const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi'];
+const sourceDetails = {
+  0:'Klient przyszedł do salonu bez umówienia',
+  2:'E-mail lub formularz z naszej strony',
+  3:'Karta kontaktu lub telefon do salonu',
+  8:'VEHIS i inne portale brokerskie'
+};
 // Keep the existing daily row positions. Slot 3 is the retired scheduled-drive count.
 const columns = [
   [0,'Leady'],[1,'Kontakty'],[2,'Spotkania'],[4,'Jazdy próbne'],[5,'Oferty'],
@@ -410,7 +416,8 @@ function renderSeller(readOnly=false) {
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(([,name])=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
   const previousSource=$('#entry-grid').dataset.day===day?Number(sourceSelect.value):0;
   $('#entry-grid').dataset.day=day;
-  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+'</th>'+columns.map(([c,label])=>
+  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
+    (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
     '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
