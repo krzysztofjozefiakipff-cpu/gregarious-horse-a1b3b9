@@ -25,10 +25,10 @@ def main():
  bb=source.getchannel("A").point(lambda v:255 if v>=32 else 0).getbbox()
  if not bb:raise ValueError("Missing vehicle transparency")
  car=source.crop(bb)
- target_width=.76 if a.camera_angle=="side" or a.view in ("left","right") else (.74 if a.camera_angle=="three_quarter" else .63)
- scale=min(W*target_width/car.width,H*(.59 if a.view in ("left","right") else .61)/car.height)
- # Never upscale the source cutout: synthetic sharpening cannot restore detail.
- scale=min(scale,1.0)
+ target_width=.84 if a.camera_angle=="side" or a.view in ("left","right") else (.82 if a.camera_angle=="three_quarter" else .74)
+ scale=min(W*target_width/car.width,H*(.68 if a.view in ("left","right") else .70)/car.height)
+ # Permit modest upscaling for showroom framing; flag image quality for visual QA.
+ scale=min(scale,1.18)
  car=car.resize((round(car.width*scale),round(car.height*scale)),Image.Resampling.LANCZOS) if scale<.999 else car.copy()
  cw,ch=car.size;x=(W-cw)//2;alpha=car.getchannel("A")
  # Wheel regions are orientation-specific. We sample the bottom of the alpha
@@ -67,7 +67,7 @@ def main():
  # Fit the visible wheel geometry into the actual floor plane before placement.
  # A distant wheel in a 45-degree photo can be far above the lowest alpha pixel.
  floor_seam=round(H*a.floor_seam_y)
- reserve=round(H*(.075 if a.camera_angle=="three_quarter" else .11))
+ reserve=round(H*(.045 if a.camera_angle=="three_quarter" else .075))
  margin=round(H*.012)
  min_contact=min(yy for xx,yy in contacts_local)
  required_depth=ch-min_contact
@@ -190,7 +190,7 @@ def main():
  diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
  "method":"floor_contact_projection_v6","view":a.view,
- "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"vehicle_bbox":[x,y,x+cw,y+ch],
+ "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"visual_qa_required_for_upscaling":True,"vehicle_bbox":[x,y,x+cw,y+ch],
  "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"camera_angle_aware_floor_projection","camera_angle":a.camera_angle,"contact_shadow_anchored_per_wheel":True,"assumed_front_floor_y":baseline,
  "frontal_reflected_side_wheels_synthesized":False,"wheel_reflection_type":"source_pixels_only","wheel_ground_contact_verified":calibrated and (len(points)==3 if a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
