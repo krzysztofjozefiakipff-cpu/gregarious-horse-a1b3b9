@@ -1,3 +1,29 @@
+const belowPlanNotes = {
+  "Kontakty": [
+    "Telefon sam nie zadzwoni. Ma w tej sprawie bardzo konsekwentne stanowisko.",
+    "Lista kontaktów czeka. Zacznij od osoby, której obiecałeś oddzwonić.",
+    "Klient może być gotowy. Twój numer nadal ma ustawione «dzwoń pierwszy».",
+    "CRM nie gryzie. Co najwyżej przypomni, komu obiecałeś telefon.",
+    "Uwaga, na biurku wykryto sprawny telefon. Czas na pierwsze połączenie.",
+    "Na telepatię jeszcze nie ma rubryki. Zadzwoń do klienta, który czeka na odpowiedź."
+  ],
+  "Jazdy próbne": [
+    "Auto demonstracyjne ma dziś mniej ruchu niż ekspres do kawy. Umów jazdę.",
+    "Kluczyki leżą na biurku i udają wyposażenie ekspozycji. Zaproponuj klientowi termin.",
+    "Place parkingowe są świetne, ale klient nie poczuje na nich zawieszenia. Zaproś go na jazdę.",
+    "Auto zna już każdy centymetr placu. Pokaż mu kawałek drogi z klientem za kierownicą.",
+    "Tryb parkingowy opanowany do perfekcji. Czas wpisać do kalendarza jazdę próbną.",
+    "Fotel kierowcy nie przeprowadzi prezentacji sam. Zaproś klienta, żeby w nim usiadł."
+  ],
+  "Oferty": [
+    "Oferta w szkicach ma skuteczność koperty bez znaczka. Wyślij ją.",
+    "PDF sam się nie wyśle. Sprawdzał to już niejeden handlowiec.",
+    "Wersja «oferta_final» czeka na swoją premierę. Wyślij ją klientowi po ostatnim sprawdzeniu.",
+    "Kalkulator wykonał swoją część roboty. Teraz kolej na przycisk «Wyślij».",
+    "Klient prosił o konkrety. Dobra wiadomość: możesz mu je wysłać szybciej niż kalkulator się rozładuje.",
+    "Najlepszy rabat w szkicach nikogo jeszcze nie przekonał. Wyślij ofertę klientowi, który na nią czeka."
+  ]
+};
 const abovePlanNotes = [
   "Możesz iść na urlop. Kierownik pewnie poprosi tylko o datę powrotu.",
   "Zasłużyłeś na przerwę. Tym razem kawa ma szansę być wypita na ciepło.",
@@ -103,7 +129,8 @@ function renderPlans(records) {
     const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
     const status=delta<0?'Brakuje '+Math.abs(delta):delta>0?'Jesteś ponad planem o '+delta:'Zgodnie z planem';
     const dayIndex=Math.floor(Date.parse(data.today)/86400000);
-    const note=delta>0?'<small class="pace-note">'+abovePlanNotes[(dayIndex+i*7)%abovePlanNotes.length]+'</small>':'';
+    const notes=delta<0?belowPlanNotes[label]:abovePlanNotes;
+    const note=delta!==0?'<small class="pace-note'+(delta<0?' pace-note-behind':'')+'">'+notes[(dayIndex+i*7)%notes.length]+'</small>':'';
     return '<div class="pace-item"><span>'+label+' — <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+status+'</strong></span>'+note+'</div>';
   }).join('');
 }
