@@ -1,0 +1,40 @@
+name: CARVAMO wheel detector prototype QA
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - tools/carvamo-photo-ai/wheel_detector_prototype.py
+      - .github/workflows/carvamo-wheel-detector-prototype.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  wheel-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenCV and NumPy
+        run: python3 -m pip install --user opencv-python-headless numpy
+      - name: Reuse cutouts from successful previous test
+        uses: actions/download-artifact@v4
+        with:
+          name: carvamo-fixed-showroom-new-photos
+          run-id: 44252883637
+          github-token: ${{ github.token }}
+          path: wheel_qa/input
+      - name: Analyze seven original cutouts
+        run: |
+          set -euo pipefail
+          for base in IMG_9322 IMG_9321 IMG_9319 IMG_9318 IMG_9315 IMG_9314 IMG_9313; do
+            src="$(find wheel_qa/input -name "$base-cutout.png" -print -quit)"
+            test -n "$src"
+            python3 tools/carvamo-photo-ai/wheel_detector_prototype.py --vehicle "$src" --output-dir "wheel_qa/$base"
+          done
+      - name: Save visual overlays and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carvamo-wheel-detection-prototype
+          path: wheel_qa/
+          retention-days: 7
