@@ -16,6 +16,7 @@ def main():
  p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="water_mirror")
  p.add_argument("--reflection-gap",type=float,default=.025,help="Front/rear visual gap between bumper and first reflection")
  p.add_argument("--floor-seam-y",type=float,default=.705,help="Top edge of visible showroom floor as fraction of image height")
+ p.add_argument("--wheel-hints",help="JSON reviewed wheel-contact hints for this specific source image (normalized cropped cutout coordinates)")
  p.add_argument("--tilt-degrees",type=float,default=None,help="Optional verified in-plane correction, max +/- 3 degrees; otherwise conservative side-view leveling")
  p.add_argument("--ground-drop",type=float,default=.075,help="Move car and its contact-linked reflection down as a unit")
  a=p.parse_args()
@@ -68,6 +69,31 @@ def main():
   for xx,yy in contacts_local:
    if alpha.getpixel((xx,yy))<80:raise ValueError("Calibrated contact outside vehicle alpha")
   calibrated=True
+ # Source-specific wheel hints come from inspection of the actual tire pixels,
+ # not the bottom of the full silhouette (which can include bumpers, cables).
+ # They are advisory, never falsely described as geometrically verified.
+ hints_used=False
+ if a.wheel_hints:
+  hints=json.loads(Path(a.wheel_hints).read_text(encoding="utf-8"))
+  pts=hints.get("wheel_contacts")
+  if hints.get("camera_angle")!=a.camera_angle or not isinstance(pts,list) or len(pts)!=2:
+   raise ValueError("Wheel hints must match angle and contain two visible tires")
+  new_contacts=[]
+  for nx,ny in pts:
+   if not (0<=nx<=1 and 0<=ny<=1):raise ValueError("Wheel hint outside cutout")
+   tx=round(nx*(cw-1));ty=round(ny*(ch-1))
+   # Snap to the closest opaque tire edge in a small neighborhood, never
+   # relocate the contact to an unrelated bumper at another image location.
+   radius=max(5,round(ch*.035))
+   possible=[(abs(yy-ty)*2+abs(xx-tx),xx,yy)
+             for xx in range(max(0,tx-radius),min(cw,tx+radius+1))
+             for yy in range(max(0,ty-radius),min(ch,ty+radius+1))
+             if alpha.getpixel((xx,yy))>=160]
+   if not possible:raise ValueError("Wheel hint lacks nearby opaque tire pixels")
+   _,xx,yy=min(possible)
+   new_contacts.append((xx,yy))
+  contacts_local=new_contacts
+  hints_used=True
  if len(contacts_local)<2:raise ValueError("At least two wheel contacts are required")
  if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
  # Level only verified/side-view wheel baselines. In perspective views the
@@ -183,9 +209,9 @@ def main():
   marker.text((px+rr,py-rr),"Wheel "+str(idx+1),fill=(255,255,255))
  diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
- "method":"wheel_aware_conservative_tilt_v9","view":a.view,
+ "method":"visually_reviewed_tire_hints_v10","view":a.view,
  "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"visual_qa_required_for_upscaling":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.camera_angle=="straight" and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"single_uniform_compressed_mirror_clipped_to_floor","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"logo_clearance_and_visible_wheel_floor","camera_angle":a.camera_angle,"tilt_degrees_applied":round(tilt,3),"contact_shadow_anchored_per_wheel":True,"estimated_contacts_not_verified":not calibrated,"assumed_front_floor_y":baseline,
+ "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.camera_angle=="straight" and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"wheel_hints_used":hints_used,"floor_reflection":a.floor_reflection,"reflection_geometry":"single_uniform_compressed_mirror_clipped_to_floor","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"logo_clearance_and_visible_wheel_floor","camera_angle":a.camera_angle,"tilt_degrees_applied":round(tilt,3),"contact_shadow_anchored_per_wheel":True,"estimated_contacts_not_verified":not calibrated,"assumed_front_floor_y":baseline,
  "frontal_reflected_side_wheels_synthesized":False,"wheel_reflection_type":"source_pixels_only","wheel_ground_contact_verified":calibrated and (len(points)==3 if a.camera_angle=="straight" and a.view in ("front","rear") else True),"logo_visibility_verified":False,
  "notes":["Reflection follows approved JAECOO 8 soft mirror reference","Roof kept below logo; visible contacts kept on showroom floor","Three-quarter views exclude misleading outer bumper silhouette contact","Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
