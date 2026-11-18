@@ -377,17 +377,14 @@ function updateSourceStatuses() {
 sourceSelect.onchange=()=>showEntrySource(Number(sourceSelect.value));
 $('#entry-prev').onclick=()=>showEntrySource(Number(sourceSelect.value)-1);
 $('#entry-next').onclick=()=>showEntrySource(Number(sourceSelect.value)+1);
-const manuallyEditedWalkInFields=new WeakSet();
 $('#rows').addEventListener('input',event=>{
   const input=event.target;
   if (input.name==='v0_0'&&input.validity.valid) {
     const row=input.closest('tr');
     for (const name of ['v0_1','v0_2']) {
       const field=row.querySelector('[name="'+name+'"]');
-      if (!manuallyEditedWalkInFields.has(field)) field.value=input.value;
+      field.value=input.value;
     }
-  } else if (input.name==='v0_1'||input.name==='v0_2') {
-    manuallyEditedWalkInFields.add(input);
   }
   updateSourceStatuses();
 });
@@ -439,7 +436,7 @@ function renderSeller(readOnly=false) {
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);

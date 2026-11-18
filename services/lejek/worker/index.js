@@ -324,8 +324,10 @@ async function handle(request, env) {
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     const {rows}=body;
-    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))||
-        !rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
+    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
+    rows[0][1]=rows[0][0];
+    rows[0][2]=rows[0][0];
+    if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     const totals=[1,3,4,5,7].map(i=>rows.reduce((sum,row)=>sum+row[i],0));
     const written=await db.prepare("INSERT INTO daily_results SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected') ON CONFLICT(person,day) DO NOTHING")
       .bind(user.id,day,JSON.stringify([...totals,rows]),user.id,day).run();
