@@ -8,7 +8,7 @@ const textValid = value => typeof value==='string' && value.trim().length>0 && v
 async function list(db,sql,...params) { return (await db.prepare(sql).bind(...params).all()).results; }
 
 const sourceCount = 12;
-const columnCount = 10;
+const dailyRowLengths = [9,10,11];
 const workday = day => ![0,6].includes(new Date(day+'T00:00:00Z').getUTCDay());
 function daysBetween(start,end) {
   const days=[];
@@ -205,7 +205,7 @@ async function handle(request, env) {
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     const {rows}=body;
-    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&[columnCount-1,columnCount].includes(row.length)&&row.every(countValid))||
+    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))||
         !rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     const totals=[1,3,4,5,7].map(i=>rows.reduce((sum,row)=>sum+row[i],0));
     const written=await db.prepare("INSERT INTO daily_results SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected') ON CONFLICT(person,day) DO NOTHING")

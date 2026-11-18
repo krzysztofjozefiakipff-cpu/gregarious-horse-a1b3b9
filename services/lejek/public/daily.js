@@ -57,7 +57,11 @@ const abovePlanNotes = [
 ];
 const $ = selector => document.querySelector(selector);
 const sources = ['Salon (WALK)','Facebook','WWW','Karta kontaktu','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','VEHIS i inne portale','Serwis','Galerie','Targi'];
-const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne','Oferty','Follow-up','Zamówienia','Wydania','Opinie Google'];
+// Keep the existing daily row positions. Slot 3 is the retired scheduled-drive count.
+const columns = [
+  [0,'Leady'],[1,'Kontakty'],[2,'Spotkania'],[4,'Jazdy próbne'],[5,'Oferty'],
+  [6,'Follow-up'],[7,'Zamówienia'],[10,'Wystawione faktury'],[8,'Wydania'],[9,'Opinie Google']
+];
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
 const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
@@ -117,7 +121,7 @@ function renderPlans(records) {
   const targets=salesGoal?sourceTargets(salesGoal):[];
   const todayTasks=[
     {verb:'Skontaktuj się z', forms:['klientem','klientami','klientami'], note:'Zacznij od osoby, która czeka na odpowiedź.', col:1, index:0},
-    {verb:'Umów', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], note:'Zaproponuj od razu konkretny termin.', col:2, index:1},
+    {verb:'Przeprowadź', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], note:'Potwierdź termin z klientem i przygotuj auto.', col:4, index:2},
     {verb:'Wyślij', forms:['ofertę','oferty','ofert'], note:'Zacznij od klienta, który jest najbliżej decyzji.', col:5, index:3}
   ].map(task=>({...task,gap:Math.max(0,targets.reduce((sum,row)=>sum+row[task.col],0)-(current[task.index]??0))}))
     .filter(task=>task.gap>0);
@@ -288,10 +292,10 @@ function renderSeller(readOnly=false) {
   $('#save').disabled=readOnly||busy||Boolean(blocked)||locked;
   const matrix=records[day]?.[5];
   const legacy=records[day]&&!matrix;
-  $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(name=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
+  $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(([,name])=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
   const previousSource=$('#entry-grid').dataset.day===day?Number(sourceSelect.value):0;
   $('#entry-grid').dataset.day=day;
-  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+'</th>'+columns.map((label,c)=>
+  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+'</th>'+columns.map(([c,label])=>
     '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||readOnly?' disabled':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
@@ -433,7 +437,11 @@ $('#entry').onsubmit=event=>{
   event.preventDefault();
   if(data.role!=='seller') return;
   const day=editDay??data.today;
-  const rows=sources.map((_,r)=>columns.map((__,c)=>Number(event.target.elements['v'+r+'_'+c].value)));
+  const rows=sources.map((_,r)=>{
+    const row=Array(11).fill(0);
+    for (const [index] of columns) row[index]=Number(event.target.elements['v'+r+'_'+index].value);
+    return row;
+  });
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows}),day===data.today);
 };
 for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{
