@@ -71,10 +71,12 @@ function renderPlans(records) {
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
   const monthTargets=monthPlan?sourceTargets(monthPlan):[];
-  $('#pace').innerHTML=monthPlan==null?'':[['Kontakty',1,0],['Jazdy',4,2],['Oferty',5,3]].map(([label,col,i])=>{
+  $('#pace').hidden=monthPlan==null;
+  $('#pace-items').innerHTML=monthPlan==null?'':[['Kontakty',1,0],['Jazdy próbne',4,2],['Oferty',5,3]].map(([label,col,i])=>{
     const goal=Math.round(monthTargets.reduce((sum,row)=>sum+row[col],0)*(elapsed+Number(weekday(data.today)))/daysMonth);
     const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
-    return '<span>'+label+' <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+(delta>0?'+':'')+delta+'</strong></span>';
+    const status=delta<0?'Brakuje '+Math.abs(delta):delta>0?'Ponad plan o '+delta:'Zgodnie z planem';
+    return '<span>'+label+' — <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+status+'</strong></span>';
   }).join('');
 }
 
