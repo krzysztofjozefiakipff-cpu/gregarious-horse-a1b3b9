@@ -11,7 +11,7 @@ const extras = [
   'Odpowiedzi NPS','Promotorzy (9–10)','Krytycy (0–6)'
 ];
 const empty = () => fields.map(() => 0);
-let entries = {}, plans = {}, reviewPlans = {};
+let entries = {}, plans = {}, reviewPlans = {}, funnelPlans = {};
 const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const planFor = (person,month) => plans[month+'/'+people[person].id] ?? null;
 function record(person,source,month=get('month').value) {
@@ -37,14 +37,15 @@ async function refresh() {
     if(latest!==revision) return;
     const prior=get('seller').value?people[+get('seller').value]?.id:null;
     people=data.sellers;
-    salons=[...new Set(people.map(p=>p.salon))];
+    salons=data.salons.map(({salon})=>salon);
     accounts=data.accounts;
     entries=Object.fromEntries(data.results.map(r=>[[r.month,r.person,r.source].join('/'),JSON.parse(r.counters)]));
     plans=Object.fromEntries(data.plans.map(r=>[r.month+'/'+r.person,r.target]));
     reviewPlans=Object.fromEntries(data.reviewPlans.map(r=>[r.month+'/'+r.person,r.target]));
+    funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
     get('roleLabel').textContent=get('role').selectedOptions[0].textContent;
-    get('accountPanel').hidden=data.role!=='admin';
+    get('accountPanel').hidden=data.role==='seller';
     document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
     get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola'],accounts.map(a=>[escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role]]));
     updateFilters(prior);
@@ -68,9 +69,9 @@ function available() {
 function updateFilters(priorPerson=undefined) {
   const role=get('role').value;
   const prior=get('salon').value;
-  options(get('salon'),role==='admin' ? [['','Wszystkie salony'],...salons.map(s=>[s,s])] : [[salons[0] ?? '',salons[0] ?? '—']]);
-  if(role==='admin' && salons.includes(prior)) get('salon').value=prior;
-  get('salon').disabled=role!=='admin';
+  options(get('salon'),['admin','group'].includes(role) ? [['','Wszystkie salony'],...salons.map(s=>[s,s])] : [[salons[0] ?? '',salons[0] ?? '—']]);
+  if(['admin','group'].includes(role) && salons.includes(prior)) get('salon').value=prior;
+  get('salon').disabled=!['admin','group'].includes(role);
   const selected=priorPerson===undefined?get('seller').value:String(people.findIndex(p=>p.id===priorPerson));
   options(get('seller'),[...(role==='seller'?[]:[['','Wszyscy handlowcy']]),...available().map(i=>[i,people[i].name])]);
   if(available().some(i=>String(i)===selected)) get('seller').value=selected;
@@ -93,7 +94,7 @@ function render() {
   get('monthlyPace').innerHTML='<div class="row"><strong>Tempo miesiąca</strong><span>'+
     (current?.expected==null?'Uzupełnij cele i rozliczenia poprzednich miesięcy.':
       display(current.sold)+' sprzedanych / '+display(current.expected)+' według tempa · '+pct(current.progress,1)+' miesiąca')+'</span></div>';
-  get('salonPanel').hidden=get('role').value!=='admin';
+  get('salonPanel').hidden=!['admin','group'].includes(get('role').value);
   get('salonTable').innerHTML=table(['Salon','Leady','Sprzedaż','Lead → sprzedaż','Cel bazowy'],salons.filter(s=>scope.some(i=>people[i].salon===s)).map(s=>{
     const team=scope.filter(i=>people[i].salon===s);
     const figures=sum(team.flatMap(i=>sources.map((_,source)=>record(i,source))));
@@ -213,6 +214,7 @@ function renderInlineSheet(scope,bySource) {
   };
 }
 function renderJourney(scope,bySource,total) {
+  get('journeyEdit').hidden=get('role').value==='group';
   get('journeyEdit').disabled=!scope.length;
   get('journeyScope').textContent=scope.length===1 ? people[scope[0]].name : scope.length ? 'Podsumowanie wybranego zespołu' : 'Brak handlowców w wybranym zakresie';
   const records=scope.flatMap(person=>sources.map((_,source)=>record(person,source)));
@@ -280,17 +282,19 @@ function renderQuarter(scope) {
     r.month,display(r.base),display(r.carry),display(r.target),display(r.sold),pct(r.sold,r.target),pct(r.progress,1),display(r.expected),
     r.expected===null?'—':'<span class="'+(r.sold>=r.expected?'ahead':'behind')+'">'+delta(r.sold,r.expected)+'</span>',display(r.remaining)
   ]));
-  get('editPlan').hidden=get('role').value==='seller'||!months.length;
+  get('editPlan').hidden=!['admin','manager'].includes(get('role').value)||!months.length;
   get('editPlan').disabled=!scope.length;
   return report;
 }
 function loadPlanInputs() {
   const months=quarterMonths(get('month').value);
-  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>').join('');
+  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+['Kontakty','Jazdy próbne','Oferty'].map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')).join('');
   const seller=+get('planPerson').value;
   months.forEach((m,i)=>{
     get('goal'+i).value=planFor(seller,m)??'';
     get('review-goal'+i).value=reviewPlans[m+'/'+people[seller].id]??'';
+    const targets=funnelPlans[m+'/'+people[seller].id]??[];
+    for(let j=0;j<3;j++) get('funnel-'+i+'-'+j).value=targets[j]??'';
   });
   get('planError').textContent='';
 }
@@ -314,10 +318,20 @@ async function saveForm(event,path,payload,dialog,errorId) {
 get('planForm').onsubmit=event=>saveForm(event,'/api/plans',{
   month:get('month').value,person:people[+get('planPerson').value].id,
   targets:quarterMonths(get('month').value).map((_,i)=>get('goal'+i).valueAsNumber),
-  reviewTargets:quarterMonths(get('month').value).map((_,i)=>get('review-goal'+i).value===''?null:get('review-goal'+i).valueAsNumber)
+  reviewTargets:quarterMonths(get('month').value).map((_,i)=>get('review-goal'+i).value===''?null:get('review-goal'+i).valueAsNumber),
+  funnelTargets:quarterMonths(get('month').value).map((_,i)=>[0,1,2].map(j=>{
+    const input=get('funnel-'+i+'-'+j);
+    return input.value===''?null:input.valueAsNumber;
+  }))
 },'planEditor','planError');
 get('addAccount').onclick=()=>{
-  get('accountForm').reset();
+  const form=get('accountForm');
+  form.reset();
+  get('accountSalons').replaceChildren(...salons.map(salon=>new Option(salon,salon)));
+  const manager=get('role').value==='manager';
+  form.elements.salon.value=get('salon').value||(salons.length===1?salons[0]:'');
+  form.elements.salon.readOnly=manager;
+  form.elements.role.options[1].disabled=manager;
   get('accountError').textContent='';
   get('accountEditor').showModal();
 };

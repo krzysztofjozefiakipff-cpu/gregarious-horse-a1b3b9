@@ -78,7 +78,7 @@ const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString(
 let data;
 let editDay;
 let busy=false;
-let preview=true;
+let preview=false;
 
 async function api(path,body) {
   const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
@@ -119,24 +119,34 @@ function renderPlans(records) {
       (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
   }).join('');
   const targets=salesGoal?sourceTargets(salesGoal):[];
+  const funnel=data.funnelPlans?.find(row=>row.month===monthKey);
+  const custom=funnel?JSON.parse(funnel.targets):[];
+  const actionNumbers=[0,2,3];
+  const actionTotal=index=>monthRecords.reduce((sum,[,values])=>sum+(values[index]??0),0);
+  const targetFor=index=>custom[actionNumbers.indexOf(index)]??null;
   const todayTasks=[
     {verb:'Skontaktuj się z', forms:['klientem','klientami','klientami'], note:'Zacznij od osoby, która czeka na odpowiedź.', col:1, index:0},
     {verb:'Przeprowadź', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], note:'Potwierdź termin z klientem i przygotuj auto.', col:4, index:2},
     {verb:'Wyślij', forms:['ofertę','oferty','ofert'], note:'Zacznij od klienta, który jest najbliżej decyzji.', col:5, index:3}
-  ].map(task=>({...task,gap:Math.max(0,targets.reduce((sum,row)=>sum+row[task.col],0)-(current[task.index]??0))}))
+  ].map(task=>({...task,gap:Math.max(0,targetFor(task.index)==null
+      ?targets.reduce((sum,row)=>sum+row[task.col],0)-(current[task.index]??0)
+      :Math.ceil(Math.max(0,targetFor(task.index)-actionTotal(task.index))/daysLeft))}))
     .filter(task=>task.gap>0);
   $('#tasks').innerHTML=todayTasks.length?todayTasks.map(({verb,forms,note,gap})=>
     '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
     '<small class="task-note">'+note+'</small></li>').join(''):
-    '<li class="task-message">'+(salesGoal==null?'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.':'Brawo! Dzisiejsze cele są zrealizowane.')+'</li>';
+    '<li class="task-message">'+(salesGoal==null&&!funnel?'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.':'Brawo! Dzisiejsze cele są zrealizowane.')+'</li>';
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
   const monthTargets=monthPlan?sourceTargets(monthPlan):[];
   const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
   const reviews=monthRecords.reduce((total,[,values])=>total+(values[5]??[]).reduce((sum,row)=>sum+(row[9]??0),0),0);
-  $('#pace').hidden=monthPlan==null&&reviewTarget==null&&reviews===0;
-  $('#pace-items').innerHTML=monthPlan==null?'':[['Kontakty',1,0],['Jazdy próbne',4,2],['Oferty',5,3]].map(([label,col,i])=>{
-    const goal=Math.round(monthTargets.reduce((sum,row)=>sum+row[col],0)*(elapsed+Number(weekday(data.today)))/daysMonth);
+  $('#pace').hidden=monthPlan==null&&!funnel&&reviewTarget==null&&reviews===0;
+  $('#pace-items').innerHTML=[['Kontakty',1,0],['Jazdy próbne',4,2],['Oferty',5,3]].map(([label,col,i])=>{
+    const customTarget=targetFor(i);
+    if (customTarget==null&&monthPlan==null) return '';
+    const monthlyTarget=customTarget??monthTargets.reduce((sum,row)=>sum+row[col],0);
+    const goal=Math.round(monthlyTarget*(elapsed+Number(weekday(data.today)))/daysMonth);
     const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
     const status=delta<0?'Brakuje '+Math.abs(delta):delta>0?'Jesteś ponad planem o '+delta:'Zgodnie z planem';
     const dayIndex=Math.floor(Date.parse(data.today)/86400000);
@@ -288,6 +298,11 @@ function renderSeller(readOnly=false) {
   $('#lesson-remember').hidden=!lesson;
   $('#lesson-remember span').textContent=lesson?.remember??'';
   renderPlans(records);
+  const ranking=data.ranking;
+  const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
+  $('#seller-ranking').textContent=ranking
+    ?'Ranking miesiąca · Salon: '+rankText(ranking.salon)+(ranking.group?' · Grupa: '+rankText(ranking.group):'')+' · Realizacja: '+new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%'
+    :'';
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
@@ -337,9 +352,47 @@ function renderSeller(readOnly=false) {
   $('#daily').hidden=false;
 }
 
+function renderSalonSummary() {
+  const month=data.today.slice(0,7);
+  const results=$('#salon-results');
+  results.replaceChildren();
+  const pct=(orders,target)=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(100*orders/target)+'%';
+  const describe=(orders,target)=>target>0?orders+' / '+target+' · '+pct(orders,target):orders+' zam. · Brak planu';
+  const targets=new Map(data.plans.filter(plan=>plan.month===month).map(plan=>[plan.person,plan.target]));
+  const ordersBySeller=new Map();
+  for (const result of data.daily) {
+    if (!result.day.startsWith(month)||result.day>data.today) continue;
+    ordersBySeller.set(result.person,(ordersBySeller.get(result.person)??0)+(JSON.parse(result.counters)[4]??0));
+  }
+  for (const {salon} of data.salons) {
+    const team=data.sellers.filter(seller=>seller.salon===salon);
+    const planned=team.filter(seller=>(targets.get(seller.id)??0)>0);
+    const total=planned.reduce((sum,seller)=>sum+targets.get(seller.id),0);
+    const orders=planned.reduce((sum,seller)=>sum+(ordersBySeller.get(seller.id)??0),0);
+    const detail=document.createElement('details');
+    const summary=document.createElement('summary');
+    summary.textContent=salon+' · '+describe(orders,total)+' · '+planned.length+' z '+team.length+' osób z planem';
+    detail.append(summary);
+    const people=document.createElement('ul');
+    for (const seller of team) {
+      const item=document.createElement('li');
+      item.textContent=seller.name+' · '+describe(ordersBySeller.get(seller.id)??0,targets.get(seller.id));
+      people.append(item);
+    }
+    detail.append(people);
+    results.append(detail);
+  }
+  if (!results.children.length) results.textContent='Brak przypisanych salonów.';
+}
+
 function renderAdmin() {
   $('#dealer').textContent='Panel salonu';
   $('#admin').hidden=false;
+  renderSalonSummary();
+  $('#group-editor').hidden=data.role!=='admin';
+  $('#group-list').textContent=data.groups.map(group=>group.name+' · '+(group.salons??'').replaceAll('\n',', ')+' · '+(group.heads??'').replaceAll('\n',', ')).join(' / ');
+  $('#absence-panel').hidden=data.role==='group';
+  $('#lesson-editor').hidden=data.role==='group';
   $('#team').textContent=data.sellers.length+' handlowców';
   const reviews=$('#reviews');
   reviews.replaceChildren();
@@ -512,6 +565,11 @@ $('#meme-form').onsubmit=async event=>{
   } finally {
     submit.disabled=false;
   }
+};
+$('#group-editor').onsubmit=event=>{
+  event.preventDefault();
+  const values=Object.fromEntries(new FormData(event.target));
+  run(()=>api('/api/group',{name:values.name,headEmail:values.headEmail,salons:values.salons.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)}));
 };
 const lessonEditor=$('#lesson-editor');
 const lessonDraftList=$('#lesson-drafts');

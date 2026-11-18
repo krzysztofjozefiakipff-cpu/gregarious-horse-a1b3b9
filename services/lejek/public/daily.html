@@ -48,6 +48,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily-lesson h2{margin:6px 0 10px}#lesson-remember{margin-top:12px;background:#e8efff;border-radius:8px;padding:10px;color:#17336e;white-space:pre-wrap}
 #lesson-topic{white-space:pre-wrap;overflow-wrap:anywhere}#lesson-drafts fieldset{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:8px}#lesson-drafts textarea{resize:vertical}
 @media(max-width:850px){#daily-lesson{margin:0}}
+#seller-ranking{margin-top:12px;font-weight:750;color:#17336e}#salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
 </style>
 </head>
 <body>
@@ -68,6 +69,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <h2 id="order-plan-title">Realizacja planu zamówień</h2>
 <p>Zamówienia podpisane / plan na dany okres</p>
 <div class="cards" id="cards"></div>
+<p id="seller-ranking"></p>
 </section>
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań do dziś</h2><p>Porównanie z planem miesięcznym na dziś.</p></div>
@@ -105,7 +107,15 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <p id="meme-status" role="status"></p></section></div>
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></aside>
 </div>
-<section id="admin" hidden><h1>Panel salonu</h1><p><a href="/index.html">Plany, wyniki i konta handlowców</a></p><div id="team"></div><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div>
+<section id="admin" hidden><h1>Panel salonu</h1><p><a href="/index.html">Plany, wyniki i konta handlowców</a></p><div id="team"></div><section id="salon-summary"><h2>Realizacja planów zamówień</h2><div id="salon-results"></div></section>
+<div id="absence-panel"><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div></div>
+<form id="group-editor" hidden><h2>Grupy dealerskie</h2>
+<p>Dodaj grupę lub przypisz do istniejącej grupy kolejne salony i szefa.</p>
+<div id="group-list"></div>
+<label>Nazwa grupy <input name="name" required maxlength="120"></label>
+<label>E-mail szefa grupy (konto CARVAMO) <input name="headEmail" type="email" required maxlength="120"></label>
+<label>Nazwy salonów, każda w osobnym wierszu <textarea name="salons" rows="4" required></textarea></label>
+<button>Zapisz grupę i uprawnienia</button></form>
 <form id="lesson-editor">
   <h2>Lekcja na dziś</h2>
   <label id="lesson-salon-label">Salon <select id="lesson-salon"></select></label>
