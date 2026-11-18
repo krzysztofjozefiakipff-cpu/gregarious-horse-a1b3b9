@@ -93,6 +93,7 @@ let data;
 let editDay;
 let busy=false;
 let preview=false;
+let previewResult=null;
 
 async function api(path,body) {
   const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
@@ -428,7 +429,7 @@ function renderSeller(readOnly=false) {
   $('#resolve').hidden=!next||day===next||waiting;
   for (const button of document.querySelectorAll('[data-kind]')) button.hidden=!next||day!==next||waiting;
   $('#reason').hidden=true;
-  $('#save').disabled=readOnly||busy||Boolean(blocked)||locked;
+  $('#save').disabled=busy||Boolean(blocked)||locked;
   const matrix=records[day]?.[5];
   const legacy=records[day]&&!matrix;
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(([,name])=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
@@ -445,7 +446,7 @@ function renderSeller(readOnly=false) {
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
-  $('#status').textContent=readOnly?'Podgląd · możesz wpisać przykładowe wyniki. Zapis jest dostępny na koncie handlowca.':legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+  $('#status').textContent=readOnly?(locked?'Zapisano przykładowy dzień.':'Podgląd · zapis próbny nie trafi do raportów.'):legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
@@ -615,12 +616,12 @@ function showView() {
   data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
     plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
     ranking:{salon:{place:3,total:8},group:{place:7,total:24},percent:0},
-    reviewPlans:[{month:actual.today.slice(0,7),target:5}],daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
+    reviewPlans:[{month:actual.today.slice(0,7),target:5}],daily:previewResult?.day===actual.today?[previewResult]:[],personal:{missing:[],exceptions:{},progress:[0,0]},
     sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy,
     lesson:{title:'Pierwszy kontakt',topic:'Przywitaj klienta, przedstaw się i zapytaj, czego potrzebuje.',remember:'Najpierw wysłuchaj, potem zaproponuj rozwiązanie.'}};
   try { renderSeller(true); } finally { data=actual; }
 }
-$('#view-switch').onclick=()=>{preview=!preview;showView();};
+$('#view-switch').onclick=()=>{preview=!preview;previewResult=null;$('#cookie').open=false;showView();};
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
   $('#load').textContent='';
@@ -650,13 +651,25 @@ async function run(operation,openCookie=false) {
 $('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows .active-source input')?.focus();};
 $('#entry').onsubmit=event=>{
   event.preventDefault();
-  if(data.role!=='seller') return;
+  if(data.role!=='seller'&&!preview) return;
   const day=editDay??data.today;
   const rows=sources.map((_,r)=>{
     const row=Array(11).fill(0);
     for (const [index] of columns) row[index]=Number(event.target.elements['v'+r+'_'+index].value);
     return row;
   });
+  if (data.role!=='seller') {
+    if (previewResult?.day===day) return;
+    if (!rows.some(row=>row.some(value=>value>0))) {
+      $('#status').textContent='Wpisz co najmniej jedno wykonane działanie.';
+      return;
+    }
+    const totals=[1,3,4,5,7].map(index=>rows.reduce((sum,row)=>sum+row[index],0));
+    previewResult={day,counters:JSON.stringify([...totals,rows])};
+    showView();
+    $('#cookie').open=true;
+    return;
+  }
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows}),day===data.today);
 };
 for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{
