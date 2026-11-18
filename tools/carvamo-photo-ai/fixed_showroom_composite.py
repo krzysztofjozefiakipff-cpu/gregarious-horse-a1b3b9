@@ -13,7 +13,7 @@ def main():
  p.add_argument("--view",choices=["front","rear","left","right"],default="front")
  p.add_argument("--calibration",help="JSON with manually verified normalized wheel contacts")
  p.add_argument("--camera-angle",choices=["straight","three_quarter","side"],default="straight")
- p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="off")
+ p.add_argument("--floor-reflection",choices=["water_mirror","subtle","off"],default="water_mirror")
  p.add_argument("--reflection-gap",type=float,default=.025,help="Front/rear visual gap between bumper and first reflection")
  p.add_argument("--floor-seam-y",type=float,default=.705,help="Top edge of visible showroom floor as fraction of image height")
  p.add_argument("--ground-drop",type=float,default=.075,help="Move car and its contact-linked reflection down as a unit")
@@ -69,54 +69,37 @@ def main():
   calibrated=True
  if len(contacts_local)<2:raise ValueError("At least two wheel contacts are required")
  if any(abs(q[0]-r[0])<cw*.06 for i,q in enumerate(contacts_local) for r in contacts_local[i+1:]):raise ValueError("Wheel contacts overlap")
- # Fit the visible wheel geometry into the actual floor plane before placement.
- # A distant wheel in a 45-degree photo can be far above the lowest alpha pixel.
+ # Position the car from its roof and visible tire contacts, not from a
+ # reflection reserve. The approved showroom/logo remain completely unchanged.
+ # A wheel farther from the camera may touch the floor higher in the image.
  floor_seam=round(H*a.floor_seam_y)
- reserve=round(H*(.045 if a.camera_angle=="three_quarter" else .075))
- margin=round(H*.012)
- min_contact=min(yy for xx,yy in contacts_local)
- required_depth=ch-min_contact
- available_depth=H-reserve-floor_seam-margin
- if required_depth>available_depth:
-  factor=min(1.,available_depth/max(1,required_depth)*.985)
-  if factor<.40:
-   raise ValueError("Vehicle geometry cannot fit safely on the floor; manual calibration required")
+ roof_clearance=round(H*.295)  # immediately below the CARVAMO logo/tagline
+ min_far_contact=floor_seam+round(H*.030)
+ preferred_near_contact=round(H*.845)
+ bottom_margin=round(H*.012)
+ def fit_position():
+  nearest=max(yy for xx,yy in contacts_local)
+  farthest=min(yy for xx,yy in contacts_local)
+  # Do not let the roof overlap the logo or a visible tire enter the wall.
+  lower=max(roof_clearance,min_far_contact-farthest)
+  upper=H-bottom_margin-ch
+  ideal=preferred_near_contact-nearest
+  return lower,upper,max(lower,ideal)
+ lower,upper,desired=fit_position()
+ if lower>upper:
+  # Preserve the requested framing wherever possible; only scale when
+  # the cutout cannot fit between the logo and bottom of the photograph.
+  factor=(H-bottom_margin-roof_clearance)/max(1,ch)
+  if factor<=0 or factor>=1:raise ValueError("Cannot fit car under logo")
   old_cw,old_ch=cw,ch
-  car=car.resize((max(1,round(cw*factor)),max(1,round(ch*factor))),Image.Resampling.LANCZOS)
-  cw,ch=car.size
-  alpha=car.getchannel("A")
-  x=(W-cw)//2
+  car=car.resize((max(1,round(cw*factor*.985)),max(1,round(ch*factor*.985))),Image.Resampling.LANCZOS)
+  cw,ch=car.size;alpha=car.getchannel("A");x=(W-cw)//2
   contacts_local=[(min(cw-1,round(xx*cw/old_cw)),min(ch-1,round(yy*ch/old_ch))) for xx,yy in contacts_local]
- baseline=round(H*(a.floor_y+min(a.ground_drop,.015)))
- y=baseline-max(yy for xx,yy in contacts_local)
- # Keep every wheel contact on the visible floor; reserve reflection space.
- floor_seam=round(H*a.floor_seam_y)
- reserve=round(H*(.075 if a.camera_angle=="three_quarter" else .11))
- min_contact=min(yy for xx,yy in contacts_local)
- min_y=floor_seam+round(H*.012)-min_contact
- max_y=H-ch-reserve
- if min_y>max_y:
-  # Refit after integer resizing: rounding and silhouette geometry can leave
-  # a few pixels of overflow even when the initial scale estimate passed.
-  # Preserve the same proportions and rescale contacts with the image.
-  available=H-reserve-floor_seam-round(H*.012)
-  depth=max(1,ch-min_contact)
-  factor=min(.985,available/depth*.975)
-  if factor<=0 or factor>=1:
-   factor=.97
-  old_cw,old_ch=cw,ch
-  car=car.resize((max(1,round(cw*factor)),max(1,round(ch*factor))),Image.Resampling.LANCZOS)
-  cw,ch=car.size
-  alpha=car.getchannel("A")
-  x=(W-cw)//2
-  contacts_local=[(min(cw-1,round(xx*cw/old_cw)),min(ch-1,round(yy*ch/old_ch))) for xx,yy in contacts_local]
-  min_contact=min(yy for xx,yy in contacts_local)
-  min_y=floor_seam+round(H*.012)-min_contact
-  max_y=H-ch-reserve
-  if min_y>max_y:
-   raise ValueError("Floor fit still impossible after adaptive rescaling; manual wheel calibration required")
- y=max(y,min_y)
- y=min(y,max_y)
+  lower,upper,desired=fit_position()
+ if lower>upper:
+  raise ValueError("Wheel-floor and roof-logo constraints conflict; calibration required")
+ y=min(upper,desired)
+ baseline=y+max(yy for xx,yy in contacts_local)
  points=[(x+xx,y+yy) for xx,yy in contacts_local]
  scene=bg.convert("RGBA")
  floor_mask=Image.new("L",(W,H),0)
@@ -140,48 +123,29 @@ def main():
  combined=ImageChops.multiply(ImageChops.lighter(contact_mask,diffuse),floor_mask)
  shadow=Image.new("RGBA",(W,H),(0,0,0,0));shadow.putalpha(combined)
  scene=Image.alpha_composite(scene,shadow)
- # Per-column reflection anchored to the perspective ground-contact line.
- # Unlike a single horizontal flip, the distant wheel is reflected at its
- # own contact point, so tire and reflected tire meet without a visible gap.
+ # Restore the approved JAECOO 8-style soft water reflection.
+ # A single uniform mirror transform preserves vehicle/wheel geometry.
+ # The floor mask and canvas clip any part beyond the visible floor.
  reflection_start=max(py for px,py in points)
- # Frontal/rear shots have a bumper between the visible tires and camera.
- # Their reflection must start below the bumper, not at a guessed wheel line.
- frontal=a.camera_angle=="straight" and a.view in ("front","rear")
- gap_px=0 # The reflection must begin at the physical contact line.
- if a.floor_reflection!="off":
-  anchors=sorted(points)
-  (x1,y1),(x2,y2)=anchors[0],anchors[-1]
-  if x2==x1:raise ValueError("Wheel contacts must have different x coordinates")
-  opacity=215 if a.floor_reflection=="water_mirror" else 42
-  refl=Image.new("RGBA",(W,H),(0,0,0,0))
-  for col in range(cw):
-   gx=x+col
-   (x1,y1),(x2,y2)=next(((l,r) for l,r in zip(anchors,anchors[1:]) if gx<=r[0]),(anchors[-2],anchors[-1]))
-   t=max(0.,min(1.,(gx-x1)/(x2-x1)))
-   axis=round(y1+(y2-y1)*t)+gap_px
-   # Never detach the reflection from the wheel-ground projection.
-   # For head-on views the bumper is visible but the tire sidewalls are not.
-   # Mirror the original pixels; do not hallucinate new wheels in this pass.
-   local_axis=max(0,min(ch-1,axis-y))
-   available=H-axis
-   if available<2 or local_axis<2:continue
-   # The pixel immediately above the contact line is the first reflected
-   # pixel below it. Do not flip the entire car about a different baseline.
-   strip=car.crop((col,0,col+1,local_axis+1)).transpose(Image.Transpose.FLIP_TOP_BOTTOM)
-   length=max(1,min(available,round(strip.height*(.68 if frontal else .82))))
-   strip=strip.resize((1,length),Image.Resampling.BICUBIC)
-   fa=strip.getchannel("A")
-   fade=Image.new("L",(1,length),0)
-   for rr in range(length):
-    fade.putpixel((0,rr),round(opacity*(1-rr/max(1,length-1))**1.45))
-   strip.putalpha(ImageChops.multiply(fa,fade))
-   refl.paste(strip,(gx,axis))
-  # Do not fabricate dark oval tires: they are not true reflections.
-  # When wheel surfaces are occluded, preserve source pixels only and
-  # mark the render as requiring wheel geometry calibration.
-  refl=refl.filter(ImageFilter.GaussianBlur(max(2,round(W*(.0015 if a.floor_reflection=="water_mirror" else .004)))))
-  refl.putalpha(ImageChops.multiply(refl.getchannel("A"),floor_mask))
-  scene=Image.alpha_composite(scene,refl)
+ gap_px=0
+ if a.floor_reflection!="off" and reflection_start<H-2:
+  local_axis=max(0,min(ch-1,reflection_start-y))
+  mirrored=car.crop((0,0,cw,local_axis+1)).transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+  visible=H-reflection_start
+  reflected_height=min(visible,max(1,round(mirrored.height*.64)))
+  if reflected_height>1:
+   mirrored=mirrored.resize((cw,reflected_height),Image.Resampling.BICUBIC)
+   opacity=105 if a.floor_reflection=="water_mirror" else 28
+   fade=Image.new("L",(cw,reflected_height),0)
+   painter=ImageDraw.Draw(fade)
+   for rr in range(reflected_height):
+    painter.line((0,rr,cw,rr),fill=round(opacity*(1-rr/max(1,reflected_height-1))**1.45))
+   mirrored.putalpha(ImageChops.multiply(mirrored.getchannel("A"),fade))
+   refl=Image.new("RGBA",(W,H),(0,0,0,0))
+   refl.paste(mirrored,(x,reflection_start))
+   refl=refl.filter(ImageFilter.GaussianBlur(max(2,round(W*.0025))))
+   refl.putalpha(ImageChops.multiply(refl.getchannel("A"),floor_mask))
+   scene=Image.alpha_composite(scene,refl)
  layer=Image.new("RGBA",(W,H),(0,0,0,0))
  layer.paste(car,(x,y))
  scene=Image.alpha_composite(scene,layer)
@@ -194,11 +158,11 @@ def main():
   marker.text((px+rr,py-rr),"Wheel "+str(idx+1),fill=(255,255,255))
  diagnostic.save(out/"wheel_calibration_overlay.png")
  qa={"status":"AWAITING_VISUAL_QA","ready_for_publication":False,
- "method":"floor_contact_projection_v7_no_reflection","view":a.view,
+ "method":"approved_jaecoo8_soft_mirror_floor_v8","view":a.view,
  "background_preserved":True,"floor_contact_all_on_floor":all(py>=floor_seam for px,py in points),"floor_plane_masked":True,"frontal_reflection_gap_px":gap_px,"floor_seam_y":floor_seam,"profile_width_target":target_width,"visual_qa_required_for_upscaling":True,"vehicle_bbox":[x,y,x+cw,y+ch],
- "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.camera_angle=="straight" and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"per_column_interpolated_wheel_contact","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"camera_angle_aware_floor_projection","camera_angle":a.camera_angle,"contact_shadow_anchored_per_wheel":True,"estimated_contacts_not_verified":not calibrated,"assumed_front_floor_y":baseline,
+ "estimated_contact_points":points,"wheel_contacts_used":len(points),"third_contact_missing":len(points)<3 and a.camera_angle=="straight" and a.view in ("front","rear"),"calibration_file_used":bool(a.calibration),"floor_reflection":a.floor_reflection,"reflection_geometry":"single_uniform_compressed_mirror_clipped_to_floor","ground_drop":a.ground_drop,"reflection_visible_pixels":H-reflection_start,"vehicle_width_fraction":round(cw/W,3),"composition_preset":"logo_clearance_and_visible_wheel_floor","camera_angle":a.camera_angle,"contact_shadow_anchored_per_wheel":True,"estimated_contacts_not_verified":not calibrated,"assumed_front_floor_y":baseline,
  "frontal_reflected_side_wheels_synthesized":False,"wheel_reflection_type":"source_pixels_only","wheel_ground_contact_verified":calibrated and (len(points)==3 if a.camera_angle=="straight" and a.view in ("front","rear") else True),"logo_visibility_verified":False,
- "notes":["Three-quarter views exclude misleading outer bumper silhouette contact","Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
+ "notes":["Reflection follows approved JAECOO 8 soft mirror reference","Roof kept below logo; visible contacts kept on showroom floor","Three-quarter views exclude misleading outer bumper silhouette contact","Contact zones estimated from alpha; not tire geometry","No generative modification of approved background","Inspect contact shadows and source tire pixels before approval"]}
  (out/"qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
  print("Candidate:",candidate,"contacts:",points,"publication blocked pending visual QA")
 if __name__=="__main__":main()
