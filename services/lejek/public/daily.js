@@ -139,32 +139,35 @@ function renderPlans(records) {
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
   const monthTargets=monthPlan?sourceTargets(monthPlan):[];
-  const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
-  const reviews=monthRecords.reduce((total,[,values])=>total+(values[5]??[]).reduce((sum,row)=>sum+(row[9]??0),0),0);
-  $('#pace').hidden=monthPlan==null&&!funnel&&reviewTarget==null&&reviews===0;
-  $('#pace-items').innerHTML=[['Kontakty',1,0],['Jazdy próbne',4,2],['Oferty',5,3]].map(([label,col,i])=>{
-    const customTarget=targetFor(i);
-    if (customTarget==null&&monthPlan==null) return '';
-    const monthlyTarget=customTarget??monthTargets.reduce((sum,row)=>sum+row[col],0);
-    const goal=Math.round(monthlyTarget*(elapsed+Number(weekday(data.today)))/daysMonth);
-    const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
-    const status=delta<0?'Brakuje '+Math.abs(delta):delta>0?'Jesteś ponad planem o '+delta:'Zgodnie z planem';
-    const dayIndex=Math.floor(Date.parse(data.today)/86400000);
-    const notes=delta<0?belowPlanNotes[label]:abovePlanNotes;
-    const note=delta!==0?'<small class="pace-note'+(delta<0?' pace-note-behind':'')+'">'+notes[(dayIndex+i*7)%notes.length]+'</small>':'';
-    return '<div class="pace-item"><span>'+label+' — <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+status+'</strong></span>'+note+'</div>';
+  const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target??null;
+  // Keep the first three custom targets in the order used by existing saved plans.
+  const customIndex={1:0,4:1,5:2,0:3,2:4,6:5,10:6,8:7};
+  const legacyIndex={1:0,4:2,5:3,7:4};
+  const todayFraction=(elapsed+Number(weekday(data.today)))/daysMonth;
+  const dayIndex=Math.floor(Date.parse(data.today)/86400000);
+  $('#pace').hidden=false;
+  $('#pace-items').innerHTML=columns.map(([index,label])=>{
+    const actual=monthRecords.reduce((total,[,values])=>{
+      const matrix=values[5];
+      return total+(Array.isArray(matrix)
+        ?matrix.reduce((sum,row)=>sum+(row[index]??0),0)
+        :(values[legacyIndex[index]]??0));
+    },0);
+    const defaultTarget=monthPlan!=null&&index<=7
+      ?monthTargets.reduce((sum,row)=>sum+(row[index]??0),0)
+      :null;
+    const target=index===9?reviewTarget:index===7?(monthPlan??null):(custom[customIndex[index]]??defaultTarget);
+    const goal=target==null?null:Math.round(target*todayFraction);
+    const delta=goal==null?null:actual-goal;
+    const style=delta<0?'behind':delta>0?'ahead':'';
+    const status=delta==null?'Brak celu':delta<0?'Brakuje '+(-delta):delta>0?'Ponad planem o '+delta:'Zgodnie z planem';
+    const notes=index===9
+      ?(delta<0?reviewNotes.below:delta>0?reviewNotes.above:reviewNotes.on)
+      :(delta<0?belowPlanNotes[label]:delta>0?abovePlanNotes:null);
+    const note=delta!=null&&notes?.length?'<small class="pace-note'+(delta<0?' pace-note-behind':'')+'">'+notes[(dayIndex+index*7)%notes.length]+'</small>':'';
+    return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
+      '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+note+'</div>';
   }).join('');
-  const reviewCard=$('#review-plan');
-  reviewCard.hidden=reviewTarget==null&&reviews===0;
-  $('#review-count').textContent=reviews+' / '+(reviewTarget??'—');
-  const difference=reviewTarget==null?null:reviews-reviewTarget;
-  $('#review-status').textContent=difference==null?'Brak celu na ten miesiąc':difference<0?'Do celu brakuje '+(-difference):difference>0?'Ponad planem o '+difference:'Cel osiągnięty';
-  $('#review-status').className=difference<0?'behind':difference>0?'ahead':'';
-  const notes=difference==null?[]:difference<0?reviewNotes.below:difference>0?reviewNotes.above:reviewNotes.on;
-  const note=$('#review-note');
-  note.hidden=notes.length===0;
-  note.className='pace-note'+(difference<0?' pace-note-behind':'');
-  note.textContent=notes[Math.floor(Date.parse(data.today)/86400000)%notes.length]??'';
 }
 
 function renderQuote(text) {

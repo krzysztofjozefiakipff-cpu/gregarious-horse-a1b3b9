@@ -316,7 +316,7 @@ async function handle(request, env) {
     if (reviewTargets!==undefined&&(!Array.isArray(reviewTargets)||reviewTargets.length!==3||!reviewTargets.every(value=>value===null||countValid(value))))
       return json({error:'Sprawdź cele dotyczące opinii Google.'},400);
     const funnelTargets=body.funnelTargets;
-    const validFunnel=value=>Array.isArray(value)&&value.length===3&&value.every(target=>target===null||countValid(target));
+    const validFunnel=value=>Array.isArray(value)&&[3,8].includes(value.length)&&value.every(target=>target===null||countValid(target));
     if (funnelTargets!==undefined&&(!Array.isArray(funnelTargets)||funnelTargets.length!==3||!funnelTargets.every(validFunnel)))
       return json({error:'Sprawdź cele lejka.'},400);
     const first=Math.floor((Number(body.month.slice(5))-1)/3)*3+1;

@@ -50,6 +50,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 @media(max-width:850px){#daily-lesson{margin:0}}
 #seller-ranking{margin-top:12px;font-weight:750;color:#17336e}#salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
 .management-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px}.management-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:750}.management-nav a[aria-current=page]{background:var(--blue);color:white}.management-nav+section h1,#administration-view h1{margin-bottom:9px}
+#pace-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}#pace-items .pace-item{display:grid;align-content:start;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:white}#pace-items .pace-count{font-size:1.2rem}.pace-month{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -73,13 +74,9 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <p id="seller-ranking"></p>
 </section>
 <section id="pace" aria-labelledby="pace-title" hidden>
-  <div class="pace-intro"><h2 id="pace-title">Realizacja działań do dziś</h2><p>Porównanie z planem miesięcznym na dziś.</p></div>
+  <div class="pace-intro"><h2 id="pace-title">Realizacja działań do dziś</h2><p>Wykonano od początku miesiąca / cel narastająco do dziś.</p></div>
   <div id="pace-items"></div>
-  <section id="review-plan" aria-labelledby="review-title" hidden>
-    <h3 id="review-title">Opinie Google · cel miesięczny</h3>
-    <strong id="review-count"></strong> <span id="review-status"></span>
-    <small id="review-note" class="pace-note"></small>
-  </section>
+
 </section>
 <form id="entry"><div class="heading"><h2>Wyniki dzienne</h2><strong id="entry-date"></strong></div>
 <div id="backlog" hidden><strong id="backlog-text"></strong><div id="options">

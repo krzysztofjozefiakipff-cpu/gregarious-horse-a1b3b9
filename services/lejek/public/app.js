@@ -286,15 +286,16 @@ function renderQuarter(scope) {
   get('editPlan').disabled=!scope.length;
   return report;
 }
+const funnelGoalLabels=['Kontakty','Jazdy próbne','Oferty','Leady','Spotkania','Follow-up','Wystawione faktury','Wydania'];
 function loadPlanInputs() {
   const months=quarterMonths(get('month').value);
-  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+['Kontakty','Jazdy próbne','Oferty'].map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')).join('');
+  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+funnelGoalLabels.map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')).join('');
   const seller=+get('planPerson').value;
   months.forEach((m,i)=>{
     get('goal'+i).value=planFor(seller,m)??'';
     get('review-goal'+i).value=reviewPlans[m+'/'+people[seller].id]??'';
     const targets=funnelPlans[m+'/'+people[seller].id]??[];
-    for(let j=0;j<3;j++) get('funnel-'+i+'-'+j).value=targets[j]??'';
+    for(let j=0;j<funnelGoalLabels.length;j++) get('funnel-'+i+'-'+j).value=targets[j]??'';
   });
   get('planError').textContent='';
 }
@@ -319,7 +320,7 @@ get('planForm').onsubmit=event=>saveForm(event,'/api/plans',{
   month:get('month').value,person:people[+get('planPerson').value].id,
   targets:quarterMonths(get('month').value).map((_,i)=>get('goal'+i).valueAsNumber),
   reviewTargets:quarterMonths(get('month').value).map((_,i)=>get('review-goal'+i).value===''?null:get('review-goal'+i).valueAsNumber),
-  funnelTargets:quarterMonths(get('month').value).map((_,i)=>[0,1,2].map(j=>{
+  funnelTargets:quarterMonths(get('month').value).map((_,i)=>funnelGoalLabels.map((_,j)=>{
     const input=get('funnel-'+i+'-'+j);
     return input.value===''?null:input.valueAsNumber;
   }))
