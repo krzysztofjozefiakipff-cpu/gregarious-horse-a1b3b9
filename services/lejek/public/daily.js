@@ -125,16 +125,15 @@ function renderPlans(records) {
   const actionTotal=index=>monthRecords.reduce((sum,[,values])=>sum+(values[index]??0),0);
   const targetFor=index=>custom[actionNumbers.indexOf(index)]??null;
   const todayTasks=[
-    {verb:'Skontaktuj się z', forms:['klientem','klientami','klientami'], note:'Zacznij od osoby, która czeka na odpowiedź.', col:1, index:0},
-    {verb:'Przeprowadź', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], note:'Potwierdź termin z klientem i przygotuj auto.', col:4, index:2},
-    {verb:'Wyślij', forms:['ofertę','oferty','ofert'], note:'Zacznij od klienta, który jest najbliżej decyzji.', col:5, index:3}
+    {verb:'Skontaktuj się z', forms:['klientem','klientami','klientami'], col:1, index:0},
+    {verb:'Przeprowadź', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], col:4, index:2},
+    {verb:'Wyślij', forms:['ofertę','oferty','ofert'], col:5, index:3}
   ].map(task=>({...task,gap:Math.max(0,targetFor(task.index)==null
       ?targets.reduce((sum,row)=>sum+row[task.col],0)-(current[task.index]??0)
       :Math.ceil(Math.max(0,targetFor(task.index)-actionTotal(task.index))/daysLeft))}))
     .filter(task=>task.gap>0);
-  $('#tasks').innerHTML=todayTasks.length?todayTasks.map(({verb,forms,note,gap})=>
-    '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
-    '<small class="task-note">'+note+'</small></li>').join(''):
+  $('#tasks').innerHTML=todayTasks.length?todayTasks.map(({verb,forms,gap})=>
+    '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span></li>').join(''):
     '<li class="task-message">'+(salesGoal==null&&!funnel?'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.':'Brawo! Dzisiejsze cele są zrealizowane.')+'</li>';
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
@@ -409,6 +408,7 @@ function renderSeller(readOnly=false) {
   $('#progress').max=expected||1;
   $('#progress').value=done;
   $('#fortune').textContent=records[data.today]?fortunes[dayIndex%fortunes.length]:'Otworzy się po zapisaniu dzisiejszych wyników.';
+  selectSellerTab();
   $('#daily').hidden=false;
 }
 
@@ -518,6 +518,24 @@ function renderStoryQueue() {
     queue.append(form);
   }
 }
+
+function selectSellerTab() {
+  const requested=location.hash.slice(1);
+  const links=[...document.querySelectorAll('[data-seller-tab]')];
+  const active=links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
+  for (const link of links) {
+    if (link.dataset.sellerTab===active) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  }
+  for (const panel of document.querySelectorAll('[data-seller-panel]')) {
+    panel.hidden=panel.dataset.sellerPanel!==active;
+  }
+}
+window.addEventListener('hashchange',()=>{
+  if ($('#daily').hidden) return;
+  selectSellerTab();
+  window.scrollTo(0,0);
+});
 
 function showView() {
   $('#daily').hidden=true;
