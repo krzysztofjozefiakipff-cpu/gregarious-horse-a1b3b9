@@ -8,7 +8,7 @@ const textValid = value => typeof value==='string' && value.trim().length>0 && v
 async function list(db,sql,...params) { return (await db.prepare(sql).bind(...params).all()).results; }
 
 const sourceCount = 12;
-const columnCount = 9;
+const columnCount = 10;
 const workday = day => ![0,6].includes(new Date(day+'T00:00:00Z').getUTCDay());
 function daysBetween(start,end) {
   const days=[];
@@ -84,6 +84,7 @@ async function handle(request, env) {
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
     const first=Math.floor((Number(month.slice(5))-1)/3)*3+1;
     const months=[first,first+1,first+2].map(n=>month.slice(0,5)+String(n).padStart(2,'0'));
+    const reviewPlans=await list(db,'SELECT person,month,target FROM review_plans WHERE month IN (?,?,?) AND '+scope,...months,...params);
     if (path==='/api/daily') {
       const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN (?,?,?) AND '+scope,...months,...params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+scope,...months,...params);
@@ -102,14 +103,14 @@ async function handle(request, env) {
       const giphy=trending?{key:env.GIPHY_API_KEY,id:assignedGif?.gif_id??null}:null;
       const memeLiked=personal&&meme?Boolean(await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()):false;
       const memeStories=user.role==='admin'?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending' ORDER BY id LIMIT 50"):[];
-      return json({role:user.role,sellers,plans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),today});
+      return json({role:user.role,sellers,plans,reviewPlans,daily,personal,brand,salons,approvals,cause,sidebarMode,meme,memeLiked,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
       list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+scope,...months,...params),
       user.role==='admin'?list(db,'SELECT id,email,name,salon,role FROM accounts ORDER BY id'):[],
     ]);
-    return json({role:user.role,sellers,results,plans,accounts});
+    return json({role:user.role,sellers,results,plans,reviewPlans,accounts});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
@@ -204,7 +205,7 @@ async function handle(request, env) {
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     const {rows}=body;
-    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&row.length===columnCount&&row.every(countValid))||
+    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&[columnCount-1,columnCount].includes(row.length)&&row.every(countValid))||
         !rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     const totals=[1,3,4,5,7].map(i=>rows.reduce((sum,row)=>sum+row[i],0));
     const written=await db.prepare("INSERT INTO daily_results SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected') ON CONFLICT(person,day) DO NOTHING")
@@ -213,9 +214,17 @@ async function handle(request, env) {
   }
   if (path==='/api/plans' && user.role!=='seller') {
     if (!monthValid(body.month)||!Array.isArray(body.targets)||body.targets.length!==3||!body.targets.every(countValid)) return json({error:'Wpisz trzy cele miesięczne.'},400);
+    const reviewTargets=body.reviewTargets;
+    if (reviewTargets!==undefined&&(!Array.isArray(reviewTargets)||reviewTargets.length!==3||!reviewTargets.every(value=>value===null||countValid(value))))
+      return json({error:'Sprawdź cele dotyczące opinii Google.'},400);
     const first=Math.floor((Number(body.month.slice(5))-1)/3)*3+1;
     await db.batch(body.targets.map((target,i)=>db.prepare('INSERT INTO plans(person,month,target) VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target')
-      .bind(body.person,body.month.slice(0,5)+String(first+i).padStart(2,'0'),target)));
+      .bind(body.person,body.month.slice(0,5)+String(first+i).padStart(2,'0'),target)).concat((reviewTargets??[]).map((target,i)=>{
+        const month=body.month.slice(0,5)+String(first+i).padStart(2,'0');
+        return target===null
+          ?db.prepare('DELETE FROM review_plans WHERE person=? AND month=?').bind(body.person,month)
+          :db.prepare('INSERT INTO review_plans(person,month,target) VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(body.person,month,target);
+      })));
     return json({ok:true});
   }
   if (path==='/api/results' || path==='/api/results-table') {

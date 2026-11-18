@@ -43,6 +43,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   #entry-count{font-size:.85rem;color:var(--muted);white-space:nowrap}
   #save{width:100%;min-height:44px}
 }
+#review-plan{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:white}#review-plan h3{margin:0 0 5px;font-size:1rem}#review-count{font-size:1.3rem;margin-right:6px}
 </style>
 </head>
 <body>
@@ -61,6 +62,11 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań do dziś</h2><p>Porównanie z planem miesięcznym na dziś.</p></div>
   <div id="pace-items"></div>
+  <section id="review-plan" aria-labelledby="review-title" hidden>
+    <h3 id="review-title">Opinie Google · cel miesięczny</h3>
+    <strong id="review-count"></strong> <span id="review-status"></span>
+    <small id="review-note" class="pace-note"></small>
+  </section>
 </section>
 <form id="entry"><div class="heading"><h2>Wyniki dzienne</h2><strong id="entry-date"></strong></div>
 <div id="backlog" hidden><strong id="backlog-text"></strong><div id="options">

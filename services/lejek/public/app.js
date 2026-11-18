@@ -11,7 +11,7 @@ const extras = [
   'Odpowiedzi NPS','Promotorzy (9–10)','Krytycy (0–6)'
 ];
 const empty = () => fields.map(() => 0);
-let entries = {}, plans = {};
+let entries = {}, plans = {}, reviewPlans = {};
 const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const planFor = (person,month) => plans[month+'/'+people[person].id] ?? null;
 function record(person,source,month=get('month').value) {
@@ -41,6 +41,7 @@ async function refresh() {
     accounts=data.accounts;
     entries=Object.fromEntries(data.results.map(r=>[[r.month,r.person,r.source].join('/'),JSON.parse(r.counters)]));
     plans=Object.fromEntries(data.plans.map(r=>[r.month+'/'+r.person,r.target]));
+    reviewPlans=Object.fromEntries(data.reviewPlans.map(r=>[r.month+'/'+r.person,r.target]));
     get('role').value=data.role;
     get('roleLabel').textContent=get('role').selectedOptions[0].textContent;
     get('accountPanel').hidden=data.role!=='admin';
@@ -285,8 +286,12 @@ function renderQuarter(scope) {
 }
 function loadPlanInputs() {
   const months=quarterMonths(get('month').value);
-  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+'<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label>').join('');
-  months.forEach((m,i)=>get('goal'+i).value=planFor(+get('planPerson').value,m) ?? '');
+  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>').join('');
+  const seller=+get('planPerson').value;
+  months.forEach((m,i)=>{
+    get('goal'+i).value=planFor(seller,m)??'';
+    get('review-goal'+i).value=reviewPlans[m+'/'+people[seller].id]??'';
+  });
   get('planError').textContent='';
 }
 get('editPlan').onclick=()=>{
@@ -308,7 +313,8 @@ async function saveForm(event,path,payload,dialog,errorId) {
 }
 get('planForm').onsubmit=event=>saveForm(event,'/api/plans',{
   month:get('month').value,person:people[+get('planPerson').value].id,
-  targets:quarterMonths(get('month').value).map((_,i)=>get('goal'+i).valueAsNumber)
+  targets:quarterMonths(get('month').value).map((_,i)=>get('goal'+i).valueAsNumber),
+  reviewTargets:quarterMonths(get('month').value).map((_,i)=>get('review-goal'+i).value===''?null:get('review-goal'+i).valueAsNumber)
 },'planEditor','planError');
 get('addAccount').onclick=()=>{
   get('accountForm').reset();

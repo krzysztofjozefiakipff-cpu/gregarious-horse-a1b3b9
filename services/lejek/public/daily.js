@@ -1,3 +1,8 @@
+const reviewNotes = {
+  below:['Google nie czyta w myślach. Przypomnij klientowi po odbiorze, że może zostawić opinię.','Klient wyjechał nowym autem. Link do opinii może ruszyć za nim.','Kluczyki przekazane, zdjęcie z odbioru zrobione. Czas powiedzieć klientowi, gdzie może podzielić się wrażeniami.','Google ma wolne miejsce. Zaproś ostatniego klienta do podzielenia się wrażeniami.'],
+  on:['Opinie dowiezione. Nawigacja może przestać mówić „przeliczam trasę”.','Plan w punkt. Nawet Google Maps nie znalazłoby krótszej drogi.'],
+  above:['Google chyba już wie, gdzie pracujesz. Dobra robota!','Plan został w lusterku wstecznym. Możesz dopić kawę na ciepło.','Zrzut ekranu do rozmowy o podwyżce? Materiał jest.','Opinie przyjechały w komplecie i jeszcze przywiozły kolegów.']
+};
 const belowPlanNotes = {
   "Kontakty": [
     "Telefon sam nie zadzwoni. Ma w tej sprawie bardzo konsekwentne stanowisko.",
@@ -52,7 +57,7 @@ const abovePlanNotes = [
 ];
 const $ = selector => document.querySelector(selector);
 const sources = ['Salon (WALK)','Facebook','WWW','Karta kontaktu','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','VEHIS i inne portale','Serwis','Galerie','Targi'];
-const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne','Oferty','Follow-up','Zamówienia','Wydania'];
+const columns = ['Leady','Kontakty','Spotkania','Umówione jazdy','Jazdy próbne','Oferty','Follow-up','Zamówienia','Wydania','Opinie Google'];
 const quotes = ['Klient nie czyta w myślach. Zadzwoń.','Dobra jazda próbna zaczyna się od pytania.','Oferta wysłana? Daj klientowi powód, żeby do niej wrócił.','Czasem najlepszy argument to chwila ciszy.','Zamknij dzień, zanim dzień zamknie Ciebie.'];
 const fortunes = ['Jutro gwiazdy sprzyjają follow-upom. Zwłaszcza tym wykonanym.','Przed Tobą dobra rozmowa. Numer telefonu jest w CRM-ie.','Ktoś jutro powie „muszę się zastanowić”. Zapytaj, nad czym.','Wróżba widzi dużo ruchu. Dobrze, że masz jazdy próbne.','Jutro może paść „biorę”. Miej pod ręką długopis.'];
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
@@ -123,7 +128,9 @@ function renderPlans(records) {
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
   const monthTargets=monthPlan?sourceTargets(monthPlan):[];
-  $('#pace').hidden=monthPlan==null;
+  const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
+  const reviews=monthRecords.reduce((total,[,values])=>total+(values[5]??[]).reduce((sum,row)=>sum+(row[9]??0),0),0);
+  $('#pace').hidden=monthPlan==null&&reviewTarget==null&&reviews===0;
   $('#pace-items').innerHTML=monthPlan==null?'':[['Kontakty',1,0],['Jazdy próbne',4,2],['Oferty',5,3]].map(([label,col,i])=>{
     const goal=Math.round(monthTargets.reduce((sum,row)=>sum+row[col],0)*(elapsed+Number(weekday(data.today)))/daysMonth);
     const delta=monthRecords.reduce((sum,[,v])=>sum+(v[i]??0),0)-goal;
@@ -133,6 +140,17 @@ function renderPlans(records) {
     const note=delta!==0?'<small class="pace-note'+(delta<0?' pace-note-behind':'')+'">'+notes[(dayIndex+i*7)%notes.length]+'</small>':'';
     return '<div class="pace-item"><span>'+label+' — <strong class="'+(delta<0?'behind':delta>0?'ahead':'')+'">'+status+'</strong></span>'+note+'</div>';
   }).join('');
+  const reviewCard=$('#review-plan');
+  reviewCard.hidden=reviewTarget==null&&reviews===0;
+  $('#review-count').textContent=reviews+' / '+(reviewTarget??'—');
+  const difference=reviewTarget==null?null:reviews-reviewTarget;
+  $('#review-status').textContent=difference==null?'Brak celu na ten miesiąc':difference<0?'Do celu brakuje '+(-difference):difference>0?'Ponad planem o '+difference:'Cel osiągnięty';
+  $('#review-status').className=difference<0?'behind':difference>0?'ahead':'';
+  const notes=difference==null?[]:difference<0?reviewNotes.below:difference>0?reviewNotes.above:reviewNotes.on;
+  const note=$('#review-note');
+  note.hidden=notes.length===0;
+  note.className='pace-note'+(difference<0?' pace-note-behind':'');
+  note.textContent=notes[Math.floor(Date.parse(data.today)/86400000)%notes.length]??'';
 }
 
 function renderQuote(text) {
@@ -379,7 +397,7 @@ function showView() {
   const quarterStart=Math.floor((month-1)/3)*3;
   data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
     plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
-    daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
+    reviewPlans:[{month:actual.today.slice(0,7),target:5}],daily:[],personal:{missing:[],exceptions:{},progress:[0,0]},
     sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy};
   try { renderSeller(true); } finally { data=actual; }
 }
