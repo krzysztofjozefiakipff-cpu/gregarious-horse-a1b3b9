@@ -1,0 +1,54 @@
+{
+  "IMG_9318": {
+    "camera_angle": "three_quarter",
+    "wheel_contacts": [
+      [
+        0.64,
+        0.985
+      ],
+      [
+        0.94,
+        0.65
+      ]
+    ]
+  },
+  "IMG_9315": {
+    "camera_angle": "three_quarter",
+    "wheel_contacts": [
+      [
+        0.63,
+        0.965
+      ],
+      [
+        0.96,
+        0.64
+      ]
+    ]
+  },
+  "IMG_9314": {
+    "camera_angle": "three_quarter",
+    "wheel_contacts": [
+      [
+        0.59,
+        0.975
+      ],
+      [
+        0.94,
+        0.72
+      ]
+    ]
+  },
+  "IMG_9313": {
+    "camera_angle": "three_quarter",
+    "wheel_contacts": [
+      [
+        0.42,
+        0.975
+      ],
+      [
+        0.9,
+        0.73
+      ]
+    ]
+  }
+}
