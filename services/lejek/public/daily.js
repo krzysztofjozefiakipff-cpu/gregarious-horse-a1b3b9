@@ -26,6 +26,13 @@ async function api(path,body) {
   return result;
 }
 
+function pluralForm(count,forms) {
+  if (count===1) return forms[0];
+  const last=count%10;
+  const lastTwo=count%100;
+  return last>=2&&last<=4&&(lastTwo<12||lastTwo>14)?forms[1]:forms[2];
+}
+
 function renderPlans(records) {
   const [year,month]=data.today.split('-').map(Number);
   const monthKey=data.today.slice(0,7);
@@ -51,10 +58,16 @@ function renderPlans(records) {
       (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
   }).join('');
   const targets=salesGoal?sourceTargets(salesGoal):[];
-  const todayTasks=[['Skontaktuj się z klientami',1,0],['Umów jazdy próbne',2,1],['Wyślij oferty',5,3]]
-    .map(([label,col,i])=>[label,Math.max(0,targets.reduce((sum,row)=>sum+row[col],0)-(current[i]??0))]).filter(([,gap])=>gap>0);
-  $('#tasks').innerHTML=todayTasks.length?todayTasks.map(([label,gap])=>'<li><strong>'+gap+'</strong> · '+label+'</li>').join(''):
-    '<li>'+(salesGoal==null?'Poproś kierownika o ustawienie planu.':'Dzisiejsze cele są osiągnięte.')+'</li>';
+  const todayTasks=[
+    {verb:'Skontaktuj się z', forms:['klientem','klientami','klientami'], note:'Zacznij od osoby, która czeka na odpowiedź.', col:1, index:0},
+    {verb:'Umów', forms:['jazdę próbną','jazdy próbne','jazd próbnych'], note:'Zaproponuj od razu konkretny termin.', col:2, index:1},
+    {verb:'Wyślij', forms:['ofertę','oferty','ofert'], note:'Zacznij od klienta, który jest najbliżej decyzji.', col:5, index:3}
+  ].map(task=>({...task,gap:Math.max(0,targets.reduce((sum,row)=>sum+row[task.col],0)-(current[task.index]??0))}))
+    .filter(task=>task.gap>0);
+  $('#tasks').innerHTML=todayTasks.length?todayTasks.map(({verb,forms,note,gap})=>
+    '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span>'+
+    '<small class="task-note">'+note+'</small></li>').join(''):
+    '<li class="task-message">'+(salesGoal==null?'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.':'Brawo! Dzisiejsze cele są zrealizowane.')+'</li>';
   const daysMonth=remainingDays(monthKey+'-01',monthEnd);
   const elapsed=daysMonth-remainingDays(data.today,monthEnd);
   const monthTargets=monthPlan?sourceTargets(monthPlan):[];
