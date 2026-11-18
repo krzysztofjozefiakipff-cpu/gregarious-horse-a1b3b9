@@ -378,6 +378,27 @@ function updateSourceStatuses() {
 sourceSelect.onchange=()=>showEntrySource(Number(sourceSelect.value));
 $('#entry-prev').onclick=()=>showEntrySource(Number(sourceSelect.value)-1);
 $('#entry-next').onclick=()=>showEntrySource(Number(sourceSelect.value)+1);
+$('#rows').addEventListener('keydown',event=>{
+  const input=event.target;
+  if (event.key!=='Enter'||event.isComposing||input.type!=='number') return;
+  event.preventDefault();
+  if (!input.reportValidity()) return;
+  const editable='input[type="number"]:not([readonly]):not(:disabled)';
+  const rows=$('#rows');
+  const mobile=matchMedia('(max-width:1050px)').matches;
+  const currentRow=input.closest('tr');
+  const fields=[...(mobile?currentRow:rows).querySelectorAll(editable)];
+  const next=fields[fields.indexOf(input)+1];
+  if (next) {
+    next.focus();
+  } else if (mobile&&currentRow.nextElementSibling) {
+    const nextRow=currentRow.nextElementSibling;
+    showEntrySource(Number(nextRow.dataset.source));
+    nextRow.querySelector(editable)?.focus();
+  } else if (!$('#save').disabled) {
+    $('#save').focus();
+  }
+});
 $('#rows').addEventListener('input',event=>{
   const input=event.target;
   if (input.name==='v0_0'&&input.validity.valid) {
@@ -437,7 +458,7 @@ function renderSeller(readOnly=false) {
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
