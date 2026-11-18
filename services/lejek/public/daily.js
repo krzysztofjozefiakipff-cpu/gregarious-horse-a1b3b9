@@ -534,7 +534,7 @@ $('#lesson-add').onclick=()=>appendLesson();
 $('#lesson-import').onclick=async ()=>{
   const file=$('#lesson-file').files[0];
   const status=$('#lesson-status');
-  if (!file||file.size>4*1024*1024) {status.textContent='Wybierz plik do 4 MB.';return;}
+  if (!file||file.size>15*1024*1024) {status.textContent='Wybierz plik do 15 MB.';return;}
   lessonBusy=true;
   updateLessonButtons();
   status.textContent='Odczytuję plik…';

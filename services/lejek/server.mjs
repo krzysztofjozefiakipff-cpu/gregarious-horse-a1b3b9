@@ -96,7 +96,7 @@ createServer(async (req,res)=>{
   try {
     const chunks=[];
     let bytes=0;
-    const maxBytes=req.method==='POST'&&req.url==='/api/lesson-import'?5_600_000:65_536;
+    const maxBytes=req.method==='POST'&&req.url==='/api/lesson-import'?21_000_000:65_536;
     for await(const chunk of req) {
       bytes+=chunk.length;
       if(bytes>maxBytes){res.writeHead(413);res.end();return;}

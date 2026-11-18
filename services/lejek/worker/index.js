@@ -144,10 +144,10 @@ async function handle(request, env) {
       return json({error:'Wybierz salon.'},400);
     if (path==='/api/lesson-import') {
       if (typeof body.filename!=='string'||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
-          typeof body.file!=='string'||!body.file||body.file.length>5_592_408)
-        return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 4 MB.'},400);
+          typeof body.file!=='string'||!body.file||body.file.length>20_971_520)
+        return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 15 MB.'},400);
       try {
-        const lessons=lessonDrafts(await env.extractLessonText(body.filename,body.file));
+        const lessons=lessonDrafts((await env.extractLessonText(body.filename,body.file)).slice(0,120_000));
         if (lessons.length) return json({lessons});
         return json({error:'Brak tekstu do odczytania. Jeśli to skan, użyj pliku z rozpoznanym tekstem lub dodaj lekcję ręcznie.'},422);
       } catch {
