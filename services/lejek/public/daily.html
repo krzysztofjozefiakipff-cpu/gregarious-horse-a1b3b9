@@ -95,6 +95,9 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #manager-team-list summary{cursor:pointer;overflow-wrap:anywhere}
 #manager-team-list summary strong{display:block}
 #manager-team-list ul{margin:10px 0 0;padding-inline-start:23px}
+.manager-preview-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px;margin-bottom:14px;background:white;border:1px solid var(--line);border-radius:10px}
+.manager-preview-bar select{min-width:0;max-width:100%}
+#manager-preview-note{margin:10px 0}
 </style>
 </head>
 <body>
@@ -168,6 +171,11 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 </div>
 </div>
 <section id="admin" hidden>
+<div id="manager-preview-bar" class="manager-preview-bar" hidden>
+  <label for="manager-preview-salon">Salon do podglądu</label>
+  <select id="manager-preview-salon"></select>
+  <button type="button" id="manager-preview-toggle" class="secondary">Podgląd kierownika</button>
+</div>
 <nav class="management-nav" aria-label="Zarządzanie salonem">
   <a href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a href="#zespol" id="management-team" hidden>Zespół</a>
@@ -182,7 +190,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   </section>
   <p id="team"></p>
   <section id="salon-summary"><h2>Realizacja planów zamówień</h2><div id="salon-results"></div></section>
-  <p><a href="/zarzadzanie.html">Szczegółowe wyniki i raport kwartalny</a></p>
+  <p id="management-report-link"><a href="/zarzadzanie.html">Szczegółowe wyniki i raport kwartalny</a></p>
 </section>
 <section id="manager-team-view" hidden>
   <h1>Zespół</h1>
@@ -191,6 +199,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <section id="administration-view" hidden>
 <h1>Panel administracyjny</h1>
 <p><a id="management-team-link" href="/zarzadzanie.html#administracja">Konta zespołu i ustawienia planów</a></p>
+<p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
 <div id="absence-panel"><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div></div>
 <form id="group-editor" hidden><h2>Grupy dealerskie</h2>
 <p>Dodaj grupę lub przypisz do istniejącej grupy kolejne salony i szefa.</p>

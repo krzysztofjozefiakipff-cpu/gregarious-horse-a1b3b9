@@ -117,13 +117,14 @@ async function handle(request, env) {
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
-      const teamDay=user.role==='manager'?await list(db,`SELECT a.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind
+      const teamDay=['manager','admin'].includes(user.role)?await list(db,`SELECT a.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind
         FROM accounts a
         LEFT JOIN daily_tracking t ON t.person=a.id
         LEFT JOIN daily_results d ON d.person=a.id AND d.day=?
         LEFT JOIN daily_exceptions e ON e.person=a.id AND e.day=?
-        WHERE a.salon=? AND a.role='seller' AND NOT EXISTS (SELECT 1 FROM dealer_group_heads h WHERE h.email=a.email)`,
-        today,today,user.salon):null;
+        WHERE a.role='seller' AND NOT EXISTS (SELECT 1 FROM dealer_group_heads h WHERE h.email=a.email)
+        ${user.role==='manager'?'AND a.salon=?':''}`,
+        today,today,...params):null;
       const previousDaily=personal?await db.prepare('SELECT day,counters FROM daily_results WHERE person=? AND day<? ORDER BY day DESC LIMIT 1').bind(user.id,today).first():null;
       const sidebarMode=sidebar?.mode??'cause';
       const pref=await db.prepare('SELECT enabled FROM giphy_preference WHERE id=1').bind().first();
