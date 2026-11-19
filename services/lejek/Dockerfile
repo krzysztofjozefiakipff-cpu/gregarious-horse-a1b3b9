@@ -5,7 +5,7 @@ COPY public public
 COPY worker worker
 COPY scripts scripts
 COPY drizzle drizzle
-COPY server.mjs .
+COPY server.mjs identity.mjs ./
 RUN node scripts/build.mjs && mkdir /data && chown node:node /data
 USER node
 CMD ["node", "server.mjs"]

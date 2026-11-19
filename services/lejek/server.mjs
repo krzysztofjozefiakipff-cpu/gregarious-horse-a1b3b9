@@ -3,6 +3,7 @@ import {createServer} from 'node:http';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {extractLessonText} from './scripts/lesson-text.mjs';
+import {localIdentity, sharedAdmin} from './identity.mjs';
 import worker from './dist/server/index.js';
 
 const previewOrigin = 'https://lejek.carvamo.com';
@@ -10,7 +11,7 @@ const allowedHosts = new Set(['lejek.carvamo.com', 'biegwyzej.pl', 'www.biegwyze
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users','0015_identity']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
@@ -31,6 +32,7 @@ const DB = {
     catch(error) {database.exec('ROLLBACK'); throw error;}
   }
 };
+const identity=localIdentity(database,DB);
 const cookie='__Host-lejek';
 const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
 const theme = readFileSync('public/theme.css','utf8');
@@ -86,6 +88,15 @@ function loginForm(error='',status=200) {
     'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
   });
 }
+async function adminAccount(token) {
+  const response=await fetch(accounts+'/api/auth/me',{
+    headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)
+  });
+  if (response.status>=500) throw new Error('Shared administrator authentication unavailable');
+  if (!response.ok) return null;
+  const {account}=await response.json();
+  return account?.email===sharedAdmin&&account?.role==='admin'?account:null;
+}
 async function handle(request) {
   const {pathname:path,origin}=new URL(request.url);
   if (path==='/healthz' && request.method==='GET') {
@@ -104,8 +115,14 @@ async function handle(request) {
     if (!csrf || csrf!==form.get('csrf') || (source && source!=='null' && source!==origin)) {
       return loginForm('Formularz wygasł. Zaloguj się ponownie.',403);
     }
-    const email=form.get('email')??'', password=form.get('password')??'';
+    const email=(form.get('email')??'').trim().toLowerCase(), password=form.get('password')??'';
     if (!email||!password||email.length>254||password.length>512) return loginForm('Sprawdź e-mail i hasło.',401);
+    if (email!==sharedAdmin) {
+      if (!identity.allowAttempt(email)) return loginForm('Zbyt wiele prób. Spróbuj później.',429);
+      const token=await identity.authenticate(email,password);
+      if (!token) return loginForm('Sprawdź e-mail i hasło.',401);
+      return redirect('/daily.html',{'Set-Cookie':cookie+'='+token+cookieOptions+'; Max-Age=28800'});
+    }
     const result=await fetch(accounts+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email,password}),signal:AbortSignal.timeout(8000)});
     if (result.status===429) return loginForm('Zbyt wiele prób. Spróbuj później.',429);
@@ -113,18 +130,17 @@ async function handle(request) {
     if (!result.ok) return loginForm('Sprawdź e-mail i hasło.',401);
     const {token}=await result.json();
     if (typeof token!=='string'||!/^[\w.-]+$/.test(token)) return reply('Logowanie chwilowo niedostępne',503);
-    return redirect('/daily.html',{'Set-Cookie':cookie+'='+token+cookieOptions+'; Max-Age=28800'});
-  }
-  if(path==='/logout' && request.method==='POST' && request.headers.get('Origin')===origin) {
-    return redirect('/login',{'Set-Cookie':cookie+'='+cookieOptions+'; Max-Age=0'});
+    if (!await adminAccount(token)) return loginForm('Sprawdź e-mail i hasło.',401);
+    return redirect('/daily.html',{'Set-Cookie':cookie+'=shared-'+token+cookieOptions+'; Max-Age=28800'});
   }
   const token=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek=([\w.-]{1,4096})(?:;|$)/)?.[1];
-  let account;
-  if (token) {
-    const result=await fetch(accounts+'/api/auth/me',{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)});
-    if(result.status>=500) return reply('Logowanie chwilowo niedostępne',503);
-    if(result.ok) account=(await result.json()).account;
+  const localToken=token?.match(/^bw-([a-f0-9]{64})$/)?.[1];
+  if(path==='/logout' && request.method==='POST' && request.headers.get('Origin')===origin) {
+    if (localToken) identity.logout(localToken);
+    return redirect('/login',{'Set-Cookie':cookie+'='+cookieOptions+'; Max-Age=0'});
   }
+  const sharedToken=token?.startsWith('shared-')?token.slice(7):null;
+  const account=localToken?identity.account(localToken):sharedToken?await adminAccount(sharedToken):null;
   if (!account?.email || !account?.id) {
     if(path.startsWith('/api/')) return Response.json({error:'Zaloguj się ponownie.'},{status:401,headers});
     return redirect('/login');
@@ -133,7 +149,7 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText});
+  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,sharedAdmin});
 }
 createServer(async (req,res)=>{
   try {

@@ -68,6 +68,10 @@ function lessonDrafts(text) {
 }
 const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
 
+function validAccountPassword(password) {
+  return typeof password === 'string' && password.length >= 12 && password.length <= 128;
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -312,11 +316,14 @@ async function handle(request, env) {
     if (!textValid(body.email)||typeof body.archived!=='boolean') return json({error:'Wybierz użytkownika.'},400);
     const address=body.email.trim().toLowerCase();
     const account=await db.prepare('SELECT role FROM accounts WHERE email=?').bind(address).first();
-    if (address===email||account?.role==='admin') return json({error:'Nie można usunąć dostępu administratora.'},403);
+    if (address===env.sharedAdmin||address===email||account?.role==='admin') return json({error:'Nie można usunąć dostępu administratora.'},403);
     const head=await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first();
     if (!account&&!head) return json({error:'Nie znaleziono użytkownika.'},404);
     const sql=body.archived?'INSERT INTO archived_users(email) VALUES (?) ON CONFLICT DO NOTHING':'DELETE FROM archived_users WHERE email=?';
-    await db.prepare(sql).bind(address).run();
+    await db.batch([
+      db.prepare(sql).bind(address),
+      db.prepare('DELETE FROM lejek_sessions WHERE email=?').bind(address)
+    ]);
     return json({ok:true});
   }
   if (path==='/api/users' && canManage) {
@@ -328,7 +335,7 @@ async function handle(request, env) {
       return json({error:'Podaj dane użytkownika i zaznacz co najmniej jedną rolę. Dla kierownika lub handlowca wybierz salon.'},400);
     const address=body.email.trim().toLowerCase();
     const current=await db.prepare('SELECT id,role FROM accounts WHERE email=?').bind(address).first();
-    if (address===email||current?.role==='admin') return json({error:'Tym formularzem nie można zmienić konta administratora.'},403);
+    if (address===env.sharedAdmin||address===email||current?.role==='admin') return json({error:'Tym formularzem nie można zmienić konta administratora.'},403);
     if (user.role!=='admin') {
       if (!needsSalon||!managedSalons.has(salon.trim())||chosen.some(role=>role==='group'||user.role==='manager'&&role!=='seller'))
         return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
@@ -342,24 +349,22 @@ async function handle(request, env) {
     if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
     const fallback=chosen.includes('manager')?'manager':'seller';
-    if (user.role!=='admin') {
-      const created=await db.prepare(`INSERT INTO accounts(email,name,salon,role)
-        SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM dealer_group_heads WHERE email=?)
-        ON CONFLICT(email) DO NOTHING RETURNING id`).bind(address,name.trim(),salon.trim(),fallback,address).first();
-      if (!created) return json({error:'Konto jest już przypisane w Lejku.'},409);
-      if (chosen.length>1) await db.batch(chosen.map(role=>db.prepare('INSERT INTO account_roles VALUES (?,?)').bind(created.id,role)));
-      return json({ok:true});
-    }
+    const password=body.password??'';
+    if ((body.createOnly===true||!current||password!=='')&&!validAccountPassword(password))
+      return json({error:'Hasło do Biegu Wyżej musi mieć od 12 do 128 znaków.'},400);
+    const credentials=password?await env.passwordStatements(address,password):[];
+    const createOnly=body.createOnly===true||user.role!=='admin';
     const insertAccount='INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)';
     const updateAccount=' ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role';
     await db.batch([
-      db.prepare(insertAccount+(body.createOnly===true?'':updateAccount))
+      db.prepare(insertAccount+(createOnly?'':updateAccount))
         .bind(address,name.trim(),needsSalon?salon.trim():'',fallback),
       db.prepare('DELETE FROM account_roles WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address),
       ...chosen.map(role=>db.prepare('INSERT INTO account_roles SELECT id,? FROM accounts WHERE email=?').bind(role,address)),
       group?db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name').bind(address,group)
         :db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(address),
-      ...(!chosen.includes('manager')&&current?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[])
+      ...(!chosen.includes('manager')&&current?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
+      ...credentials
     ]);
     return json({ok:true});
   }
@@ -368,23 +373,19 @@ async function handle(request, env) {
         !textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return json({error:'Uzupełnij poprawnie wszystkie pola.'},400);
     const targetEmail=body.email.trim().toLowerCase();
     const salon=body.salon.trim();
+    if (targetEmail===env.sharedAdmin) return json({error:'Nie można zmienić konta administratora.'},403);
+    if (!validAccountPassword(body.password))
+      return json({error:'Hasło do Biegu Wyżej musi mieć od 12 do 128 znaków.'},400);
     if (user.role!=='admin'&&!managedSalons.has(salon) || user.role==='manager'&&body.role!=='seller')
       return json({error:'Nie możesz nadać tej roli w wybranym salonie.'},403);
     const current=await db.prepare('SELECT id,role,salon FROM accounts WHERE email=?').bind(targetEmail).first();
-    if (current&&await db.prepare('SELECT 1 FROM account_roles WHERE person=?').bind(current.id).first())
-      return json({error:'Role tego konta zmienisz w panelu administratora w sekcji Użytkownicy.'},403);
-    const currentHead=await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(targetEmail).first();
-    if (current?.role==='admin'||targetEmail===email||user.role!=='admin'&&(currentHead||current&&(!managedSalons.has(current.salon)||user.role==='manager'&&current.role!=='seller')))
-      return json({error:'Nie możesz zmienić uprawnień tego konta.'},403);
-    if (user.role==='group'&&current?.role==='manager') {
-      const extra=await list(db,'SELECT salon FROM manager_salons WHERE manager=?',current.id);
-      if (extra.some(row=>!managedSalons.has(row.salon))) return json({error:'Ten kierownik zarządza także salonem spoza Twojej grupy.'},403);
-    }
+    if (current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(targetEmail).first())
+      return json({error:'Konto już istnieje. Zmiany wprowadź w sekcji Zarządzaj użytkownikami.'},409);
+    const credentials=await env.passwordStatements(targetEmail,body.password);
     await db.batch([
-      db.prepare('INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role')
+      db.prepare('INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)')
         .bind(targetEmail,body.name.trim(),salon,body.role),
-      ...(current?.role==='manager'&&body.role!=='manager'?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
-      ...(currentHead?[db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(targetEmail)]:[])
+      ...credentials
     ]);
     return json({ok:true});
   }

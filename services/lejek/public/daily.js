@@ -1041,6 +1041,9 @@ function loadUserEditor() {
   userEditor.elements.name.value=selected?.name??'';
   userEditor.elements.email.value=selected?.email??'';
   userEditor.elements.email.readOnly=Boolean(selected);
+  userEditor.elements.password.value='';
+  userEditor.elements.password.required=!editing;
+  $('#user-password-label').textContent=editing?'Nowe hasło (opcjonalnie)':'Hasło do Biegu Wyżej (co najmniej 12 znaków)';
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
