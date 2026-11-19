@@ -1422,6 +1422,7 @@ function loadUserEditor() {
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
+  $('#user-send-invite').hidden=!selected||Boolean(selected.archived||managerPreviewSalon||groupPreviewName);
   const archiveButton=$('#user-archive');
   archiveButton.hidden=!selected;
   archiveButton.dataset.archived=String(Boolean(selected?.archived));
@@ -1481,6 +1482,21 @@ userEditor.onsubmit=async event=>{
       loadUserEditor();
     }
     $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.':result.invitation==='failed'?'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.':'Dodano użytkownika.';
+  } catch(error) {
+    $('#user-status').textContent=error.message;
+  } finally {
+    button.disabled=false;
+  }
+};
+
+$('#user-send-invite').onclick=async event=>{
+  const button=event.currentTarget;
+  const selected=editableUsers.find(user=>user.email===$('#user-picker').value);
+  if (!selected||selected.archived) return;
+  button.disabled=true;
+  try {
+    await api('/api/users/invite',{email:selected.email});
+    $('#user-status').textContent='Wysłano zaproszenie na '+selected.email+'.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {
