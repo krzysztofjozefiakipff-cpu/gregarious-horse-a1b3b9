@@ -237,11 +237,33 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .salon-pace-time { color:var(--muted); font-size:.875rem; margin-top:5px; }
 #salon-results h3 { margin:10px 0 4px; font-size:1rem; }
 #salon-results li+li { margin-top:5px; }
+.salon-coaching { display:grid; gap:12px; margin-top:12px; }
+.salon-coaching > section { min-width:0; padding:10px 12px; border-radius:8px; border-inline-start:4px solid; }
+.coaching-risk { background:#fff1f1; border-color:#b22929; }
+.coaching-good { background:#eaf8ef; border-color:#17663c; }
+#salon-results .salon-coaching h3 { margin:0 0 8px; }
+.coaching-metric + .coaching-metric { margin-top:10px; }
+.coaching-metric a { color:var(--accent-ink); font-weight:700; }
+#seller-detail { background:white; border:1px solid var(--line); border-radius:12px; padding:14px; }
+#seller-detail-table { margin-block:12px; }
+#seller-detail td, #seller-detail th { padding:7px 10px; }
+@media(min-width:850px) { .salon-coaching { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 </style>
 </head>
 <body>
 <header class="panel-header"><div class="identity"><img id="logo" alt="" hidden><strong id="dealer">Bieg Wyżej</strong><span id="salon"></span></div><div class="header-account"><span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span><span id="display-date"></span></div></header>
 <main>
+<section id="seller-detail" hidden aria-labelledby="seller-detail-heading">
+  <h1 id="seller-detail-heading">Praca na lejku</h1>
+  <p id="seller-detail-period"></p>
+  <div id="seller-detail-table" class="scroll" hidden>
+    <table>
+      <thead><tr><th scope="col">Etap lejka</th><th scope="col">Wykonanie</th><th scope="col">Cel narastająco do dziś</th><th scope="col">Cel miesiąca</th><th scope="col">Tempo</th></tr></thead>
+      <tbody id="seller-detail-metrics"></tbody>
+    </table>
+  </div>
+  <p><a href="/daily.html#wykonanie">Wróć do panelu</a></p>
+</section>
 <p id="load" role="status">Wczytywanie danych…</p>
 <div id="account-role-bar" class="manager-preview-bar" hidden><label for="account-role">Aktywna rola</label> <select id="account-role"></select></div>
 <div id="daily" hidden>

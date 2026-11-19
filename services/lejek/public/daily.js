@@ -332,6 +332,8 @@ const remainingDays = (start,end) => {
 };
 const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString().slice(0,10);
 const panelNames={admin:'Panel administratora',group:'Panel szefa grupy dealerskiej',manager:'Panel kierownika salonu',seller:'Panel handlowca'};
+const detailParams=new URLSearchParams(location.search);
+const detailSeller=detailParams.get('handlowiec');
 let data;
 let editDay;
 let busy=false;
@@ -344,7 +346,7 @@ async function api(path,body) {
   if (body!==undefined&&(managerPreviewSalon||groupPreviewName))
     throw new Error('To podgląd. Zmiany możesz zapisać z konta kierownika lub szefa grupy.');
   const url=new URL(path,location.origin);
-  const selectedRole=sessionStorage.getItem('lejek-active-role');
+  const selectedRole=(detailSeller&&detailParams.get('role'))||sessionStorage.getItem('lejek-active-role');
   if (selectedRole) url.searchParams.set('role',selectedRole);
   const response=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
   const result=await response.json();
@@ -937,7 +939,7 @@ const managerActions={
 
 function renderSalonSummary(view,team=[]) {
   const results=$('#salon-results');
-  const expanded=new Set([...results.querySelectorAll('details[open]')].map(card=>card.dataset.salon));
+  const expanded=new Map([...results.querySelectorAll('details')].map(card=>[card.dataset.salon,card.open]));
   results.replaceChildren();
   if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
   if (!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
@@ -953,7 +955,6 @@ function renderSalonSummary(view,team=[]) {
   for (const plan of data.salonPerformance.filter(plan=>salons.has(plan.salon))) {
     const card=document.createElement('details');
     card.dataset.salon=plan.salon;
-    card.open=expanded.has(plan.salon);
     const summary=document.createElement('summary');
     const title=document.createElement('strong');
     title.textContent=plan.salon;
@@ -1005,43 +1006,69 @@ function renderSalonSummary(view,team=[]) {
     summary.append(title,status,time,grid);
     const members=new Set(plan.team.map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
-    const heading=document.createElement('h3');
-    heading.textContent='Obszary do reakcji kierownika';
-    const gaps=columns.map(([index,label],column)=>{
-      const measured=metrics.map(person=>person.metrics[column]).filter(metric=>metric.goal>0);
-      const gap=measured.reduce((sum,metric)=>sum+Math.max(0,-metric.delta),0);
-      const goal=measured.reduce((sum,metric)=>sum+metric.goal,0);
-      return {index,label,gap,pressure:goal?gap/goal:0};
-    }).filter(metric=>metric.gap>0);
-    for (const [index,metric] of [7,8,10,9].entries()) {
-      const target=plan.targets[index];
-      if (!plan.configured[index]||target<=0) continue;
-      const expected=target*elapsed/total;
-      const gap=Math.ceil(expected-plan.actuals[index]);
-      if (gap<=0) continue;
-      const existing=gaps.find(item=>item.index===metric);
-      if (!existing) gaps.push({index:metric,label:salonPlanMetrics[index],gap,pressure:gap/expected});
+    const areas=columns.map(([index,label],column)=>{
+      const contributors=metrics.map(person=>({seller:person.seller,...person.metrics[column]}))
+        .filter(metric=>metric.goal>0);
+      const salonIndex=[7,8,10,9].indexOf(index);
+      const target=plan.targets[salonIndex];
+      const salonDelta=plan.configured[salonIndex]&&target>0
+        ?plan.actuals[salonIndex]-target*elapsed/total:null;
+      return {index,label,contributors,salonDelta};
+    });
+    const sections=document.createElement('div');
+    sections.className='salon-coaching';
+    for (const needsAction of [true,false]) {
+      const section=document.createElement('section');
+      section.className=needsAction?'coaching-risk':'coaching-good';
+      const heading=document.createElement('h3');
+      heading.textContent=needsAction?'Wymaga reakcji':'Co działa';
+      section.append(heading);
+      for (const {index,label,contributors,salonDelta} of areas) {
+        const people=contributors.filter(metric=>needsAction?metric.delta<0:metric.delta>=0)
+          .sort((a,b)=>needsAction?a.delta-b.delta:b.delta-a.delta);
+        const matchesSalon=salonDelta!==null&&(needsAction?salonDelta<0:salonDelta>=0);
+        if (!people.length&&!matchesSalon) continue;
+        const row=document.createElement('div');
+        row.className='coaching-metric';
+        const name=document.createElement('strong');
+        name.textContent=label+(matchesSalon
+          ?needsAction?' · salonowi brakuje '+Math.ceil(-salonDelta)+' do tempa':' · salon zgodnie z tempem':'');
+        row.append(name);
+        if (needsAction) {
+          const action=document.createElement('p');
+          action.textContent=managerActions[index];
+          row.append(action);
+        }
+        const list=document.createElement('ul');
+        for (const metric of people) {
+          const item=document.createElement('li');
+          const link=document.createElement('a');
+          link.textContent=metric.seller.name;
+          link.href='/daily.html?'+new URLSearchParams({handlowiec:metric.seller.id,role:data.role});
+          link.target='_blank';
+          link.rel='noopener';
+          link.setAttribute('aria-label',metric.seller.name+' – szczegóły lejka w nowej karcie');
+          item.append(link,' · '+metric.actual+' / '+metric.goal+' na dziś · '+
+            (metric.delta<0?'brakuje '+(-metric.delta):metric.delta>0?'nadwyżka '+metric.delta:'zgodnie z planem'));
+          list.append(item);
+        }
+        if (list.children.length) row.append(list);
+        section.append(row);
+      }
+      if (section.children.length===1) {
+        const note=document.createElement('p');
+        note.textContent=needsAction?'Brak wykazanych zaległości.':'Brak wskaźników na planie z wyznaczonym celem na dziś.';
+        section.append(note);
+      }
+      sections.append(section);
     }
-    const list=document.createElement('ul');
-    for (const {index,label,gap} of gaps.sort((a,b)=>b.pressure-a.pressure||b.gap-a.gap).slice(0,3)) {
-      const item=document.createElement('li');
-      item.textContent=label+' · brakuje '+gap+' do tempa na dziś. '+managerActions[index];
-      list.append(item);
-    }
-    card.append(summary,heading);
-    card.open=risky||expanded.has(plan.salon);
-    if (list.children.length) card.append(list);
-    else {
-      const note=document.createElement('p');
-      note.textContent=metrics.some(person=>person.metrics.some(metric=>metric.goal>0))||assessed.length
-        ?'Brak wykazanych zaległości względem tempa.':'Brak celów do wskazania słabych punktów.';
-      card.append(note);
-    }
+    card.append(summary,sections);
+    card.open=expanded.get(plan.salon)??true;
     results.append(card);
   }
 }
 
-function renderManagerDashboard(view) {
+function renderManagerDashboard(view,detailOnly=false) {
   const {today,sellers,daily,plans,funnelPlans,reviewPlans,teamDay}=view;
   const month=today.slice(0,7);
   const [year,monthNumber]=month.split('-').map(Number);
@@ -1066,6 +1093,7 @@ function renderManagerDashboard(view) {
       .sort((a,b)=>a.actual/a.goal-b.actual/b.goal||a.delta-b.delta)[0];
     return {seller,status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
   });
+  if (detailOnly) return team;
   const list=$('#manager-team-list');
   list.replaceChildren();
   if (!team.length) list.textContent='Brak przypisanych handlowców.';
@@ -1684,10 +1712,44 @@ for (const panel of historyPanels) {
   panel.reloadHistory=()=>{if(panel.open && input.value) load();};
 }
 
+function renderSellerDetail() {
+  const section=$('#seller-detail');
+  section.hidden=false;
+  const seller=data.role!=='seller'&&data.sellers.find(person=>String(person.id)===detailSeller);
+  if (!seller) {
+    $('#seller-detail-heading').textContent='Brak dostępu do szczegółów handlowca';
+    return;
+  }
+  const [person]=renderManagerDashboard({...data,sellers:[seller]},true);
+  labelPanel(data.role,seller.salon);
+  $('#seller-detail-heading').textContent=seller.name+' · praca na lejku';
+  $('#seller-detail-period').textContent=seller.salon+' · '+monthLabel(data.today.slice(0,7))+' · '+person.status;
+  const tbody=$('#seller-detail-metrics');
+  tbody.replaceChildren(...person.metrics.map(metric=>{
+    const row=document.createElement('tr');
+    const heading=document.createElement('th');
+    heading.scope='row';
+    heading.textContent=metric.label;
+    row.append(heading);
+    for (const value of [metric.actual,metric.goal,metric.target,metric.delta===null?null:
+      metric.delta<0?'Brakuje '+(-metric.delta):metric.delta>0?'Nadwyżka '+metric.delta:'Zgodnie z tempem']) {
+      const cell=document.createElement('td');
+      cell.textContent=value??'—';
+      row.append(cell);
+    }
+    return row;
+  }));
+  $('#seller-detail-table').hidden=false;
+}
+
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
   $('#logo').hidden=true;
+  if (detailSeller) {
+    renderSellerDetail();
+    return;
+  }
   if (data.role==='seller') {
     renderSeller();
     return;
@@ -1768,7 +1830,7 @@ async function refresh() {
   const signedIn=$('#signed-in');
   signedIn.querySelector('strong').textContent=data.signedInAs??'';
   signedIn.hidden=!data.signedInAs;
-  if (data.role!=='seller') {
+  if (!detailSeller&&data.role!=='seller') {
     data.salonPerformance=await api('/api/salon-plans?month='+data.today.slice(0,7))
       .then(({plans})=>plans).catch(()=>null);
   }
