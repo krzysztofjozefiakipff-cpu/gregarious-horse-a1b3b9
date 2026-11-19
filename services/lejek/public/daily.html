@@ -84,7 +84,6 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .manager-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin:14px 0}
 .manager-cards article,#manager-team-list details{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--ink)}
 .manager-cards strong{display:block;font-size:1.2rem;margin-top:4px}
-#manager-missing{margin:0 0 8px}
 #manager-team-list details{margin:0 0 8px}
 #manager-team-list summary{cursor:pointer;overflow-wrap:anywhere}
 #manager-team-list summary strong{display:block}
@@ -116,6 +115,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #salon-plan-results article{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px}
 #salon-plan-results dl{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin-bottom:0}
 #salon-plan-results dd{margin:0;font-weight:750}
+.salon-progress-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0 2px}
+.salon-progress-grid>span{min-width:0;padding:10px;background:var(--tint);border-radius:8px;font-size:.9rem}
+.salon-progress-grid strong{display:block;margin:4px 0;font-variant-numeric:tabular-nums}
+.salon-progress-grid progress{display:block;appearance:none;width:100%;height:8px;border:0;border-radius:5px;background:var(--line);overflow:hidden}
+.salon-progress-grid progress::-webkit-progress-bar{background:var(--line)}
+.salon-progress-grid progress::-webkit-progress-value{background:var(--plan-progress)}
+.salon-progress-grid progress::-moz-progress-bar{background:var(--plan-progress)}
 </style>
 </head>
 <body>
@@ -210,10 +216,9 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <h1 id="performance-title">Wykonanie planu</h1>
   <section id="manager-today" hidden aria-label="Podsumowanie dnia">
     <div id="manager-cards" class="manager-cards"></div>
-    <p id="manager-missing"></p>
   </section>
   <p id="team"></p>
-  <section id="salon-summary"><h2>Realizacja planów zamówień</h2><div id="salon-results"></div></section>
+  <section id="salon-summary"><h2>Realizacja planów salonów</h2><p id="salon-period"></p><div id="salon-results"></div></section>
   <p id="management-report-link"><a href="/zarzadzanie.html">Szczegółowe wyniki i raport kwartalny</a></p>
 </section>
 <section id="manager-team-view" hidden>

@@ -869,37 +869,71 @@ function renderSeller() {
   $('#daily').hidden=false;
 }
 
-function renderSalonSummary(view) {
-  const month=view.today.slice(0,7);
+function renderSalonSummary(view,team=[]) {
   const results=$('#salon-results');
+  const expanded=new Set([...results.querySelectorAll('details[open]')].map(card=>card.dataset.salon));
   results.replaceChildren();
-  const pct=(orders,target)=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(100*orders/target)+'%';
-  const describe=(orders,target)=>target>0?orders+' / '+target+' · '+pct(orders,target):orders+' zam. · Brak planu';
-  const targets=new Map(view.plans.filter(plan=>plan.month===month).map(plan=>[plan.person,plan.target]));
-  const ordersBySeller=new Map();
-  for (const result of view.daily) {
-    if (!result.day.startsWith(month)||result.day>view.today) continue;
-    ordersBySeller.set(result.person,(ordersBySeller.get(result.person)??0)+(JSON.parse(result.counters)[4]??0));
-  }
-  for (const {salon} of view.salons) {
-    const team=view.sellers.filter(seller=>seller.salon===salon&&seller.includeInReports);
-    const planned=team.filter(seller=>(targets.get(seller.id)??0)>0);
-    const total=planned.reduce((sum,seller)=>sum+targets.get(seller.id),0);
-    const orders=planned.reduce((sum,seller)=>sum+(ordersBySeller.get(seller.id)??0),0);
-    const detail=document.createElement('details');
+  if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
+  if (!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
+  $('#salon-period').textContent=dateLabel(view.today,{month:'long',year:'numeric'});
+  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
+  const salons=new Set(view.salons.map(({salon})=>salon));
+  for (const plan of data.salonPerformance.filter(plan=>salons.has(plan.salon))) {
+    const card=document.createElement('details');
+    card.dataset.salon=plan.salon;
+    card.open=expanded.has(plan.salon);
     const summary=document.createElement('summary');
-    summary.textContent=salon+' · '+describe(orders,total)+' · '+planned.length+' z '+team.length+' osób z planem';
-    detail.append(summary);
-    const people=document.createElement('ul');
-    for (const seller of team) {
-      const item=document.createElement('li');
-      item.textContent=seller.name+' · '+describe(ordersBySeller.get(seller.id)??0,targets.get(seller.id));
-      people.append(item);
+    const title=document.createElement('strong');
+    title.textContent=plan.salon;
+    const grid=document.createElement('span');
+    grid.className='salon-progress-grid';
+    for (const [index,label] of salonPlanMetrics.entries()) {
+      const indicator=document.createElement('span');
+      const name=document.createElement('span');
+      name.textContent=label;
+      const values=document.createElement('strong');
+      const actual=plan.actuals[index];
+      const target=plan.targets[index];
+      const configured=plan.configured[index];
+      const ratio=target>0?actual/target:null;
+      values.textContent=actual+' / '+(configured?target:'—')+
+        (ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
+      if (ratio!==null) values.className=ratio>=1?'ahead':'behind';
+      indicator.append(name,values);
+      if (ratio!==null) {
+        const progress=document.createElement('progress');
+        progress.max=target;
+        progress.value=Math.min(actual,target);
+        progress.setAttribute('aria-label',plan.salon+' · '+label);
+        progress.setAttribute('aria-valuetext',values.textContent);
+        progress.style.setProperty('--plan-progress',ratio>=1?'#12633b':'hsl('+Math.round(ratio*38)+' 75% 38%)');
+        indicator.append(progress);
+      }
+      grid.append(indicator);
     }
-    detail.append(people);
-    results.append(detail);
+    summary.append(title,grid);
+    const members=new Set(plan.team.map(person=>person.id));
+    const metrics=team.filter(person=>members.has(person.seller.id));
+    const heading=document.createElement('h3');
+    heading.textContent='Braki w lejku względem tempa na dziś';
+    const list=document.createElement('ul');
+    for (const [index,[,label]] of columns.entries()) {
+      const gap=metrics.reduce((total,person)=>total+Math.max(0,-person.metrics[index].delta),0);
+      if (!gap) continue;
+      const item=document.createElement('li');
+      item.textContent=label+' · brakuje '+gap;
+      list.append(item);
+    }
+    card.append(summary,heading);
+    if (list.children.length) card.append(list);
+    else {
+      const note=document.createElement('p');
+      note.textContent=metrics.some(person=>person.metrics.some(metric=>metric.goal!=null))
+        ?'Brak zaległości względem tempa na dziś.':'Brak celów handlowców do porównania.';
+      card.append(note);
+    }
+    results.append(card);
   }
-  if (!results.children.length) results.textContent='Brak przypisanych salonów.';
 }
 
 function renderManagerDashboard(view) {
@@ -934,17 +968,17 @@ function renderManagerDashboard(view) {
   const todayOrders=(planned.length?planned:reportTeam).reduce((sum,person)=>sum+person.orders.doneToday,0);
   const todayTarget=planned.reduce((sum,person)=>sum+person.orders.todayTarget,0);
   const gaps=columns.map(([index,label],i)=>{
-    const actual=reportTeam.reduce((sum,person)=>sum+(person.metrics[i].goal==null?0:person.metrics[i].actual),0);
+    const gap=reportTeam.reduce((sum,person)=>sum+Math.max(0,-person.metrics[i].delta),0);
     const goal=reportTeam.reduce((sum,person)=>sum+(person.metrics[i].goal??0),0);
-    return {label,actual,goal};
-  }).filter(row=>row.actual<row.goal).sort((a,b)=>a.actual/a.goal-b.actual/b.goal);
+    return {label,gap,goal};
+  }).filter(row=>row.gap>0).sort((a,b)=>b.gap/b.goal-a.gap/a.goal);
   const priority=gaps[0];
   const cards=$('#manager-cards');
   cards.replaceChildren();
   for (const [label,value] of [
     ['Zamówienia dziś',planned.length?todayOrders+' / '+todayTarget:todayOrders+' · brak planu'],
     ['Wpisy do uzupełnienia',String(missing.length)],
-    ['Priorytet w lejku',priority?priority.label+' · brakuje '+(priority.goal-priority.actual):reportTeam.some(person=>person.metrics.some(metric=>metric.target>0))?'Brak zaległości względem tempa':'Brak celów zespołu']
+    ['Priorytet w lejku',priority?priority.label+' · brakuje '+priority.gap:reportTeam.some(person=>person.metrics.some(metric=>metric.target>0))?'Brak zaległości względem tempa':'Brak celów zespołu']
   ]) {
     const card=document.createElement('article');
     const valueNode=document.createElement('strong');
@@ -952,7 +986,6 @@ function renderManagerDashboard(view) {
     card.append(label,valueNode);
     cards.append(card);
   }
-  $('#manager-missing').textContent=missing.length?'Brak wpisu: '+missing.map(person=>person.seller.name).join(', '):'';
   const list=$('#manager-team-list');
   list.replaceChildren();
   if (!team.length) list.textContent='Brak przypisanych handlowców.';
@@ -985,6 +1018,7 @@ function renderManagerDashboard(view) {
     detail.append(summary,figures);
     list.append(detail);
   }
+  return team;
 }
 
 const salonPlans=$('#salon-plans');
@@ -1014,7 +1048,9 @@ function planTargets(values,max) {
 function planAction(button,path,body,month) {
   button.disabled=true;
   return api(path,{month,...body}).then(()=>{
-    if (salonPlanMonth.value===month) return loadSalonPlans();
+    return refresh().then(()=>{
+      if (salonPlanMonth.value===month) return loadSalonPlans();
+    });
   }).catch(error=>{
     if (salonPlanMonth.value===month) $('#salon-plan-status').textContent=error.message;
   }).finally(()=>{button.disabled=false;});
@@ -1309,7 +1345,7 @@ function renderAdmin() {
     :managerPreview?{...baseView,role:'manager',salon:'Wszystkie salony'}:baseView;
   const manager=view.role==='manager';
   const teamDashboard=manager||group;
-  const title=group?(selected?'Dziś w salonie':'Dziś w grupie'):manager?'Dziś w salonie':'Wykonanie planu';
+  const title=group?(selected?'Dziś w salonie':'Dziś w grupie'):manager?(multiple&&!selected?'Dziś w salonach':'Dziś w salonie'):'Wykonanie planu';
   $('#manager-preview-note').hidden=!readOnlyPreview;
   $('#manager-preview-note').textContent=(groupPreview?'Podgląd szefa grupy.':'Podgląd kierownika.')+' Możesz wypróbować pola formularza. Dane salonu nie zostaną zapisane.';
   $('#management-report-link').hidden=readOnlyPreview;
@@ -1320,7 +1356,7 @@ function renderAdmin() {
   $('#management-performance').textContent=group?'Wyniki grupy':title;
   $('#management-team').hidden=!teamDashboard;
   $('#manager-today').hidden=!teamDashboard;
-  if (teamDashboard) renderManagerDashboard(view);
+  const team=teamDashboard?renderManagerDashboard(view):[];
   $('#admin').hidden=false;
   selectManagementView();
   const params=new URLSearchParams({role:data.role});
@@ -1329,7 +1365,8 @@ function renderAdmin() {
   $('#management-team-link').href='/zarzadzanie.html'+query+'#administracja';
   $('#management-report-link a').href='/zarzadzanie.html'+query;
   $('#management-team-link').textContent='Ustawienia planów';
-  renderSalonSummary(view);
+  $('#salon-summary').hidden=!teamDashboard;
+  if (teamDashboard) renderSalonSummary(view,team);
   userEditor.hidden=false;
   renderUserEditor(view);
   $('#group-add-salon-block').hidden=!group;
@@ -1496,6 +1533,10 @@ $('#account-role').onchange=event=>{
 };
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
+  if (data.role!=='seller') {
+    data.salonPerformance=await api('/api/salon-plans?month='+data.today.slice(0,7))
+      .then(({plans})=>plans).catch(()=>null);
+  }
   const roleSelect=$('#account-role');
   $('#account-role-bar').hidden=data.roles.length<2;
   roleSelect.replaceChildren(...data.roles.map(role=>new Option(panelNames[role],role)));

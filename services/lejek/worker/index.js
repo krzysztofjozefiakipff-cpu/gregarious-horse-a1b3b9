@@ -185,7 +185,7 @@ async function handle(request, env) {
     ORDER BY a.name,a.id
   `,salon,salon);
   if (path==='/api/salon-plans'&&request.method==='GET') {
-    if (!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
+    if (!owner&&!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const month=url.searchParams.get('month');
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
     const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
@@ -211,7 +211,7 @@ async function handle(request, env) {
         LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
       const managers=await assignedManagers(salon);
       const override=Boolean(approvals&&saved?.approvals===approvals);
-      plans.push({salon,automatic,targets:override?JSON.parse(saved.targets):automatic,override,
+      plans.push({salon,automatic,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
         actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
         team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
