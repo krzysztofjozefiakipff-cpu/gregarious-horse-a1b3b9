@@ -1173,6 +1173,16 @@ const managerActions={
   10:'Sprawdź, co blokuje fakturowanie podpisanych zamówień.'
 };
 
+function coachingSellerLink(seller) {
+  const link=document.createElement('a');
+  link.textContent=seller.name;
+  link.href=sellerDetailUrl(seller.id,'wykonanie');
+  link.target='_blank';
+  link.rel='noopener';
+  link.setAttribute('aria-label',seller.name+' – szczegóły lejka w nowej karcie');
+  return link;
+}
+
 function renderSalonSummary(view,team=[]) {
   const results=$('#salon-results');
   const expanded=new Map([...results.querySelectorAll('details')].map(card=>[card.dataset.salon,card.open]));
@@ -1251,6 +1261,10 @@ function renderSalonSummary(view,team=[]) {
       const actual=hasSalonPlan?plan.actuals[salonIndex]:results.reduce((sum,metric)=>sum+metric.actual,0);
       return {index,label,contributors:results.filter(metric=>metric.goal>0),actual,goal,delta:actual-goal};
     });
+    const onPace=metrics.filter(person=>{
+      const due=person.metrics.filter(metric=>metric.goal>0);
+      return due.length&&due.every(metric=>metric.delta>=0);
+    });
     const sections=document.createElement('div');
     sections.className='salon-coaching';
     for (const needsAction of [true,false]) {
@@ -1259,15 +1273,31 @@ function renderSalonSummary(view,team=[]) {
       const heading=document.createElement('h3');
       heading.textContent=needsAction?'Wymaga reakcji':'Co działa';
       section.append(heading);
+      if (!needsAction&&onPace.length) {
+        const row=document.createElement('div');
+        row.className='coaching-metric coaching-on-pace';
+        const title=document.createElement('strong');
+        title.textContent='Handlowcy z planem zgodnym z tempem';
+        const list=document.createElement('ul');
+        for (const {seller} of onPace) {
+          const item=document.createElement('li');
+          item.append(coachingSellerLink(seller));
+          list.append(item);
+        }
+        row.append(title,list);
+        section.append(row);
+      }
       for (const {index,label,contributors,actual,goal,delta} of areas) {
-        if (goal<=0||(delta<0)!==needsAction) continue;
         const people=contributors.filter(metric=>needsAction?metric.delta<0:metric.delta>=0)
           .sort((a,b)=>needsAction?a.delta-b.delta:b.delta-a.delta);
+        const salonOnPace=goal>0&&delta>=0;
+        if (needsAction?goal<=0||delta>=0:!salonOnPace&&!people.length) continue;
         const row=document.createElement('div');
         row.className='coaching-metric';
         const name=document.createElement('strong');
-        name.textContent=label+' · '+number.format(actual)+' / '+number.format(goal)+' na dziś'
-          +(needsAction?' · brakuje '+Math.ceil(-delta):' · zgodnie z tempem');
+        name.textContent=!needsAction&&!salonOnPace?label+' · handlowcy zgodnie z własnym tempem'
+          :label+' · '+number.format(actual)+' / '+number.format(goal)+' na dziś'
+            +(needsAction?' · brakuje '+Math.ceil(-delta):' · salon zgodnie z tempem');
         row.append(name);
         if (needsAction) {
           const action=document.createElement('p');
@@ -1277,13 +1307,8 @@ function renderSalonSummary(view,team=[]) {
         const list=document.createElement('ul');
         for (const metric of people) {
           const item=document.createElement('li');
-          const link=document.createElement('a');
-          link.textContent=metric.seller.name;
-          link.href=sellerDetailUrl(metric.seller.id,'wykonanie');
-          link.target='_blank';
-          link.rel='noopener';
-          link.setAttribute('aria-label',metric.seller.name+' – szczegóły lejka w nowej karcie');
-          item.append(link);
+          item.append(coachingSellerLink(metric.seller));
+          if (!needsAction) item.append(' · '+number.format(metric.actual)+' / '+number.format(metric.goal)+' na dziś');
           list.append(item);
         }
         if (list.children.length) row.append(list);
