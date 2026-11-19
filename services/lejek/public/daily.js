@@ -341,15 +341,14 @@ let data;
 let editDay;
 let busy=false;
 const allPreviewSalons='\u0000all-salons';
-let managerPreviewSalon='';
-let groupPreviewName='';
-let managerReturnHash='';
+let managerPreviewSalon=history.state?.managerPreviewSalon??'';
+let groupPreviewName=history.state?.groupPreviewName??'';
 
 async function api(path,body) {
   if (body!==undefined&&(managerPreviewSalon||groupPreviewName))
     throw new Error('To podgląd. Zmiany możesz zapisać z konta kierownika lub szefa grupy.');
   const url=new URL(path,location.origin);
-  const selectedRole=(detailSeller&&detailParams.get('role'))||sessionStorage.getItem('lejek-active-role');
+  const selectedRole=data?.role||detailParams.get('role')||sessionStorage.getItem('lejek-active-role');
   if (selectedRole) url.searchParams.set('role',selectedRole);
   const response=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
   const result=await response.json();
@@ -1088,6 +1087,7 @@ function renderSeller() {
   reminder.hidden=!pending;
   const calendarLink=document.createElement('a');
   calendarLink.href='#plan';
+  calendarLink.dataset.panelRoute='';
   calendarLink.textContent='Otwórz kalendarz w zakładce Plan';
   calendarLink.onclick=()=>{$('#seller-calendar').open=true;};
   reminder.replaceChildren('Dni wolne czekające na zatwierdzenie: '+pending+'. ',calendarLink);
@@ -1279,7 +1279,7 @@ function renderSalonSummary(view,team=[]) {
           const item=document.createElement('li');
           const link=document.createElement('a');
           link.textContent=metric.seller.name;
-          link.href='/daily.html?'+new URLSearchParams({handlowiec:metric.seller.id,role:data.role});
+          link.href=sellerDetailUrl(metric.seller.id,'wykonanie');
           link.target='_blank';
           link.rel='noopener';
           link.setAttribute('aria-label',metric.seller.name+' – szczegóły lejka w nowej karcie');
@@ -1359,10 +1359,12 @@ function renderManagerDashboard(view,detailOnly=false) {
       row.textContent=metric.label+' · '+metric.actual+(metric.target==null?' · brak celu':' / '+metric.target+' w miesiącu');
       figures.append(row);
     }
+    detail.id='zespol-handlowiec-'+seller.id;
+    if (detailParams.get('osoba')===String(seller.id)) detail.open=true;
     detail.append(summary,figures);
     if (view.role==='manager'&&data.role==='manager'&&seller.accountStatus!=='inactive') {
       const link=document.createElement('a');
-      link.href='/daily.html?'+new URLSearchParams({handlowiec:seller.id,role:'manager'})+'#reopen-day-form';
+      link.href=sellerDetailUrl(seller.id,'zespol')+'#reopen-day-form';
       link.textContent='Zarządzaj zatwierdzonymi dniami';
       detail.append(link);
     }
@@ -1932,7 +1934,7 @@ salonPlans.addEventListener('toggle',()=>{
 
 function selectManagementView() {
   if (location.hash==='#plany-salonow') {
-    history.replaceState(null,'','#administracja');
+    history.replaceState(history.state,'','#administracja');
     salonPlans.open=true;
   }
   const administration=location.hash==='#administracja';
@@ -1946,7 +1948,7 @@ function selectManagementView() {
   $('#management-performance').setAttribute('aria-current',administration||team?'false':'page');
   $('#management-admin').setAttribute('aria-current',administration?'page':'false');
 }
-window.addEventListener('hashchange',selectManagementView);
+
 
 function renderManagerAssignments() {
   const picker=$('#assignment-manager');
@@ -2132,7 +2134,7 @@ function renderAdmin() {
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
   const readOnlyPreview=managerPreview||Boolean(groupPreview);
   const managerScope=$('#manager-scope');
-  const picked=managerScope.value;
+  const picked=managerScope.options.length?managerScope.value:detailParams.get('salon');
   const group=baseView.role==='group';
   const multiple=(baseView.role==='manager'||group)&&baseView.salons.length>1;
   $('#manager-scope-bar').hidden=!multiple;
@@ -2159,7 +2161,7 @@ function renderAdmin() {
   const team=teamDashboard?renderManagerDashboard(view):[];
   $('#admin').hidden=false;
   selectManagementView();
-  const params=new URLSearchParams({role:data.role});
+  const params=new URLSearchParams({role:data.role,powrot:'administracja'});
   if (multiple&&selected) params.set('salon',selected);
   const query='?'+params;
   $('#management-team-link').href='/zarzadzanie.html'+query+'#administracja';
@@ -2270,10 +2272,16 @@ function selectSellerTab() {
     panel.hidden=panel.dataset.sellerPanel!==active;
   }
 }
-window.addEventListener('hashchange',()=>{
-  if ($('#daily').hidden) return;
-  selectSellerTab();
-  window.scrollTo(0,0);
+const navigation=panelNavigation(()=>{
+  if (!data||detailSeller) return;
+  const manager=history.state?.managerPreviewSalon??'';
+  const group=history.state?.groupPreviewName??'';
+  if (data.role==='admin'&&(manager!==managerPreviewSalon||group!==groupPreviewName)) {
+    managerPreviewSalon=manager;
+    groupPreviewName=group;
+    showView();
+  } else if (data.role==='seller') selectSellerTab();
+  else selectManagementView();
 });
 
 const historyPanels=[...document.querySelectorAll('[data-history]')];
@@ -2373,9 +2381,23 @@ $('#reopen-day-form').onsubmit=async event=>{
   }
 };
 
+function sellerDetailUrl(person,from) {
+  const params=new URLSearchParams({handlowiec:person,role:data.role,powrot:from});
+  const scope=$('#manager-scope');
+  if (!$('#manager-scope-bar').hidden&&scope.value) params.set('salon',scope.value);
+  return '/daily.html?'+params;
+}
+
 function renderSellerDetail() {
   const section=$('#seller-detail');
   section.hidden=false;
+  const team=detailParams.get('powrot')==='zespol'&&['manager','group'].includes(data.role);
+  const params=new URLSearchParams({role:data.role});
+  if (detailParams.get('salon')) params.set('salon',detailParams.get('salon'));
+  if (team) params.set('osoba',detailSeller);
+  const back=$('#seller-detail-return');
+  back.textContent=team?'← Wróć do zespołu':data.role==='seller'?'← Wróć do panelu':'← Wróć do realizacji planów';
+  back.href='/daily.html?'+params+(team?'#zespol':data.role==='seller'?'#dzisiaj':'#wykonanie');
   const seller=data.role!=='seller'&&data.sellers.find(person=>String(person.id)===detailSeller);
   if (!seller) {
     $('#seller-detail-heading').textContent='Brak dostępu do szczegółów handlowca';
@@ -2447,43 +2469,41 @@ function showView() {
 $('#group-preview-toggle').onclick=()=>{
   if (data?.role!=='admin') return;
   if (groupPreviewName) {
-    groupPreviewName='';
-    location.hash=managerReturnHash;
+    navigation.go(history.state?.previewReturn??'',{groupPreviewName:''});
   } else {
-    managerReturnHash=location.hash;
-    groupPreviewName=$('#group-preview-select').value;
     $('#manager-scope').value='';
-    location.hash='#wykonanie';
+    navigation.go('#wykonanie',{groupPreviewName:$('#group-preview-select').value,previewReturn:location.hash});
   }
-  showView();
 };
 $('#group-preview-select').onchange=event=>{
   if (!groupPreviewName) return;
   groupPreviewName=event.target.value;
+  history.replaceState({...history.state,groupPreviewName},'');
   $('#manager-scope').value='';
   showView();
 };
 $('#manager-preview-toggle').onclick=()=>{
   if (data?.role!=='admin') return;
   if (managerPreviewSalon) {
-    managerPreviewSalon='';
-    location.hash=managerReturnHash;
+    navigation.go(history.state?.previewReturn??'',{managerPreviewSalon:''});
   } else {
-    managerReturnHash=location.hash;
-    managerPreviewSalon=$('#manager-preview-salon').value;
-    location.hash='#wykonanie';
+    navigation.go('#wykonanie',{managerPreviewSalon:$('#manager-preview-salon').value,previewReturn:location.hash});
   }
-  showView();
 };
 $('#manager-preview-salon').onchange=event=>{
   if (!managerPreviewSalon) return;
   managerPreviewSalon=event.target.value;
+  history.replaceState({...history.state,managerPreviewSalon},'');
   showView();
 };
 $('#account-role').onchange=event=>{
+  const previous=new URL(location.href);
+  previous.searchParams.set('role',data.role);
+  history.replaceState(history.state,'',previous);
   sessionStorage.setItem('lejek-active-role',event.target.value);
-  location.replace('/daily.html');
+  location.assign('/daily.html?'+new URLSearchParams({role:event.target.value}));
 };
+let restoredNavigation=false;
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
   const month=data.today.slice(0,7);
@@ -2499,13 +2519,19 @@ async function refresh() {
       .then(({plans})=>plans).catch(()=>null);
   }
   const roleSelect=$('#account-role');
-  $('#account-role-bar').hidden=data.roles.length<2;
+  $('#account-role-bar').hidden=Boolean(detailSeller)||data.roles.length<2;
   roleSelect.replaceChildren(...data.roles.map(role=>new Option(panelNames[role],role)));
   roleSelect.value=data.role;
   sessionStorage.setItem('lejek-active-role',data.role);
   $('#load').textContent='';
   $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
   showView();
+  if (!restoredNavigation) {
+    restoredNavigation=true;
+    const anchor=detailSeller&&location.hash==='#reopen-day-form'?'reopen-day-form'
+      :location.hash==='#zespol'&&detailParams.has('osoba')?'zespol-handlowiec-'+detailParams.get('osoba'):null;
+    navigation.restoreInitialPosition(anchor);
+  }
 }
 async function run(operation,openCookie=false,keepEditDay=false) {
   if (busy) return;

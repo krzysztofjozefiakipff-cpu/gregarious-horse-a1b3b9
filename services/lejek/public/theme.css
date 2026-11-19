@@ -91,3 +91,25 @@ a { color: var(--ink); }
   color:#c9d8ed; font-size:.875rem; min-width:0; overflow-wrap:anywhere;
 }
 .panel-header .signed-in strong { color:white; font-size:inherit; letter-spacing:normal; }
+
+.panel-signout { margin:0; margin-inline-start:auto; }
+.panel-signout button {
+  min-height:44px;
+  padding:5px 10px;
+  background:transparent;
+  border:1px solid #ffffff59;
+  border-radius:8px;
+  color:white;
+  font:inherit;
+  font-size:.875rem;
+  cursor:pointer;
+}
+.panel-signout button:hover { background:#ffffff18; }
+.panel-return-link {
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+  margin-bottom:8px;
+  font-weight:700;
+  color:var(--accent-ink);
+}
