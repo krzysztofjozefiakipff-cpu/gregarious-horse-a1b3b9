@@ -93,6 +93,17 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   .seller-nav{flex-wrap:nowrap;position:fixed;z-index:2;bottom:0;left:0;right:0;margin:0;padding:6px 12px calc(6px + env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;box-shadow:0 -3px 14px #0b152212}
 }
 #meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:var(--ink);color:#fff}
+#entry-guide{margin:10px 0 14px;border:1px solid var(--line);border-inline-start:4px solid var(--blue);border-radius:10px;background:var(--tint)}
+#entry-guide summary{min-height:44px;padding:10px 12px;cursor:pointer;font-weight:750}
+#entry-guide .guide-content{padding:0 12px 14px;display:grid;gap:14px}
+#entry-guide h3{margin:0 0 6px;font-size:1rem}
+#entry-guide ol{margin:0;padding-inline-start:22px}
+#entry-guide li+li{margin-top:6px}
+#entry-guide dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px;margin:0}
+#entry-guide dl>div{padding:8px 10px;border-radius:8px;background:#fff}
+#entry-guide dt{font-weight:750}
+#entry-guide dd{margin:2px 0 0;color:var(--muted)}
+#entry-guide .guide-example{padding:10px 12px;border-radius:8px;background:#fff}
 #entry-grid .source-detail{display:block;margin-top:4px;font-size:.8rem;font-weight:500;line-height:1.35}
 #entry-grid input.has-value{font-weight:750}
 #entry-grid input[readonly]{background:var(--tint);color:var(--muted);cursor:default}
@@ -377,6 +388,41 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 </div>
 <div data-seller-panel="wyniki" hidden>
 <form id="entry"><div class="heading"><h2>Wpisz działania z tego dnia</h2><strong id="entry-date"></strong></div>
+<details id="entry-guide">
+  <summary>Instrukcja wypełniania lejka</summary>
+  <div class="guide-content">
+    <section>
+      <h3>Jak zapisywać dzień</h3>
+      <ol>
+        <li><strong>Sprawdź datę i wybierz źródło klienta.</strong> Na telefonie wybierz źródło z listy, na komputerze użyj odpowiedniego wiersza. Kolejne działania dla tej samej szansy zapisuj w jej źródle, nawet jeśli wykonasz je innego dnia.</li>
+        <li><strong>Wpisz łączną liczbę działań wykonanych tego dnia.</strong> Jeżeli rano zapiszesz 2 oferty, a po południu wyślesz trzecią, zmień 2 na 3. Puste pole oznacza 0.</li>
+        <li><strong>Zapisuj roboczo w trakcie dnia.</strong> Zapis obejmuje wszystkie źródła. Możesz wrócić do wpisu i poprawić wartości.</li>
+        <li><strong>Na koniec kliknij „Zatwierdź dzień” i potwierdź.</strong> Zatwierdzony wpis trafia do wyników. Jeśli trzeba go poprawić, poproś kierownika o odblokowanie. Zaległe dni rozliczaj od najstarszego. Gdy nie było żadnych aktywności, wybierz „Zgłoś dzień bez aktywności”, podaj powód i wyślij do zatwierdzenia.</li>
+      </ol>
+    </section>
+    <section>
+      <h3>Co liczyć w każdym polu</h3>
+      <dl>
+        <div><dt>Leady</dt><dd>Nowe szanse sprzedażowe. To samo zapytanie wpisz raz, nawet jeśli klient odezwie się kilkoma kanałami.</dd></div>
+        <div><dt>Próby kontaktu</dt><dd>Wykonane próby nawiązania pierwszego kontaktu, także połączenia bez odpowiedzi. Jeśli zadzwonisz dwa razy, wpisz 2.</dd></div>
+        <div><dt>Spotkania</dt><dd>Odbyte spotkania sprzedażowe. Umówione spotkanie wpisz w dniu, w którym się odbędzie.</dd></div>
+        <div><dt>Jazdy próbne</dt><dd>Jazdy, które faktycznie się odbyły. Samą rezerwację pomiń.</dd></div>
+        <div><dt>Oferty</dt><dd>Oferty przekazane klientom. Ponowne wysłanie tej samej oferty policz jako follow-up.</dd></div>
+        <div><dt>Follow-up</dt><dd>Ponowne kontakty w sprawie otwartej szansy, np. po wysłaniu oferty. Gdy wpisujesz kontakt jako follow-up, pomiń go w polu „Próby kontaktu”.</dd></div>
+        <div><dt>Zamówienia</dt><dd>Zamówienia potwierdzone przez klienta w danym dniu.</dd></div>
+        <div><dt>Wystawione faktury</dt><dd>Faktury sprzedaży wystawione tego dnia.</dd></div>
+        <div><dt>Rejestracje</dt><dd>Pojazdy zarejestrowane tego dnia.</dd></div>
+        <div><dt>Opinie Google</dt><dd>Opinie, które pojawiły się w Google. Samą prośbę o opinię pomiń.</dd></div>
+      </dl>
+    </section>
+    <section>
+      <h3>Co aplikacja zlicza automatycznie</h3>
+      <p>Aplikacja sumuje wpisy ze wszystkich źródeł za dany dzień. Zatwierdzone dni składają się na wynik okresu i realizację planu. Robocze wpisy możesz uzupełnić przed zatwierdzeniem.</p>
+      <p>W <strong>Walk-in</strong> liczba leadów automatycznie uzupełnia „Próby kontaktu” i „Spotkania”. W pozostałych źródłach wszystkie wykonane aktywności wpisujesz ręcznie.</p>
+    </section>
+    <p class="guide-example"><strong>Przykład.</strong> Dziś otrzymujesz 1 nowy lead z OTOMOTO i dzwonisz do klienta dwa razy. Wpisz w OTOMOTO 1 w „Leady” i 2 w „Próby kontaktu”. Jeśli jutro klient przyjedzie i odbędzie jazdę próbną, w jutrzejszym wpisie pod OTOMOTO dodaj 1 spotkanie i 1 jazdę próbną. Lead został już zapisany pierwszego dnia.</p>
+  </div>
+</details>
 <div id="backlog" hidden><strong id="backlog-text"></strong><div id="options">
 <button type="button" id="resolve">Rozlicz dzień</button>
 <button type="button" data-kind="leave">Oznacz urlop</button>
