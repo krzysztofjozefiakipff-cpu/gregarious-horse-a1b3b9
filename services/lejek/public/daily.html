@@ -255,6 +255,8 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 .plan-period.month-history label { display:grid; gap:4px; margin:0; }
 .plan-period select { min-height:42px; width:100%; }
 #seller-period-status { flex-basis:100%; margin:0; }
+#seller-period-notice { flex-basis:100%; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:10px 12px; border-inline-start:4px solid var(--blue); border-radius:8px; background:var(--tint); }
+#seller-period-notice p { margin:0; color:var(--ink); }
 .month-history { background:white; border:1px solid var(--line); border-radius:12px; padding:14px; }
 .month-history summary { cursor:pointer; font-weight:750; }
 .month-history label { display:inline-flex; align-items:center; flex-wrap:wrap; gap:8px; margin-block:10px; }
@@ -372,6 +374,10 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <label>Widok <select id="seller-period-type"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select></label>
   <label>Wyświetlany okres <select id="seller-period-value"></select></label>
   <p id="seller-period-status" role="status" hidden></p>
+  <div id="seller-period-notice" hidden>
+    <p id="seller-period-notice-text" role="status"></p>
+    <button type="button" class="secondary" id="seller-period-reset">Wróć do bieżącego miesiąca</button>
+  </div>
 </div>
   <section id="seller-ranking" aria-labelledby="ranking-title">
     <div class="ranking-heading">
