@@ -2173,7 +2173,9 @@ $('#lesson-import').onclick=async ()=>{
       reader.onerror=()=>reject(new Error('Nie udało się otworzyć pliku.'));
       reader.readAsDataURL(file);
     });
-    const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded});
+    const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded,mode:'pack'});
+    if (!Number.isSafeInteger(result.count)||result.count<1)
+      throw new Error('Nie udało się potwierdzić importu. Sprawdź listę paczek po odświeżeniu strony.');
     $('#lesson-file').value='';
     status.textContent='Zapisano '+result.count+' pytań w paczce „'+file.name+'”. Sprawdź treść i włącz paczkę, gdy będzie gotowa.';
     await loadLessonPacks();
