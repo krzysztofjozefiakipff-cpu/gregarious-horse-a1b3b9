@@ -224,6 +224,15 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 }
 .rating p { font-size:.875rem; color:#dbeaff; }
 #seller-rating { font-weight:750; color:white; }
+.plan-period { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.plan-period p { color:var(--muted); }
+.month-history { background:white; border:1px solid var(--line); border-radius:12px; padding:14px; }
+.month-history summary { cursor:pointer; font-weight:750; }
+.month-history label { display:inline-flex; align-items:center; flex-wrap:wrap; gap:8px; margin-block:10px; }
+.month-history .pace-item { min-width:0; border:1px solid var(--line); border-radius:8px; padding:8px; }
+.history-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)); gap:8px; }
+.history-salon { margin-block:12px; }
+.history-salon h3 { margin:0 0 6px; }
 </style>
 </head>
 <body>
@@ -282,6 +291,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></div>
 <div data-seller-panel="plan" hidden>
+<div class="plan-period"><p id="seller-plan-period"></p></div>
+<details class="month-history" data-history="seller">
+  <summary>Historia zakończonych miesięcy</summary>
+  <label>Miesiąc <input type="month"></label>
+  <p class="history-status" role="status"></p>
+  <div class="history-results"></div>
+</details>
   <section id="seller-ranking" aria-labelledby="ranking-title">
     <div class="ranking-heading">
       <h2 id="ranking-title"></h2>
@@ -353,6 +369,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 </nav>
 <section id="performance-view">
   <h1 id="performance-title">Wykonanie planu</h1>
+  <p id="management-plan-period"></p>
+  <details class="month-history" data-history="management">
+  <summary>Historia zakończonych miesięcy</summary>
+  <label>Miesiąc <input type="month"></label>
+  <p class="history-status" role="status"></p>
+  <div class="history-results"></div>
+</details>
   <p id="team"></p>
   <section id="salon-summary" aria-labelledby="performance-title"><p id="salon-period"></p><div id="salon-results"></div></section>
   <p id="management-report-link"><a href="/zarzadzanie.html">Szczegółowe wyniki i raport kwartalny</a></p>
