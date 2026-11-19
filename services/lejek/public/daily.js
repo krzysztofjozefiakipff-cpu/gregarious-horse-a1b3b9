@@ -341,6 +341,8 @@ let managerReturnHash='';
 let previewResult=null;
 
 async function api(path,body) {
+  if (body!==undefined&&(managerPreviewSalon||groupPreviewName))
+    throw new Error('To podgląd. Zmiany możesz zapisać z konta kierownika lub szefa grupy.');
   const url=new URL(path,location.origin);
   const selectedRole=sessionStorage.getItem('lejek-active-role');
   if (selectedRole) url.searchParams.set('role',selectedRole);
@@ -1041,10 +1043,9 @@ function loadUserEditor() {
   $('#user-status').textContent=selected?.archived?'Użytkownik usunięty z aktywnych kont Lejka.':'';
   updateUserRoleFields();
 }
-function renderUserEditor(view,readOnly) {
+function renderUserEditor(view) {
   const delegated=view.role!=='admin';
   userEditor.dataset.delegated=String(delegated);
-  userEditor.inert=readOnly;
   $('#user-picker-label').hidden=delegated;
   for (const [id,allowed] of [['user-group-role',!delegated],['user-manager-role',view.role!=='manager']]) {
     const label=$('#'+id);
@@ -1067,7 +1068,6 @@ $('#user-picker').onchange=loadUserEditor;
 userEditor.onchange=updateUserRoleFields;
 userEditor.onsubmit=async event=>{
   event.preventDefault();
-  if (userEditor.inert) return;
   const values=new FormData(userEditor);
   const roles=values.getAll('roles');
   const button=$('#user-save');
@@ -1137,12 +1137,9 @@ function renderAdmin() {
   const teamDashboard=manager||group;
   const title=group?(selected?'Dziś w salonie':'Dziś w grupie'):manager?'Dziś w salonie':'Wykonanie planu';
   $('#manager-preview-note').hidden=!readOnlyPreview;
-  $('#manager-preview-note').textContent=groupPreview?'Podgląd szefa grupy.': 'Podgląd kierownika.';
+  $('#manager-preview-note').textContent=(groupPreview?'Podgląd szefa grupy.':'Podgląd kierownika.')+' Możesz wypróbować pola formularza. Dane salonu nie zostaną zapisane.';
   $('#management-report-link').hidden=readOnlyPreview;
   $('#management-team-shortcut').hidden=readOnlyPreview||data.role!=='manager';
-  $('#absence-panel').inert=readOnlyPreview;
-  $('#lesson-editor').inert=readOnlyPreview;
-  $('#settings').inert=readOnlyPreview;
   $('#dealer').textContent=group?(selected||view.dealerGroup):manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
   $('#performance-title').textContent=title;
   $('#management-performance').textContent=group?'Wyniki grupy':title;
@@ -1158,9 +1155,8 @@ function renderAdmin() {
   $('#management-team-link').textContent='Ustawienia planów';
   renderSalonSummary(view);
   userEditor.hidden=false;
-  renderUserEditor(view,readOnlyPreview);
+  renderUserEditor(view);
   $('#group-add-salon-block').hidden=!group;
-  $('#group-add-salon').inert=readOnlyPreview;
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
@@ -1499,7 +1495,6 @@ function renderDealerGroups(groups) {
 $('#group-add-salon').onsubmit=event=>{
   event.preventDefault();
   const form=event.currentTarget;
-  if (form.inert) return;
   run(async()=>{await api('/api/group/salon',{salon:form.elements.salon.value});form.reset();});
 };
 $('#group-editor').onsubmit=event=>{
