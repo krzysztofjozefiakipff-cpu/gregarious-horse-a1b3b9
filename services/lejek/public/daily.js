@@ -334,8 +334,7 @@ let data;
 let editDay;
 let busy=false;
 let preview=false;
-const demoManagerSalon='Salon demonstracyjny';
-const demoManagerOption='\u0000demo-manager';
+const allPreviewSalons='\u0000all-salons';
 let managerPreviewSalon='';
 let managerReturnHash='';
 let previewResult=null;
@@ -1019,23 +1018,14 @@ function renderAdmin() {
     managerScope.replaceChildren(new Option('Wszystkie moje salony',''),...data.salons.map(({salon})=>new Option(salon,salon)));
     if (data.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
   }
-  const selected=managerPreview?managerPreviewSalon:multiple?managerScope.value:'';
-  const demo=managerPreview&&selected===demoManagerOption;
+  const selected=managerPreview?(managerPreviewSalon===allPreviewSalons?'':managerPreviewSalon):multiple?managerScope.value:'';
   const people=selected?data.sellers.filter(seller=>seller.salon===selected):data.sellers;
-  let view=selected?{...data,role:'manager',salon:selected,sellers:people,
+  const view=selected?{...data,role:'manager',salon:selected,sellers:people,
     salons:[{salon:selected}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
-    :data;
-  if (demo) {
-    const month=data.today.slice(0,7);
-    const sellers=['Anna Nowak','Marek Kowalski'].map((name,index)=>({id:index+1,name,salon:demoManagerSalon}));
-    view={...view,salon:demoManagerSalon,salons:[{salon:demoManagerSalon}],approvals:[],sellers,plans:sellers.map(({id})=>({person:id,month,target:10})),funnelPlans:[],reviewPlans:[],
-      daily:[{person:1,day:data.today,counters:'[4,0,1,2,1]'}],
-      teamDay:sellers.map(({id})=>({person:id,started:month+'-01',saved:id===1}))};
-  }
+    :managerPreview?{...data,role:'manager',salon:'Wszystkie salony'}:data;
   const manager=view.role==='manager';
   $('#manager-preview-note').hidden=!managerPreview;
-  $('#manager-preview-note').textContent=demo?'Salon demonstracyjny · dane przykładowe.':'Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.';
-  $('#manager-preview-bar label').textContent=demo?'Podgląd kierownika · dane przykładowe':'Salon do podglądu';
+  $('#manager-preview-note').textContent='Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.';
   $('#management-report-link').hidden=managerPreview;
   $('#management-team-link').hidden=managerPreview;
   $('#absence-panel').inert=managerPreview;
@@ -1142,13 +1132,14 @@ function showView() {
   }
   const salonSelect=$('#manager-preview-salon');
   const selected=managerPreviewSalon||salonSelect.value;
-  const canPreview=data.role==='admin';
+  const canPreview=data.role==='admin'&&data.salons.length>0;
+  if (!canPreview) managerPreviewSalon='';
   $('#manager-preview-bar').hidden=!canPreview;
   if (canPreview) {
     const salons=data.salons.map(({salon})=>salon);
-    salonSelect.replaceChildren(...salons.map(salon=>new Option(salon,salon)),
-      new Option(demoManagerSalon+' · dane przykładowe',demoManagerOption));
-    if (salons.includes(selected)||selected===demoManagerOption) salonSelect.value=selected;
+    salonSelect.replaceChildren(new Option('Wszystkie salony',allPreviewSalons),
+      ...salons.map(salon=>new Option(salon,salon)));
+    if (salons.includes(selected)||selected===allPreviewSalons) salonSelect.value=selected;
     else managerPreviewSalon='';
     $('#manager-preview-toggle').textContent=managerPreviewSalon?'Wróć do panelu administratora':'Podgląd kierownika';
   }
