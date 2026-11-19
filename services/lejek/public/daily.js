@@ -910,8 +910,8 @@ function renderManagerDashboard(view) {
   const team=sellers.map(seller=>{
     const entry=teamDay.find(row=>row.person===seller.id);
     const active=Boolean(entry?.started&&entry.started<=today);
-    const expected=weekday(today)&&active&&!statuses[entry?.kind];
-    const status=entry?.saved?'Wpisano działania':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
+    const expected=!entry?.archived&&weekday(today)&&active&&!statuses[entry?.kind];
+    const status=entry?.archived?'Konto usunięte':entry?.saved?'Wpisano działania':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
     const records=entries.get(seller.id)??[];
     const current=records.find(([day])=>day===today)?.[1];
     const metrics=monthlyMetrics(records,current,forSeller(plans,seller.id)?.target,forSeller(funnelPlans,seller.id),
@@ -1029,13 +1029,18 @@ function loadUserEditor() {
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
-  $('#user-status').textContent='';
+  const archiveButton=$('#user-archive');
+  archiveButton.hidden=!selected;
+  archiveButton.dataset.archived=String(Boolean(selected?.archived));
+  archiveButton.textContent=selected?.archived?'Przywróć użytkownika':'Usuń użytkownika';
+  $('#user-save').hidden=Boolean(selected?.archived);
+  $('#user-status').textContent=selected?.archived?'Użytkownik usunięty z aktywnych kont Lejka.':'';
   updateUserRoleFields();
 }
 function renderUserEditor() {
   const picker=$('#user-picker');
   const prior=picker.value;
-  picker.replaceChildren(new Option('Dodaj użytkownika',''),...data.users.map(user=>new Option(user.name+' · '+user.email,user.email)));
+  picker.replaceChildren(new Option('Dodaj użytkownika',''),...data.users.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
   if (data.users.some(user=>user.email===prior)) picker.value=prior;
   userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
   $('#user-salons').replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
@@ -1047,7 +1052,7 @@ userEditor.onsubmit=async event=>{
   event.preventDefault();
   const values=new FormData(userEditor);
   const roles=values.getAll('roles');
-  const button=userEditor.querySelector('button');
+  const button=$('#user-save');
   button.disabled=true;
   try {
     await api('/api/users',{...Object.fromEntries(values),roles});
@@ -1055,6 +1060,28 @@ userEditor.onsubmit=async event=>{
     $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
     loadUserEditor();
     $('#user-status').textContent='Zapisano użytkownika i role.';
+  } catch(error) {
+    $('#user-status').textContent=error.message;
+  } finally {
+    button.disabled=false;
+  }
+};
+
+$('#user-archive').onclick=async event=>{
+  const button=event.currentTarget;
+  const selected=data.users.find(user=>user.email===$('#user-picker').value);
+  if (!selected) return;
+  const archived=!selected.archived;
+  if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach.')) return;
+  button.disabled=true;
+  try {
+    await api('/api/users/archive',{email:selected.email,archived});
+    await refresh();
+    if (archived) {
+      $('#user-picker').value='';
+      loadUserEditor();
+    }
+    $('#user-status').textContent=archived?'Użytkownik usunięty z aktywnych kont Lejka.':'Przywrócono dostęp użytkownika.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {

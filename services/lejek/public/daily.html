@@ -107,6 +107,12 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #settings>details{margin:0 0 8px}
 #settings summary{cursor:pointer;font-weight:700;padding:8px 0}
 #user-editor fieldset label,#assignment-salons label{display:flex;align-items:center;gap:8px}
+#user-editor{min-width:0;grid-template-columns:minmax(0,1fr)}
+#user-editor select,#user-editor input:not([type=checkbox]){width:100%;min-width:0;max-width:100%}
+#user-editor fieldset{min-width:0;margin:0}
+#user-status{overflow-wrap:anywhere}
+.user-actions{display:flex;flex-wrap:wrap;gap:8px}
+#user-archive[data-archived=false]{color:#9b292e}
 </style>
 </head>
 <body>
@@ -225,7 +231,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <label id="user-group-label" hidden>Grupa dealerska <select name="dealerGroup"></select></label>
 <label id="user-salon-label" hidden>Salon handlowca lub główny salon kierownika <input name="salon" list="user-salons" maxlength="120"></label>
 <datalist id="user-salons"></datalist>
-<button>Zapisz użytkownika i role</button>
+<div class="user-actions">
+<button id="user-save">Zapisz użytkownika i role</button>
+<button type="button" class="secondary" id="user-archive" hidden>Usuń użytkownika</button>
+</div>
 <p id="user-status" role="status"></p>
 </form>
 </details>

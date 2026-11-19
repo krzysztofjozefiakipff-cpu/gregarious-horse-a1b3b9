@@ -84,6 +84,8 @@ async function handle(request, env) {
   if (!email || !request.headers.get('oai-authenticated-user-id')) return json({error:'Zaloguj się do konta CARVAMO.'},401);
   const owner = request.headers.get('x-lejek-verified-admin')==='1';
   const db = env.DB;
+  if (!owner&&await db.prepare('SELECT 1 FROM archived_users WHERE email=?').bind(email).first())
+    return json({error:'To konto nie ma obecnie dostępu do Lejka.'},403);
   const assigned = await db.prepare('SELECT id, name, salon, role FROM accounts WHERE email=?').bind(email).first();
   const head=await db.prepare('SELECT group_name FROM dealer_group_heads WHERE email=?').bind(email).first();
   const explicitRoles=assigned?await list(db,'SELECT role FROM account_roles WHERE person=?',assigned.id):[];
@@ -129,7 +131,7 @@ async function handle(request, env) {
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
-      const teamDay=['manager','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind
+      const teamDay=['manager','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind, EXISTS (SELECT 1 FROM archived_users WHERE email=accounts.email) AS archived
         FROM accounts
         LEFT JOIN daily_tracking t ON t.person=accounts.id
         LEFT JOIN daily_results d ON d.person=accounts.id AND d.day=?
@@ -184,9 +186,9 @@ async function handle(request, env) {
         WHERE ${accountRole('a','manager')}
         ORDER BY a.name,a.id,m.salon`):[];
       const users=user.role==='admin'?await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
-        COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles
+        COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived
         FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email WHERE a.role<>'admin'
-        UNION ALL SELECT h.email,h.email,'',h.group_name,'group' FROM dealer_group_heads h
+        UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email) FROM dealer_group_heads h
         WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)
         ORDER BY name,email`):[];
       return json({users,roles,managerAssignments,role:user.role,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
@@ -288,6 +290,17 @@ async function handle(request, env) {
       db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(manager.id),
       ...additional.map(salon=>db.prepare('INSERT INTO manager_salons(manager,salon) VALUES (?,?)').bind(manager.id,salon))
     ]);
+    return json({ok:true});
+  }
+  if (path==='/api/users/archive' && user.role==='admin') {
+    if (!textValid(body.email)||typeof body.archived!=='boolean') return json({error:'Wybierz użytkownika.'},400);
+    const address=body.email.trim().toLowerCase();
+    const account=await db.prepare('SELECT role FROM accounts WHERE email=?').bind(address).first();
+    if (address===email||account?.role==='admin') return json({error:'Nie można usunąć dostępu administratora.'},403);
+    const head=await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first();
+    if (!account&&!head) return json({error:'Nie znaleziono użytkownika.'},404);
+    const sql=body.archived?'INSERT INTO archived_users(email) VALUES (?) ON CONFLICT DO NOTHING':'DELETE FROM archived_users WHERE email=?';
+    await db.prepare(sql).bind(address).run();
     return json({ok:true});
   }
   if (path==='/api/users' && user.role==='admin') {
