@@ -29,6 +29,14 @@ if ! docker volume inspect "$production_volume" >/dev/null 2>&1; then
   initialize_production=1
 fi
 docker volume create "$production_volume" >/dev/null
+mail_network=biegwyzej_mail_egress
+if [[ -n "${RESET_SMTP_PASSWORD:-}" ]]; then
+  docker network inspect "$mail_network" >/dev/null 2>&1 ||
+    docker network create "$mail_network" >/dev/null
+  docker run --rm --network "$mail_network" --read-only --cap-drop ALL \
+    --security-opt no-new-privileges -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD \
+    "$image" python3 scripts/reset-mail.py --check
+fi
 old_image=
 old_volume=
 if docker container inspect "$service" >/dev/null 2>&1; then
@@ -41,7 +49,10 @@ run_service() {
   local deployed_image="$1" data_volume="$2"
   docker run -d --name "$service" --label com.carvamo.role=lejek --restart unless-stopped \
     --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD --read-only --tmpfs /tmp:rw,noexec,nosuid \
-    --security-opt no-new-privileges --cap-drop ALL -v "$data_volume:/data" "$deployed_image" >/dev/null
+    --security-opt no-new-privileges --cap-drop ALL -v "$data_volume:/data" "$deployed_image" >/dev/null || return
+  if [[ -n "${RESET_SMTP_PASSWORD:-}" ]]; then
+    docker network connect "$mail_network" "$service"
+  fi
 }
 if [ -n "$old_image" ]; then docker rm -f "$service" >/dev/null; fi
 rollback() {
@@ -58,6 +69,11 @@ for attempt in {1..12}; do
         if (db.prepare("SELECT count(*) AS total FROM " + table).get().total !== 0) process.exit(1);
       }
     '; then
+      rollback
+      exit 1
+    fi
+    if [[ -n "${RESET_SMTP_PASSWORD:-}" ]] &&
+        ! docker exec "$service" python3 scripts/reset-mail.py --check; then
       rollback
       exit 1
     fi
