@@ -141,7 +141,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
     grid-template-columns:repeat(2,minmax(0,1fr));
     align-items:start;
   }
-  #salon-results, #manager-team-list, #administration-view {
+  #manager-team-list, #administration-view {
     grid-template-columns:repeat(2,minmax(0,1fr));
     align-items:start;
   }
@@ -233,6 +233,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .history-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)); gap:8px; }
 .history-salon { margin-block:12px; }
 .history-salon h3 { margin:0 0 6px; }
+.salon-pace-status { display:inline-block; margin-inline-start:8px; padding:2px 7px; border:1px solid var(--line); border-radius:6px; }
+.salon-pace-time { color:var(--muted); font-size:.875rem; margin-top:5px; }
+#salon-results h3 { margin:10px 0 4px; font-size:1rem; }
+#salon-results li+li { margin-top:5px; }
 </style>
 </head>
 <body>

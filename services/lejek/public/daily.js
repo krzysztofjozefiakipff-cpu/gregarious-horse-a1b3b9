@@ -913,6 +913,28 @@ function renderSeller() {
   $('#daily').hidden=false;
 }
 
+function salonPace(actual,target,elapsed,total) {
+  const expected=target*elapsed/total;
+  const forecast=elapsed>0?actual*total/elapsed:null;
+  const tone=actual>=target?'ahead':forecast===null?'':forecast>=target?'ahead':'behind';
+  const status=actual>=target?'Plan wykonany':forecast===null?'Za wcześnie na prognozę'
+    :tone==='ahead'?'Zgodnie z tempem':'Plan zagrożony';
+  return {expected,forecast,tone,status};
+}
+
+const managerActions={
+  0:'Sprawdź dopływ zapytań według źródeł i przydział nowych leadów.',
+  1:'Sprawdź nieobsłużone kontakty i rozdziel oddzwonienia w zespole.',
+  2:'Ustal z zespołem, których klientów zaprosić na spotkanie i na kiedy.',
+  4:'Sprawdź dostępność aut i terminy jazd z klientami.',
+  5:'Przejrzyj otwarte szanse i ustal terminy wysyłki ofert.',
+  6:'Przejrzyj oferty bez odpowiedzi i przypisz termin ponownego kontaktu.',
+  7:'Omów transakcje bliskie podpisu i usuń przeszkody w ich domknięciu.',
+  8:'Sprawdź brakujące dokumenty i terminy rejestracji.',
+  9:'Sprawdź, czy klienci po odbiorze dostali zaproszenie do wystawienia opinii.',
+  10:'Sprawdź, co blokuje fakturowanie podpisanych zamówień.'
+};
+
 function renderSalonSummary(view,team=[]) {
   const results=$('#salon-results');
   const expanded=new Set([...results.querySelectorAll('details[open]')].map(card=>card.dataset.salon));
@@ -921,6 +943,12 @@ function renderSalonSummary(view,team=[]) {
   if (!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
   $('#salon-period').textContent=dateLabel(view.today,{month:'long',year:'numeric'});
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
+  const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
+  const [year,month]=view.today.split('-').map(Number);
+  const first=monthStart(year,month-1);
+  const end=monthStart(year,month);
+  const total=remainingDays(first,end);
+  const elapsed=remainingDays(first,view.today)+Number(weekday(view.today));
   const salons=new Set(view.salons.map(({salon})=>salon));
   for (const plan of data.salonPerformance.filter(plan=>salons.has(plan.salon))) {
     const card=document.createElement('details');
@@ -940,9 +968,10 @@ function renderSalonSummary(view,team=[]) {
       const target=plan.targets[index];
       const configured=plan.configured[index];
       const ratio=target>0?actual/target:null;
+      const pace=ratio===null?null:salonPace(actual,target,elapsed,total);
       values.textContent=actual+' / '+(configured?target:'—')+
         (ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
-      if (ratio!==null) values.className=ratio>=1?'ahead':'behind';
+      if (pace) values.className=pace.tone;
       indicator.append(name,values);
       if (ratio!==null) {
         const progress=document.createElement('progress');
@@ -950,30 +979,62 @@ function renderSalonSummary(view,team=[]) {
         progress.value=Math.min(actual,target);
         progress.setAttribute('aria-label',plan.salon+' · '+label);
         progress.setAttribute('aria-valuetext',values.textContent);
-        progress.style.setProperty('--plan-progress',ratio>=1?'#12633b':'hsl('+Math.round(ratio*38)+' 75% 38%)');
-        indicator.append(progress);
+        progress.style.setProperty('--plan-progress',pace.tone==='behind'?'#a12626':pace.tone==='ahead'?'#12633b':'#64748b');
+        const status=document.createElement('strong');
+        status.className=pace.tone;
+        status.textContent=pace.status;
+        const note=document.createElement('small');
+        note.textContent='Tempo na dziś: '+number.format(pace.expected)
+          +' · Prognoza na koniec: '+(pace.forecast===null?'—':number.format(pace.forecast));
+        indicator.append(progress,status,note);
       }
       grid.append(indicator);
     }
-    summary.append(title,grid);
+    const assessed=plan.targets.map((target,index)=>plan.configured[index]&&target>0
+      ?salonPace(plan.actuals[index],target,elapsed,total):null).filter(Boolean);
+    const risky=assessed.some(metric=>metric.tone==='behind');
+    const status=document.createElement('span');
+    status.className='salon-pace-status '+(risky?'behind':assessed.some(metric=>metric.tone==='ahead')?'ahead':'');
+    status.textContent=risky?'Plan zagrożony':!assessed.length?'Brak celów do oceny'
+      :assessed.every(metric=>metric.status==='Plan wykonany')?'Plan wykonany'
+      :assessed.some(metric=>metric.forecast===null)?'Za wcześnie na prognozę':'Zgodnie z tempem';
+    const time=document.createElement('p');
+    time.className='salon-pace-time';
+    time.textContent=elapsed+' z '+total+' dni roboczych miesiąca (pon.–pt.) · '+percent.format(elapsed/total)
+      +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
+    summary.append(title,status,time,grid);
     const members=new Set(plan.team.map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const heading=document.createElement('h3');
-    heading.textContent='Braki w lejku względem tempa na dziś';
+    heading.textContent='Obszary do reakcji kierownika';
+    const gaps=columns.map(([index,label],column)=>{
+      const measured=metrics.map(person=>person.metrics[column]).filter(metric=>metric.goal>0);
+      const gap=measured.reduce((sum,metric)=>sum+Math.max(0,-metric.delta),0);
+      const goal=measured.reduce((sum,metric)=>sum+metric.goal,0);
+      return {index,label,gap,pressure:goal?gap/goal:0};
+    }).filter(metric=>metric.gap>0);
+    for (const [index,metric] of [7,8,10,9].entries()) {
+      const target=plan.targets[index];
+      if (!plan.configured[index]||target<=0) continue;
+      const expected=target*elapsed/total;
+      const gap=Math.ceil(expected-plan.actuals[index]);
+      if (gap<=0) continue;
+      const existing=gaps.find(item=>item.index===metric);
+      if (!existing) gaps.push({index:metric,label:salonPlanMetrics[index],gap,pressure:gap/expected});
+    }
     const list=document.createElement('ul');
-    for (const [index,[,label]] of columns.entries()) {
-      const gap=metrics.reduce((total,person)=>total+Math.max(0,-person.metrics[index].delta),0);
-      if (!gap) continue;
+    for (const {index,label,gap} of gaps.sort((a,b)=>b.pressure-a.pressure||b.gap-a.gap).slice(0,3)) {
       const item=document.createElement('li');
-      item.textContent=label+' · brakuje '+gap;
+      item.textContent=label+' · brakuje '+gap+' do tempa na dziś. '+managerActions[index];
       list.append(item);
     }
     card.append(summary,heading);
+    card.open=risky||expanded.has(plan.salon);
     if (list.children.length) card.append(list);
     else {
       const note=document.createElement('p');
-      note.textContent=metrics.some(person=>person.metrics.some(metric=>metric.goal!=null))
-        ?'Brak zaległości względem tempa na dziś.':'Brak celów handlowców do porównania.';
+      note.textContent=metrics.some(person=>person.metrics.some(metric=>metric.goal>0))||assessed.length
+        ?'Brak wykazanych zaległości względem tempa.':'Brak celów do wskazania słabych punktów.';
       card.append(note);
     }
     results.append(card);
