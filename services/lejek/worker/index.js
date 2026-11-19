@@ -491,6 +491,8 @@ async function handle(request, env) {
       return result.meta.changes?json({ok:true}):json({error:'Nie znaleziono paczki w tym salonie.'},404);
     }
     if (path==='/api/lesson-import') {
+      if (body.mode!=='pack')
+        return json({error:'Widok lekcji został zaktualizowany. Odśwież stronę i sprawdź „Paczki pytań”. Jeśli pliku tam nie ma, zaimportuj go ponownie.'},409);
       if (typeof body.filename!=='string'||body.filename.length>255||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
           typeof body.file!=='string'||!body.file||body.file.length>20_971_520)
         return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 15 MB.'},400);
