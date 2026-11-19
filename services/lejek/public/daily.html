@@ -306,6 +306,10 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 .salon-quick-totals { display:flex; flex-wrap:wrap; gap:4px 8px; margin-top:6px; font-size:.82rem; font-weight:650; font-variant-numeric:tabular-nums; color:var(--muted); }
 .salon-quick-totals > span { padding:2px 6px; border-radius:5px; background:var(--tint); white-space:nowrap; }
 .salon-quick-totals abbr { text-decoration:none; }
+.salon-quick-totals [data-pace="ahead"] { background:#eaf8ef; color:#12633b; }
+.salon-quick-totals [data-pace="behind"] { background:#fff1f1; color:#a12528; }
+.salon-pace-description { position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+#salon-pace-key { display:flex; flex-wrap:wrap; gap:2px 12px; margin-top:4px; color:var(--muted); font-size:.8rem; }
 .salon-pace-time { color:var(--muted); font-size:.875rem; margin-top:5px; }
 #salon-results h3 { margin:10px 0 4px; font-size:1rem; }
 #salon-results li+li { margin-top:5px; }
@@ -564,7 +568,13 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <div class="history-results"></div>
 </details>
   <p id="team"></p>
-  <section id="salon-summary" aria-labelledby="performance-title"><p id="salon-period"></p><div id="salon-results"></div></section>
+  <section id="salon-summary" aria-labelledby="performance-title"><p id="salon-period"></p>
+    <p id="salon-pace-key" hidden>
+      <span><strong class="ahead" aria-hidden="true">✓</strong> W tempie lub powyżej</span>
+      <span><strong class="behind" aria-hidden="true">↓</strong> Poniżej tempa</span>
+      <span><strong aria-hidden="true">○</strong> Bez oceny</span>
+    </p>
+    <div id="salon-results"></div></section>
 </section>
 <section id="manager-team-view" hidden>
   <h1>Zespół</h1>
