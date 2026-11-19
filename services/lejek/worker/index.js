@@ -977,7 +977,7 @@ async function handle(request, env) {
   if (path==='/api/work-calendar') {
     if (!['seller','manager'].includes(user.role)) return json({error:'Brak dostępu do kalendarza.'},403);
     const {person,day,kind,action}=body;
-    if (!dayValid(day)||(!workday(day)&&!(action==='save'&&body.endDay&&body.endDay!==day))||!['save','remove','approve','reject'].includes(action))
+    if (!dayValid(day)||(!workday(day)&&!(action==='save'&&body.endDay&&body.endDay!==day))||!['save','remove','approve','reject','revoke'].includes(action))
       return json({error:'Wybierz dzień od poniedziałku do soboty i poprawną operację.'},400);
     const seller=user.role==='seller';
     if (seller&&(day<localDay()||!['save','remove'].includes(action)))
@@ -986,6 +986,9 @@ async function handle(request, env) {
     if (action==='remove') {
       change=await db.prepare(`DELETE FROM work_calendar WHERE person=? AND day=? AND (?=0 OR status!='approved')`)
         .bind(person,day,Number(seller)).run();
+    } else if (action==='revoke') {
+      change=await db.prepare("UPDATE work_calendar SET status='pending' WHERE person=? AND day=? AND status='approved'")
+        .bind(person,day).run();
     } else if (action==='reject') {
       change=await db.prepare("UPDATE work_calendar SET status='rejected' WHERE person=? AND day=? AND status='pending'")
         .bind(person,day).run();

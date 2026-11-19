@@ -370,7 +370,8 @@ function renderCalendar(host,sellers,manager) {
   const endLabel=host.querySelector('[data-calendar-end-label]');
   const kind=host.querySelector('[data-calendar-kind]');
   const status=host.querySelector('[data-calendar-status]');
-  const list=host.querySelector('[data-calendar-list]');
+  const grid=host.querySelector('[data-calendar-grid]');
+  const detail=host.querySelector('[data-calendar-detail]');
   const save=host.querySelector('[data-calendar-save]');
   person.replaceChildren(...sellers.map(seller=>new Option(seller.name,seller.id)));
   if (sellers.some(seller=>String(seller.id)===currentPerson)) person.value=currentPerson;
@@ -388,51 +389,96 @@ function renderCalendar(host,sellers,manager) {
   date.onchange=updateRange;
   updateRange();
   let revision=0;
+  const showDetails=(entry,focus=false)=>{
+    host.dataset.calendarSelection=person.value+'/'+entry.day;
+    detail.hidden=false;
+    for (const button of grid.querySelectorAll('button')) {
+      button.setAttribute('aria-pressed',String(button.dataset.day===entry.day));
+    }
+    const title=document.createElement('h3');
+    title.tabIndex=-1;
+    title.textContent=dateLabel(entry.day,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const info=document.createElement('p');
+    const automatic=entry.status==='automatic';
+    const type=automatic?'Dzień wolny':calendarKinds[entry.kind];
+    info.textContent=type+' · '+(automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
+    detail.replaceChildren(title,info);
+    if (!automatic&&entry.status!=='recorded'&&(manager||(entry.status!=='approved'&&entry.day>=data.today))) {
+      const actions=document.createElement('div');
+      actions.className='calendar-entry-actions';
+      const edit=document.createElement('button');
+      edit.type='button';
+      edit.className='secondary';
+      edit.textContent='Edytuj wpis';
+      edit.onclick=()=>{date.value=entry.day;endDate.value='';kind.value=entry.kind;updateRange();date.focus();};
+      actions.append(edit);
+      const decisions=entry.status==='approved'?[['revoke','Cofnij zgodę']]
+        :manager&&entry.status==='pending'?[['approve','Zatwierdź'],['reject','Odrzuć'],['remove','Usuń zgłoszenie']]
+        :[['remove','Usuń zgłoszenie']];
+      for (const [action,label] of decisions) {
+        const button=document.createElement('button');
+        button.type='button';
+        button.className=action==='approve'?'':'secondary';
+        button.textContent=label;
+        button.onclick=()=>{
+          if (action==='revoke'&&!confirm('Cofnąć zgodę na nieobecność w dniu '+dateLabel(entry.day)+'? Zgłoszenie wróci do oczekujących.')) return;
+          change(button,{day:entry.day,action});
+        };
+        actions.append(button);
+      }
+      detail.append(actions);
+    }
+    if (focus) {
+      title.focus({preventScroll:true});
+      detail.scrollIntoView({block:'nearest'});
+    }
+  };
   const load=async()=>{
     const request=++revision;
-    list.replaceChildren();
+    detail.hidden=true;
+    grid.replaceChildren();
     if (!month.value) return;
     try {
       const {entries,automaticDays=[]}=await api('/api/work-calendar?person='+person.value+'&month='+month.value);
-      if (request!==revision||!list.isConnected) return;
-      const days=[...entries,...automaticDays.map(day=>({day,status:'automatic'}))].sort((a,b)=>a.day.localeCompare(b.day));
-      for (const entry of days) {
-        const row=document.createElement('li');
-        const automatic=entry.status==='automatic';
-        row.dataset.calendarOrigin=automatic?'automatic':'manual';
-        const entryLabel=document.createElement('div');
-        entryLabel.className='calendar-entry';
-        const dateText=document.createElement('strong');
-        dateText.textContent=dateLabel(entry.day,{weekday:'long',day:'numeric',month:'long'});
-        const statusLabel=document.createElement('span');
-        statusLabel.className='calendar-status';
-        statusLabel.dataset.status=entry.status;
-        statusLabel.textContent=(automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
-        entryLabel.append(dateText,automatic?'Dzień wolny':calendarKinds[entry.kind],statusLabel);
-        row.append(entryLabel);
-        if (!automatic&&entry.status!=='recorded'&&(manager||(entry.status!=='approved'&&entry.day>=data.today))) {
-          const edit=document.createElement('button');
-          edit.type='button';
-          edit.className='secondary';
-          edit.textContent='Edytuj';
-          edit.onclick=()=>{date.value=entry.day;endDate.value='';kind.value=entry.kind;updateRange();date.focus();};
-          const remove=document.createElement('button');
-          remove.type='button';
-          remove.className='secondary';
-          remove.textContent=entry.status==='approved'?'Przywróć dzień pracy':'Usuń zgłoszenie';
-          remove.onclick=()=>change(remove,{day:entry.day,action:'remove'});
-          const actions=document.createElement('div');
-          actions.className='calendar-entry-actions';
-          actions.append(edit,remove);
-          row.append(actions);
+      if (request!==revision||!grid.isConnected) return;
+      const calendar=new Map(automaticDays.map(day=>[day,{day,status:'automatic'}]));
+      for (const entry of entries) calendar.set(entry.day,entry);
+      const [year,monthNumber]=month.value.split('-').map(Number);
+      const first=month.value+'-01';
+      const offset=(new Date(first+'T12:00:00Z').getUTCDay()+6)%7;
+      for (const day of ['Pon','Wt','Śr','Czw','Pt','Sob','Nd']) {
+        const label=document.createElement('li');
+        label.className='calendar-weekday';
+        label.textContent=day;
+        grid.append(label);
+      }
+      for (let index=0;index<offset;index++) {
+        const padding=document.createElement('li');
+        padding.setAttribute('aria-hidden','true');
+        grid.append(padding);
+      }
+      const count=new Date(Date.UTC(year,monthNumber,0)).getUTCDate();
+      for (let n=1;n<=count;n++) {
+        const day=month.value+'-'+String(n).padStart(2,'0');
+        const entry=calendar.get(day);
+        const cell=document.createElement('li');
+        const marker=document.createElement(entry?'button':'span');
+        marker.className='calendar-day';
+        marker.textContent=n;
+        if (day===data.today) marker.setAttribute('aria-current','date');
+        if (entry) {
+          marker.type='button';
+          marker.dataset.day=day;
+          marker.dataset.status=entry.status;
+          marker.setAttribute('aria-pressed','false');
+          marker.setAttribute('aria-label',dateLabel(day)+' · '+(calendarKinds[entry.kind]??'Dzień wolny')+' · '+calendarStatuses[entry.status]);
+          marker.onclick=()=>showDetails(entry,true);
         }
-        list.append(row);
+        cell.append(marker);
+        grid.append(cell);
       }
-      if (!days.length) {
-        const empty=document.createElement('li');
-        empty.textContent='Brak zaplanowanych dni wolnych w tym miesiącu.';
-        list.append(empty);
-      }
+      const selected=[...calendar.values()].find(entry=>person.value+'/'+entry.day===host.dataset.calendarSelection);
+      if (selected) showDetails(selected);
     } catch (error) {
       if (request===revision) status.textContent=error.message;
     }
@@ -444,8 +490,10 @@ function renderCalendar(host,sellers,manager) {
       const result=await api('/api/work-calendar',{person:Number(person.value),...values});
       month.value=values.day.slice(0,7);
       await refresh();
-      host.querySelector('[data-calendar-status]').textContent=values.action==='remove'?'Zaktualizowano kalendarz.'
-        :manager?'Zapisano dni · '+result.days:'Zgłoszono dni · '+result.days+'. Czekają na decyzję kierownika.';
+      const messages={remove:'Usunięto zgłoszenie.',revoke:'Cofnięto zgodę. Zgłoszenie wróciło do oczekujących.',
+        approve:'Zatwierdzono zgłoszenie.',reject:'Odrzucono zgłoszenie.'};
+      host.querySelector('[data-calendar-status]').textContent=messages[values.action]??(
+        manager?'Zapisano dni · '+result.days:'Zgłoszono dni · '+result.days+'. Czekają na decyzję kierownika.');
     } catch (error) {
       status.textContent=error.message;
     } finally {button.disabled=false;}
@@ -454,7 +502,7 @@ function renderCalendar(host,sellers,manager) {
     if (!kind.value||!date.reportValidity()||(!endDate.disabled&&!endDate.reportValidity())) return;
     change(save,{day:date.value,endDay:endDate.disabled||!endDate.value?undefined:endDate.value,kind:kind.value,action:'save'});
   };
-  person.onchange=month.onchange=load;
+  person.onchange=month.onchange=()=>{delete host.dataset.calendarSelection;load();};
   load();
 }
 $('#seller-calendar').addEventListener('toggle',event=>{

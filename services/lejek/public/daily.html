@@ -27,10 +27,22 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .calendar-fields label { display:grid; gap:5px; min-width:0; font-weight:650; }
 .calendar-fields input, .calendar-fields select { width:100%; min-width:0; }
 .calendar-fields .calendar-day-fields { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
-[data-calendar-list] { display:grid; gap:8px; padding:0; list-style:none; }
-[data-calendar-list] li[data-calendar-origin="automatic"] { background:#f4f6fa; color:var(--muted); }
-[data-calendar-list] li { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:var(--tint); border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
-.calendar-entry { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+[data-calendar-grid] { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; padding:0; list-style:none; }
+.calendar-weekday { text-align:center; padding:4px 0; color:var(--muted); font-size:.8rem; font-weight:750; }
+.calendar-day { display:grid; place-items:center; position:relative; min-height:44px; padding:3px 0; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-variant-numeric:tabular-nums; }
+button.calendar-day { width:100%; min-height:44px; padding:2px 0 11px; }
+button.calendar-day::after,.calendar-legend [data-status]::before { content:""; display:inline-block; inline-size:7px; block-size:7px; flex:none; border-radius:50%; background:currentColor; }
+button.calendar-day::after { position:absolute; inset-block-end:5px; inset-inline-start:calc(50% - 3.5px); }
+button.calendar-day[aria-pressed="true"] { border-color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
+.calendar-day[aria-current="date"] { text-decoration:underline; text-underline-offset:3px; }
+.calendar-day[data-status="automatic"],.calendar-legend [data-status="automatic"] { background:#edf1f6; color:#435572; }
+.calendar-day[data-status="approved"],.calendar-day[data-status="recorded"],.calendar-legend [data-status="approved"] { background:#dff3e8; color:#175b3b; }
+.calendar-day[data-status="pending"],.calendar-legend [data-status="pending"] { background:#fff0c2; color:#614400; }
+.calendar-day[data-status="rejected"],.calendar-legend [data-status="rejected"] { background:#fbe5e5; color:#842c2c; }
+.calendar-legend { display:flex; flex-wrap:wrap; gap:5px 10px; margin:8px 0; padding:0; list-style:none; color:var(--muted); font-size:.8rem; }
+.calendar-legend li { display:inline-flex; align-items:center; gap:5px; padding:2px 6px; border-radius:5px; }
+[data-calendar-detail] { display:grid; gap:8px; padding:12px; margin-top:10px; border:1px solid var(--line); border-inline-start:4px solid var(--blue); border-radius:9px; }
+[data-calendar-detail] h3 { margin:0; }
 .calendar-entry-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .calendar-status { border-radius:999px; padding:3px 8px; font-size:.82rem; font-weight:750; }
 .calendar-status[data-status="pending"] { background:#fff0c2; color:#614400; }
@@ -738,7 +750,12 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
     </div>
   </div>
   <p data-calendar-status role="status"></p>
-  <ul data-calendar-list></ul>
+  <ul class="calendar-legend" aria-label="Oznaczenia kalendarza">
+    <li data-status="automatic">Z grafiku</li><li data-status="approved">Zatwierdzony</li>
+    <li data-status="pending">Oczekuje</li><li data-status="rejected">Odrzucony</li>
+  </ul>
+  <ol data-calendar-grid aria-label="Kalendarz miesiąca"></ol>
+  <div data-calendar-detail hidden></div>
 </template>
 </main>
 <footer><strong class="product-brand"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</strong></footer>
