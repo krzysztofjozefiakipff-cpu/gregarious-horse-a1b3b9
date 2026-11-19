@@ -77,3 +77,18 @@ function sourceActivityProposal(source,orders,observedRate) {
   const offers=Math.max(orders,up(leads,offerRate));
   return [attempts,drives,offers,leads,meetings,up(offers,followRate)];
 }
+
+function effectiveCalendarTarget(target,adjustment) {
+  if (target==null||!adjustment||!adjustment.workdays) return target;
+  return Math.round(target*Math.max(0,adjustment.workdays-adjustment.absentDays)/adjustment.workdays);
+}
+
+function effectiveSourcePlan(rows,adjustment) {
+  if (!adjustment) return rows;
+  const columns=rows[0].map((_,index)=>{
+    const values=rows.map(row=>row[index]);
+    const total=values.reduce((sum,value)=>sum+value,0);
+    return total?allocateSourceTargets(effectiveCalendarTarget(total,adjustment),values):values;
+  });
+  return rows.map((_,index)=>columns.map(column=>column[index]));
+}

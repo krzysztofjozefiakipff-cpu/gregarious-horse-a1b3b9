@@ -15,6 +15,13 @@ database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_time
 for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users','0015_identity','0016_report_exclusions','0017_salon_plans','0018_plan_approvals','0019_source_plans','0020_password_resets','0021_daily_drafts','0022_lesson_packs','0023_work_calendar','0024_seller_source_profiles','0025_archive_report_periods','0026_direct_salon_plans','0027_salon_plan_change_requests']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
+if (!database.prepare("SELECT sql FROM sqlite_schema WHERE name='work_calendar'").get().sql.includes("'sick'")) {
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    database.exec(readFileSync('drizzle/0028_work_calendar_absence_kinds.sql','utf8'));
+    database.exec('COMMIT');
+  } catch(error) { database.exec('ROLLBACK'); throw error; }
+}
 // Legacy archives recorded only the email. Use the rollout month for those accounts.
 const archiveCutoff=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit'}).format(new Date());
 database.prepare(`INSERT INTO archive_report_periods (email,from_month)

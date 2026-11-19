@@ -356,8 +356,8 @@ async function api(path,body) {
   return result;
 }
 
-const calendarKinds={leave:'Urlop',saturday:'Wolna sobota',other:'Inny dzień bez aktywności'};
-const calendarStatuses={pending:'Czeka na zatwierdzenie',approved:'Zatwierdzony',rejected:'Odrzucony'};
+const calendarKinds={leave:'Urlop',sick:'Chorobowe',training:'Szkolenie',saturday:'Wolna sobota',other:'Inny dzień bez aktywności'};
+const calendarStatuses={pending:'Czeka na zatwierdzenie',approved:'Zatwierdzony',rejected:'Odrzucony',recorded:'Rozliczony',automatic:'Z grafiku'};
 
 function renderCalendar(host,sellers,manager) {
   const currentPerson=host.querySelector('[data-calendar-person] select')?.value;
@@ -365,7 +365,9 @@ function renderCalendar(host,sellers,manager) {
   host.replaceChildren($('#calendar-template').content.cloneNode(true));
   const person=host.querySelector('[data-calendar-person] select');
   const month=host.querySelector('[type="month"]');
-  const date=host.querySelector('[type="date"]');
+  const date=host.querySelector('[data-calendar-start]');
+  const endDate=host.querySelector('[data-calendar-end]');
+  const endLabel=host.querySelector('[data-calendar-end-label]');
   const kind=host.querySelector('[data-calendar-kind]');
   const status=host.querySelector('[data-calendar-status]');
   const list=host.querySelector('[data-calendar-list]');
@@ -375,33 +377,45 @@ function renderCalendar(host,sellers,manager) {
   person.parentElement.hidden=!manager;
   month.value=currentMonth||data.today.slice(0,7);
   if (!manager) date.min=data.today;
-  save.textContent=manager?'Zapisz dzień wolny':'Zgłoś do zatwierdzenia';
+  save.textContent=manager?'Zapisz nieobecność':'Zgłoś do zatwierdzenia';
+  const updateRange=()=>{
+    endLabel.hidden=!['leave','sick'].includes(kind.value);
+    endDate.disabled=endLabel.hidden;
+    endDate.min=date.value||date.min;
+    save.disabled=!kind.value;
+  };
+  kind.onchange=()=>{endDate.value='';updateRange();};
+  date.onchange=updateRange;
+  updateRange();
   let revision=0;
   const load=async()=>{
     const request=++revision;
     list.replaceChildren();
     if (!month.value) return;
     try {
-      const {entries}=await api('/api/work-calendar?person='+person.value+'&month='+month.value);
+      const {entries,automaticDays=[]}=await api('/api/work-calendar?person='+person.value+'&month='+month.value);
       if (request!==revision||!list.isConnected) return;
-      for (const entry of entries) {
+      const days=[...entries,...automaticDays.map(day=>({day,status:'automatic'}))].sort((a,b)=>a.day.localeCompare(b.day));
+      for (const entry of days) {
         const row=document.createElement('li');
+        const automatic=entry.status==='automatic';
+        row.dataset.calendarOrigin=automatic?'automatic':'manual';
         const entryLabel=document.createElement('div');
         entryLabel.className='calendar-entry';
         const dateText=document.createElement('strong');
-        dateText.textContent=dateLabel(entry.day);
+        dateText.textContent=dateLabel(entry.day,{weekday:'long',day:'numeric',month:'long'});
         const statusLabel=document.createElement('span');
         statusLabel.className='calendar-status';
         statusLabel.dataset.status=entry.status;
-        statusLabel.textContent=calendarStatuses[entry.status];
-        entryLabel.append(dateText,calendarKinds[entry.kind],statusLabel);
+        statusLabel.textContent=(automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
+        entryLabel.append(dateText,automatic?'Dzień wolny':calendarKinds[entry.kind],statusLabel);
         row.append(entryLabel);
-        if (manager||(entry.status!=='approved'&&entry.day>=data.today)) {
+        if (!automatic&&entry.status!=='recorded'&&(manager||(entry.status!=='approved'&&entry.day>=data.today))) {
           const edit=document.createElement('button');
           edit.type='button';
           edit.className='secondary';
           edit.textContent='Edytuj';
-          edit.onclick=()=>{date.value=entry.day;kind.value=entry.kind;date.focus();};
+          edit.onclick=()=>{date.value=entry.day;endDate.value='';kind.value=entry.kind;updateRange();date.focus();};
           const remove=document.createElement('button');
           remove.type='button';
           remove.className='secondary';
@@ -414,7 +428,7 @@ function renderCalendar(host,sellers,manager) {
         }
         list.append(row);
       }
-      if (!entries.length) {
+      if (!days.length) {
         const empty=document.createElement('li');
         empty.textContent='Brak zaplanowanych dni wolnych w tym miesiącu.';
         list.append(empty);
@@ -427,18 +441,18 @@ function renderCalendar(host,sellers,manager) {
     button.disabled=true;
     status.textContent='';
     try {
-      await api('/api/work-calendar',{person:Number(person.value),...values});
+      const result=await api('/api/work-calendar',{person:Number(person.value),...values});
       month.value=values.day.slice(0,7);
       await refresh();
       host.querySelector('[data-calendar-status]').textContent=values.action==='remove'?'Zaktualizowano kalendarz.'
-        :manager?'Zapisano dzień wolny.':'Zgłoszono dzień wolny. Czeka na decyzję kierownika.';
+        :manager?'Zapisano dni · '+result.days:'Zgłoszono dni · '+result.days+'. Czekają na decyzję kierownika.';
     } catch (error) {
       status.textContent=error.message;
     } finally {button.disabled=false;}
   };
   save.onclick=()=>{
-    if (!date.value||!date.reportValidity()) {status.textContent='Wybierz poprawną datę.';return;}
-    change(save,{day:date.value,kind:kind.value,action:'save'});
+    if (!kind.value||!date.reportValidity()||(!endDate.disabled&&!endDate.reportValidity())) return;
+    change(save,{day:date.value,endDay:endDate.disabled||!endDate.value?undefined:endDate.value,kind:kind.value,action:'save'});
   };
   person.onchange=month.onchange=load;
   load();
@@ -527,7 +541,8 @@ $('#seller-period-reset').onclick=()=>{
 function periodMetrics(snapshot,start,count) {
   const [year,month]=start.split('-').map(Number);
   const records=snapshot.daily.filter(row=>row.day<=snapshot.today).map(row=>[row.day,JSON.parse(row.counters)]);
-  const isScheduled=day=>weekday(day)&&!['leave','training'].includes(snapshot.personal.exceptions[day]);
+  const approved=new Set((snapshot.calendar??[]).filter(row=>row.status==='approved').map(row=>row.day));
+  const isScheduled=day=>weekday(day)&&!approved.has(day)&&!['leave','training'].includes(snapshot.personal.exceptions[day]);
   const metricsByMonth=Array.from({length:count},(_,index)=>{
     const first=monthStart(year,month-1+index);
     const end=monthStart(year,month+index);
@@ -536,7 +551,8 @@ function periodMetrics(snapshot,start,count) {
     const entries=records.filter(([date])=>date.startsWith(key));
     const metrics=monthlyMetrics(entries,entries.find(([date])=>date===day)?.[1]??[],
       snapshot.plans.find(row=>row.month===key)?.target,snapshot.funnelPlans.find(row=>row.month===key),
-      snapshot.reviewPlans.find(row=>row.month===key)?.target,day,remainingDays(day,end,isScheduled),isScheduled(day),isScheduled);
+      snapshot.reviewPlans.find(row=>row.month===key)?.target,day,remainingDays(day,end,isScheduled),isScheduled(day),isScheduled,
+      snapshot.absenceAdjustments?.[snapshot.sellers[0].id+'/'+key]);
     return metrics.map(metric=>{
       const goal=metric.target==null?null:snapshot.today<first?0:snapshot.today>=end?metric.target:metric.goal;
       return {...metric,goal,delta:goal==null?null:metric.actual-goal};
@@ -563,7 +579,18 @@ function renderPlans(snapshot,month,type) {
   const sourceTable=$('#seller-source-plan');
   sourceTable.hidden=!saved.length;
   const totals=sources.map(()=>Array(10).fill(0));
-  for (const plan of saved) JSON.parse(plan.targets).forEach((row,index)=>row.forEach((value,column)=>{totals[index][column]+=value;}));
+  const person=snapshot.sellers[0].id;
+  for (const plan of saved) {
+    const rows=effectiveSourcePlan(JSON.parse(plan.targets),snapshot.absenceAdjustments?.[person+'/'+plan.month]);
+    rows.forEach((row,index)=>row.forEach((value,column)=>{totals[index][column]+=value;}));
+  }
+  const adjusted=Object.entries(snapshot.absenceAdjustments??{}).some(([key])=>{
+    const period=key.split('/')[1];
+    return period>=month&&period<end;
+  });
+  const absenceNote=$('#seller-absence-adjustment');
+  absenceNote.hidden=!adjusted;
+  absenceNote.textContent='Cele uwzględniają zatwierdzony urlop i chorobowe.';
   $('#seller-source-rows').replaceChildren(...totals.flatMap((values,index)=>{
     if (!values.some(Boolean)) return [];
     const row=document.createElement('tr');
@@ -610,7 +637,7 @@ function renderPlans(snapshot,month,type) {
   renderMotivator(metrics,snapshot.today);
 }
 
-function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLeft,isWorkday,isScheduled=weekday) {
+function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLeft,isWorkday,isScheduled=weekday,adjustment) {
   const [year,month]=day.split('-').map(Number);
   const monthEnd=monthStart(year,month);
   const daysMonth=remainingDays(day.slice(0,7)+'-01',monthEnd,isScheduled);
@@ -621,7 +648,7 @@ function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLe
   return columns.map(([index,label])=>{
     const actual=records.reduce((sum,[,values])=>sum+activityCount(values,index),0);
     const standard=monthPlan!=null&&index<=7?monthTargets.reduce((sum,row)=>sum+(row[index]??0),0):null;
-    const target=(index===9?reviewTarget:index===7?monthPlan:(custom[customIndex[index]]??standard))??null;
+    const target=effectiveCalendarTarget((index===9?reviewTarget:index===7?monthPlan:(custom[customIndex[index]]??standard))??null,adjustment);
     const goal=target==null?null:Math.round(target*fraction);
     const doneToday=activityCount(current,index);
     const todayTarget=dailyTarget(target,actual-doneToday,daysLeft,isWorkday);
@@ -1395,14 +1422,15 @@ function renderManagerDashboard(view,detailOnly=false) {
   const team=sellers.filter(seller=>seller.accountStatus!=='inactive').map(seller=>{
     const entry=teamDay.find(row=>row.person===seller.id);
     const active=Boolean(entry?.started&&entry.started<=today);
-    const plannedToday=(view.calendar??[]).some(row=>row.person===seller.id&&row.day===today&&row.status==='approved');
-    const status=entry?.saved?'Wpisano działania':plannedToday?'Zaplanowany dzień wolny':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
+    const plannedToday=(view.calendar??[]).find(row=>row.person===seller.id&&row.day===today&&row.status==='approved');
+    const status=entry?.saved?'Wpisano działania':calendarKinds[plannedToday?.kind]??statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
     const records=entries.get(seller.id)??[];
     const current=records.find(([day])=>day===today)?.[1];
     const free=new Set((view.calendar??[]).filter(row=>row.person===seller.id&&row.status==='approved').map(row=>row.day));
     const isScheduled=day=>weekday(day)&&!free.has(day);
     const metrics=monthlyMetrics(records,current,forSeller(plans,seller.id)?.target,forSeller(funnelPlans,seller.id),
-      forSeller(reviewPlans,seller.id)?.target,today,remainingDays(today,monthStart(year,monthNumber),isScheduled),isScheduled(today),isScheduled);
+      forSeller(reviewPlans,seller.id)?.target,today,remainingDays(today,monthStart(year,monthNumber),isScheduled),isScheduled(today),isScheduled,
+      view.absenceAdjustments?.[seller.id+'/'+month]);
     const weakest=metrics.filter(metric=>metric.delta<0)
       .sort((a,b)=>a.actual/a.goal-b.actual/b.goal||a.delta-b.delta)[0];
     return {seller,status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
@@ -2038,6 +2066,12 @@ async function loadSalonPlans() {
           else if (openPlanningSeller===person.id) openPlanningSeller=null;
         });
         row.append(summary);
+        if (person.absenceAdjustment) {
+          const adjusted=document.createElement('p');
+          adjusted.textContent='Cel po korekcie za urlop lub chorobowe · '+salonPlanMetrics.map((label,index)=>
+            label+' '+(effectiveCalendarTarget(person.targets[index],person.absenceAdjustment)??'—')).join(' · ');
+          row.append(adjusted);
+        }
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager'&&!person.archived) {
           row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id),plan.sourceHistoryRates??[]));

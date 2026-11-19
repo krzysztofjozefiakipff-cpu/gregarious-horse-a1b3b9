@@ -27,6 +27,31 @@ function daysBetween(start,end) {
   }
   return days;
 }
+const calendarKinds=['leave','saturday','other','training','sick'];
+function calendarMonthDays(month) {
+  const last=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),0)).getUTCDate();
+  return daysBetween(month+'-01',month+'-'+String(last).padStart(2,'0'));
+}
+
+async function calendarAdjustments(db,months,scope,...params) {
+  const keys=months.map(()=>'?').join(',');
+  const rows=await list(db,`SELECT person,day,kind FROM work_calendar
+      WHERE status='approved' AND substr(day,1,7) IN (${keys}) AND ${scope}
+    UNION ALL SELECT person,day,kind FROM daily_exceptions
+      WHERE kind='leave' AND substr(day,1,7) IN (${keys}) AND ${scope}`,...months,...params,...months,...params);
+  const totals=new Map();
+  for (const {person,day,kind} of rows) {
+    if (!workday(day)) continue;
+    const month=day.slice(0,7);
+    const key=person+'/'+month;
+    if (!totals.has(key)) totals.set(key,{workdays:calendarMonthDays(month).filter(workday).length,absentDays:0});
+    const offset=totals.get(key);
+    if (kind==='leave'||kind==='sick') offset.absentDays++;
+    else if (kind==='saturday'||kind==='other') offset.workdays--;
+  }
+  return Object.fromEntries([...totals].filter(([,value])=>value.absentDays>0));
+}
+
 async function tracking(db,person) {
   await db.prepare('INSERT INTO daily_tracking VALUES (?,?) ON CONFLICT DO NOTHING').bind(person,localDay()).run();
   const {start_day}=await db.prepare('SELECT start_day FROM daily_tracking WHERE person=?').bind(person).first();
@@ -282,13 +307,16 @@ async function handle(request, env) {
         });
       }
     }
+    const adjustments=await calendarAdjustments(db,[month],scope,...params);
     const plans=[];
     for (const {salon} of salons) {
       const team=await sellerTargets(salon,month);
       const contributors=await salonContributors(salon,month);
       const approvals=approvalSet(team,contributors.length);
       const automatic=[0,0,0,0];
-      for (const person of team) person.targets.forEach((target,index)=>{automatic[index]+=target??0;});
+      for (const person of team) person.targets.forEach((target,index)=>{
+        automatic[index]+=effectiveCalendarTarget(target,adjustments[person.id+'/'+month])??0;
+      });
       const saved=await db.prepare(`SELECT p.manager,p.targets,k.approvals FROM salon_plans p
         LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
       const direct=await db.prepare(`SELECT p.targets,locked.salon IS NOT NULL AS protected
@@ -307,7 +335,7 @@ async function handle(request, env) {
         change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
         contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
-        team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
+        team:team.map(({version,...person})=>({...person,approved:Boolean(version),absenceAdjustment:adjustments[person.id+'/'+month]??null}))});
     }
     const pendingChanges=user.role==='group'?await list(db,`SELECT salon,month FROM salon_plan_change_requests
       WHERE status='pending' AND ${groupSalon} ORDER BY month,salon`,user.group):[];
@@ -331,8 +359,10 @@ async function handle(request, env) {
     if (!['seller','manager'].includes(user.role)||!sellers.some(seller=>seller.id===person))
       return json({error:'Brak dostępu do kalendarza.'},403);
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
-    const entries=await list(db,'SELECT day,kind,status FROM work_calendar WHERE person=? AND substr(day,1,7)=? ORDER BY day',person,month);
-    return json({entries});
+    const entries=await list(db,`SELECT day,kind,status FROM work_calendar WHERE person=? AND substr(day,1,7)=?
+      UNION ALL SELECT day,kind,'recorded' AS status FROM daily_exceptions WHERE person=? AND substr(day,1,7)=? AND kind IN ('leave','training')
+      ORDER BY day`,person,month,person,month);
+    return json({entries,automaticDays:calendarMonthDays(month).filter(day=>!workday(day))});
   }
   if (request.method==='GET' && path==='/api/daily/reopen') {
     const person=Number(url.searchParams.get('person'));
@@ -353,6 +383,7 @@ async function handle(request, env) {
     const placeholders=months.map(()=>'?').join(',');
     const reviewPlans=await list(db,'SELECT person,month,target FROM review_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('review_plans','review_plans.month'),...months,...params);
     const funnelPlans=await list(db,'SELECT person,month,targets FROM funnel_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('funnel_plans','funnel_plans.month'),...months,...params);
+    const absenceAdjustments=await calendarAdjustments(db,months,scope,...params);
     if (path==='/api/daily') {
       const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN ('+placeholders+') AND '+scope+' AND '+includedResult('daily_results',"substr(daily_results.day,1,7)"),...months,...params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('plans','plans.month'),...months,...params);
@@ -373,7 +404,10 @@ async function handle(request, env) {
       }
       const brand=personal?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
       const calendar=await list(db,`SELECT person,day,kind,status FROM work_calendar
-        WHERE (substr(day,1,7)=? OR status='pending') AND ${scope} ORDER BY day`,month,...params);
+        WHERE (substr(day,1,7) IN (${placeholders}) OR status='pending') AND ${scope}
+        UNION ALL SELECT person,day,kind,'approved' FROM daily_exceptions
+        WHERE substr(day,1,7) IN (${placeholders}) AND kind IN ('leave','training') AND ${scope}
+        ORDER BY day`,...months,...params,...months,...params);
       const approvals=personal?[]:await list(db,"SELECT person,day,reason FROM daily_exceptions WHERE kind='pending' AND "+scope+' ORDER BY day',...params);
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
@@ -413,12 +447,12 @@ async function handle(request, env) {
         const group=await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first();
         const rankingStart=period?months[0]:today.slice(0,7);
         const rankingEnd=period?months.at(-1):rankingStart;
-        const ranks=await list(db,`SELECT a.id,a.name,a.salon,p.target,
+        const candidates=await list(db,`SELECT a.id,a.name,a.salon,p.monthly_targets,
           COALESCE((SELECT SUM(json_extract(d.counters,'$[4]')) FROM daily_results d
             WHERE d.person=a.id AND substr(d.day,1,7) BETWEEN ?1 AND ?2 AND d.day<=?3
               AND ${inReportMonth('a.email','substr(d.day,1,7)')}),0) AS orders
           FROM accounts a JOIN (
-            SELECT person,SUM(target) AS target FROM plans WHERE month BETWEEN ?1 AND ?2
+            SELECT person,json_group_array(json_array(month,target)) AS monthly_targets FROM plans WHERE month BETWEEN ?1 AND ?2
               AND ${includedResult('plans','plans.month')}
             GROUP BY person HAVING SUM(target)>0
           ) p ON p.person=a.id
@@ -426,6 +460,10 @@ async function handle(request, env) {
           AND NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=a.id)
           AND (a.salon=?4 OR a.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?5))`,
           rankingStart,rankingEnd,today,user.salon,group?.group_name??null);
+        const rankingAdjustments=await calendarAdjustments(db,period?months:[rankingStart],
+          'person IN (SELECT value FROM json_each(?))',JSON.stringify(candidates.map(row=>row.id)));
+        const ranks=candidates.map(row=>({...row,target:JSON.parse(row.monthly_targets).reduce((sum,[month,target])=>
+          sum+effectiveCalendarTarget(target,rankingAdjustments[row.id+'/'+month]),0)})).filter(row=>row.target>0);
         ranks.sort((a,b)=>b.orders*a.target-a.orders*b.target || b.orders-a.orders || String(a.id).localeCompare(String(b.id)));
         const salonRanks=ranks.filter(row=>row.salon===user.salon);
         const positionIn=rows=>{
@@ -460,7 +498,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1 FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+reportScope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -479,7 +517,7 @@ async function handle(request, env) {
     }
     const reportSellers=sellers.filter(seller=>!reportsOnly||seller.includeInReports)
       .map(seller=>({...seller,reportMonths:reportMonths.get(seller.id)??[]}));
-    return json({signedInAs,roles,role:user.role,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
+    return json({signedInAs,roles,role:user.role,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
@@ -939,7 +977,7 @@ async function handle(request, env) {
   if (path==='/api/work-calendar') {
     if (!['seller','manager'].includes(user.role)) return json({error:'Brak dostępu do kalendarza.'},403);
     const {person,day,kind,action}=body;
-    if (!dayValid(day)||!workday(day)||!['save','remove','approve','reject'].includes(action))
+    if (!dayValid(day)||(!workday(day)&&!(action==='save'&&body.endDay&&body.endDay!==day))||!['save','remove','approve','reject'].includes(action))
       return json({error:'Wybierz dzień od poniedziałku do soboty i poprawną operację.'},400);
     const seller=user.role==='seller';
     if (seller&&(day<localDay()||!['save','remove'].includes(action)))
@@ -957,16 +995,32 @@ async function handle(request, env) {
         AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')`)
         .bind(person,day).run();
     } else {
-      if (!['leave','saturday','other'].includes(kind)||kind==='saturday'&&new Date(day+'T00:00:00Z').getUTCDay()!==6)
-        return json({error:'Wybierz rodzaj dnia wolnego. Wolną sobotę można zaznaczyć tylko w sobotę.'},400);
-      change=await db.prepare(`INSERT INTO work_calendar(person,day,kind,status)
-        SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2)
-          AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')
-        ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,status=excluded.status
-          WHERE ?4='approved' OR work_calendar.status!='approved'`)
-        .bind(person,day,kind,seller?'pending':'approved').run();
+      if (!calendarKinds.includes(kind)||kind==='saturday'&&new Date(day+'T00:00:00Z').getUTCDay()!==6)
+        return json({error:'Wybierz rodzaj nieobecności. Wolną sobotę można zaznaczyć tylko w sobotę.'},400);
+      const endDay=body.endDay??day;
+      if (!dayValid(endDay)||endDay<day||(Date.parse(endDay)-Date.parse(day))/86400000>=366||
+          (endDay!==day&&!['leave','sick'].includes(kind)))
+        return json({error:'Sprawdź zakres dat. Urlop i chorobowe można wpisać za maksymalnie 366 dni.'},400);
+      const days=daysBetween(day,endDay).filter(workday);
+      change=await db.prepare(`WITH selected AS (SELECT value AS day FROM json_each(?2)),
+        eligible AS (
+          SELECT day FROM selected WHERE ?5=0 OR NOT EXISTS (
+            SELECT 1 FROM work_calendar c WHERE c.person=?1 AND c.day=selected.day
+              AND c.status='approved' AND c.kind IN ('saturday','other')
+          )
+        )
+        INSERT INTO work_calendar(person,day,kind,status)
+        SELECT ?1,day,?3,?4 FROM eligible WHERE NOT EXISTS (
+          SELECT 1 FROM eligible e
+          WHERE EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=e.day)
+             OR EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=e.day AND kind!='rejected')
+             OR EXISTS (SELECT 1 FROM work_calendar c WHERE c.person=?1 AND c.day=e.day
+               AND ((?4='pending' AND c.status='approved') OR (?5=1 AND c.status!='rejected' AND c.kind<>?3)))
+        )
+        ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,status=excluded.status`)
+        .bind(person,JSON.stringify(days),kind,seller?'pending':'approved',Number(endDay!==day)).run();
     }
-    return change.meta.changes?json({ok:true}):json({error:'Dzień jest już rozliczony albo zgłoszenie zostało zmienione. Odśwież kalendarz.'},409);
+    return change.meta.changes?json({ok:true,days:change.meta.changes}):json({error:'Brak dni do zapisania albo w wybranym zakresie są rozliczone dni lub inne zgłoszenia. Sprawdź kalendarz.'},409);
   }
   if (path==='/api/review' && user.role!=='seller') {
     if (!dayValid(body.day)||typeof body.approve!=='boolean') return json({error:'Sprawdź decyzję.'},400);
