@@ -2012,7 +2012,7 @@ $('#lesson-import').onclick=async ()=>{
   if (!file||file.size>15*1024*1024) {status.textContent='Wybierz plik do 15 MB.';return;}
   lessonBusy=true;
   updateLessonButtons();
-  status.textContent='Odczytuję plik…';
+  status.textContent='Analizuję dokument i wybieram zagadnienia do nauki…';
   try {
     const encoded=await new Promise((resolve,reject)=>{
       const reader=new FileReader();
@@ -2023,7 +2023,7 @@ $('#lesson-import').onclick=async ()=>{
     const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded});
     lessonDraftList.replaceChildren();
     for (const lesson of result.lessons) appendLesson(lesson);
-    status.textContent='Przygotowano '+result.lessons.length+' szkiców. Sprawdź i uzupełnij podsumowania przed publikacją.';
+    status.textContent='Wybrano zagadnienia: '+result.lessons.length+'. Sprawdź szkice przed publikacją.';
   } catch(error) {status.textContent=error.message;}
   finally {lessonBusy=false;updateLessonButtons();}
 };
