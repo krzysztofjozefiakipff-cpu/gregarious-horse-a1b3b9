@@ -100,6 +100,7 @@ const localResetToken=/^[a-f0-9]{64}$/;
 const sharedResetToken=/^shared-[\w.-]{1,1024}$/;
 const validResetToken=token=>localResetToken.test(token)||sharedResetToken.test(token);
 const smtpReady=Boolean(process.env.RESET_SMTP_HOST&&process.env.RESET_SMTP_USER&&process.env.RESET_SMTP_PASSWORD);
+const inviteReady=Boolean(process.env.INVITE_SMTP_PASSWORD);
 let activeMailJobs=0;
 
 function loginForm(message='',status=200,path='/login',token='') {
@@ -130,6 +131,21 @@ function sendReset(email,token) {
   });
   mail.stdin.end(JSON.stringify([email,'https://biegwyzej.pl/reset-password?token='+token]));
 }
+async function sendInvitation(email,inviter,roles) {
+  if (!inviteReady||activeMailJobs>=4) return false;
+  const token=identity.issueReset(email,24*60*60_000);
+  if (!token) return false;
+  const delivered=await new Promise(resolve=>{
+    const mail=spawn('python3',['scripts/reset-mail.py','--invite'],{stdio:['pipe','ignore','ignore'],timeout:15000});
+    activeMailJobs++;
+    mail.stdin.on('error',()=>{});
+    mail.on('error',()=>resolve(false));
+    mail.on('close',code=>{activeMailJobs--;resolve(code===0);});
+    mail.stdin.end(JSON.stringify([email,'https://biegwyzej.pl/reset-password?token='+token,inviter,roles]));
+  });
+  if (!delivered) identity.discardReset(token);
+  return delivered;
+}
 async function accountsPost(path,body,token) {
   const headers={'Content-Type':'application/json'};
   if (token) headers.Authorization='Bearer '+token;
@@ -148,7 +164,7 @@ async function handle(request) {
   const {pathname:path,origin}=new URL(request.url);
   if (path==='/healthz' && request.method==='GET') {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
-    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing','X-Lejek-Reset-Mail':smtpReady?'configured':'missing'});
+    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing','X-Lejek-Reset-Mail':smtpReady?'configured':'missing','X-Lejek-Invite-Mail':inviteReady?'configured':'missing'});
   }
   const publicPage = publicPages.get(path);
   if (publicPage && (request.method === 'GET' || request.method === 'HEAD')) {
@@ -257,7 +273,7 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,sharedAdmin});
+  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
 }
 createServer(async (req,res)=>{
   try {

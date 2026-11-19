@@ -67,7 +67,7 @@ export function localIdentity(database, db) {
       const current=await verify(email,oldPassword);
       return Boolean(current&&await replacePassword(email,current.password_hash,newPassword));
     },
-    issueReset(email) {
+    issueReset(email, validFor=20*60_000) {
       const current=credentialFor(email);
       if (!current) return null;
       const token=random();
@@ -76,8 +76,11 @@ export function localIdentity(database, db) {
       const result=database.prepare(`INSERT INTO lejek_password_resets VALUES (?,?,?,?)
         ON CONFLICT(email) DO UPDATE SET token_hash=excluded.token_hash,credential_hash=excluded.credential_hash,
           expires_at=excluded.expires_at WHERE lejek_password_resets.expires_at<=?`)
-        .run(tokenHash(token),email,current.password_hash,now+20*60_000,now+18*60_000);
+        .run(tokenHash(token),email,current.password_hash,now+validFor,now+validFor-2*60_000);
       return result.changes?token:null;
+    },
+    discardReset(token) {
+      database.prepare("DELETE FROM lejek_password_resets WHERE token_hash=?").run(tokenHash(token));
     },
     resetPassword(token,password) {
       const key=tokenHash(token);

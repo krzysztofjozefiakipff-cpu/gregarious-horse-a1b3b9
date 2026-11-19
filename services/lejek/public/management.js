@@ -336,7 +336,14 @@ async function saveForm(event,path,payload,dialog,errorId) {
   const submit=event.currentTarget.querySelector('button[type="submit"]');
   submit.disabled=true;
   get(errorId).textContent='';
-  try {await api(path,payload);get(dialog).close();await refresh();}
+  try {
+    const result=await api(path,payload);
+    get(dialog).close();
+    await refresh();
+    if(result.invitation) get('status').textContent=result.invitation==='sent'
+      ?'Dodano użytkownika i wysłano zaproszenie.'
+      :'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.';
+  }
   catch(error) {get(errorId).textContent=error.message;}
   finally {submit.disabled=false;}
 }
@@ -352,6 +359,7 @@ get('planForm').onsubmit=event=>saveForm(event,'/api/plans',{
 get('addAccount').onclick=()=>{
   const form=get('accountForm');
   form.reset();
+  updateAccountInvitation();
   get('accountSalons').replaceChildren(...salons.map(salon=>new Option(salon,salon)));
   const manager=get('role').value==='manager';
   form.elements.salon.value=get('salon').value||(salons.length===1?salons[0]:'');
@@ -361,8 +369,21 @@ get('addAccount').onclick=()=>{
   get('accountEditor').showModal();
 };
 get('cancelAccount').onclick=()=>get('accountEditor').close();
-get('accountForm').onsubmit=event=>saveForm(event,'/api/accounts',
-  {...Object.fromEntries(new FormData(event.currentTarget)),includeInReports:event.currentTarget.elements.includeInReports.checked}, 'accountEditor','accountError');
+function updateAccountInvitation() {
+  const form=get('accountForm');
+  const invite=form.elements.invite.checked;
+  get('account-password-field').hidden=invite;
+  form.elements.password.required=!invite;
+  form.elements.password.disabled=invite;
+}
+get('accountForm').elements.invite.onchange=updateAccountInvitation;
+get('accountForm').onsubmit=event=>{
+  const fields=Object.fromEntries(new FormData(event.currentTarget));
+  const invite=event.currentTarget.elements.invite.checked;
+  const payload={...fields,invite,includeInReports:event.currentTarget.elements.includeInReports.checked};
+  return saveForm(event,invite?'/api/users':'/api/accounts',
+    invite?{...payload,roles:[fields.role],createOnly:true}:payload,'accountEditor','accountError');
+};
 const benchmarks=benchmarksFromWorkbook.map(([contact,visit,drive,offer,follow,close],i)=>
   [sources[i],pct(contact,1),i===0?'—':pct(visit,1),pct(offer,1),pct(follow,1),pct(close,1)]);
 get('bench').innerHTML=table(['Źródło','Kontakt / lead','Odbyte / kontakt','Oferta / kontakt','Follow-up / oferta','Zamówienie / lead'],benchmarks);

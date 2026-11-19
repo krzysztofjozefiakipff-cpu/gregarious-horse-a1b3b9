@@ -1415,7 +1415,9 @@ function loadUserEditor() {
   userEditor.elements.email.readOnly=Boolean(selected);
   userEditor.elements.includeInReports.checked=selected?.includeInReports!==0;
   userEditor.elements.password.value='';
-  userEditor.elements.password.required=!editing;
+  userEditor.elements.invite.checked=false;
+  $('#user-invite-label').hidden=editing;
+  updateInviteFields();
   $('#user-password-label').textContent=editing?'Nowe hasło (opcjonalnie)':'Hasło do Biegu Wyżej (co najmniej 8 znaków)';
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
@@ -1452,7 +1454,16 @@ function renderUserEditor(view) {
   loadUserEditor();
 }
 $('#user-picker').onchange=loadUserEditor;
-userEditor.onchange=updateUserRoleFields;
+function updateInviteFields() {
+  const inviting=!editingUsers()&&userEditor.elements.invite.checked;
+  $('#user-password-field').hidden=inviting;
+  userEditor.elements.password.disabled=inviting;
+  userEditor.elements.password.required=!editingUsers()&&!inviting;
+}
+userEditor.onchange=()=>{
+  updateUserRoleFields();
+  updateInviteFields();
+};
 userEditor.onsubmit=async event=>{
   event.preventDefault();
   const values=new FormData(userEditor);
@@ -1463,13 +1474,13 @@ userEditor.onsubmit=async event=>{
   button.disabled=true;
   try {
     const fields=Object.fromEntries(values);
-    await api('/api/users',{...fields,roles,includeInReports:values.has('includeInReports'),createOnly:!editing});
+    const result=await api('/api/users',{...fields,roles,invite:!editing&&values.has('invite'),includeInReports:values.has('includeInReports'),createOnly:!editing});
     await refresh();
     if (editing) {
       $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
       loadUserEditor();
     }
-    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':'Dodano użytkownika.';
+    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.':result.invitation==='failed'?'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.':'Dodano użytkownika.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {
