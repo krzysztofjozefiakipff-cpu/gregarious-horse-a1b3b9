@@ -119,7 +119,11 @@ async function handle(request, env) {
   const groupSalon='salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?)';
   const filters={admin:'',group:' AND '+groupSalon,manager:' AND (salon=? OR salon IN (SELECT salon FROM manager_salons WHERE manager=?))',seller:' AND id=?'};
   const params=user.role==='admin'?[]:user.role==='group'?[user.group]:user.role==='manager'?[user.salon,user.id]:[user.id];
-  const sellerQuery='SELECT id,name,salon,NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=accounts.id) AS includeInReports FROM accounts WHERE '+members+filters[user.role];
+  const accountStatuses=`NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=accounts.id) AS includeInReports,
+    CASE WHEN EXISTS (SELECT 1 FROM archived_users au WHERE au.email=accounts.email) THEN 'inactive'
+         WHEN EXISTS (SELECT 1 FROM lejek_credentials lc WHERE lc.email=accounts.email) THEN 'active'
+         ELSE 'pending' END AS accountStatus`;
+  const sellerQuery='SELECT id,name,salon,'+accountStatuses+' FROM accounts WHERE '+members+filters[user.role];
   const sellers=await list(db,sellerQuery+' ORDER BY id',...params);
   const scope='person IN (SELECT id FROM accounts WHERE '+members+filters[user.role]+')';
   const salons=user.role==='admin'
@@ -235,7 +239,7 @@ async function handle(request, env) {
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+reportScope,...months,...params),
       list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params),
-      user.role==='seller'?[]:list(db,`SELECT id,email,name,salon,CASE WHEN ${user.role==='manager'?'0':managers} THEN 'manager' ELSE 'seller' END AS role
+      user.role==='seller'?[]:list(db,`SELECT id,email,name,salon,CASE WHEN ${user.role==='manager'?'0':managers} THEN 'manager' ELSE 'seller' END AS role, ${accountStatuses}
         FROM accounts WHERE ${user.role==='manager'?members:'('+members+' OR '+managers+')'}${filters[user.role]} ORDER BY id`,...params),
     ]);
     return json({roles,role:user.role,sellers:reportsOnly?sellers.filter(seller=>seller.includeInReports):sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});

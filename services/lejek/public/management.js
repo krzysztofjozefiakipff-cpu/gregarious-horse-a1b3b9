@@ -54,7 +54,7 @@ async function refresh() {
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
     document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
-    get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola'],accounts.map(a=>[escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role]]));
+    get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],accounts.map(a=>[escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],{active:'Aktywne',inactive:'Nieaktywne',pending:'Bez hasła'}[a.accountStatus],a.includeInReports?'W raportach':'Poza raportami']));
     updateFilters(prior);
     syncDetailedSection();
     get('dashboard').hidden=false;

@@ -918,8 +918,8 @@ function renderManagerDashboard(view) {
   const team=sellers.map(seller=>{
     const entry=teamDay.find(row=>row.person===seller.id);
     const active=Boolean(entry?.started&&entry.started<=today);
-    const expected=!entry?.archived&&weekday(today)&&active&&!statuses[entry?.kind];
-    const status=entry?.archived?'Konto usunięte':entry?.saved?'Wpisano działania':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
+    const expected=seller.accountStatus==='active'&&weekday(today)&&active&&!statuses[entry?.kind];
+    const status=entry?.saved?'Wpisano działania':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
     const records=entries.get(seller.id)??[];
     const current=records.find(([day])=>day===today)?.[1];
     const metrics=monthlyMetrics(records,current,forSeller(plans,seller.id)?.target,forSeller(funnelPlans,seller.id),
@@ -929,12 +929,13 @@ function renderManagerDashboard(view) {
     return {seller,expected,saved:Boolean(entry?.saved),status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
   });
   const missing=team.filter(person=>person.expected&&!person.saved);
-  const planned=team.filter(person=>person.orders.todayTarget!=null);
-  const todayOrders=(planned.length?planned:team).reduce((sum,person)=>sum+person.orders.doneToday,0);
+  const reportTeam=team.filter(person=>person.seller.includeInReports);
+  const planned=reportTeam.filter(person=>person.orders.todayTarget!=null);
+  const todayOrders=(planned.length?planned:reportTeam).reduce((sum,person)=>sum+person.orders.doneToday,0);
   const todayTarget=planned.reduce((sum,person)=>sum+person.orders.todayTarget,0);
   const gaps=columns.map(([index,label],i)=>{
-    const actual=team.reduce((sum,person)=>sum+(person.metrics[i].goal==null?0:person.metrics[i].actual),0);
-    const goal=team.reduce((sum,person)=>sum+(person.metrics[i].goal??0),0);
+    const actual=reportTeam.reduce((sum,person)=>sum+(person.metrics[i].goal==null?0:person.metrics[i].actual),0);
+    const goal=reportTeam.reduce((sum,person)=>sum+(person.metrics[i].goal??0),0);
     return {label,actual,goal};
   }).filter(row=>row.actual<row.goal).sort((a,b)=>a.actual/a.goal-b.actual/b.goal);
   const priority=gaps[0];
@@ -943,7 +944,7 @@ function renderManagerDashboard(view) {
   for (const [label,value] of [
     ['Zamówienia dziś',planned.length?todayOrders+' / '+todayTarget:todayOrders+' · brak planu'],
     ['Wpisy do uzupełnienia',String(missing.length)],
-    ['Priorytet w lejku',priority?priority.label+' · brakuje '+(priority.goal-priority.actual):team.some(person=>person.metrics.some(metric=>metric.target>0))?'Brak zaległości względem tempa':'Brak celów zespołu']
+    ['Priorytet w lejku',priority?priority.label+' · brakuje '+(priority.goal-priority.actual):reportTeam.some(person=>person.metrics.some(metric=>metric.target>0))?'Brak zaległości względem tempa':'Brak celów zespołu']
   ]) {
     const card=document.createElement('article');
     const valueNode=document.createElement('strong');
@@ -962,7 +963,15 @@ function renderManagerDashboard(view) {
     const name=document.createElement('strong');
     name.textContent=seller.name+(view.salons.length>1?' · '+seller.salon:'');
     const progress=orders.target>0?percent.format(orders.actual/orders.target)+' planu miesiąca':'Brak planu zamówień';
-    summary.append(name,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
+    const badges=document.createElement('span');
+    badges.className='team-statuses';
+    const accountLabels={active:'Konto aktywne',inactive:'Konto nieaktywne',pending:'Konto bez hasła'};
+    for (const label of [accountLabels[seller.accountStatus],seller.includeInReports?'W raportach':'Poza raportami']) {
+      const badge=document.createElement('span');
+      badge.textContent=label;
+      badges.append(badge);
+    }
+    summary.append(name,badges,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
     const figures=document.createElement('ul');
     for (const metric of metrics) {
       const row=document.createElement('li');
