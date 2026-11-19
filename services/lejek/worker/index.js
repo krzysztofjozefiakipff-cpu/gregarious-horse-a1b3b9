@@ -155,26 +155,39 @@ async function handle(request, env) {
     ?db.prepare('DELETE FROM report_exclusions WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address)
     :db.prepare('INSERT INTO report_exclusions SELECT id FROM accounts WHERE email=? ON CONFLICT DO NOTHING').bind(address)];
   const storyScope=user.role==='admin'?'':' AND '+scope;
+  const managesSalonPlans=['group','manager'].includes(user.role);
+  const sellerTargets=async (salon,month)=>{
+    const rows=await list(db,`
+      SELECT a.id,a.name,p.target AS orders,r.target AS reviews,f.targets,k.version
+      FROM accounts a
+      LEFT JOIN plans p ON p.person=a.id AND p.month=?
+      LEFT JOIN review_plans r ON r.person=a.id AND r.month=?
+      LEFT JOIN funnel_plans f ON f.person=a.id AND f.month=?
+      LEFT JOIN seller_plan_approvals k ON k.person=a.id AND k.month=?
+      WHERE a.salon=? AND ${accountRole('a','seller')}
+        AND NOT EXISTS (SELECT 1 FROM archived_users x WHERE x.email=a.email)
+      ORDER BY a.id
+    `,month,month,month,month,salon);
+    return rows.map(row=>{
+      const funnel=JSON.parse(row.targets??'[]');
+      const targets=[row.orders,funnel[7]??null,funnel[6]??null,row.reviews];
+      const complete=targets.every(countValid);
+      return {id:row.id,name:row.name,targets,complete,version:complete?row.version:null};
+    });
+  };
+  const approvalSet=team=>team.length&&team.every(person=>person.version)
+    ?JSON.stringify(team.map(person=>[person.id,person.version])):null;
+  const assignedManagers=salon=>list(db,`
+    SELECT a.id,a.name FROM accounts a
+    WHERE ${accountRole('a','manager')}
+      AND NOT EXISTS (SELECT 1 FROM archived_users au WHERE au.email=a.email)
+      AND (a.salon=? OR EXISTS (SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND ms.salon=?))
+    ORDER BY a.name,a.id
+  `,salon,salon);
   if (path==='/api/salon-plans'&&request.method==='GET') {
-    if (!['group','manager'].includes(user.role)) return json({error:'Brak dostępu do planów salonu.'},403);
+    if (!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const month=url.searchParams.get('month');
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
-    const choices=user.role==='group'?await list(db,`
-      SELECT a.id,a.name,gs.salon FROM dealer_group_salons gs
-      JOIN accounts a ON a.salon=gs.salon OR EXISTS (
-        SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND ms.salon=gs.salon
-      )
-      WHERE gs.group_name=? AND ${accountRole('a','manager')}
-      AND NOT EXISTS (SELECT 1 FROM archived_users au WHERE au.email=a.email)
-      ORDER BY a.name,a.id
-    `,user.group):[];
-    const stored=await list(db,`
-      SELECT p.salon,p.manager,p.targets,a.name FROM salon_plans p JOIN accounts a ON a.id=p.manager
-      WHERE p.month=? AND ${user.role==='group'
-        ?'p.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?)'
-        :'p.manager=? AND (p.salon=? OR p.salon IN (SELECT salon FROM manager_salons WHERE manager=?))'}
-      ORDER BY p.salon
-    `,month,...(user.role==='group'?[user.group]:[user.id,user.salon,user.id]));
     const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
     const totals=new Map(salons.map(({salon})=>[salon,[0,0,0,0]]));
     const daily=await list(db,'SELECT person,counters FROM daily_results WHERE substr(day,1,7)=? AND day<=? AND '+scope,month,localDay(),...params);
@@ -188,8 +201,22 @@ async function handle(request, env) {
         for (let i=1;i<metricIndexes.length;i++) total[i]+=source[metricIndexes[i]]??0;
       }
     }
-    const plans=stored.map(plan=>({...plan,targets:JSON.parse(plan.targets),actuals:totals.get(plan.salon)}));
-    return json({plans,choices,salons});
+    const plans=[];
+    for (const {salon} of salons) {
+      const team=await sellerTargets(salon,month);
+      const approvals=approvalSet(team);
+      const automatic=[0,0,0,0];
+      for (const person of team) person.targets.forEach((target,index)=>{automatic[index]+=target??0;});
+      const saved=await db.prepare(`SELECT p.manager,p.targets,k.approvals FROM salon_plans p
+        LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
+      const managers=await assignedManagers(salon);
+      const override=Boolean(approvals&&saved?.approvals===approvals);
+      plans.push({salon,automatic,targets:override?JSON.parse(saved.targets):automatic,override,
+        actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
+        manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
+        team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
+    }
+    return json({plans});
   }
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
@@ -285,23 +312,50 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
-  if (path==='/api/salon-plans') {
-    if (user.role!=='group') return json({error:'Plan ustawia szef grupy dealerskiej.'},403);
-    const {salon,month,manager,targets}=body;
-    if (!textValid(salon)||!monthValid(month)||!Number.isSafeInteger(manager)||
-        !Array.isArray(targets)||targets.length!==4||!targets.every(countValid))
-      return json({error:'Wybierz salon, kierownika i miesiąc oraz wpisz cztery cele.'},400);
-    const result=await db.prepare(`
-      INSERT INTO salon_plans (salon,month,manager,targets)
-      SELECT gs.salon,?,a.id,? FROM dealer_group_salons gs JOIN accounts a ON a.id=?
-      WHERE gs.group_name=? AND gs.salon=? AND ${accountRole('a','manager')}
-        AND NOT EXISTS (SELECT 1 FROM archived_users au WHERE au.email=a.email)
-        AND (a.salon=gs.salon OR EXISTS (
-          SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND ms.salon=gs.salon
-        ))
-      ON CONFLICT(salon,month) DO UPDATE SET manager=excluded.manager,targets=excluded.targets
-    `).bind(month,JSON.stringify(targets),manager,user.group,salon.trim()).run();
-    return result.meta.changes?json({ok:true}):json({error:'Wybierz kierownika przypisanego do salonu w Twojej grupie.'},403);
+  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller'].includes(path)) {
+    if (!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
+    const {salon,month,manager,targets,person}=body;
+    if (!monthValid(month)||!managedSalons.has(salon)) return json({error:'Wybierz miesiąc i salon w swoim zakresie.'},403);
+    const team=await sellerTargets(salon,month);
+    if (path.endsWith('/seller')) {
+      if (user.role!=='manager'||!team.some(row=>row.id===person))
+        return json({error:'Cele handlowca zmienia kierownik przypisanego salonu.'},403);
+      if (!Array.isArray(targets)||targets.length!==4||!targets.every(countValid))
+        return json({error:'Wpisz cztery poprawne cele handlowca.'},400);
+      const existing=await db.prepare('SELECT targets FROM funnel_plans WHERE person=? AND month=?').bind(person,month).first();
+      const previous=JSON.parse(existing?.targets??'[]');
+      const funnel=Array.from({length:8},(_,i)=>previous[i]??null);
+      funnel[6]=targets[2];
+      funnel[7]=targets[1];
+      await db.batch([
+        db.prepare('INSERT INTO plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(person,month,targets[0]),
+        db.prepare('INSERT INTO review_plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(person,month,targets[3]),
+        db.prepare('INSERT INTO funnel_plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET targets=excluded.targets').bind(person,month,JSON.stringify(funnel))
+      ]);
+      return json({ok:true});
+    }
+    if (path.endsWith('/approve')) {
+      const individual=team.find(row=>row.id===person);
+      if (!individual?.complete) return json({error:'Najpierw uzupełnij cztery cele handlowca.'},409);
+      if (!individual.version) await db.prepare('INSERT INTO seller_plan_approvals VALUES (?,?,?) ON CONFLICT DO NOTHING')
+        .bind(person,month,crypto.randomUUID()).run();
+      return json({ok:true});
+    }
+    const approvals=approvalSet(team);
+    if (!approvals) return json({error:'Najpierw zatwierdź plany wszystkich handlowców salonu.'},409);
+    if (!Array.isArray(targets)||targets.length!==4||!targets.every(n=>Number.isSafeInteger(n)&&n>=0))
+      return json({error:'Wpisz cztery poprawne cele.'},400);
+    const managers=await assignedManagers(salon);
+    const existing=await db.prepare('SELECT manager FROM salon_plans WHERE salon=? AND month=?').bind(salon,month).first();
+    const responsible=user.role==='group'?manager:managers.some(row=>row.id===existing?.manager)?existing.manager:user.id;
+    if (!managers.some(row=>row.id===responsible)) return json({error:'Wybierz kierownika przypisanego do salonu.'},403);
+    await db.batch([
+      db.prepare(`INSERT INTO salon_plans VALUES (?,?,?,?) ON CONFLICT(salon,month)
+        DO UPDATE SET manager=excluded.manager,targets=excluded.targets`).bind(salon,month,responsible,JSON.stringify(targets)),
+      db.prepare(`INSERT INTO salon_plan_approval_sets VALUES (?,?,?) ON CONFLICT(salon,month)
+        DO UPDATE SET approvals=excluded.approvals`).bind(salon,month,approvals)
+    ]);
+    return json({ok:true});
   }
   if (['/api/lesson-import','/api/lessons'].includes(path) && canManage) {
     const salon=body.salon||(user.role==='manager'&&salons.length===1?salons[0].salon:null);

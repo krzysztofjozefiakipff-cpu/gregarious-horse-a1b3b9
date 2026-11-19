@@ -987,110 +987,153 @@ function renderManagerDashboard(view) {
   }
 }
 
-const salonPlanForm=$('#salon-plan-form');
+const salonPlans=$('#salon-plans');
 const salonPlanMonth=$('#salon-plan-month');
-const salonPlanMetrics=[
-  ['orders','Zamówienia'],['registrations','Rejestracje'],
-  ['invoices','Wystawione faktury'],['reviews','Opinie Google']
-];
-let salonPlanData;
+const salonPlanMetrics=['Zamówienia','Rejestracje','Wystawione faktury','Opinie Google'];
 let salonPlanRevision=0;
 
-function fillSalonPlan() {
-  const form=salonPlanForm.elements;
-  const salon=form.salon.value;
-  const saved=salonPlanData.plans.find(plan=>plan.salon===salon);
-  const managers=salonPlanData.choices.filter(choice=>choice.salon===salon);
-  form.manager.replaceChildren(new Option(managers.length?'Wybierz kierownika':'Brak przypisanego kierownika',''),
-    ...managers.map(manager=>new Option(manager.name,manager.id)));
-  if (saved&&managers.some(manager=>manager.id===saved.manager)) form.manager.value=saved.manager;
-  for (const [index,[field]] of salonPlanMetrics.entries()) form[field].value=saved?.targets[index]??'';
-  salonPlanForm.querySelector('button').disabled=!managers.length;
+function planTargets(values,max) {
+  const fields=document.createElement('div');
+  fields.className='salon-plan-fields';
+  const inputs=salonPlanMetrics.map((name,index)=>{
+    const label=document.createElement('label');
+    const input=document.createElement('input');
+    input.type='number';
+    input.inputMode='numeric';
+    input.min='0';
+    if (max) input.max=max;
+    input.required=true;
+    input.value=values[index]??'';
+    label.append(name,input);
+    fields.append(label);
+    return input;
+  });
+  return {fields,inputs};
+}
+
+function planAction(button,path,body,month) {
+  button.disabled=true;
+  return api(path,{month,...body}).then(()=>{
+    if (salonPlanMonth.value===month) return loadSalonPlans();
+  }).catch(error=>{
+    if (salonPlanMonth.value===month) $('#salon-plan-status').textContent=error.message;
+  }).finally(()=>{button.disabled=false;});
 }
 
 async function loadSalonPlans() {
   const revision=++salonPlanRevision;
+  const month=salonPlanMonth.value;
   const status=$('#salon-plan-status');
   const results=$('#salon-plan-results');
   results.replaceChildren();
-  salonPlanForm.hidden=true;
-  if (!salonPlanMonth.value) {status.textContent='Wybierz miesiąc.';return;}
-  status.textContent='Wczytywanie planów…';
+  status.textContent=month?'Wczytywanie planów…':'Wybierz miesiąc.';
+  if (!month) return;
   try {
-    const response=await api('/api/salon-plans?month='+encodeURIComponent(salonPlanMonth.value));
+    const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(month));
     if (revision!==salonPlanRevision) return;
-    salonPlanData=response;
-    if (data.role==='group') {
-      const selector=salonPlanForm.elements.salon;
-      const selected=selector.value;
-      selector.replaceChildren(new Option('Wybierz salon',''),...response.salons.map(({salon})=>new Option(salon,salon)));
-      if (response.salons.some(({salon})=>salon===selected)) selector.value=selected;
-      else if (response.salons.length===1) selector.value=response.salons[0].salon;
-      fillSalonPlan();
-      salonPlanForm.hidden=false;
-    }
-    for (const plan of response.plans) {
+    for (const plan of plans) {
       const card=document.createElement('article');
       const title=document.createElement('h2');
       title.textContent=plan.salon;
-      const manager=document.createElement('p');
-      manager.textContent='Kierownik: '+plan.name;
-      const list=document.createElement('dl');
-      for (const [index,[,label]] of salonPlanMetrics.entries()) {
+      const state=document.createElement('p');
+      const approved=plan.team.filter(person=>person.approved).length;
+      state.textContent=approved+' / '+plan.team.length+' planów zatwierdzonych · '+(plan.override?'Plan po korekcie':'Plan automatyczny');
+      const totals=document.createElement('dl');
+      for (const [index,label] of salonPlanMetrics.entries()) {
         const term=document.createElement('dt');
         const value=document.createElement('dd');
-        const actual=plan.actuals[index];
-        const target=plan.targets[index];
         term.textContent=label;
-        value.textContent=actual+' / '+target;
-        value.className=actual>=target?'ahead':'behind';
-        list.append(term,value);
+        value.textContent=plan.actuals[index]+' / '+plan.targets[index]+' · suma celów: '+plan.automatic[index];
+        value.className=plan.actuals[index]>=plan.targets[index]?'ahead':'behind';
+        totals.append(term,value);
       }
-      card.append(title,manager,list);
+      card.append(title,state,totals);
+      if (!plan.editable) {
+        const note=document.createElement('p');
+        note.textContent=!plan.team.length?'Brak aktywnych handlowców w salonie.'
+          :approved<plan.team.length?'Korektę planu salonu odblokuje zatwierdzenie wszystkich planów handlowców.'
+          :'Przypisz kierownika do salonu, aby móc zapisać korektę.';
+        card.append(note);
+      }
+      for (const person of plan.team) {
+        const row=document.createElement('details');
+        const summary=document.createElement('summary');
+        summary.textContent=person.name+' · '+(person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Brak kompletu celów');
+        row.append(summary);
+        const individual={salon:plan.salon,person:person.id};
+        if (data.role==='manager') {
+          const form=document.createElement('form');
+          const {fields,inputs}=planTargets(person.targets,1000000);
+          const save=document.createElement('button');
+          save.textContent='Zapisz cele handlowca';
+          form.append(fields,save);
+          form.onsubmit=event=>{
+            event.preventDefault();
+            planAction(save,'/api/salon-plans/seller',{...individual,targets:inputs.map(input=>input.valueAsNumber)},month);
+          };
+          row.append(form);
+        } else {
+          const values=document.createElement('p');
+          values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
+          row.append(values);
+        }
+        if (person.complete&&!person.approved) {
+          const approve=document.createElement('button');
+          approve.textContent='Zatwierdź plan handlowca';
+          approve.onclick=()=>planAction(approve,'/api/salon-plans/approve',individual,month);
+          row.append(approve);
+        }
+        card.append(row);
+      }
+      if (plan.editable) {
+        const form=document.createElement('form');
+        const {fields,inputs}=planTargets(plan.targets);
+        const manager=document.createElement('select');
+        if (data.role==='group') {
+          const label=document.createElement('label');
+          label.append('Kierownik salonu',manager);
+          manager.required=true;
+          manager.replaceChildren(new Option('Wybierz kierownika',''),
+            ...plan.managers.map(({name,id})=>new Option(name,id)));
+          manager.value=plan.manager??(plan.managers.length===1?plan.managers[0].id:'');
+          form.append(label);
+        }
+        const save=document.createElement('button');
+        save.textContent='Zapisz korektę planu salonu';
+        form.append(fields,save);
+        form.onsubmit=event=>{
+          event.preventDefault();
+          planAction(save,'/api/salon-plans',{salon:plan.salon,manager:Number(manager.value),
+            targets:inputs.map(input=>input.valueAsNumber)},month);
+        };
+        card.append(form);
+      }
       results.append(card);
     }
-    status.textContent=response.plans.length?'':'Brak zapisanych planów na ten miesiąc.';
+    status.textContent=plans.length?'':'Brak przypisanych salonów.';
   } catch(error) {
     if (revision===salonPlanRevision) status.textContent=error.message;
   }
 }
 salonPlanMonth.onchange=loadSalonPlans;
-salonPlanForm.elements.salon.onchange=fillSalonPlan;
-salonPlanForm.onsubmit=async event=>{
-  event.preventDefault();
-  const form=salonPlanForm.elements;
-  const button=salonPlanForm.querySelector('button');
-  const month=salonPlanMonth.value;
-  button.disabled=true;
-  try {
-    await api('/api/salon-plans',{month,salon:form.salon.value,manager:Number(form.manager.value),
-      targets:salonPlanMetrics.map(([field])=>form[field].valueAsNumber)});
-    if (salonPlanMonth.value===month) await loadSalonPlans();
-  } catch(error) {
-    $('#salon-plan-status').textContent=error.message;
-  } finally {
-    button.disabled=false;
-  }
-};
+salonPlans.addEventListener('toggle',()=>{
+  if (salonPlans.open&&!salonPlans.hidden) loadSalonPlans();
+});
 
 function selectManagementView() {
+  if (location.hash==='#plany-salonow') {
+    history.replaceState(null,'','#administracja');
+    salonPlans.open=true;
+  }
   const administration=location.hash==='#administracja';
   const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';
   $('#manager-team-view').hidden=!team;
   $('#management-team').setAttribute('aria-current',team?'page':'false');
-  const canViewPlans=['group','manager'].includes(data?.role);
-  const plans=canViewPlans&&location.hash==='#plany-salonow';
-  const wasVisible=!$('#salon-plans').hidden;
-  $('#management-salon-plans').hidden=!canViewPlans;
-  $('#management-salon-plans').setAttribute('aria-current',plans?'page':'false');
-  $('#salon-plans').hidden=!plans;
-  if (plans&&!wasVisible) {
-    if (!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
-    loadSalonPlans();
-  }
-  $('#performance-view').hidden=administration||team||plans;
+  salonPlans.hidden=!['group','manager'].includes(data?.role);
+  if (!salonPlans.hidden&&!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
+  $('#performance-view').hidden=administration||team;
   $('#administration-view').hidden=!administration;
-  $('#management-performance').setAttribute('aria-current',administration||team||plans?'false':'page');
+  $('#management-performance').setAttribute('aria-current',administration||team?'false':'page');
   $('#management-admin').setAttribute('aria-current',administration?'page':'false');
 }
 window.addEventListener('hashchange',selectManagementView);
