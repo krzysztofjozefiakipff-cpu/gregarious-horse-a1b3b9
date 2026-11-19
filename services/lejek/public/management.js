@@ -38,6 +38,9 @@ async function refresh() {
   try {
     const data=await api('/api/state?month='+encodeURIComponent(month));
     if(latest!==revision) return;
+    const signedIn=get('signed-in');
+    signedIn.querySelector('strong').textContent=data.signedInAs??'';
+    signedIn.hidden=!data.signedInAs;
     if (data.role==='seller') { location.replace('/daily.html'); return; }
     sessionStorage.setItem('lejek-active-role',data.role);
     const panel=panelNames[data.role];
