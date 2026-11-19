@@ -1007,7 +1007,7 @@ function renderSalonSummary(view,team=[]) {
     time.textContent=elapsed+' z '+total+' dni roboczych miesiąca (pon.–pt.) · '+percent.format(elapsed/total)
       +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
     summary.append(title,status,time,grid);
-    const members=new Set(plan.team.map(person=>person.id));
+    const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
       const results=metrics.map(person=>({seller:person.seller,...person.metrics[column]}));
@@ -1263,7 +1263,9 @@ async function loadSalonPlans() {
       title.textContent=plan.salon;
       const state=document.createElement('p');
       const approved=plan.team.filter(person=>person.approved).length;
-      state.textContent=approved+' / '+plan.team.length+' planów zatwierdzonych · '+(plan.override?'Plan po korekcie':'Plan automatyczny');
+      state.textContent=plan.team.length
+        ?approved+' / '+plan.team.length+' planów zatwierdzonych · '+(plan.override?'Plan po korekcie':'Plan automatyczny')
+        :plan.override?'Plan salonu ustawiony ręcznie':'Brak indywidualnych planów do zatwierdzenia';
       const totals=document.createElement('dl');
       for (const [index,label] of salonPlanMetrics.entries()) {
         const term=document.createElement('dt');
@@ -1274,6 +1276,11 @@ async function loadSalonPlans() {
         totals.append(term,value);
       }
       card.append(title,state,totals);
+      if (plan.contributors.length) {
+        const note=document.createElement('p');
+        note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zatwierdzone działania liczą się do wyników salonu.';
+        card.append(note);
+      }
       if (!plan.editable) {
         const note=document.createElement('p');
         note.textContent=!plan.team.length?'Brak aktywnych handlowców w salonie.'

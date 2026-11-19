@@ -307,7 +307,7 @@ function renderQuarter(scope) {
     r.expected===null?'—':'<span class="'+(r.sold>=r.expected?'ahead':'behind')+'">'+delta(r.sold,r.expected)+'</span>',display(r.remaining)
   ]));
   get('editPlan').hidden=!['admin','manager'].includes(get('role').value)||!months.length;
-  get('editPlan').disabled=!scope.length;
+  get('editPlan').disabled=!available().some(i=>people[i].planEligible);
   return report;
 }
 const funnelGoalLabels=['Próby kontaktu','Jazdy próbne','Oferty','Leady','Spotkania','Follow-up','Wystawione faktury','Rejestracje'];
@@ -324,8 +324,11 @@ function loadPlanInputs() {
   get('planError').textContent='';
 }
 get('editPlan').onclick=()=>{
-  options(get('planPerson'),available().map(i=>[i,people[i].name]));
-  if(get('seller').value) get('planPerson').value=get('seller').value;
+  const eligible=available().filter(i=>people[i].planEligible);
+  if (!eligible.length) return;
+  options(get('planPerson'),eligible.map(i=>[i,people[i].name]));
+  if(get('seller').value&&eligible.includes(Number(get('seller').value)))
+    get('planPerson').value=get('seller').value;
   loadPlanInputs();
   get('planEditor').showModal();
 };
