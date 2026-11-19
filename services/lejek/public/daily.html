@@ -17,10 +17,27 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 12px}.cards strong{display:block;font-size:clamp(1.3rem,3vw,2rem);line-height:1.15;font-variant-numeric:tabular-nums}
 .behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
 #meme{background:var(--yellow);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--blue);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--yellow)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
-.calendar-fields{display:flex;align-items:end;flex-wrap:wrap;gap:10px;margin-top:12px}
-.calendar-fields label{display:grid;gap:4px}
-[data-calendar-list] li{margin-block:8px}
-[data-calendar-list] button{margin-inline-start:8px}
+.plan-tools { display:grid; gap:10px; }
+.plan-tools summary { padding:4px 0; color:var(--ink); }
+.plan-tools summary::marker { color:var(--blue); }
+.plan-tools input, .calendar-fields select, .calendar-fields input { min-height:42px; }
+#seller-calendar-days { margin:10px 0 0; color:var(--muted); font-size:.9rem; }
+.calendar-fields { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-block:12px; }
+.calendar-fields label { display:grid; gap:5px; min-width:0; font-weight:650; }
+.calendar-fields input, .calendar-fields select { width:100%; min-width:0; }
+.calendar-fields .calendar-day-fields { display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
+[data-calendar-list] { display:grid; gap:8px; padding:0; list-style:none; }
+[data-calendar-list] li { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:var(--tint); border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
+.calendar-entry { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+.calendar-entry-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.calendar-status { border-radius:999px; padding:3px 8px; font-size:.82rem; font-weight:750; }
+.calendar-status[data-status="pending"] { background:#fff0c2; color:#614400; }
+.calendar-status[data-status="approved"] { background:#dff3e8; color:#175b3b; }
+.calendar-status[data-status="rejected"] { background:#fbe5e5; color:#842c2c; }
+@media(max-width:540px) {
+  .calendar-fields, .calendar-fields .calendar-day-fields { display:grid; grid-template-columns:minmax(0,1fr); }
+  .calendar-entry-actions { width:100%; }
+}
 #calendar-reminder{padding:10px;border-left:4px solid var(--blue);background:var(--tint)}
 #backlog{padding:13px;background:var(--yellow);border-radius:10px;margin:10px 0}#options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}#reason{width:100%;margin-top:8px}
 .scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:5px 3px;border-bottom:1px solid var(--line)}th{font-size:.78rem}td:first-child{min-width:115px;font-size:.86rem}input,select{font:inherit;border:1px solid #a1b0c4;border-radius:6px;padding:5px 7px;background:white;color:var(--ink)}input[type=number]{width:100%;min-width:56px;min-height:32px;text-align:center}button{background:var(--blue);color:white;border:0;border-radius:8px;padding:8px 13px;font:inherit;font-weight:700;cursor:pointer}button:disabled{background:#dedad1;color:#53545a;cursor:default}button.secondary{background:transparent;color:var(--blue);border:1px solid currentColor}
@@ -347,18 +364,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></div>
 <div data-seller-panel="plan" hidden>
-<details id="seller-calendar" class="order-plan">
-  <summary>Kalendarz pracy i dni wolne</summary>
-  <p id="seller-calendar-days"></p>
-  <div id="seller-calendar-editor"></div>
-</details>
 <div class="plan-period"><p id="seller-plan-period"></p></div>
-<details class="month-history" data-history="seller">
-  <summary>Historia zakończonych miesięcy</summary>
-  <label>Miesiąc <input type="month"></label>
-  <p class="history-status" role="status"></p>
-  <div class="history-results"></div>
-</details>
   <section id="seller-ranking" aria-labelledby="ranking-title">
     <div class="ranking-heading">
       <h2 id="ranking-title"></h2>
@@ -409,6 +415,19 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <ol id="motivation-actions"></ol>
   <p id="motivation-message"></p>
 </section>
+<div class="plan-tools">
+<details class="month-history" data-history="seller">
+  <summary>Historia zakończonych miesięcy</summary>
+  <label>Miesiąc <input type="month"></label>
+  <p class="history-status" role="status"></p>
+  <div class="history-results"></div>
+</details>
+<details id="seller-calendar" class="month-history">
+  <summary>Kalendarz pracy i dni wolne</summary>
+  <p id="seller-calendar-days"></p>
+  <div id="seller-calendar-editor"></div>
+</details>
+</div>
 </div>
 </div>
 <section id="admin" hidden>
@@ -540,12 +559,14 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 <template id="calendar-template">
   <div class="calendar-fields">
     <label data-calendar-person hidden>Handlowiec <select aria-label="Handlowiec"></select></label>
-    <label>Miesiąc <input type="month"></label>
+    <label>Wyświetlany miesiąc <input type="month"></label>
+    <div class="calendar-day-fields">
     <label>Data dnia wolnego <input type="date"></label>
     <label>Rodzaj <select data-calendar-kind>
       <option value="leave">Urlop</option><option value="saturday">Wolna sobota</option><option value="other">Inny dzień bez aktywności</option>
     </select></label>
     <button type="button" data-calendar-save></button>
+    </div>
   </div>
   <p data-calendar-status role="status"></p>
   <ul data-calendar-list></ul>
