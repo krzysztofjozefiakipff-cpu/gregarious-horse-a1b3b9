@@ -291,19 +291,27 @@ async function handle(request, env) {
       for (const person of team) person.targets.forEach((target,index)=>{automatic[index]+=target??0;});
       const saved=await db.prepare(`SELECT p.manager,p.targets,k.approvals FROM salon_plans p
         LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
-      const direct=await db.prepare('SELECT targets FROM direct_salon_plans WHERE salon=? AND month=?').bind(salon,month).first();
+      const direct=await db.prepare(`SELECT p.targets,locked.salon IS NOT NULL AS protected
+        FROM direct_salon_plans p LEFT JOIN protected_direct_salon_plans locked USING (salon,month)
+        WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
+      const change=direct&&await db.prepare(`SELECT r.id,r.status,r.proposed_targets,r.reason,a.name AS requester
+        FROM salon_plan_change_requests r JOIN accounts a ON a.id=r.requester
+        WHERE r.salon=? AND r.month=? ORDER BY r.id DESC LIMIT 1`).bind(salon,month).first();
       const managers=await assignedManagers(salon);
       const override=Boolean(approvals&&saved?.approvals===approvals);
       const manual=direct??(override?saved:null);
       const history=historicalRates.get(salon)??[];
       const sourceRates=history.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders));
       const sourceHistoryRates=history.map(({leads,orders})=>sourceHistoryRate(leads,orders));
-      plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured:automatic.map((_,index)=>Boolean(manual)||team.some(person=>person.targets[index]!=null)),targets:manual?JSON.parse(manual.targets):automatic,override,direct:Boolean(direct),
+      plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured:automatic.map((_,index)=>Boolean(manual)||team.some(person=>person.targets[index]!=null)),targets:manual?JSON.parse(manual.targets):automatic,override,direct:Boolean(direct),protected:Boolean(direct?.protected),
+        change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
         contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
         team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
     }
-    return json({plans});
+    const pendingChanges=user.role==='group'?await list(db,`SELECT salon,month FROM salon_plan_change_requests
+      WHERE status='pending' AND ${groupSalon} ORDER BY month,salon`,user.group):[];
+    return json({plans,pendingChanges});
   }
   if (request.method==='GET' && path==='/api/lesson-packs') {
     const salon=url.searchParams.get('salon');
@@ -478,17 +486,64 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
-  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller','/api/salon-plans/source-profile','/api/salon-plans/direct'].includes(path)) {
+  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller','/api/salon-plans/source-profile','/api/salon-plans/direct','/api/salon-plans/request-change','/api/salon-plans/decide-change'].includes(path)) {
     if (!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const {salon,month,manager,targets,person}=body;
     if (!monthValid(month)||!managedSalons.has(salon)) return json({error:'Wybierz miesiąc i salon w swoim zakresie.'},403);
+    const fourTargets=()=>Array.isArray(targets)&&targets.length===4&&targets.every(n=>Number.isSafeInteger(n)&&n>=0);
+    const recordOwner=role=>db.prepare(`INSERT INTO direct_salon_plan_owners (salon,month,role)
+      SELECT ?,?,? WHERE changes()>0 ON CONFLICT(salon,month) DO UPDATE SET role=excluded.role`).bind(salon,month,role);
     if (path==='/api/salon-plans/direct') {
-      if (!Array.isArray(targets)||targets.length!==4||!targets.every(n=>Number.isSafeInteger(n)&&n>=0))
-        return json({error:'Wpisz cztery cele salonu jako liczby całkowite od 0.'},400);
-      await db.prepare(`INSERT INTO direct_salon_plans (salon,month,targets) VALUES (?,?,?)
-        ON CONFLICT(salon,month) DO UPDATE SET targets=excluded.targets`).bind(salon,month,JSON.stringify(targets)).run();
-      return json({ok:true});
+      if (!fourTargets()) return json({error:'Wpisz cztery cele salonu jako liczby całkowite od 0.'},400);
+      const encoded=JSON.stringify(targets);
+      const [saved]=await db.batch([
+        db.prepare(`INSERT INTO direct_salon_plans (salon,month,targets)
+          SELECT ?1,?2,?3 WHERE ?4='group' OR NOT EXISTS (
+            SELECT 1 FROM protected_direct_salon_plans WHERE salon=?1 AND month=?2
+          ) ON CONFLICT(salon,month) DO UPDATE SET targets=excluded.targets`).bind(salon,month,encoded,user.role),
+        recordOwner(user.role),
+        db.prepare(`UPDATE salon_plan_change_requests SET status='superseded'
+          WHERE salon=? AND month=? AND status='pending' AND base_targets<>? AND ?='group'`).bind(salon,month,encoded,user.role)
+      ]);
+      return saved.meta.changes?json({ok:true}):json({error:'Ten plan ustala szef grupy. Wyślij prośbę o korektę.'},403);
     }
+    if (path==='/api/salon-plans/request-change') {
+      if (user.role!=='manager') return json({error:'Prośbę o korektę wysyła kierownik salonu.'},403);
+      if (!fourTargets()||typeof body.reason!=='string'||!body.reason.trim()||body.reason.trim().length>500)
+        return json({error:'Wpisz cztery cele i uzasadnienie do 500 znaków.'},400);
+      const request=await db.prepare(`INSERT INTO salon_plan_change_requests
+        (salon,month,requester,base_targets,proposed_targets,reason)
+        SELECT salon,month,?3,targets,?4,?5 FROM protected_direct_salon_plans
+        WHERE salon=?1 AND month=?2 AND targets<>?4
+        ON CONFLICT DO NOTHING`).bind(salon,month,user.id,JSON.stringify(targets),body.reason.trim()).run();
+      return request.meta.changes?json({ok:true})
+        :json({error:'Zmień co najmniej jeden cel. Plan musi być ustalony przez szefa i nie może mieć oczekującej prośby.'},409);
+    }
+    if (path==='/api/salon-plans/decide-change') {
+      if (user.role!=='group') return json({error:'O korekcie decyduje szef grupy.'},403);
+      const {id,approve}=body;
+      if (!Number.isSafeInteger(id)||id<1||typeof approve!=='boolean') return json({error:'Wybierz prośbę i decyzję.'},400);
+      if (!approve) {
+        const declined=await db.prepare(`UPDATE salon_plan_change_requests SET status='rejected'
+          WHERE id=? AND salon=? AND month=? AND status='pending'`).bind(id,salon,month).run();
+        return declined.meta.changes?json({ok:true}):json({error:'Ta prośba została już rozpatrzona.'},409);
+      }
+      const [,accepted]=await db.batch([
+        db.prepare(`UPDATE direct_salon_plans AS p SET targets=(
+          SELECT proposed_targets FROM salon_plan_change_requests WHERE id=?3
+        ) WHERE salon=?1 AND month=?2 AND EXISTS (
+          SELECT 1 FROM salon_plan_change_requests r WHERE r.id=?3 AND r.salon=p.salon AND r.month=p.month
+            AND r.status='pending' AND r.base_targets=p.targets
+        )`).bind(salon,month,id),
+        db.prepare(`UPDATE salon_plan_change_requests SET status='approved'
+          WHERE id=? AND salon=? AND month=? AND status='pending' AND changes()>0`).bind(id,salon,month),
+        recordOwner('group')
+      ]);
+      return accepted.meta.changes?json({ok:true}):json({error:'Plan lub status prośby się zmienił. Odśwież widok.'},409);
+    }
+    if (path==='/api/salon-plans'&&user.role==='manager'&&await db.prepare(
+      'SELECT 1 FROM protected_direct_salon_plans WHERE salon=? AND month=?'
+    ).bind(salon,month).first()) return json({error:'Ten plan ustala szef grupy. Wyślij prośbę o korektę.'},403);
     const team=await sellerTargets(salon,month);
     if (path.endsWith('/source-profile')) {
       if (user.role!=='manager'||!team.some(row=>row.id===person&&!row.archived))
