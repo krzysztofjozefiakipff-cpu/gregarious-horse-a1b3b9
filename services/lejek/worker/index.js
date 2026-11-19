@@ -129,6 +129,22 @@ async function handle(request, env) {
     :[{salon:user.salon}];
   const managedSalons=new Set(salons.map(({salon})=>salon));
   const canManage=['admin','group','manager'].includes(user.role);
+  // A delegated operator may manage only subordinate accounts in their full scope.
+  const delegatedScope=user.role==='manager'
+    ? filters.manager+' AND '+accountRole('a','seller')+' AND NOT '+accountRole('a','manager')
+    : filters.group+` AND NOT EXISTS (
+      SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND NOT EXISTS (
+        SELECT 1 FROM dealer_group_salons gs WHERE gs.salon=ms.salon AND gs.group_name=?
+      )
+    )`;
+  const delegatedParams=user.role==='group'?[...params,user.group]:params;
+  const delegatedWhere=`a.role IN ('manager','seller') AND a.email<>?
+    AND NOT EXISTS (SELECT 1 FROM dealer_group_heads dh WHERE dh.email=a.email)
+    AND NOT EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=a.id AND ar.role='group')
+    `+delegatedScope;
+  const canEditDelegated=address=>db.prepare(
+    'SELECT 1 FROM accounts a WHERE a.email=? AND '+delegatedWhere
+  ).bind(address,email,...delegatedParams).first();
   const storyScope=user.role==='admin'?'':' AND '+scope;
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
@@ -200,12 +216,13 @@ async function handle(request, env) {
         FROM accounts a LEFT JOIN manager_salons m ON m.manager=a.id
         WHERE ${accountRole('a','manager')}
         ORDER BY a.name,a.id,m.salon`):[];
-      const users=user.role==='admin'?await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
+      const users=!canManage?[]:await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
         COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived
-        FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email WHERE a.role<>'admin'
-        UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email) FROM dealer_group_heads h
-        WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)
-        ORDER BY name,email`):[];
+        FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email WHERE `+
+        (owner?`a.role<>'admin'
+          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email) FROM dealer_group_heads h
+          WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
+        ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
       return json({users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
@@ -321,11 +338,12 @@ async function handle(request, env) {
     ]);
     return json({ok:true});
   }
-  if (path==='/api/users/archive' && user.role==='admin') {
+  if (path==='/api/users/archive' && canManage) {
     if (!textValid(body.email)||typeof body.archived!=='boolean') return json({error:'Wybierz użytkownika.'},400);
     const address=body.email.trim().toLowerCase();
     const account=await db.prepare('SELECT role FROM accounts WHERE email=?').bind(address).first();
     if (address===env.sharedAdmin||address===email||account?.role==='admin') return json({error:'Nie można usunąć dostępu administratora.'},403);
+    if (!owner&&!await canEditDelegated(address)) return json({error:'Nie możesz zarządzać tym kontem.'},403);
     const head=await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first();
     if (!account&&!head) return json({error:'Nie znaleziono użytkownika.'},404);
     const sql=body.archived?'INSERT INTO archived_users(email) VALUES (?) ON CONFLICT DO NOTHING':'DELETE FROM archived_users WHERE email=?';
@@ -348,8 +366,8 @@ async function handle(request, env) {
     if (user.role!=='admin') {
       if (!needsSalon||!managedSalons.has(salon.trim())||chosen.some(role=>role==='group'||user.role==='manager'&&role!=='seller'))
         return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
-      if (current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first())
-        return json({error:'Konto jest już przypisane w Lejku. Zmianę ról wykonuje administrator.'},409);
+      if (body.createOnly!==true&&!await canEditDelegated(address))
+        return json({error:'Nie możesz zarządzać tym kontem.'},403);
     }
     if (body.createOnly===true&&(current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first()))
       return json({error:'Użytkownik już istnieje. Przejdź do sekcji Zarządzaj użytkownikami.'},409);
@@ -362,7 +380,11 @@ async function handle(request, env) {
     if ((body.createOnly===true||!current||password!=='')&&!validAccountPassword(password))
       return json({error:'Hasło do Biegu Wyżej musi mieć od 12 do 128 znaków.'},400);
     const credentials=password?await env.passwordStatements(address,password):[];
-    const createOnly=body.createOnly===true||user.role!=='admin';
+    if (!owner&&body.createOnly!==true&&!await canEditDelegated(address))
+      return json({error:'Nie możesz zarządzać tym kontem.'},403);
+    const createOnly=body.createOnly===true;
+    if (!owner&&createOnly&&await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first())
+      return json({error:'Użytkownik już istnieje.'},409);
     const insertAccount='INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)';
     const updateAccount=' ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role';
     await db.batch([

@@ -1022,6 +1022,7 @@ $('#manager-scope').onchange=()=>renderAdmin();
 const userEditor=$('#user-editor');
 const addUserBlock=$('#admin-users-block');
 const editUserBlock=$('#admin-edit-users-block');
+let editableUsers=[];
 const editingUsers=()=>userEditor.parentElement===editUserBlock;
 for (const block of [addUserBlock,editUserBlock]) block.addEventListener('toggle',()=>{
   if (!block.open||block.hidden||userEditor.parentElement===block) return;
@@ -1039,7 +1040,7 @@ function updateUserRoleFields() {
 }
 function loadUserEditor() {
   const editing=editingUsers();
-  const selected=editing?data.users.find(user=>user.email===$('#user-picker').value):null;
+  const selected=editing?editableUsers.find(user=>user.email===$('#user-picker').value):null;
   $('#user-picker-label').hidden=!editing;
   $('#user-fields').hidden=editing&&!selected;
   $('#user-save').textContent=editing?'Zapisz zmiany':'Dodaj użytkownika';
@@ -1062,8 +1063,12 @@ function loadUserEditor() {
 }
 function renderUserEditor(view) {
   const delegated=view.role!=='admin';
-  editUserBlock.hidden=delegated;
-  if (delegated&&editingUsers()) addUserBlock.append(userEditor);
+  editUserBlock.hidden=false;
+  const visibleSalons=new Set(view.salons.map(({salon})=>salon));
+  editableUsers=delegated?data.users.filter(user=>
+    visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
+    (view.role!=='manager'||user.roles==='seller')
+  ):data.users;
   for (const [id,allowed] of [['user-group-role',!delegated],['user-manager-role',view.role!=='manager']]) {
     const label=$('#'+id);
     label.hidden=!allowed;
@@ -1073,9 +1078,9 @@ function renderUserEditor(view) {
   salonPicker.replaceChildren(new Option(view.salons.length?'Wybierz salon':'Brak dodanych salonów',''),
     ...view.salons.map(({salon})=>new Option(salon,salon)));
   const picker=$('#user-picker');
-  const prior=delegated?'':picker.value;
-  picker.replaceChildren(new Option('Wybierz użytkownika',''),...data.users.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
-  if (data.users.some(user=>user.email===prior)) picker.value=prior;
+  const prior=picker.value;
+  picker.replaceChildren(new Option(editableUsers.length?'Wybierz użytkownika':'Brak użytkowników w tym zakresie',''),...editableUsers.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
+  if (editableUsers.some(user=>user.email===prior)) picker.value=prior;
   userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
   loadUserEditor();
 }
@@ -1107,10 +1112,9 @@ userEditor.onsubmit=async event=>{
 
 $('#user-archive').onclick=async event=>{
   const button=event.currentTarget;
-  const selected=data.users.find(user=>user.email===$('#user-picker').value);
+  const selected=editableUsers.find(user=>user.email===$('#user-picker').value);
   if (!selected) return;
   const archived=!selected.archived;
-  if (data.role!=='admin') return;
   if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach.')) return;
   button.disabled=true;
   try {
