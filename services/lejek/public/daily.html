@@ -86,6 +86,15 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily .task-action strong{font-size:1.65rem}
 #tasks-intro{margin:0 0 6px;background:#f4eff5;color:#302038}
 #tasks-closing{margin-top:12px;padding:12px 14px;border-inline-start:4px solid #ff7547;border-radius:8px;background:#302038;color:#fff;font-size:1rem;font-weight:700;line-height:1.45}
+#manager-today,#manager-team-view{margin-bottom:20px}
+.manager-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin:14px 0}
+.manager-cards article,#manager-team-list details{background:#fff;border:1px solid #ded7dc;border-radius:12px;padding:14px;color:#302038}
+.manager-cards strong{display:block;font-size:1.2rem;margin-top:4px}
+#manager-missing{margin:0 0 8px}
+#manager-team-list details{margin:0 0 8px}
+#manager-team-list summary{cursor:pointer;overflow-wrap:anywhere}
+#manager-team-list summary strong{display:block}
+#manager-team-list ul{margin:10px 0 0;padding-inline-start:23px}
 </style>
 </head>
 <body>
@@ -161,13 +170,23 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <section id="admin" hidden>
 <nav class="management-nav" aria-label="Zarządzanie salonem">
   <a href="#wykonanie" id="management-performance">Wykonanie planu</a>
+  <a href="#zespol" id="management-team" hidden>Zespół</a>
   <a href="#administracja" id="management-admin">Panel administracyjny</a>
 </nav>
 <section id="performance-view">
-  <h1>Wykonanie planu</h1>
+  <h1 id="performance-title">Wykonanie planu</h1>
+  <section id="manager-today" hidden aria-label="Podsumowanie dnia">
+    <div id="manager-cards" class="manager-cards"></div>
+    <p id="manager-missing"></p>
+    <a href="#zespol">Zobacz statusy zespołu</a>
+  </section>
   <p id="team"></p>
   <section id="salon-summary"><h2>Realizacja planów zamówień</h2><div id="salon-results"></div></section>
   <p><a href="/zarzadzanie.html">Szczegółowe wyniki i raport kwartalny</a></p>
+</section>
+<section id="manager-team-view" hidden>
+  <h1>Zespół</h1>
+  <div id="manager-team-list"></div>
 </section>
 <section id="administration-view" hidden>
 <h1>Panel administracyjny</h1>

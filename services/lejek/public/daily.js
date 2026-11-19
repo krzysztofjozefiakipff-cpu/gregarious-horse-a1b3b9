@@ -373,27 +373,9 @@ function renderPlans(records) {
       (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
   }).join('');
   const funnel=data.funnelPlans?.find(row=>row.month===monthKey);
-  const custom=funnel?JSON.parse(funnel.targets):[];
-  const daysMonth=remainingDays(monthKey+'-01',monthEnd);
-  const elapsed=daysMonth-remainingDays(data.today,monthEnd);
-  const monthTargets=monthPlan?sourceTargets(monthPlan):[];
-  const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target??null;
-  // Keep the first three custom targets in the order used by existing saved plans.
-  const customIndex={1:0,4:1,5:2,0:3,2:4,6:5,10:6,8:7};
-  const todayFraction=(elapsed+Number(weekday(data.today)))/daysMonth;
+  const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
+  const metrics=monthlyMetrics(monthRecords,current,monthPlan,funnel,reviewTarget,data.today,daysLeft,isWorkday);
   $('#pace').hidden=false;
-  const metrics=columns.map(([index,label])=>{
-    const actual=monthRecords.reduce((total,[,values])=>total+activityCount(values,index),0);
-    const defaultTarget=monthPlan!=null&&index<=7
-      ?monthTargets.reduce((sum,row)=>sum+(row[index]??0),0)
-      :null;
-    const target=index===9?reviewTarget:index===7?(monthPlan??null):(custom[customIndex[index]]??defaultTarget);
-    const goal=target==null?null:Math.round(target*todayFraction);
-    const delta=goal==null?null:actual-goal;
-    const doneToday=activityCount(current,index);
-    const todayTarget=dailyTarget(target,actual-doneToday,daysLeft,isWorkday);
-    return {index,label,actual,target,goal,delta,doneToday,todayTarget};
-  });
   $('#pace-items').innerHTML=metrics.map(({label,actual,target,goal,delta})=>{
     const style=delta<0?'behind':delta>0?'ahead':'';
     const status=delta==null?'Brak celu':delta<0?'Brakuje '+(-delta):delta>0?'Ponad planem o '+delta:'Zgodnie z planem';
@@ -402,6 +384,26 @@ function renderPlans(records) {
   }).join('');
   renderTodayTasks(metrics,data.previousDaily,data.today);
   renderMotivator(metrics,data.today);
+}
+
+function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLeft,isWorkday) {
+  const [year,month]=day.split('-').map(Number);
+  const monthEnd=monthStart(year,month);
+  const daysMonth=remainingDays(day.slice(0,7)+'-01',monthEnd);
+  const elapsed=daysMonth-remainingDays(day,monthEnd);
+  const fraction=(elapsed+Number(weekday(day)))/daysMonth;
+  const monthTargets=monthPlan?sourceTargets(monthPlan):[];
+  const custom=funnel?JSON.parse(funnel.targets):[];
+  const customIndex={1:0,4:1,5:2,0:3,2:4,6:5,10:6,8:7};
+  return columns.map(([index,label])=>{
+    const actual=records.reduce((sum,[,values])=>sum+activityCount(values,index),0);
+    const standard=monthPlan!=null&&index<=7?monthTargets.reduce((sum,row)=>sum+(row[index]??0),0):null;
+    const target=(index===9?reviewTarget:index===7?monthPlan:(custom[customIndex[index]]??standard))??null;
+    const goal=target==null?null:Math.round(target*fraction);
+    const doneToday=activityCount(current,index);
+    const todayTarget=dailyTarget(target,actual-doneToday,daysLeft,isWorkday);
+    return {index,label,actual,target,goal,delta:goal==null?null:actual-goal,doneToday,todayTarget};
+  });
 }
 
 function activityCount(values,index) {
@@ -886,17 +888,99 @@ function renderSalonSummary() {
   if (!results.children.length) results.textContent='Brak przypisanych salonów.';
 }
 
+function renderManagerDashboard() {
+  const {today,sellers,daily,plans,funnelPlans,reviewPlans,teamDay}=data;
+  const month=today.slice(0,7);
+  const [year,monthNumber]=month.split('-').map(Number);
+  const daysLeft=remainingDays(today,monthStart(year,monthNumber));
+  const entries=new Map();
+  for (const row of daily) {
+    if (!row.day.startsWith(month)||row.day>today) continue;
+    if (!entries.has(row.person)) entries.set(row.person,[]);
+    entries.get(row.person).push([row.day,JSON.parse(row.counters)]);
+  }
+  const forSeller=(items,person)=>items.find(row=>row.month===month&&row.person===person);
+  const statuses={leave:'Urlop',training:'Szkolenie',zero:'Dzień rozliczony bez aktywności',pending:'Czeka na zatwierdzenie'};
+  const team=sellers.map(seller=>{
+    const entry=teamDay.find(row=>row.person===seller.id);
+    const active=Boolean(entry?.started&&entry.started<=today);
+    const expected=weekday(today)&&active&&!statuses[entry?.kind];
+    const status=entry?.saved?'Wpisano działania':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
+    const records=entries.get(seller.id)??[];
+    const current=records.find(([day])=>day===today)?.[1];
+    const metrics=monthlyMetrics(records,current,forSeller(plans,seller.id)?.target,forSeller(funnelPlans,seller.id),
+      forSeller(reviewPlans,seller.id)?.target,today,daysLeft,weekday(today)&&!['leave','training','zero'].includes(entry?.kind));
+    const weakest=metrics.filter(metric=>metric.delta<0)
+      .sort((a,b)=>a.actual/a.goal-b.actual/b.goal||a.delta-b.delta)[0];
+    return {seller,expected,saved:Boolean(entry?.saved),status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
+  });
+  const missing=team.filter(person=>person.expected&&!person.saved);
+  const planned=team.filter(person=>person.orders.todayTarget!=null);
+  const todayOrders=(planned.length?planned:team).reduce((sum,person)=>sum+person.orders.doneToday,0);
+  const todayTarget=planned.reduce((sum,person)=>sum+person.orders.todayTarget,0);
+  const gaps=columns.map(([index,label],i)=>{
+    const actual=team.reduce((sum,person)=>sum+(person.metrics[i].goal==null?0:person.metrics[i].actual),0);
+    const goal=team.reduce((sum,person)=>sum+(person.metrics[i].goal??0),0);
+    return {label,actual,goal};
+  }).filter(row=>row.actual<row.goal).sort((a,b)=>a.actual/a.goal-b.actual/b.goal);
+  const priority=gaps[0];
+  const cards=$('#manager-cards');
+  cards.replaceChildren();
+  for (const [label,value] of [
+    ['Zamówienia dziś',planned.length?todayOrders+' / '+todayTarget:todayOrders+' · brak planu'],
+    ['Wpisy do uzupełnienia',String(missing.length)],
+    ['Priorytet w lejku',priority?priority.label+' · brakuje '+(priority.goal-priority.actual):team.some(person=>person.metrics.some(metric=>metric.target>0))?'Brak zaległości względem tempa':'Brak celów zespołu']
+  ]) {
+    const card=document.createElement('article');
+    const valueNode=document.createElement('strong');
+    valueNode.textContent=value;
+    card.append(label,valueNode);
+    cards.append(card);
+  }
+  $('#manager-missing').textContent=missing.length?'Brak wpisu: '+missing.map(person=>person.seller.name).join(', '):'';
+  const list=$('#manager-team-list');
+  list.replaceChildren();
+  if (!team.length) list.textContent='Brak przypisanych handlowców.';
+  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
+  for (const {seller,status,metrics,weakest,orders} of team) {
+    const detail=document.createElement('details');
+    const summary=document.createElement('summary');
+    const name=document.createElement('strong');
+    name.textContent=seller.name;
+    const progress=orders.target>0?percent.format(orders.actual/orders.target)+' planu miesiąca':'Brak planu zamówień';
+    summary.append(name,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
+    const figures=document.createElement('ul');
+    for (const metric of metrics) {
+      const row=document.createElement('li');
+      row.textContent=metric.label+' · '+metric.actual+(metric.target==null?' · brak celu':' / '+metric.target+' w miesiącu');
+      figures.append(row);
+    }
+    detail.append(summary,figures);
+    list.append(detail);
+  }
+}
+
 function selectManagementView() {
   const administration=location.hash==='#administracja';
-  $('#performance-view').hidden=administration;
+  const team=data?.role==='manager'&&location.hash==='#zespol';
+  $('#manager-team-view').hidden=!team;
+  $('#management-team').setAttribute('aria-current',team?'page':'false');
+  $('#performance-view').hidden=administration||team;
   $('#administration-view').hidden=!administration;
-  $('#management-performance').setAttribute('aria-current',administration?'false':'page');
+  $('#management-performance').setAttribute('aria-current',administration||team?'false':'page');
   $('#management-admin').setAttribute('aria-current',administration?'page':'false');
 }
 window.addEventListener('hashchange',selectManagementView);
 
 function renderAdmin() {
-  $('#dealer').textContent='Panel salonu';
+  const manager=data.role==='manager';
+  $('#dealer').textContent=manager?data.salon:'Panel salonu';
+  $('#performance-title').textContent=manager?'Dziś w salonie':'Wykonanie planu';
+  $('#management-performance').textContent=manager?'Dziś w salonie':'Wykonanie planu';
+  $('#management-admin').textContent=manager?'Zarządzanie':'Panel administracyjny';
+  $('#management-team').hidden=!manager;
+  $('#manager-today').hidden=!manager;
+  if (manager) renderManagerDashboard();
   $('#admin').hidden=false;
   selectManagementView();
   $('#management-team-link').textContent=data.role==='group'?'Konta zespołu':'Konta zespołu i ustawienia planów';
