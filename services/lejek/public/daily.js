@@ -1550,8 +1550,8 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
   link.href='https://miesiecznikdealer.pl/rynek/wywiad/10-proc-marzy-na-samochodzie-bardzo-trudne';
   link.target='_blank';
   link.rel='noopener noreferrer';
-  link.textContent='Polski przykład: Miesięcznik Dealer';
-  reference.append('Dla źródeł z co najmniej 30 leadami i 3 zamówieniami kalkulator korzysta z konwersji salonu z trzech poprzednich zakończonych miesięcy. Przy mniejszej próbie stosuje założenia arkusza Bieg Wyżej. Dla BDC punktem wyjścia jest baza retencyjna. ',link);
+  link.textContent='Przykład z Miesięcznika Dealer';
+  reference.append('Przy co najmniej 60 leadach z danego źródła kalkulator łączy relację zamówień do leadów z trzech zakończonych miesięcy ze stawką startową. Przy mniejszej próbie stosuje stawkę startową. Są to założenia planistyczne dla danego źródła. ',link);
   const summary=document.createElement('dl');
   summary.className='planning-totals';
   const sourceDetails=document.createElement('details');
@@ -1629,9 +1629,10 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
       input.addEventListener('invalid',()=>{sourceDetails.open=true;panel.open=true;});
     }
     const rateNote=document.createElement('p');
-    rateNote.textContent=sourceRates[index]
-      ?'Konwersja leadów na zamówienia w salonie: '+new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1}).format(sourceRates[index])
-      :'Konwersja startowa według założeń planowania.';
+    const rate=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1})
+      .format(sourceConversionRate(index,sourceRates[index]));
+    rateNote.textContent='Konwersja przyjęta do planu · '+rate
+      +(sourceRates[index]!=null?' · skorygowana danymi salonu':' · stawka startowa');
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
     sourceDetails.append(panel);
     const inputs=[...manual.inputs,...activity.inputs];
@@ -1658,7 +1659,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     }
     const values=sourcePlanProposal(totals,shares,sourceRates);
     if (values.some(row=>row.some(value=>value>1000000))) {
-      proposalStatus.textContent='Wyliczone działania przekraczają limit. Zmniejsz cel zamówień.';
+      proposalStatus.textContent='Wyliczone działania przekraczają limit. Sprawdź podział zamówień między źródła.';
       return;
     }
     rows.forEach((row,index)=>row.apply(values[index]));
@@ -1730,6 +1731,34 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
       +(donor.sourceTargets?'':' Plan łączny rozdzielono '+(shares?'według profilu odbiorcy.':'według domyślnego podziału źródeł.'))
       +(donor.targets.some(value=>value==null)?' Brakujące cele łączne uzupełniono zerami.':'');
   }
+  const recalculateActivities=document.createElement('button');
+  recalculateActivities.type='button';
+  recalculateActivities.className='secondary';
+  recalculateActivities.textContent='Przelicz tylko aktywności';
+  const activityStatus=document.createElement('p');
+  activityStatus.setAttribute('role','status');
+  recalculateActivities.onclick=()=>{
+    const goals=rows.map(({inputs})=>inputs.slice(0,4).map(input=>input.valueAsNumber));
+    if (goals.some(row=>row.some(value=>!Number.isInteger(value)||value<0||value>1000000))) {
+      activityStatus.textContent='Sprawdź cele wpisane przy poszczególnych źródłach.';
+      return;
+    }
+    if (!goals.some(row=>row[0]>0)) {
+      activityStatus.textContent='Najpierw wczytaj plan lub przypisz zamówienia do źródeł.';
+      return;
+    }
+    const proposals=goals.map((row,index)=>sourceActivityProposal(index,row[0],sourceRates[index]));
+    const exceedsLimit=proposals.some(row=>row.some(value=>value>1000000))||
+      proposals[0].some((_,index)=>proposals.reduce((total,row)=>total+row[index],0)>1000000);
+    if (exceedsLimit) {
+      activityStatus.textContent='Wyliczone aktywności przekraczają limit.';
+      return;
+    }
+    rows.forEach((row,index)=>row.apply([...goals[index],...proposals[index]]));
+    updateSummary();
+    activityStatus.textContent='Przeliczono aktywności. Cele sprzedażowe w każdym źródle pozostają takie same. Sprawdź podgląd i zapisz.';
+  };
+  reviewStep.append(recalculateActivities,activityStatus);
   const calculationInfo=document.createElement('details');
   const calculationTitle=document.createElement('summary');
   calculationTitle.textContent='Jak liczymy działania?';

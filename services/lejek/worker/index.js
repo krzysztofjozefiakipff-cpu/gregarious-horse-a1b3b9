@@ -284,8 +284,8 @@ async function handle(request, env) {
         LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
       const managers=await assignedManagers(salon);
       const override=Boolean(approvals&&saved?.approvals===approvals);
-      const sourceRates=(historicalRates.get(salon)??[]).map(({leads,orders})=>
-        leads>=30&&orders>=3&&orders<=leads?orders/leads:null);
+      const history=historicalRates.get(salon)??[];
+      const sourceRates=history.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders));
       plans.push({salon,automatic,sourceRates,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
         contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,

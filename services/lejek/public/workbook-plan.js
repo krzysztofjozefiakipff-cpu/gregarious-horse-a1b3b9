@@ -1,4 +1,21 @@
-const benchmarksFromWorkbook = [[1, 0, 0.8, 0.7, 0.8, 0.3], [0.65, 0.25, 0.7, 0.45, 0.8, 0.035], [0.8, 0.4, 0.75, 0.55, 0.8, 0.06], [0.9, 0.65, 0.8, 0.7, 0.8, 0.2], [0.85, 0.45, 0.75, 0.55, 0.8, 0.075], [0.95, 0.65, 0.85, 0.7, 0.8, 0.25], [0.75, 0.35, 0.75, 0.55, 0.8, 0.07], [0.8, 0.4, 0.75, 0.6, 0.8, 0.06], [0.85, 0.45, 0.75, 0.55, 0.8, 0.07], [0.8, 0.4, 0.75, 0.5, 0.8, 0.06], [0.7, 0.3, 0.7, 0.45, 0.8, 0.04], [0.7, 0.3, 0.7, 0.45, 0.8, 0.04]];
+// Planning assumptions, not nationwide conversion benchmarks.
+// Columns: orders per lead, attempts per lead, scheduled meetings per lead, drives per scheduled meeting,
+// offers per lead, follow-ups per offer. Walk-in matches the daily entry's automatic counts.
+const sourceAssumptions = [
+  [0.20,1,1,0.35,0.55,0.80],   // Walk-in
+  [0.035,1.4,0.18,0.45,0.25,0.85], // Facebook
+  [0.08,1.3,0.30,0.45,0.40,0.85],  // Strona WWW
+  [0.15,1.2,0.45,0.50,0.50,0.85],  // Kontakt z salonem
+  [0.06,1.3,0.28,0.45,0.35,0.85],  // OTOMOTO
+  [0.20,1.2,0.50,0.50,0.55,0.85],  // Polecenia
+  [0.05,1.3,0.20,0.45,0.28,0.85],  // Baza retencyjna
+  [0.06,1.4,0.25,0.45,0.32,0.85],  // Importerskie
+  [0.12,1.2,0.20,0.25,0.55,0.85],  // Broker
+  [0.05,1.2,0.23,0.40,0.28,0.85],  // Serwis
+  [0.03,1.4,0.15,0.45,0.22,0.85],  // Galerie
+  [0.04,1.4,0.18,0.45,0.26,0.85],  // Targi
+  [0.05,1.3,0.25,0.45,0.32,0.85]   // Odzyskane przez BDC
+];
 const defaultMix = [6, 1, 1, 4, 0, 1, 1, 1, 0, 0, 0, 0];
 
 const sourceProfilePresets={
@@ -27,26 +44,30 @@ function allocateSourceTargets(goal,mix) {
 }
 
 function sourceTargets(goal) {
-  const allocations=allocateSourceTargets(goal,defaultMix);
-  const up=(value,rate)=>Math.ceil(value*rate-1e-9);
-  return allocations.map((sales,i)=>{
-    const [contact,visit,drive,offer,follow,close]=benchmarksFromWorkbook[i];
-    const lead=Math.ceil(sales/close-1e-9);
-    const contacts=up(lead,contact);
-    const visits=up(contacts,visit);
-    const offers=up(contacts,offer);
-    return [lead,contacts,Math.ceil(visits/.8),visits,up(i===0?lead:visits,drive),offers,up(offers,follow),sales];
+  return allocateSourceTargets(goal,defaultMix).map((orders,index)=>{
+    const [attempts,drives,offers,leads,meetings,followUps]=sourceActivityProposal(index,orders);
+    const heldMeetings=index===0?meetings:Math.ceil(meetings*0.8);
+    return [leads,attempts,meetings,heldMeetings,drives,offers,followUps,orders];
   });
 }
 
+function sourceConversionRate(source, observedRate) {
+  return observedRate??sourceAssumptions[source][0];
+}
+
+function calibratedSourceRate(source, leads, orders) {
+  if (leads<60||orders<0||orders>leads) return null;
+  const priorWeight=100;
+  return (orders+priorWeight*sourceAssumptions[source][0])/(leads+priorWeight);
+}
 
 function sourceActivityProposal(source,orders,observedRate) {
-  // BDC starts from the retention profile until the salon has its own assumptions.
-  const [contact,visit,drive,offer,follow,close]=benchmarksFromWorkbook[source]??benchmarksFromWorkbook[6];
-  const leads=Math.ceil(orders/(observedRate??close)-1e-9);
-  const contacts=Math.ceil(leads*contact);
-  const meetings=source===0?leads:Math.ceil(contacts*visit);
-  const drives=Math.ceil(meetings*drive);
-  const offers=Math.ceil(contacts*offer);
-  return [contacts,drives,offers,leads,meetings,Math.ceil(offers*follow)];
+  const [,attemptsPerLead,meetingRate,driveRate,offerRate,followRate]=sourceAssumptions[source];
+  const up=(value,rate)=>Math.max(0,Math.ceil(value*rate-1e-9));
+  const leads=up(orders,1/sourceConversionRate(source,observedRate));
+  const attempts=up(leads,attemptsPerLead);
+  const meetings=up(leads,meetingRate);
+  const drives=up(meetings,driveRate);
+  const offers=Math.max(orders,up(leads,offerRate));
+  return [attempts,drives,offers,leads,meetings,up(offers,followRate)];
 }
