@@ -336,6 +336,7 @@ let busy=false;
 let preview=false;
 const allPreviewSalons='\u0000all-salons';
 let managerPreviewSalon='';
+let groupPreviewName='';
 let managerReturnHash='';
 let previewResult=null;
 
@@ -968,7 +969,7 @@ function renderManagerDashboard(view) {
 
 function selectManagementView() {
   const administration=location.hash==='#administracja';
-  const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon))&&location.hash==='#zespol';
+  const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';
   $('#manager-team-view').hidden=!team;
   $('#management-team').setAttribute('aria-current',team?'page':'false');
   $('#performance-view').hidden=administration||team;
@@ -1090,28 +1091,34 @@ $('#user-archive').onclick=async event=>{
 };
 
 function renderAdmin() {
+  const groupPreview=data.role==='admin'?data.groups.find(group=>group.name===groupPreviewName):null;
+  const previewSalons=new Set((groupPreview?.salons??'').split('\n').filter(Boolean));
+  const baseView=groupPreview?{...data,role:'group',dealerGroup:groupPreview.name,
+    salons:data.salons.filter(({salon})=>previewSalons.has(salon)),
+    sellers:data.sellers.filter(seller=>previewSalons.has(seller.salon)),approvals:[]}:data;
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
+  const readOnlyPreview=managerPreview||Boolean(groupPreview);
   const managerScope=$('#manager-scope');
   const picked=managerScope.value;
-  const group=data.role==='group';
-  const multiple=(data.role==='manager'||group)&&data.salons.length>1;
+  const group=baseView.role==='group';
+  const multiple=(baseView.role==='manager'||group)&&baseView.salons.length>1;
   $('#manager-scope-bar').hidden=!multiple;
   if (multiple) {
-    managerScope.replaceChildren(new Option(group?'Wszystkie salony grupy':'Wszystkie moje salony',''),...data.salons.map(({salon})=>new Option(salon,salon)));
-    if (data.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
+    managerScope.replaceChildren(new Option(group?'Wszystkie salony grupy':'Wszystkie moje salony',''),...baseView.salons.map(({salon})=>new Option(salon,salon)));
+    if (baseView.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
   }
   const selected=managerPreview?(managerPreviewSalon===allPreviewSalons?'':managerPreviewSalon):multiple?managerScope.value:'';
-  const people=selected?data.sellers.filter(seller=>seller.salon===selected):data.sellers;
-  const view=selected?{...data,role:managerPreview?'manager':data.role,salon:selected,sellers:people,
-    salons:[{salon:selected}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
-    :managerPreview?{...data,role:'manager',salon:'Wszystkie salony'}:data;
+  const people=selected?baseView.sellers.filter(seller=>seller.salon===selected):baseView.sellers;
+  const view=selected?{...baseView,role:managerPreview?'manager':baseView.role,salon:selected,sellers:people,
+    salons:[{salon:selected}],approvals:baseView.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
+    :managerPreview?{...baseView,role:'manager',salon:'Wszystkie salony'}:baseView;
   const manager=view.role==='manager';
   const teamDashboard=manager||group;
   const title=group?(selected?'Dziś w salonie':'Dziś w grupie'):manager?'Dziś w salonie':'Wykonanie planu';
-  $('#manager-preview-note').hidden=!managerPreview;
-  $('#manager-preview-note').textContent='Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.';
-  $('#management-report-link').hidden=managerPreview;
-  $('#management-team-shortcut').hidden=managerPreview||data.role==='admin';
+  $('#manager-preview-note').hidden=!readOnlyPreview;
+  $('#manager-preview-note').textContent=groupPreview?'Podgląd szefa grupy.': 'Podgląd kierownika.';
+  $('#management-report-link').hidden=readOnlyPreview;
+  $('#management-team-shortcut').hidden=readOnlyPreview||data.role==='admin';
   $('#absence-panel').inert=managerPreview;
   $('#lesson-editor').inert=managerPreview;
   $('#dealer').textContent=group?(selected||view.dealerGroup):manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
@@ -1234,7 +1241,17 @@ function showView() {
     else managerPreviewSalon='';
     $('#manager-preview-toggle').textContent=managerPreviewSalon?'Wróć do panelu administratora':'Podgląd kierownika';
   }
-  $('#preview-bar').hidden=Boolean(managerPreviewSalon);
+  const groupSelect=$('#group-preview-select');
+  if (data.role==='admin') {
+    const chosen=groupPreviewName||groupSelect.value;
+    groupSelect.replaceChildren(...data.groups.map(group=>new Option(group.name,group.name)));
+    if (data.groups.some(group=>group.name===chosen)) groupSelect.value=chosen;
+    else groupPreviewName='';
+    $('#group-preview-toggle').textContent=groupPreviewName?'Wróć do panelu administratora':'Podgląd szefa grupy';
+  }
+  $('#group-preview-bar').hidden=data.role!=='admin'||Boolean(managerPreviewSalon)||!data.groups.length;
+  if (groupPreviewName) $('#manager-preview-bar').hidden=true;
+  $('#preview-bar').hidden=Boolean(managerPreviewSalon||groupPreviewName);
   $('#view-switch').textContent=preview?'Zarządzanie salonem':'Podgląd handlowca';
   if (!preview) {
     renderAdmin();
@@ -1251,6 +1268,25 @@ function showView() {
     lesson:{title:'Pierwszy kontakt',topic:'Przywitaj klienta, przedstaw się i zapytaj, czego potrzebuje.',remember:'Najpierw wysłuchaj, potem zaproponuj rozwiązanie.'}};
   try { renderSeller(true); } finally { data=actual; }
 }
+$('#group-preview-toggle').onclick=()=>{
+  if (data?.role!=='admin') return;
+  if (groupPreviewName) {
+    groupPreviewName='';
+    location.hash=managerReturnHash;
+  } else {
+    managerReturnHash=location.hash;
+    groupPreviewName=$('#group-preview-select').value;
+    $('#manager-scope').value='';
+    location.hash='#wykonanie';
+  }
+  showView();
+};
+$('#group-preview-select').onchange=event=>{
+  if (!groupPreviewName) return;
+  groupPreviewName=event.target.value;
+  $('#manager-scope').value='';
+  showView();
+};
 $('#manager-preview-toggle').onclick=()=>{
   if (data?.role!=='admin') return;
   if (managerPreviewSalon) {
