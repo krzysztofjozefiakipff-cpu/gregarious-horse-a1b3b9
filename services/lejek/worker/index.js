@@ -53,19 +53,53 @@ async function memeFor(db,user,day) {
 }
 
 function lessonDrafts(text) {
-  const sentences=paragraph=>Array.from(new Intl.Segmenter('pl',{granularity:'sentence'}).segment(paragraph),item=>item.segment.trim());
-  return text.replaceAll('\r','').split(/\n[ \t]*\n|\f+/)
-    .flatMap(block=>{
-      const lines=block.split('\n').map(line=>line.trim()).filter(Boolean);
-      if (!lines.length) return [];
-      const heading=lines.length>1&&lines[0].length<=100?lines.shift().replace(/[:;]$/,''):'';
-      const parts=sentences(lines.join(' ')).filter(part=>part.length>=20);
-      return parts.map((part,index)=>({
-        title:(heading?heading+(index?' · '+(index+1):''):part.split(/\s+/).slice(0,7).join(' ')).slice(0,120),
-        topic:part.slice(0,650),
-        remember:part.length<=220?part:part.slice(0,217).replace(/\s+\S*$/,'')+'…'
-      }));
-    }).slice(0,40);
+  const skills=[
+    ['Pierwszy kontakt i powitanie', /powita|przywita|pierwsz.{0,12}kontakt|oddzwo|czas reakcji|przyjęcie klienta/iu],
+    ['Rozpoznanie potrzeb klienta', /potrzeb|oczekiwa|budżet|pytani|użytkowani|kwalifikac/iu],
+    ['Prezentacja samochodu', /wyposażeni|prezentac|parametr|zasięg|napęd|spalani|korzyś|bagażnik|ładowani|gwarancj/iu],
+    ['Jazda próbna', /jazd.{0,7}próbn|trasa testow|samochód testow/iu],
+    ['Oferta i finansowanie', /ofert|finansowan|leasing|kredyt|ubezpiecze|rabat|wycen|odkup/iu],
+    ['Kontakt po spotkaniu', /follow[ -]?up|ponown.{0,10}kontakt|po spotkaniu|po wizycie|po wysłaniu|następn.{0,8}krok/iu],
+    ['Obiekcje i domknięcie sprzedaży', /obiekcj|zastrzeże|negocjac|domkni|zamówieni|podpisani|decyzj.{0,12}klient/iu],
+    ['Wydanie auta i obsługa posprzedażowa', /wydani.{0,12}(aut|pojazd|samoch)|po zakupie|po odbiorze|posprzedaż|opini.{0,10}google|serwis/iu]
+  ];
+  const actionable=/należy|powinien|powinna|trzeba|wymaga|obowiązk|standard|zapytaj|zaproponuj|przedstaw|wyjaśnij|potwierdź|ustal|sprawdź|przekaż|zaprezentuj/iu;
+  const gap=/\b(?:nie|brak|pominięto|niewykonano)\b|niezgodnoś|pominął|pominęła/iu;
+  const metadata=/^(?:spis treści|strona\s+\d|copyright|poufne\b|autor\s*:|data\s*:|wersja\s*:)|\.{3,}\s*\d+\s*$/iu;
+  const segmenter=new Intl.Segmenter('pl',{granularity:'sentence'});
+  const topics=skills.map(()=>[]);
+  const seen=new Set();
+  for (const block of text.replaceAll('\r','').split(/\n[ \t]*\n|\f+/)) {
+    const lines=block.split('\n').map(line=>line.trim()).filter(line=>line&&!metadata.test(line));
+    const heading=lines.length>1&&lines[0].length<=100&&!/[.!?]$/.test(lines[0])&&!actionable.test(lines[0])
+      ?lines.shift():'';
+    const segments=lines.join('\n').split(/\n(?=\s*(?:[•·▪]|- |\d+[.)] ))/u)
+      .flatMap(part=>Array.from(segmenter.segment(part),({segment})=>segment));
+    for (const segment of segments) {
+      const fact=segment.replace(/\s+/g,' ').replace(/^(?:[•·▪]|- |\d+[.)] )\s*/u,'').trim();
+      if (fact.length<24||fact.length>600||metadata.test(fact)) continue;
+      const key=fact.toLocaleLowerCase('pl').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+      if (seen.has(key)) continue;
+      const index=skills.findIndex(([,pattern])=>pattern.test(fact));
+      const fallback=heading?skills.findIndex(([,pattern])=>pattern.test(heading)):-1;
+      const topic=index>=0?index:fallback;
+      if (topic<0) continue;
+      seen.add(key);
+      const priority=(gap.test(fact)?4:0)+(actionable.test(fact)?3:0)+Number(index>=0);
+      topics[topic].push({fact,priority});
+    }
+  }
+  return topics.flatMap((items,index)=>{
+    if (!items.length) return [];
+    items.sort((a,b)=>b.priority-a.priority);
+    const title=skills[index][0];
+    const [first,...rest]=items.map(item=>item.fact);
+    const supporting=rest.find(fact=>first.length+fact.length<=640);
+    const remember=gap.test(first)
+      ?'Przećwicz, jak unikniesz wskazanego błędu podczas rozmowy z klientem.'
+      :'Wyjaśnij własnymi słowami, jak wykorzystasz tę informację w rozmowie z klientem.';
+    return [{title,topic:[first,supporting].filter(Boolean).join('\n\n'),remember,priority:items[0].priority}];
+  }).sort((a,b)=>b.priority-a.priority).map(({title,topic,remember})=>({title,topic,remember}));
 }
 const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
 
@@ -415,8 +449,10 @@ async function handle(request, env) {
           typeof body.file!=='string'||!body.file||body.file.length>20_971_520)
         return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 15 MB.'},400);
       try {
-        const lessons=lessonDrafts((await env.extractLessonText(body.filename,body.file)).slice(0,120_000));
+        const text=(await env.extractLessonText(body.filename,body.file)).slice(0,120_000);
+        const lessons=lessonDrafts(text);
         if (lessons.length) return json({lessons});
+        if (text.trim()) return json({error:'Nie znaleziono zagadnień sprzedażowych. Wybierz dokument ze standardami obsługi, oceną wizyty lub informacjami o produkcie albo dodaj lekcję ręcznie.'},422);
         return json({error:'Brak tekstu do odczytania. Jeśli to skan, użyj pliku z rozpoznanym tekstem lub dodaj lekcję ręcznie.'},422);
       } catch {
         return json({error:'Nie udało się odczytać pliku. Sprawdź format lub dodaj lekcję ręcznie.'},422);
