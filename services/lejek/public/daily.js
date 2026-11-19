@@ -1407,7 +1407,39 @@ function sourcePlanProposal(totals,shares,rates) {
   });
 }
 
-function sourceProfileEditor(person,individual,month) {
+function copySourcePlan(donor,shares,rates) {
+  if (donor.sourceTargets) return donor.sourceTargets;
+  const mix=shares??[...defaultMix,0];
+  const values=sourcePlanProposal(donor.targets,mix,rates);
+  donor.funnelTargets.forEach((total,column)=>{
+    if (total==null) return;
+    allocateSourceTargets(total,mix).forEach((value,index)=>{values[index][column+4]=value;});
+  });
+  return values;
+}
+
+function sellerCopyControls(label,buttonText) {
+  const controls=document.createElement('div');
+  controls.className='salon-plan-fields';
+  const field=document.createElement('label');
+  const select=document.createElement('select');
+  field.append(label,select);
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='secondary';
+  button.textContent=buttonText;
+  controls.append(field,button);
+  return {controls,select,button};
+}
+
+function sellerCopyOptions(select,button,candidates) {
+  select.replaceChildren(new Option(candidates.length?'Wybierz handlowca':'Brak handlowców do skopiowania',''),
+    ...candidates.map(seller=>new Option(seller.name+' · '+seller.salon,seller.id)));
+  button.disabled=true;
+  select.onchange=()=>{button.disabled=!select.value;};
+}
+
+function sourceProfileEditor(person,individual,month,peers) {
   const panel=document.createElement('details');
   const title=document.createElement('summary');
   title.textContent='Profil źródeł pozyskania';
@@ -1438,15 +1470,26 @@ function sourceProfileEditor(person,individual,month) {
     try {
       await api('/api/salon-plans/source-profile',{...individual,month,shares:values});
       profile=values;
+      person.sourceProfile=values;
       status.textContent='Profil zapisany.';
     } catch (error) { status.textContent=error.message; }
     finally { save.disabled=false; }
   };
-  panel.append(title,note,fields,status,save);
+  const copy=sellerCopyControls('Profil innego handlowca','Kopiuj profil');
+  panel.addEventListener('toggle',()=>{
+    if (panel.open) sellerCopyOptions(copy.select,copy.button,peers.filter(peer=>peer.sourceProfile));
+  });
+  copy.button.onclick=()=>{
+    const donor=peers.find(peer=>String(peer.id)===copy.select.value);
+    if (!donor?.sourceProfile) return;
+    donor.sourceProfile.forEach((value,index)=>{inputs[index].value=value;});
+    status.textContent='Wczytano profil: '+donor.name+'. Możesz go zmienić przed zapisaniem.';
+  };
+  panel.append(title,note,copy.controls,fields,status,save);
   return {panel,getProfile:()=>profile};
 }
 
-function sellerPlanForm(person,individual,month,sourceRates) {
+function sellerPlanForm(person,individual,month,sourceRates,peers) {
   const form=document.createElement('form');
   const note=document.createElement('p');
   note.textContent='Wpisz cele dla obsługiwanych źródeł. Z zamówień wyliczą się proponowane działania, które możesz skorygować.';
@@ -1461,7 +1504,7 @@ function sellerPlanForm(person,individual,month,sourceRates) {
   summary.setAttribute('aria-live','polite');
   const save=document.createElement('button');
   save.textContent='Zapisz plan według źródeł';
-  const profile=sourceProfileEditor(person,individual,month);
+  const profile=sourceProfileEditor(person,individual,month,peers);
   const proposal=planTargets(person.targets.map(target=>target??''),1000000);
   proposal.inputs.forEach(input=>{input.required=false;});
   const proposalTitle=document.createElement('p');
@@ -1525,9 +1568,9 @@ function sellerPlanForm(person,individual,month,sourceRates) {
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
     form.append(panel);
     const inputs=[...manual.inputs,...activity.inputs];
-    return {inputs,apply(values){
+    return {inputs,apply(values,keepActivities=false){
       inputs.forEach((input,i)=>{input.value=values[i];});
-      edited.fill(false);
+      edited.fill(keepActivities);
       panel.open=values.some(value=>value>0);
       title.textContent=source+' · zamówienia: '+values[0]+' · leady: '+values[7];
     }};
@@ -1555,6 +1598,53 @@ function sellerPlanForm(person,individual,month,sourceRates) {
     updateSummary();
     appliedTotals=proposalInputs().join(',');
     proposalStatus.textContent='Plan wyliczony. Możesz skorygować wartości przed zapisaniem.';
+  };
+  const copy=sellerCopyControls('Plan innego handlowca','Kopiuj plan');
+  const picker=document.createElement('details');
+  const pickerTitle=document.createElement('summary');
+  pickerTitle.textContent='Skopiuj zapisany plan';
+  const monthLabelField=document.createElement('label');
+  const fromMonth=document.createElement('input');
+  fromMonth.type='month';
+  fromMonth.value=month;
+  monthLabelField.append('Miesiąc planu źródłowego',fromMonth);
+  const copyStatus=document.createElement('p');
+  copyStatus.setAttribute('role','status');
+  picker.append(pickerTitle,monthLabelField,copy.controls,copyStatus);
+  form.insertBefore(picker,proposalTitle);
+  let donors=[];
+  let revision=0;
+  const loadDonors=async()=>{
+    const request=++revision;
+    const selectedMonth=fromMonth.value;
+    copyStatus.textContent='Wczytywanie zapisanych planów…';
+    sellerCopyOptions(copy.select,copy.button,[]);
+    if (!selectedMonth) {copyStatus.textContent='Wybierz miesiąc planu źródłowego.';return;}
+    try {
+      const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(selectedMonth));
+      if (request!==revision||!picker.isConnected) return;
+      donors=plans.flatMap(plan=>plan.team.map(seller=>({...seller,salon:plan.salon})))
+        .filter(seller=>seller.id!==person.id&&(seller.sourceTargets||seller.complete));
+      sellerCopyOptions(copy.select,copy.button,donors);
+      copyStatus.textContent='';
+    } catch (error) {
+      if (request===revision) copyStatus.textContent=error.message;
+    }
+  };
+  fromMonth.onchange=loadDonors;
+  picker.addEventListener('toggle',()=>{if (picker.open) loadDonors();});
+  copy.button.onclick=()=>{
+    const donor=donors.find(seller=>String(seller.id)===copy.select.value);
+    if (!donor) return;
+    const shares=profile.getProfile();
+    const values=copySourcePlan(donor,shares,sourceRates);
+    proposal.inputs.forEach((input,index)=>{input.value=donor.targets[index]??0;});
+    appliedTotals=proposalInputs().join(',');
+    rows.forEach((row,index)=>row.apply(values[index],true));
+    updateSummary();
+    proposalStatus.textContent='';
+    copyStatus.textContent='Wczytano plan: '+donor.name+' · '+monthLabel(fromMonth.value)+'. Sprawdź wartości przed zapisaniem.'
+      +(donor.sourceTargets?'':' Plan łączny rozdzielono '+(shares?'według profilu odbiorcy.':'według domyślnego podziału źródeł.'));
   };
   form.append(reference,save);
   form.onsubmit=event=>{
@@ -1593,6 +1683,7 @@ async function loadSalonPlans() {
   try {
     const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(month));
     if (revision!==salonPlanRevision) return;
+    const team=plans.flatMap(plan=>plan.team.map(person=>Object.assign(person,{salon:plan.salon})));
     for (const plan of plans) {
       const card=document.createElement('article');
       const title=document.createElement('h2');
@@ -1631,7 +1722,7 @@ async function loadSalonPlans() {
         row.append(summary);
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
-          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[]));
+          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id)));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
