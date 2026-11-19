@@ -1027,7 +1027,7 @@ function renderAdmin() {
   $('#manager-preview-note').hidden=!managerPreview;
   $('#manager-preview-note').textContent='Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.';
   $('#management-report-link').hidden=managerPreview;
-  $('#management-team-link').hidden=managerPreview;
+  $('#management-team-shortcut').hidden=managerPreview||data.role==='admin';
   $('#absence-panel').inert=managerPreview;
   $('#lesson-editor').inert=managerPreview;
   $('#dealer').textContent=manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
