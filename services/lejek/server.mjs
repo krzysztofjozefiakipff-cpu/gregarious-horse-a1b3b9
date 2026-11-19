@@ -163,7 +163,9 @@ async function handle(request) {
     const csrf=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek-login=([a-f0-9]{64})(?:;|$)/)?.[1];
     const source=request.headers.get('Origin');
     const token=form.get('token')??'';
-    if (!csrf||csrf!==form.get('csrf')||(source&&source!==origin)) return render('Formularz wygasł. Spróbuj ponownie.',403,token);
+    // Browsers can send Origin: null for form posts under Referrer-Policy: no-referrer.
+    // Those posts still need the form token and the matching host-only cookie.
+    if (!csrf||csrf!==form.get('csrf')||(source&&source!=='null'&&source!==origin)) return render('Formularz wygasł. Spróbuj ponownie.',403,token);
     const email=(form.get('email')??'').trim().toLowerCase();
     const password=form.get('password')??'';
     const newPassword=form.get('new_password')??'';
