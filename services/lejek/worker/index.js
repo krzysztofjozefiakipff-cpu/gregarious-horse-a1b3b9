@@ -285,6 +285,11 @@ async function handle(request, env) {
       const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN (?,?,?) AND '+scope,...months,...params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params);
       const personal=user.role==='seller'?await tracking(db,user.id):null;
+      if (personal) {
+        const drafts=await list(db,'SELECT day,rows FROM daily_drafts WHERE person=? AND day IN (?,?)',
+          user.id,localDay(),personal.missing[0]??null);
+        personal.drafts=Object.fromEntries(drafts.map(({day,rows})=>[day,JSON.parse(rows)]));
+      }
       const brand=personal?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
       const approvals=personal?[]:await list(db,"SELECT person,day,reason FROM daily_exceptions WHERE kind='pending' AND "+scope+' ORDER BY day',...params);
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
@@ -743,10 +748,20 @@ async function handle(request, env) {
         .bind(user.id,day,body.kind,body.kind==='pending'?body.reason.trim():'',user.id,day).run();
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
-    const {rows}=body;
+    const {rows,draft=false}=body;
+    if (typeof draft!=='boolean') return json({error:'Sprawdź tryb zapisu.'},400);
     if (!Array.isArray(rows)||!supportedDailySourceCounts.includes(rows.length)||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     rows[0][1]=rows[0][0];
     rows[0][2]=rows[0][0];
+    if (draft) {
+      const written=await db.prepare(`INSERT INTO daily_drafts (person,day,rows)
+        SELECT ?,?,?
+        WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=? AND day=?)
+          AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected')
+        ON CONFLICT(person,day) DO UPDATE SET rows=excluded.rows`)
+        .bind(user.id,day,JSON.stringify(rows),user.id,day,user.id,day).run();
+      return written.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
+    }
     if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     const totals=[1,3,4,5,7].map(i=>rows.reduce((sum,row)=>sum+row[i],0));
     const written=await db.prepare("INSERT INTO daily_results SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected') ON CONFLICT(person,day) DO NOTHING")

@@ -19,7 +19,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #meme{background:var(--yellow);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--blue);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--yellow)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
 #backlog{padding:13px;background:var(--yellow);border-radius:10px;margin:10px 0}#options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}#reason{width:100%;margin-top:8px}
 .scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:5px 3px;border-bottom:1px solid var(--line)}th{font-size:.78rem}td:first-child{min-width:115px;font-size:.86rem}input,select{font:inherit;border:1px solid #a1b0c4;border-radius:6px;padding:5px 7px;background:white;color:var(--ink)}input[type=number]{width:100%;min-width:56px;min-height:32px;text-align:center}button{background:var(--blue);color:white;border:0;border-radius:8px;padding:8px 13px;font:inherit;font-weight:700;cursor:pointer}button:disabled{background:#dedad1;color:#53545a;cursor:default}button.secondary{background:transparent;color:var(--blue);border:1px solid currentColor}
-.save{margin-top:14px}a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
+.save{margin-top:14px;gap:10px}
+.entry-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:560px){.entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}}
+a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
 @media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.quote,.actions,.cards,#pace,#entry,#cause,#cookie{margin:0}.quote{order:0}.actions{order:1}#cause{order:2}.cards{order:3}#pace{order:4}#entry{order:5}#cookie{order:6}}
 .order-plan{background:var(--tint);border:1px solid var(--line);border-inline-start:4px solid var(--blue);border-radius:14px;padding:16px;margin:18px 0 12px}.order-plan h2{margin:0 0 4px;color:var(--ink)}.order-plan p{color:var(--muted);font-size:.92rem}.order-plan .cards{margin:12px 0 0}.order-plan .cards section{background:#fff;border-color:var(--line)}.order-plan .cards strong{color:var(--blue)}@media(max-width:850px){.order-plan{margin:0}}@media(max-width:480px){.order-plan{padding:12px}.order-plan .cards section{padding:8px}}
 #pace{display:block;border:1px solid var(--line);border-radius:14px;padding:14px 16px}.pace-intro h2{margin:0 0 4px}.pace-intro p{font-size:.9rem;color:var(--muted)}#pace-items{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:10px}#pace-items span{font-size:.95rem}
@@ -315,7 +318,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <span id="entry-count" aria-live="polite"></span>
   <button type="button" class="secondary" id="entry-next">Następne</button>
 </nav>
-<div class="save"><span id="status" role="status"></span><button id="save">Zapisz dzień</button></div></form>
+<div class="save">
+  <span id="status" role="status"></span>
+  <div class="entry-actions">
+    <button type="submit" id="save" class="secondary">Zapisz roboczo</button>
+    <button type="submit" id="approve-day">Zatwierdź dzień</button>
+  </div>
+</div></form>
 
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></div>
 <div data-seller-panel="plan" hidden>
