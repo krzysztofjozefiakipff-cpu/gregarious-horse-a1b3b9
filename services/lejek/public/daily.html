@@ -123,13 +123,36 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 .user-actions{display:flex;flex-wrap:wrap;gap:8px}
 #user-archive[data-archived=false]{color:#9b292e}
 .user-fields{display:grid;gap:9px;min-width:0}
-#salon-plan-results form,.salon-plan-fields{display:grid;gap:10px;margin:14px 0}
+#salon-plan-results form,.salon-plan-fields{display:grid;gap:10px}
 #salon-plan-results form label{display:grid;gap:4px}
-.salon-plan-fields{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
-.salon-plan-fields input{width:100%}
-#salon-plan-results article{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px}
-#salon-plan-results dl{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin-bottom:0}
-#salon-plan-results dd{margin:0;font-weight:750}
+.salon-plan-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr))}
+.salon-plan-fields input,.salon-plan-fields select{width:100%;min-width:0}
+#salon-plan-results article{margin-top:14px;padding:clamp(12px,2vw,20px);border:1px solid var(--line);border-radius:12px}
+#salon-plan-results h2,#salon-plan-results h3{margin:0}
+#salon-plan-results summary{cursor:pointer;font-weight:700}
+#salon-plan-results p{margin:8px 0}
+.planning-toolbar,.planning-month-actions,.planning-actions{display:flex;align-items:end;flex-wrap:wrap;gap:8px}
+.planning-toolbar{padding:12px;background:var(--tint);border-radius:10px}
+.planning-toolbar label{display:grid;gap:4px;font-weight:700}
+.planning-seller,.planning-compact{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+.planning-seller[open]{border-color:var(--blue)}
+.planning-seller summary .planning-badge{display:inline-block;margin-inline-start:8px}
+.planning-badge{border-radius:999px;padding:2px 8px;background:#eef1f6;color:#24355a;font-size:.8rem}
+.planning-badge[data-state=approved]{background:#e2f4e9;color:#19583a}
+.planning-badge[data-state=ready]{background:#fff0c2;color:#674700}
+.planning-step{min-width:0;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;background:#fff}
+.planning-step h3{font-size:1rem}
+.planning-step fieldset{min-width:0;margin-block:8px}
+.planning-step label:has(input[type=checkbox]){display:inline-flex;align-items:center;gap:6px}
+.planning-step .salon-plan-fields{margin:8px 0}
+.planning-step input:not([type=checkbox]),.planning-step select,.planning-toolbar input{min-height:42px}
+.planning-source{border-top:1px solid var(--line);padding:8px 0}
+.planning-totals{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.planning-totals>div{padding:6px 9px;background:var(--tint);border-radius:7px;font-size:.87rem}
+.planning-totals dd{margin:0;font-weight:750;font-variant-numeric:tabular-nums}
+.planning-actions{padding:10px 12px;background:var(--tint);border-radius:9px;margin-top:8px}
+#salon-plan-status:empty{display:none}
+@media(max-width:540px){.planning-actions button,.planning-toolbar>label{width:100%}.planning-seller summary .planning-badge{margin-inline-start:4px}}
 .salon-progress-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0 2px}
 .salon-progress-grid>span{min-width:0;padding:10px;background:var(--tint);border-radius:8px;font-size:.9rem}
 .salon-progress-grid strong{display:block;margin:4px 0;font-variant-numeric:tabular-nums}
@@ -486,8 +509,14 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 <details id="salon-plans" class="admin-block" hidden>
   <summary>Plany salonów</summary>
   <div>
-    <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
-    <p>Możesz wybrać także przyszły miesiąc.</p>
+    <div class="planning-toolbar">
+      <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
+      <div class="planning-month-actions">
+        <button type="button" class="secondary" id="salon-plan-prev" aria-label="Poprzedni miesiąc">‹</button>
+        <button type="button" class="secondary" id="salon-plan-current">Bieżący miesiąc</button>
+        <button type="button" class="secondary" id="salon-plan-next" aria-label="Następny miesiąc">›</button>
+      </div>
+    </div>
     <p id="salon-plan-status" role="status"></p>
     <div id="salon-plan-results"></div>
   </div>
