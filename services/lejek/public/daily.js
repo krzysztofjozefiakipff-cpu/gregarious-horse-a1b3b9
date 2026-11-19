@@ -1891,6 +1891,69 @@ function planAction(button,path,body,month) {
   }).finally(()=>{button.disabled=false;});
 }
 
+function salonGoalsEditor(plan,month) {
+  const section=document.createElement('details');
+  section.className='planning-compact';
+  const title=document.createElement('summary');
+  const restricted=data.role==='manager'&&plan.protected;
+  const pending=plan.change?.status==='pending';
+  title.textContent='Cele miesięczne salonu'+(pending?' · prośba o korektę':'');
+  section.append(title);
+  const scope={salon:plan.salon};
+  if (restricted) {
+    const current=document.createElement('p');
+    current.textContent='Obowiązujący plan grupy · '+salonPlanMetrics.map((label,index)=>label+' '+plan.targets[index]).join(' · ');
+    section.append(current);
+  }
+  if (plan.change) {
+    const {id,status,targets,reason,requester}=plan.change;
+    const request=document.createElement('div');
+    request.className='planning-actions';
+    const info=document.createElement('p');
+    const statusLabels={pending:'Oczekuje na decyzję',approved:'Korekta zatwierdzona',rejected:'Prośba odrzucona',superseded:'Prośba zamknięta po zmianie planu'};
+    info.textContent=statusLabels[status]+' · '+requester+' · '+reason;
+    const proposal=document.createElement('p');
+    proposal.textContent='Proponowane cele · '+salonPlanMetrics.map((label,index)=>label+' '+targets[index]).join(' · ');
+    request.append(info,proposal);
+    if (pending&&data.role==='group') {
+      for (const approve of [true,false]) {
+        const decision=document.createElement('button');
+        decision.type='button';
+        decision.className=approve?'':'secondary';
+        decision.textContent=approve?'Zatwierdź korektę':'Odrzuć prośbę';
+        decision.onclick=()=>planAction(decision,'/api/salon-plans/decide-change',{...scope,id,approve},month);
+        request.append(decision);
+      }
+    }
+    section.append(request);
+    if (pending) section.open=true;
+  }
+  if (restricted&&pending) return section;
+  const form=document.createElement('form');
+  const {fields,inputs}=planTargets(plan.targets.map((value,index)=>plan.configured[index]?value:null),Number.MAX_SAFE_INTEGER);
+  form.append(fields);
+  const reason=document.createElement('textarea');
+  if (restricted) {
+    const label=document.createElement('label');
+    reason.maxLength=500;
+    reason.required=true;
+    reason.rows=2;
+    label.append('Uzasadnienie korekty',reason);
+    form.append(label);
+  }
+  const save=document.createElement('button');
+  save.textContent=restricted?'Wyślij prośbę do szefa grupy':'Zapisz plan salonu';
+  form.append(save);
+  form.onsubmit=event=>{
+    event.preventDefault();
+    const targets=inputs.map(input=>input.valueAsNumber);
+    if (restricted) planAction(save,'/api/salon-plans/request-change',{...scope,targets,reason:reason.value},month);
+    else planAction(save,'/api/salon-plans/direct',{...scope,targets},month);
+  };
+  section.append(form);
+  return section;
+}
+
 async function loadSalonPlans() {
   const revision=++salonPlanRevision;
   const month=salonPlanMonth.value;
@@ -1900,11 +1963,34 @@ async function loadSalonPlans() {
   status.textContent=month?'Wczytywanie planów…':'Wybierz miesiąc.';
   if (!month) return;
   try {
-    const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(month));
+    const {plans,pendingChanges=[]}=await api('/api/salon-plans?month='+encodeURIComponent(month));
     if (revision!==salonPlanRevision) return;
+    if (pendingChanges.length) {
+      const inbox=document.createElement('div');
+      inbox.className='planning-toolbar';
+      const title=document.createElement('strong');
+      title.textContent='Prośby o korektę planu';
+      inbox.append(title);
+      for (const pending of pendingChanges) {
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='secondary';
+        button.textContent=pending.salon+' · '+monthLabel(pending.month);
+        button.onclick=async()=>{
+          if (salonPlanMonth.value!==pending.month) {
+            salonPlanMonth.value=pending.month;
+            await loadSalonPlans();
+          }
+          [...results.querySelectorAll('article')].find(card=>card.dataset.salon===pending.salon)?.scrollIntoView({block:'center'});
+        };
+        inbox.append(button);
+      }
+      results.append(inbox);
+    }
     const team=plans.flatMap(plan=>plan.team.map(person=>Object.assign(person,{salon:plan.salon})));
     for (const plan of plans) {
       const card=document.createElement('article');
+      card.dataset.salon=plan.salon;
       const title=document.createElement('h2');
       title.textContent=plan.salon;
       const state=document.createElement('p');
@@ -1929,21 +2015,7 @@ async function loadSalonPlans() {
       const overviewTitle=document.createElement('summary');
       overviewTitle.textContent='Wyniki i cele salonu';
       overview.append(overviewTitle,state,totals);
-      const salonGoals=document.createElement('details');
-      salonGoals.className='planning-compact';
-      const salonGoalsTitle=document.createElement('summary');
-      salonGoalsTitle.textContent='Cele miesięczne salonu';
-      const form=document.createElement('form');
-      const {fields,inputs}=planTargets(plan.targets.map((value,index)=>plan.configured[index]?value:null),Number.MAX_SAFE_INTEGER);
-      const save=document.createElement('button');
-      save.textContent='Zapisz plan salonu';
-      form.append(fields,save);
-      form.onsubmit=event=>{
-        event.preventDefault();
-        planAction(save,'/api/salon-plans/direct',{salon:plan.salon,targets:inputs.map(input=>input.valueAsNumber)},month);
-      };
-      salonGoals.append(salonGoalsTitle,form);
-      card.append(title,salonGoals,overview);
+      card.append(title,salonGoalsEditor(plan,month),overview);
       if (plan.contributors.length) {
         const note=document.createElement('p');
         note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zatwierdzone działania liczą się do wyników salonu.';
