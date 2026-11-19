@@ -337,6 +337,7 @@ async function handle(request, env) {
     }
     if (body.createOnly===true&&(current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first()))
       return json({error:'Użytkownik już istnieje. Przejdź do sekcji Zarządzaj użytkownikami.'},409);
+    if (needsSalon&&!managedSalons.has(salon.trim())) return json({error:'Wybierz salon z listy dodanych salonów.'},400);
     const group=chosen.includes('group')&&textValid(dealerGroup)?dealerGroup.trim():null;
     if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
