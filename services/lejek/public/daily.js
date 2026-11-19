@@ -1126,6 +1126,11 @@ function renderAdmin() {
     reviews.append(card);
   }
   $('#settings').hidden=view.role!=='admin';
+  for (const [block,content] of [
+    ['admin-users-block','user-editor'],['admin-groups-block','group-editor'],
+    ['admin-salons-block','manager-assignments'],['admin-absence-block','absence-panel'],
+    ['admin-lessons-block','lesson-editor'],['admin-settings-block','settings']
+  ]) $('#' + block).hidden=$('#' + content).hidden;
   const lessonSalon=$('#lesson-salon');
   const selectedSalon=lessonSalon.value;
   const lessonSalons=view.salons.map(({salon})=>salon);

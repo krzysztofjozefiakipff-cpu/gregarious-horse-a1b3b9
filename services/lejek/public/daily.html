@@ -98,6 +98,15 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .manager-preview-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px;margin-bottom:14px;background:white;border:1px solid var(--line);border-radius:10px}
 .manager-preview-bar select{min-width:0;max-width:100%}
 #manager-preview-note{margin:10px 0}
+#administration-view{max-width:800px}
+#administration-view .admin-block{margin:10px 0;border:1px solid #ded7dc;border-radius:12px;background:white;overflow:hidden}
+#administration-view .admin-block>summary{cursor:pointer;padding:14px 16px;color:#302038;font-weight:750;min-height:44px}
+#administration-view .admin-block[open]>summary{background:#f4eff5;border-bottom:1px solid #ded7dc}
+#administration-view .admin-block>form{border:0;margin:0;padding:14px 16px}
+#administration-view .admin-block>div{padding:12px 16px}
+#settings>details{margin:0 0 8px}
+#settings summary{cursor:pointer;font-weight:700;padding:8px 0}
+#user-editor fieldset label,#assignment-salons label{display:flex;align-items:center;gap:8px}
 </style>
 </head>
 <body>
@@ -201,9 +210,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <h1>Panel administracyjny</h1>
 <p id="management-team-shortcut"><a id="management-team-link" href="/zarzadzanie.html#administracja">Konta zespołu i ustawienia planów</a></p>
 <p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
-<div id="absence-panel"><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div></div>
+<details id="admin-users-block" class="admin-block" hidden>
+<summary>Użytkownicy i role</summary>
 <form id="user-editor" hidden>
-<h2>Użytkownicy</h2>
+
 <label>Użytkownik <select id="user-picker"></select></label>
 <label>Imię i nazwisko <input name="name" required maxlength="120"></label>
 <label>E-mail konta CARVAMO <input name="email" type="email" required maxlength="120"></label>
@@ -218,21 +228,34 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <button>Zapisz użytkownika i role</button>
 <p id="user-status" role="status"></p>
 </form>
+</details>
+<details id="admin-groups-block" class="admin-block" hidden>
+<summary>Grupy dealerskie</summary>
+<form id="group-editor" hidden>
+<p>Dodaj grupę lub dopisz do niej salony. Szefów przypiszesz w sekcji Użytkownicy.</p>
+<div id="group-list"></div>
+<label>Nazwa grupy <input name="name" required maxlength="120"></label>
+<label>Nazwy salonów (opcjonalnie, po jednej w wierszu) <textarea name="salons" rows="4"></textarea></label>
+<button>Zapisz grupę</button></form>
+</details>
+<details id="admin-salons-block" class="admin-block" hidden>
+<summary>Salony kierowników</summary>
 <form id="manager-assignments" hidden>
-<h2>Salony kierowników</h2>
+
 <label>Kierownik <select id="assignment-manager" required></select></label>
 <p id="assignment-primary"></p>
 <fieldset><legend>Dodatkowe salony</legend><div id="assignment-salons"></div></fieldset>
 <button id="assignment-save">Zapisz przypisania</button>
 </form>
-<form id="group-editor" hidden><h2>Grupy dealerskie</h2>
-<p>Dodaj grupę lub dopisz do niej salony. Szefów przypiszesz w sekcji Użytkownicy.</p>
-<div id="group-list"></div>
-<label>Nazwa grupy <input name="name" required maxlength="120"></label>
-<label>Nazwy salonów (opcjonalnie, po jednej w wierszu) <textarea name="salons" rows="4"></textarea></label>
-<button>Zapisz grupę i uprawnienia</button></form>
+</details>
+<details id="admin-absence-block" class="admin-block" hidden>
+<summary>Zgłoszenia dni bez aktywności</summary>
+<div id="absence-panel"><div id="reviews"></div></div>
+</details>
+<details id="admin-lessons-block" class="admin-block" hidden>
+<summary>Lekcja na dziś</summary>
 <form id="lesson-editor">
-  <h2>Lekcja na dziś</h2>
+  
   <label id="lesson-salon-label">Salon <select id="lesson-salon"></select></label>
   <label>Ocena tajemniczego klienta lub standardy obsługi <input id="lesson-file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt"></label>
   <p>PDF z tekstem, Word (DOCX), Excel (XLSX), PowerPoint (PPTX) lub TXT, do 15 MB. Sprawdź treść i usuń dane klientów przed publikacją.</p>
@@ -240,12 +263,17 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <div id="lesson-drafts"></div><button id="lesson-publish" disabled>Opublikuj serię w salonie</button>
   <p id="lesson-status" role="status"></p>
 </form>
+</details>
+<details id="admin-settings-block" class="admin-block" hidden>
+<summary>Dodatkowe ustawienia</summary>
 <div id="settings" hidden>
-<section><h2>Historie do moderacji</h2><div id="story-queue"></div></section>
-<form id="brand"><h2>Dane dealera</h2><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form>
-<form id="sidebar-settings"><h2>Co pokazać handlowcom?</h2><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Memy z naszej bazy</option><option id="giphy-option" value="giphy">Nasze memy i GIF-y z GIPHY</option></select></label><button>Zapisz wybór</button></form>
-<form id="charity"><h2>Cel miesiąca</h2><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form>
-</div></section></section>
+<details><summary>Historie do moderacji</summary><div id="story-queue"></div></details>
+<details><summary>Dane dealera</summary><form id="brand"><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form></details>
+<details><summary>Co pokazać handlowcom?</summary><form id="sidebar-settings"><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Memy z naszej bazy</option><option id="giphy-option" value="giphy">Nasze memy i GIF-y z GIPHY</option></select></label><button>Zapisz wybór</button></form></details>
+<details><summary>Cel miesiąca</summary><form id="charity"><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form></details>
+</div>
+</details>
+</section></section>
 </main>
 <footer><strong class="product-brand"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</strong><form method="post" action="/logout"><button class="secondary">Wyloguj się</button></form></footer>
 <script src="workbook-plan.js"></script><script src="daily.js"></script>
