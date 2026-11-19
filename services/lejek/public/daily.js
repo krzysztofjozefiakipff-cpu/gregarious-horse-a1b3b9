@@ -2362,6 +2362,8 @@ const userSearchName=$('#user-search-name');
 const userSearchPhone=$('#user-search-phone');
 const userSearchResults=$('#user-search-results');
 let editableUsers=[];
+let fixedUserGroup='';
+let userEditorRole='';
 let selectedUserEmail='';
 const selectedEditableUser=()=>editableUsers.find(user=>user.email===selectedUserEmail);
 const editingUsers=()=>userEditor.parentElement===editUserBlock;
@@ -2445,6 +2447,10 @@ $('#user-back-to-search').onclick=()=>{
 };
 
 function updateUserRoleFields() {
+  const groupRole=$('#user-group-role');
+  const canAssignGroup=userEditorRole==='admin'||Boolean(fixedUserGroup&&!editingUsers());
+  groupRole.hidden=!canAssignGroup;
+  groupRole.querySelector('input').disabled=!canAssignGroup;
   const choices=[...userEditor.querySelectorAll('input[name="roles"]')];
   const available=choices.filter(input=>!input.disabled);
   const roles=available.filter(input=>input.checked).map(input=>input.value);
@@ -2454,7 +2460,8 @@ function updateUserRoleFields() {
   const salon=roles.includes('manager')||roles.includes('seller');
   $('#user-group-label').hidden=!group;
   $('#user-salon-label').hidden=!salon;
-  userEditor.elements.dealerGroup.required=group;
+  userEditor.elements.dealerGroup.disabled=Boolean(fixedUserGroup);
+  userEditor.elements.dealerGroup.required=group&&!fixedUserGroup;
   userEditor.elements.salon.required=salon;
 }
 function loadUserEditor() {
@@ -2477,7 +2484,7 @@ function loadUserEditor() {
   userEditor.elements.password.value='';
   $('#user-invite-note').hidden=editing;
   userEditor.elements.salon.value=selected?.salon??'';
-  userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
+  userEditor.elements.dealerGroup.value=selected?.dealerGroup??fixedUserGroup;
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
   $('#user-send-invite').hidden=!selected||Boolean(selected.archived||managerPreviewSalon||groupPreviewName);
   const archiveButton=$('#user-archive');
@@ -2489,17 +2496,17 @@ function loadUserEditor() {
   updateUserRoleFields();
 }
 function renderUserEditor(view) {
+  userEditorRole=view.role;
   const delegated=view.role!=='admin';
   const visibleSalons=new Set(view.salons.map(({salon})=>salon));
   editableUsers=delegated?data.users.filter(user=>
     visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
     (view.role!=='manager'||user.roles==='seller')
   ):data.users;
-  for (const [id,allowed] of [['user-group-role',!delegated],['user-manager-role',view.role!=='manager']]) {
-    const label=$('#'+id);
-    label.hidden=!allowed;
-    label.querySelector('input').disabled=!allowed;
-  }
+  fixedUserGroup=view.role==='group'?view.dealerGroup:'';
+  const managerRole=$('#user-manager-role');
+  managerRole.hidden=view.role==='manager';
+  managerRole.querySelector('input').disabled=managerRole.hidden;
   const salonPicker=userEditor.elements.salon;
   salonPicker.replaceChildren(new Option(view.salons.length?'Wybierz salon':'Brak dodanych salonów',''),
     ...view.salons.map(({salon})=>new Option(salon,salon)));
@@ -2509,7 +2516,8 @@ function renderUserEditor(view) {
   if (visibleSalons.has(previousSalon)) userSearchSalon.value=previousSalon;
   if (!selectedEditableUser()) selectedUserEmail='';
   renderUserSearch();
-  userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
+  userEditor.elements.dealerGroup.replaceChildren(...(fixedUserGroup?[new Option(fixedUserGroup,fixedUserGroup)]
+    :[new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name))]));
   loadUserEditor();
 }
 userEditor.onchange=updateUserRoleFields;
@@ -2525,9 +2533,11 @@ userEditor.onsubmit=async event=>{
     const fields=Object.fromEntries(values);
     const result=await api('/api/users',{...fields,roles,createOnly:!editing});
     await refresh();
+    const retryInvite=data.role==='group'&&roles.includes('group')
+      ?'Ponowną wysyłkę może wykonać administrator.':'Możesz ją ponowić w „Zarządzaj użytkownikami”.';
     $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.'
       :result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
-      :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. Możesz ją ponowić w „Zarządzaj użytkownikami”.';
+      :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. '+retryInvite;
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {
