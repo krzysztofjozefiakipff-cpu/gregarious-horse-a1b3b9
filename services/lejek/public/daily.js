@@ -358,22 +358,32 @@ function renderPlans(records) {
   const monthEnd=monthStart(year,month);
   const monthPlan=data.plans.find(row=>row.month===monthKey)?.target;
   const quarterPlan=data.plans.length===3?data.plans.reduce((total,row)=>total+row.target,0):null;
-  const sales=entries=>entries.reduce((total,[,values])=>total+(values[4]??0),0);
   const toDate=Object.entries(records).filter(([day])=>day<=data.today);
   const monthRecords=toDate.filter(([day])=>day.startsWith(monthKey));
-  const monthSales=sales(monthRecords);
-  const quarterSales=sales(toDate);
   const daysLeft=remainingDays(data.today,monthEnd);
   const isWorkday=weekday(data.today)&&!['leave','training'].includes(data.personal.exceptions[data.today]);
   const current=records[data.today]??[];
-  const todayOrders=activityCount(current,7);
-  const orderGoal=dailyTarget(monthPlan,monthSales-todayOrders,daysLeft,isWorkday);
-  const cards=[['Dzisiaj',todayOrders,orderGoal],['Miesiąc',monthSales,monthPlan],['Kwartał',quarterSales,quarterPlan]];
-  $('#cards').innerHTML=cards.map(([name,value,target])=>{
-    const gap=target==null?null:target-value;
-    return '<section><span>'+name+'</span><strong>'+value+' / '+(target??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
-      (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
-  }).join('');
+  const invoicePlans=new Map((data.funnelPlans??[]).map(row=>[row.month,JSON.parse(row.targets)[6]]));
+  const firstQuarterMonth=Math.floor((month-1)/3)*3+1;
+  const invoiceQuarterTargets=[0,1,2].map(offset=>invoicePlans.get(monthStart(year,firstQuarterMonth+offset-1).slice(0,7)));
+  const invoiceQuarterPlan=invoiceQuarterTargets.every(target=>target!=null)
+    ?invoiceQuarterTargets.reduce((total,target)=>total+target,0):null;
+  renderPeriodCards('#cards',7,monthPlan,quarterPlan);
+  renderPeriodCards('#invoice-cards',10,invoicePlans.get(monthKey),invoiceQuarterPlan);
+
+  function renderPeriodCards(selector,index,monthTarget,quarterTarget) {
+    const sum=entries=>entries.reduce((total,[,values])=>total+activityCount(values,index),0);
+    const todayCount=activityCount(current,index);
+    const monthCount=sum(monthRecords);
+    const todayGoal=dailyTarget(monthTarget,monthCount-todayCount,daysLeft,isWorkday);
+    const cards=[['Dzisiaj',todayCount,todayGoal],['Miesiąc',monthCount,monthTarget],['Kwartał',sum(toDate),quarterTarget]];
+    $(selector).innerHTML=cards.map(([name,value,target])=>{
+      const gap=target==null?null:target-value;
+      return '<section><span>'+name+'</span><strong>'+value+' / '+(target??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
+        (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
+    }).join('');
+  }
+
   const funnel=data.funnelPlans?.find(row=>row.month===monthKey);
   const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
   const metrics=monthlyMetrics(monthRecords,current,monthPlan,funnel,reviewTarget,data.today,daysLeft,isWorkday);
@@ -821,9 +831,11 @@ function renderSeller() {
   renderPlans(records);
   const ranking=data.ranking;
   const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
-  $('#seller-ranking').textContent=ranking
-    ?'Ranking miesiąca · Salon: '+rankText(ranking.salon)+(ranking.group?' · Grupa: '+rankText(ranking.group):'')+' · Realizacja: '+new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%'
-    :'';
+  $('#ranking-salon').textContent=ranking?.salon?rankText(ranking.salon):'Brak pozycji';
+  $('#ranking-group-row').hidden=!ranking?.group;
+  $('#ranking-group').textContent=ranking?.group?rankText(ranking.group):'';
+  $('#ranking-result-row').hidden=!ranking;
+  $('#ranking-result').textContent=ranking?new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%':'';
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
