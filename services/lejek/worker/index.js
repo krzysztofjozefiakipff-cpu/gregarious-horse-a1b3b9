@@ -286,7 +286,8 @@ async function handle(request, env) {
       const override=Boolean(approvals&&saved?.approvals===approvals);
       const history=historicalRates.get(salon)??[];
       const sourceRates=history.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders));
-      plans.push({salon,automatic,sourceRates,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
+      const sourceHistoryRates=history.map(({leads,orders})=>sourceHistoryRate(leads,orders));
+      plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
         contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
         team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
