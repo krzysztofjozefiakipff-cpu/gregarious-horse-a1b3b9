@@ -1371,6 +1371,14 @@ function renderSalonSummary(view,team=[]) {
   const elapsed=remainingDays(first,view.today)+Number(weekday(view.today));
   const salons=new Set(view.salons.map(({salon})=>salon));
   const plans=data.salonPerformance.filter(plan=>salons.has(plan.salon));
+  const sellerSalons=new Map(view.sellers.map(seller=>[seller.id,seller.salon]));
+  const activityBySalon=new Map(plans.map(plan=>[plan.salon,columns.map(()=>0)]));
+  for (const {person,day,counters} of view.daily) {
+    const totals=activityBySalon.get(sellerSalons.get(person));
+    if (!totals||!day.startsWith(view.today.slice(0,7))||day>view.today) continue;
+    const values=JSON.parse(counters);
+    columns.forEach(([index],column)=>{totals[column]+=activityCount(values,index);});
+  }
   paceKey.hidden=!plans.length;
   if (plans.length>1) {
     const planned=salonPlanMetrics.map((_,index)=>plans.filter(plan=>plan.configured[index]));
@@ -1452,7 +1460,7 @@ function renderSalonSummary(view,team=[]) {
       const hasSalonPlan=plan.configured[salonIndex];
       const goal=hasSalonPlan?plan.targets[salonIndex]*elapsed/total
         :results.reduce((sum,metric)=>sum+(metric.goal??0),0);
-      const actual=hasSalonPlan?plan.actuals[salonIndex]:results.reduce((sum,metric)=>sum+metric.actual,0);
+      const actual=salonIndex>=0?plan.actuals[salonIndex]:activityBySalon.get(plan.salon)[column];
       return {index,label,contributors:results.filter(metric=>metric.goal>0),actual,goal,delta:actual-goal};
     });
     const onPace=metrics.filter(person=>{
@@ -1558,7 +1566,7 @@ function renderManagerDashboard(view,detailOnly=false) {
   removed.replaceChildren(...(inactive.length?inactive:[null]).map(seller=>{
     const item=document.createElement('li');
     item.textContent=seller?seller.name+(view.salons.length>1?' · '+seller.salon:'')
-      +(seller.archivedFrom?' · poza raportami od '+monthLabel(seller.archivedFrom):'')
+      +(seller.reportThroughDay?' · wyniki do '+dateLabel(seller.reportThroughDay,{day:'numeric',month:'long',year:'numeric'})+' włącznie':'')
       :'Brak usuniętych handlowców.';
     return item;
   }));
@@ -1572,15 +1580,10 @@ function renderManagerDashboard(view,detailOnly=false) {
     const badges=document.createElement('span');
     badges.className='team-statuses';
     const accountLabels={active:'Konto aktywne',inactive:'Konto nieaktywne',pending:'Konto bez hasła'};
-    for (const [label,positive] of [
-      [accountLabels[seller.accountStatus],seller.accountStatus==='active'],
-      [seller.includeInReports?'W raportach':'Poza raportami',seller.includeInReports]
-    ]) {
-      const badge=document.createElement('span');
-      badge.className='status-badge '+(positive?'status-positive':'status-negative');
-      badge.textContent=label;
-      badges.append(badge);
-    }
+    const badge=document.createElement('span');
+    badge.className='status-badge '+(seller.accountStatus==='active'?'status-positive':'status-negative');
+    badge.textContent=accountLabels[seller.accountStatus];
+    badges.append(badge);
     summary.append(name,badges,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
     const figures=document.createElement('ul');
     for (const metric of metrics) {
@@ -2471,7 +2474,6 @@ function loadUserEditor() {
   userEditor.elements.phone.required=!editing||Boolean(selected?.phone);
   userEditor.elements.email.value=selected?.email??'';
   userEditor.elements.email.readOnly=Boolean(selected);
-  userEditor.elements.includeInReports.checked=selected?.includeInReports!==0;
   userEditor.elements.password.value='';
   $('#user-invite-note').hidden=editing;
   userEditor.elements.salon.value=selected?.salon??'';
@@ -2521,7 +2523,7 @@ userEditor.onsubmit=async event=>{
   button.disabled=true;
   try {
     const fields=Object.fromEntries(values);
-    const result=await api('/api/users',{...fields,roles,includeInReports:values.has('includeInReports'),createOnly:!editing});
+    const result=await api('/api/users',{...fields,roles,createOnly:!editing});
     await refresh();
     $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.'
       :result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
@@ -2554,7 +2556,7 @@ $('#user-archive').onclick=async event=>{
   const selected=selectedEditableUser();
   if (!selected) return;
   const archived=!selected.archived;
-  if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Od bieżącego miesiąca osoba ta wypadnie z raportów. Wyniki wcześniejszych miesięcy zostaną w historii.')) return;
+  if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach do dzisiejszego dnia włącznie.')) return;
   button.disabled=true;
   try {
     await api('/api/users/archive',{email:selected.email,archived});
