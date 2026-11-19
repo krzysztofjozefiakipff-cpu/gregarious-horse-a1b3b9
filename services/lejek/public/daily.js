@@ -2302,7 +2302,6 @@ function renderAdmin() {
 
   $('#manager-preview-note').hidden=!readOnlyPreview;
   $('#manager-preview-note').textContent=(groupPreview?'Podgląd szefa grupy.':'Podgląd kierownika.')+' Możesz wypróbować pola formularza. Dane salonu nie zostaną zapisane.';
-  $('#management-team-shortcut').hidden=readOnlyPreview||data.role!=='manager';
   labelPanel(view.role,group?(selected||view.dealerGroup):manager?(selected||view.salon):'',readOnlyPreview);
   $('#management-nav').setAttribute('aria-label',panelNames[view.role]);
   $('#performance-title').textContent=teamDashboard?'Realizacja planów salonów':'Wykonanie planu';
@@ -2311,11 +2310,6 @@ function renderAdmin() {
   const team=teamDashboard?renderManagerDashboard(view):[];
   $('#admin').hidden=false;
   selectManagementView();
-  const params=new URLSearchParams({role:data.role,powrot:'administracja'});
-  if (multiple&&selected) params.set('salon',selected);
-  const query='?'+params;
-  $('#management-team-link').href='/zarzadzanie.html'+query+'#administracja';
-  $('#management-team-link').textContent='Ustawienia planów';
   $('#salon-summary').hidden=!teamDashboard;
   if (teamDashboard) renderSalonSummary(view,team);
   historySalons=new Set(view.salons.map(({salon})=>salon));
