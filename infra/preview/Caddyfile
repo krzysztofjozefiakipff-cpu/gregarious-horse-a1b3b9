@@ -19,7 +19,7 @@ preview.carvamo.com {
     }
 }
 
-lejek.carvamo.com {
+lejek.carvamo.com, biegwyzej.pl, www.biegwyzej.pl {
     encode gzip
     header X-Robots-Tag "noindex, nofollow"
     reverse_proxy carvamo-lejek:8075

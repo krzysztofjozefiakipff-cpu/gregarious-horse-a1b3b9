@@ -5,7 +5,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {extractLessonText} from './scripts/lesson-text.mjs';
 import worker from './dist/server/index.js';
 
-const origin = 'https://lejek.carvamo.com';
+const previewOrigin = 'https://lejek.carvamo.com';
+const allowedHosts = new Set(['lejek.carvamo.com', 'biegwyzej.pl', 'www.biegwyzej.pl']);
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
@@ -47,7 +48,7 @@ function loginForm(error='',status=200) {
   });
 }
 async function handle(request) {
-  const path=new URL(request.url).pathname;
+  const {pathname:path,origin}=new URL(request.url);
   if (path==='/healthz' && request.method==='GET') {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
     return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing'});
@@ -96,6 +97,8 @@ createServer(async (req,res)=>{
   try {
     const chunks=[];
     let bytes=0;
+    const host=req.headers.host;
+    const origin=allowedHosts.has(host)?'https://'+host:previewOrigin;
     const maxBytes=req.method==='POST'&&new URL(req.url,origin).pathname==='/api/lesson-import'?21_000_000:65_536;
     for await(const chunk of req) {
       bytes+=chunk.length;
