@@ -968,7 +968,7 @@ function renderManagerDashboard(view) {
 
 function selectManagementView() {
   const administration=location.hash==='#administracja';
-  const team=(data?.role==='manager'||Boolean(managerPreviewSalon))&&location.hash==='#zespol';
+  const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon))&&location.hash==='#zespol';
   $('#manager-team-view').hidden=!team;
   $('#management-team').setAttribute('aria-current',team?'page':'false');
   $('#performance-view').hidden=administration||team;
@@ -1093,31 +1093,34 @@ function renderAdmin() {
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
   const managerScope=$('#manager-scope');
   const picked=managerScope.value;
-  const multiple=data.role==='manager'&&data.salons.length>1;
+  const group=data.role==='group';
+  const multiple=(data.role==='manager'||group)&&data.salons.length>1;
   $('#manager-scope-bar').hidden=!multiple;
   if (multiple) {
-    managerScope.replaceChildren(new Option('Wszystkie moje salony',''),...data.salons.map(({salon})=>new Option(salon,salon)));
+    managerScope.replaceChildren(new Option(group?'Wszystkie salony grupy':'Wszystkie moje salony',''),...data.salons.map(({salon})=>new Option(salon,salon)));
     if (data.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
   }
   const selected=managerPreview?(managerPreviewSalon===allPreviewSalons?'':managerPreviewSalon):multiple?managerScope.value:'';
   const people=selected?data.sellers.filter(seller=>seller.salon===selected):data.sellers;
-  const view=selected?{...data,role:'manager',salon:selected,sellers:people,
+  const view=selected?{...data,role:managerPreview?'manager':data.role,salon:selected,sellers:people,
     salons:[{salon:selected}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
     :managerPreview?{...data,role:'manager',salon:'Wszystkie salony'}:data;
   const manager=view.role==='manager';
+  const teamDashboard=manager||group;
+  const title=group?(selected?'Dziś w salonie':'Dziś w grupie'):manager?'Dziś w salonie':'Wykonanie planu';
   $('#manager-preview-note').hidden=!managerPreview;
   $('#manager-preview-note').textContent='Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.';
   $('#management-report-link').hidden=managerPreview;
   $('#management-team-shortcut').hidden=managerPreview||data.role==='admin';
   $('#absence-panel').inert=managerPreview;
   $('#lesson-editor').inert=managerPreview;
-  $('#dealer').textContent=manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
-  $('#performance-title').textContent=manager?'Dziś w salonie':'Wykonanie planu';
-  $('#management-performance').textContent=manager?'Dziś w salonie':'Wykonanie planu';
-  $('#management-admin').textContent=manager?'Zarządzanie':'Panel administracyjny';
-  $('#management-team').hidden=!manager;
-  $('#manager-today').hidden=!manager;
-  if (manager) renderManagerDashboard(view);
+  $('#dealer').textContent=group?(selected||view.dealerGroup):manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
+  $('#performance-title').textContent=title;
+  $('#management-performance').textContent=group?'Wyniki grupy':title;
+  $('#management-admin').textContent=group?'Konta zespołu':manager?'Zarządzanie':'Panel administracyjny';
+  $('#management-team').hidden=!teamDashboard;
+  $('#manager-today').hidden=!teamDashboard;
+  if (teamDashboard) renderManagerDashboard(view);
   $('#admin').hidden=false;
   selectManagementView();
   const query=multiple&&selected?'?salon='+encodeURIComponent(selected):'';

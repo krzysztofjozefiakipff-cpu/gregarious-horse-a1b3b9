@@ -131,7 +131,7 @@ async function handle(request, env) {
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
-      const teamDay=['manager','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind, EXISTS (SELECT 1 FROM archived_users WHERE email=accounts.email) AS archived
+      const teamDay=['manager','group','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind, EXISTS (SELECT 1 FROM archived_users WHERE email=accounts.email) AS archived
         FROM accounts
         LEFT JOIN daily_tracking t ON t.person=accounts.id
         LEFT JOIN daily_results d ON d.person=accounts.id AND d.day=?
@@ -191,7 +191,7 @@ async function handle(request, env) {
         UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email) FROM dealer_group_heads h
         WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)
         ORDER BY name,email`):[];
-      return json({users,roles,managerAssignments,role:user.role,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
