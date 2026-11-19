@@ -313,8 +313,13 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 <button type="button" id="resolve">Rozlicz dzień</button>
 <button type="button" data-kind="leave">Oznacz urlop</button>
 <button type="button" data-kind="training">Oznacz szkolenie</button>
-<button type="button" data-kind="pending">Zgłoś dzień bez aktywności</button>
-</div><input id="reason" placeholder="Krótki powód" aria-label="Powód dnia bez aktywności" maxlength="120" hidden></div>
+</div></div>
+<details id="no-activity" hidden>
+  <summary>Zgłoś dzień bez aktywności</summary>
+  <label for="reason">Powód zgłoszenia</label>
+  <input id="reason" placeholder="Krótki powód" maxlength="120">
+  <button type="button" id="send-no-activity" class="secondary">Wyślij do zatwierdzenia</button>
+</details>
 <div id="mobile-entry" class="mobile-entry" hidden>
   <label for="entry-source">Źródło wyników</label>
   <select id="entry-source" aria-describedby="entry-help"></select>
