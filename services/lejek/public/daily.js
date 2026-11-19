@@ -545,9 +545,14 @@ const dailyClosings={
   ]
 };
 
+const taskPriorities=[
+  ['Najpierw: klienci blisko decyzji', [7,6]],
+  ['Następnie: nowe szanse i rozmowy', [0,1,5,2,4]],
+  ['Obsługa sprzedaży', [10,8,9]]
+];
+
 function renderTodayTasks(metrics,previous,day) {
-  const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday)
-    .sort((a,b)=>(a.goal?a.actual/a.goal:1)-(b.goal?b.actual/b.goal:1));
+  const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
   const strongest=metrics.filter(metric=>metric.delta>0).sort((a,b)=>b.delta-a.delta)[0];
   const weakest=metrics.filter(metric=>metric.goal>0&&metric.delta<0)
     .sort((a,b)=>a.actual/a.goal-b.actual/b.goal)[0];
@@ -559,11 +564,17 @@ function renderTodayTasks(metrics,previous,day) {
   const messages=dailyMotivators[tone];
   const variant=Math.floor(Date.parse(day)/86400000)%messages.length;
   intro.textContent=[...highlights,messages[variant]].join(' ');
-  $('#tasks').innerHTML=tasks.length?tasks.map(({index,doneToday,todayTarget})=>{
-    const [verb,forms]=taskWording[index];
-    const gap=todayTarget-doneToday;
-    return '<li><span class="task-action"><span>'+verb+'</span> <strong>'+gap+'</strong> <span>'+pluralForm(gap,forms)+'</span></span></li>';
-  }).join(''):'<li class="task-message">'+(hasPlan?'Na dziś nie zostały żadne zadania z planu.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</li>';
+  const tasksByIndex=new Map(tasks.map(task=>[task.index,task]));
+  const groups=taskPriorities.map(([label,indexes])=>{
+    const items=indexes.filter(index=>tasksByIndex.has(index)).map(index=>{
+      const {doneToday,todayTarget}=tasksByIndex.get(index);
+      const [verb,forms]=taskWording[index];
+      const gap=todayTarget-doneToday;
+      return '<li><span class="task-action">'+verb+' <strong>'+gap+'</strong> '+pluralForm(gap,forms)+'</span></li>';
+    }).join('');
+    return items?'<section class="task-group"><h3>'+label+'</h3><ol>'+items+'</ol></section>':'';
+  }).join('');
+  $('#tasks').innerHTML=groups||'<p class="task-message">'+(hasPlan?'Na dziś nie zostały żadne zadania z planu.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</p>';
 
   const previousOffers=previous?activityCount(JSON.parse(previous.counters),5):0;
   const followups=metrics.find(({index})=>index===6);

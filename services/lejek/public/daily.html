@@ -59,9 +59,6 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily #cause .eyebrow{color:#c4dcff}
 #lesson-remember{background:var(--ink);color:white;padding:10px 12px}
 #lesson-remember strong{color:#b5d2ff}
-#daily .actions ul{display:block;margin:0}
-#daily .actions li{padding:10px 0;border:0;border-radius:0}
-#daily .actions li+li{border-top:1px solid var(--line)}
 #daily .task-action strong{color:var(--accent-ink)}
 .entry-link{display:block;text-align:center;text-decoration:none;font-weight:800;background:var(--blue);color:white;padding:12px;border-radius:10px;margin:0 0 18px}
 #daily .order-plan,#daily #motivation{background:var(--tint);border-color:var(--line)}
@@ -74,8 +71,6 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:var(--ink);color:#fff}
 #entry-grid .source-detail{display:block;margin-top:4px;font-size:.8rem;font-weight:500;line-height:1.35}
 #entry-grid input[readonly]{background:var(--tint);color:var(--muted);cursor:default}
-#daily .actions li{padding:6px 0}
-#daily .task-action strong{font-size:1.65rem}
 #tasks-intro{margin:0 0 6px;background:var(--tint);color:var(--ink)}
 #tasks-closing{margin-top:12px;padding:12px 14px;border-inline-start:4px solid var(--accent);border-radius:8px;background:var(--ink);color:#fff;font-size:1rem;font-weight:700;line-height:1.45}
 #manager-team-view{margin-bottom:20px}
@@ -125,13 +120,12 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   [data-seller-panel="dzisiaj"] {
     display:grid;
     grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
-    grid-template-areas:"quote quote" "work lesson" "sidebar sidebar";
+    grid-template-areas:"work inspiration" "sidebar sidebar";
     gap:14px 20px;
     align-items:start;
   }
-  [data-seller-panel="dzisiaj"] > .quote { grid-area:quote; }
+  [data-seller-panel="dzisiaj"] > .daily-inspiration { grid-area:inspiration; }
   [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
-  #daily-lesson { grid-area:lesson; }
   .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
   #sidebar-feature { grid-area:sidebar; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
   #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
@@ -159,6 +153,15 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   #performance-view, #manager-team-view { padding:12px; }
   #manager-team-list details { padding:12px; }
 }
+
+#tasks { display:grid; gap:12px; }
+#tasks .task-group { border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+#tasks .task-group:first-child { border-inline-start:4px solid var(--blue); background:var(--tint); }
+.task-group h3 { margin:0 0 4px; font-size:.9rem; }
+#daily .task-group ol { list-style:none; margin:0; padding:0; }
+#daily .task-group li { border:0; border-radius:0; padding:7px 0; }
+#daily .task-group li+li { border-top:1px solid var(--line); }
+#followup-reminder { margin:8px 0 12px; }
 </style>
 </head>
 <body>
@@ -174,17 +177,20 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 </nav>
 <div data-seller-panel="dzisiaj">
 
+<div class="daily-inspiration">
 <div class="quote"><div class="eyebrow">Hasło dnia</div><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
-<div class="daily-work">
-<section class="actions"><h2>Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><ul id="tasks"></ul><p id="followup-reminder" class="task-note" hidden></p><p id="tasks-closing" hidden></p></section>
-<a class="entry-link" href="#wyniki">Wpisz działania</a>
-</div>
 <section id="daily-lesson" aria-labelledby="lesson-title">
   <div class="eyebrow">Lekcja na dziś</div>
   <h2 id="lesson-title"></h2>
   <p id="lesson-topic"></p>
   <p id="lesson-remember" hidden><strong>Zapamiętaj!</strong> <span></span></p>
 </section>
+</div>
+<div class="daily-work">
+
+<section class="actions"><h2>Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><p id="followup-reminder" class="task-note" hidden></p><div id="tasks"></div><p id="tasks-closing" hidden></p></section>
+<a class="entry-link" href="#wyniki">Wpisz działania</a>
+</div>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 <section id="meme" hidden><div class="eyebrow">Z życia salonu</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
 <div id="meme-actions" hidden><div id="meme-votes" role="group" aria-label="Oceń mem"><button type="button" data-meme-vote="1" class="secondary" aria-pressed="false">👍 Podoba mi się</button> <button type="button" data-meme-vote="-1" class="secondary" aria-pressed="false">👎 Nie podoba mi się</button></div><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
