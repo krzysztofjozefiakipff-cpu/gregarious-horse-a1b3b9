@@ -841,13 +841,29 @@ function renderSeller() {
   renderPlans(records);
   const ranking=data.ranking;
   const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
+  $('#ranking-title').textContent=ranking?.groupName?'Ranking grupy dealerskiej · '+ranking.groupName:'Ranking salonu';
+  const podium=$('#ranking-podium');
+  const podiumEntries=ranking?.podium??[];
+  podium.hidden=!podiumEntries.length;
+  $('#ranking-empty').hidden=Boolean(podiumEntries.length);
+  podium.replaceChildren(...podiumEntries.map(({place,name,salon,self})=>{
+    const card=document.createElement('li');
+    card.dataset.place=place;
+    const medal=document.createElement('span');
+    medal.className='podium-medal';
+    medal.textContent=place+'. miejsce';
+    const seller=document.createElement('strong');
+    seller.textContent=self?name+' (Ty)':name;
+    const location=document.createElement('span');
+    location.textContent=salon;
+    card.append(medal,seller,location);
+    return card;
+  }));
   $('#ranking-salon').textContent=ranking?.salon?rankText(ranking.salon):'Brak pozycji';
-  $('#ranking-podium').dataset.place=ranking?.salon?.place??'';
-  $('#ranking-podium').hidden=!ranking?.salon;
-  $('#ranking-group-row').hidden=!ranking?.group;
-  $('#ranking-group').textContent=ranking?.group?rankText(ranking.group):'';
-  $('#ranking-result-row').hidden=!ranking;
-  $('#ranking-result').textContent=ranking?new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%':'';
+  $('#ranking-group-row').hidden=!ranking?.groupName;
+  $('#ranking-group').textContent=ranking?.group?rankText(ranking.group):'Brak pozycji';
+  $('#ranking-result').textContent=ranking?.percent==null?'Brak planu'
+    :new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%';
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';

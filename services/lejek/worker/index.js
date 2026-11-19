@@ -288,7 +288,7 @@ async function handle(request, env) {
       if (personal) {
         const group=await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first();
         const rankingMonth=today.slice(0,7);
-        const ranks=await list(db,`SELECT a.id,a.salon,p.target,
+        const ranks=await list(db,`SELECT a.id,a.name,a.salon,p.target,
           COALESCE(SUM(json_extract(d.counters,'$[4]')),0) AS orders
           FROM accounts a JOIN plans p ON p.person=a.id AND p.month=? AND p.target>0
           LEFT JOIN daily_results d ON d.person=a.id AND substr(d.day,1,7)=p.month AND d.day<=?
@@ -296,11 +296,23 @@ async function handle(request, env) {
           AND NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=a.id)
           AND (a.salon=? OR a.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?))
           GROUP BY a.id,a.salon,p.target`,rankingMonth,today,user.salon,group?.group_name??null);
+        ranks.sort((a,b)=>b.orders*a.target-a.orders*b.target || b.orders-a.orders || String(a.id).localeCompare(String(b.id)));
+        const salonRanks=ranks.filter(row=>row.salon===user.salon);
+        const positionIn=rows=>{
+          const index=rows.findIndex(row=>row.id===user.id);
+          return index<0?null:{place:index+1,total:rows.length};
+        };
         const self=ranks.find(row=>row.id===user.id);
-        if (self) {
-          const place=rows=>({place:1+rows.filter(row=>row.orders*self.target>self.orders*row.target).length,total:rows.length});
-          ranking={salon:place(ranks.filter(row=>row.salon===user.salon)),group:group?place(ranks):null,percent:self.orders/self.target*100};
-        }
+        ranking={
+          salon:positionIn(salonRanks),
+          group:group?positionIn(ranks):null,
+          groupName:group?.group_name??null,
+          percent:self?self.orders/self.target*100:null,
+          podium:(group?ranks:salonRanks).slice(0,3).map((row,index)=>({
+            place:index+1, name:row.name?.trim().split(/\s+/)[0]||'Handlowiec',
+            salon:row.salon, self:row.id===user.id
+          }))
+        };
       }
       const groups=user.role==='admin'?await list(db,`SELECT g.name,
         (SELECT group_concat(salon, char(10)) FROM dealer_group_salons WHERE group_name=g.name) AS salons,
