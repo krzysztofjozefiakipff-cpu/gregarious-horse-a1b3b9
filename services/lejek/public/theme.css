@@ -1,14 +1,14 @@
 /* Shared visual identity of Bieg Wyżej. */
 :root {
-  --paper: #faf6ed;
-  --ink: #302038;
-  --muted: #655969;
-  --blue: var(--ink);
-  --line: #ded7dc;
-  --accent: #ff7547;
-  --yellow: #fff0e8;
-  --tint: #f4eff5;
-  --accent-ink: #a23a1c;
+  --paper: #f4f7fb;
+  --ink: #0b1522;
+  --muted: #425269;
+  --blue: #1359e8;
+  --line: #d8e1ed;
+  --accent: #1359e8;
+  --yellow: #eaf2ff;
+  --tint: #edf3fb;
+  --accent-ink: #1046b2;
   --error: #a12528;
 }
 * { box-sizing: border-box; }
@@ -21,7 +21,7 @@ body {
 h1, h2 { letter-spacing: -.045em; line-height: 1.12; }
 a { color: var(--ink); }
 :where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid #4285ff;
   outline-offset: 3px;
 }
 .product-brand {
@@ -64,7 +64,7 @@ a { color: var(--ink); }
   text-decoration: none;
   font-weight: 750;
 }
-.panel-nav a[aria-current="page"] { background: var(--ink); color: white; }
+.panel-nav a[aria-current="page"] { background: var(--blue); color: white; }
 
 .status-badge {
   display: inline-block;
@@ -75,3 +75,12 @@ a { color: var(--ink); }
 }
 .status-positive { color: #12633b; background: #e7f5eb; }
 .status-negative { color: #a12528; background: #fcebec; }
+
+.panel-header {
+  background: var(--ink);
+  color: white;
+  box-shadow: 0 2px 0 var(--blue);
+}
+.panel-header .product-brand, .panel-header a { color: white; }
+.panel-header .product-mark::before { background: white; }
+.panel-header #salon { color: #c9d8ed; }

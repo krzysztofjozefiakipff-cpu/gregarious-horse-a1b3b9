@@ -36,18 +36,24 @@ const DB = {
 const identity=localIdentity(database,DB);
 const cookie='__Host-lejek';
 const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
-const theme = readFileSync('public/theme.css','utf8');
+const publicPages = new Map([
+  ['/', ['text/html', readFileSync('public/home.html', 'utf8')]],
+  ['/home.css', ['text/css', readFileSync('public/home.css', 'utf8')]],
+  ['/showroom-jaecoo-8.webp', ['image/webp', readFileSync('public/showroom-jaecoo-8.webp')]],
+  ['/theme.css', ['text/css', readFileSync('public/theme.css', 'utf8')]]
+]);
 const loginPage = `<!doctype html>
 <html lang="pl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#faf6ed">
+  <meta name="theme-color" content="#0b1522">
   <title>AUTH_TITLE</title>
   <link rel="stylesheet" href="/theme.css">
   <style>
+    body { min-height: 100dvh; display: flow-root; background: linear-gradient(160deg, #0b1522 0%, #142f54 70%, #1a4376 100%); }
     .login { width: min(100%, 480px); margin: clamp(24px, 10vh, 96px) auto; padding: 0 16px; }
-    .login-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 6vw, 36px); }
+    .login-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 6vw, 36px); box-shadow: 0 20px 55px #0004; }
     .product-brand { font-weight: 750; font-size: 1.125rem; }
     h1 { margin: 20px 0 24px; font-size: clamp(1.65rem, 6vw, 2.25rem); }
     form, label { display: grid; gap: 6px; }
@@ -55,15 +61,15 @@ const loginPage = `<!doctype html>
     label { font-weight: 700; }
     input, button { min-width: 0; min-height: 48px; border-radius: 8px; padding: 10px 12px; font: inherit; }
     input { background: white; border: 1px solid var(--muted); color: var(--ink); }
-    button { background: var(--ink); color: white; border: 0; font-weight: 750; cursor: pointer; }
-    button:hover { background: var(--muted); }
+    button { background: var(--blue); color: white; border: 0; font-weight: 750; cursor: pointer; }
+    button:hover { background: var(--accent-ink); }
     [role="alert"] { color: var(--error); margin: 0; }
   </style>
 </head>
 <body>
   <main class="login">
     <section class="login-card" aria-labelledby="login-heading">
-      <div class="product-brand"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</div>
+      <a class="product-brand" style="text-decoration:none" href="/"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</a>
       <h1 id="login-heading">AUTH_TITLE</h1>
       <form method="post" action="AUTH_ACTION">
         <input type="hidden" name="csrf" value="LOGIN_CSRF">
@@ -144,8 +150,16 @@ async function handle(request) {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
     return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing','X-Lejek-Reset-Mail':smtpReady?'configured':'missing'});
   }
-  if (path==='/theme.css' && (request.method==='GET'||request.method==='HEAD')) {
-    return reply(request.method==='HEAD'?null:theme,200,{'Content-Type':'text/css; charset=utf-8'});
+  const publicPage = publicPages.get(path);
+  if (publicPage && (request.method === 'GET' || request.method === 'HEAD')) {
+    const [type, body] = publicPage;
+    const response = reply(request.method === 'HEAD' ? null : body, 200, {
+      'Content-Type': type.startsWith('text/') ? type + '; charset=utf-8' : type
+    });
+    if (path === '/' && new URL(request.url).hostname === 'biegwyzej.pl') {
+      response.headers.delete('X-Robots-Tag');
+    }
+    return response;
   }
   if (Object.hasOwn(forms,path)) {
     const render=(message='',status=200,token='')=>loginForm(message,status,path,token);
