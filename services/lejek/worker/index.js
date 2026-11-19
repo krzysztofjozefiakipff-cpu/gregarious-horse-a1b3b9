@@ -155,6 +155,42 @@ async function handle(request, env) {
     ?db.prepare('DELETE FROM report_exclusions WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address)
     :db.prepare('INSERT INTO report_exclusions SELECT id FROM accounts WHERE email=? ON CONFLICT DO NOTHING').bind(address)];
   const storyScope=user.role==='admin'?'':' AND '+scope;
+  if (path==='/api/salon-plans'&&request.method==='GET') {
+    if (!['group','manager'].includes(user.role)) return json({error:'Brak dostępu do planów salonu.'},403);
+    const month=url.searchParams.get('month');
+    if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
+    const choices=user.role==='group'?await list(db,`
+      SELECT a.id,a.name,gs.salon FROM dealer_group_salons gs
+      JOIN accounts a ON a.salon=gs.salon OR EXISTS (
+        SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND ms.salon=gs.salon
+      )
+      WHERE gs.group_name=? AND ${accountRole('a','manager')}
+      AND NOT EXISTS (SELECT 1 FROM archived_users au WHERE au.email=a.email)
+      ORDER BY a.name,a.id
+    `,user.group):[];
+    const stored=await list(db,`
+      SELECT p.salon,p.manager,p.targets,a.name FROM salon_plans p JOIN accounts a ON a.id=p.manager
+      WHERE p.month=? AND ${user.role==='group'
+        ?'p.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?)'
+        :'p.manager=? AND (p.salon=? OR p.salon IN (SELECT salon FROM manager_salons WHERE manager=?))'}
+      ORDER BY p.salon
+    `,month,...(user.role==='group'?[user.group]:[user.id,user.salon,user.id]));
+    const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
+    const totals=new Map(salons.map(({salon})=>[salon,[0,0,0,0]]));
+    const daily=await list(db,'SELECT person,counters FROM daily_results WHERE substr(day,1,7)=? AND day<=? AND '+scope,month,localDay(),...params);
+    const metricIndexes=[7,8,10,9];
+    for (const row of daily) {
+      const total=totals.get(sellerSalons.get(row.person));
+      if (!total) continue;
+      const counters=JSON.parse(row.counters);
+      total[0]+=counters[4]??0;
+      for (const source of Array.isArray(counters[5])?counters[5]:[]) {
+        for (let i=1;i<metricIndexes.length;i++) total[i]+=source[metricIndexes[i]]??0;
+      }
+    }
+    const plans=stored.map(plan=>({...plan,targets:JSON.parse(plan.targets),actuals:totals.get(plan.salon)}));
+    return json({plans,choices,salons});
+  }
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
@@ -249,6 +285,24 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
+  if (path==='/api/salon-plans') {
+    if (user.role!=='group') return json({error:'Plan ustawia szef grupy dealerskiej.'},403);
+    const {salon,month,manager,targets}=body;
+    if (!textValid(salon)||!monthValid(month)||!Number.isSafeInteger(manager)||
+        !Array.isArray(targets)||targets.length!==4||!targets.every(countValid))
+      return json({error:'Wybierz salon, kierownika i miesiąc oraz wpisz cztery cele.'},400);
+    const result=await db.prepare(`
+      INSERT INTO salon_plans (salon,month,manager,targets)
+      SELECT gs.salon,?,a.id,? FROM dealer_group_salons gs JOIN accounts a ON a.id=?
+      WHERE gs.group_name=? AND gs.salon=? AND ${accountRole('a','manager')}
+        AND NOT EXISTS (SELECT 1 FROM archived_users au WHERE au.email=a.email)
+        AND (a.salon=gs.salon OR EXISTS (
+          SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND ms.salon=gs.salon
+        ))
+      ON CONFLICT(salon,month) DO UPDATE SET manager=excluded.manager,targets=excluded.targets
+    `).bind(month,JSON.stringify(targets),manager,user.group,salon.trim()).run();
+    return result.meta.changes?json({ok:true}):json({error:'Wybierz kierownika przypisanego do salonu w Twojej grupie.'},403);
+  }
   if (['/api/lesson-import','/api/lessons'].includes(path) && canManage) {
     const salon=body.salon||(user.role==='manager'&&salons.length===1?salons[0].salon:null);
     if (!textValid(salon) || !managedSalons.has(salon))

@@ -987,14 +987,110 @@ function renderManagerDashboard(view) {
   }
 }
 
+const salonPlanForm=$('#salon-plan-form');
+const salonPlanMonth=$('#salon-plan-month');
+const salonPlanMetrics=[
+  ['orders','Zamówienia'],['registrations','Rejestracje'],
+  ['invoices','Wystawione faktury'],['reviews','Opinie Google']
+];
+let salonPlanData;
+let salonPlanRevision=0;
+
+function fillSalonPlan() {
+  const form=salonPlanForm.elements;
+  const salon=form.salon.value;
+  const saved=salonPlanData.plans.find(plan=>plan.salon===salon);
+  const managers=salonPlanData.choices.filter(choice=>choice.salon===salon);
+  form.manager.replaceChildren(new Option(managers.length?'Wybierz kierownika':'Brak przypisanego kierownika',''),
+    ...managers.map(manager=>new Option(manager.name,manager.id)));
+  if (saved&&managers.some(manager=>manager.id===saved.manager)) form.manager.value=saved.manager;
+  for (const [index,[field]] of salonPlanMetrics.entries()) form[field].value=saved?.targets[index]??'';
+  salonPlanForm.querySelector('button').disabled=!managers.length;
+}
+
+async function loadSalonPlans() {
+  const revision=++salonPlanRevision;
+  const status=$('#salon-plan-status');
+  const results=$('#salon-plan-results');
+  results.replaceChildren();
+  salonPlanForm.hidden=true;
+  if (!salonPlanMonth.value) {status.textContent='Wybierz miesiąc.';return;}
+  status.textContent='Wczytywanie planów…';
+  try {
+    const response=await api('/api/salon-plans?month='+encodeURIComponent(salonPlanMonth.value));
+    if (revision!==salonPlanRevision) return;
+    salonPlanData=response;
+    if (data.role==='group') {
+      const selector=salonPlanForm.elements.salon;
+      const selected=selector.value;
+      selector.replaceChildren(new Option('Wybierz salon',''),...response.salons.map(({salon})=>new Option(salon,salon)));
+      if (response.salons.some(({salon})=>salon===selected)) selector.value=selected;
+      else if (response.salons.length===1) selector.value=response.salons[0].salon;
+      fillSalonPlan();
+      salonPlanForm.hidden=false;
+    }
+    for (const plan of response.plans) {
+      const card=document.createElement('article');
+      const title=document.createElement('h2');
+      title.textContent=plan.salon;
+      const manager=document.createElement('p');
+      manager.textContent='Kierownik: '+plan.name;
+      const list=document.createElement('dl');
+      for (const [index,[,label]] of salonPlanMetrics.entries()) {
+        const term=document.createElement('dt');
+        const value=document.createElement('dd');
+        const actual=plan.actuals[index];
+        const target=plan.targets[index];
+        term.textContent=label;
+        value.textContent=actual+' / '+target;
+        value.className=actual>=target?'ahead':'behind';
+        list.append(term,value);
+      }
+      card.append(title,manager,list);
+      results.append(card);
+    }
+    status.textContent=response.plans.length?'':'Brak zapisanych planów na ten miesiąc.';
+  } catch(error) {
+    if (revision===salonPlanRevision) status.textContent=error.message;
+  }
+}
+salonPlanMonth.onchange=loadSalonPlans;
+salonPlanForm.elements.salon.onchange=fillSalonPlan;
+salonPlanForm.onsubmit=async event=>{
+  event.preventDefault();
+  const form=salonPlanForm.elements;
+  const button=salonPlanForm.querySelector('button');
+  const month=salonPlanMonth.value;
+  button.disabled=true;
+  try {
+    await api('/api/salon-plans',{month,salon:form.salon.value,manager:Number(form.manager.value),
+      targets:salonPlanMetrics.map(([field])=>form[field].valueAsNumber)});
+    if (salonPlanMonth.value===month) await loadSalonPlans();
+  } catch(error) {
+    $('#salon-plan-status').textContent=error.message;
+  } finally {
+    button.disabled=false;
+  }
+};
+
 function selectManagementView() {
   const administration=location.hash==='#administracja';
   const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';
   $('#manager-team-view').hidden=!team;
   $('#management-team').setAttribute('aria-current',team?'page':'false');
-  $('#performance-view').hidden=administration||team;
+  const canViewPlans=['group','manager'].includes(data?.role);
+  const plans=canViewPlans&&location.hash==='#plany-salonow';
+  const wasVisible=!$('#salon-plans').hidden;
+  $('#management-salon-plans').hidden=!canViewPlans;
+  $('#management-salon-plans').setAttribute('aria-current',plans?'page':'false');
+  $('#salon-plans').hidden=!plans;
+  if (plans&&!wasVisible) {
+    if (!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
+    loadSalonPlans();
+  }
+  $('#performance-view').hidden=administration||team||plans;
   $('#administration-view').hidden=!administration;
-  $('#management-performance').setAttribute('aria-current',administration||team?'false':'page');
+  $('#management-performance').setAttribute('aria-current',administration||team||plans?'false':'page');
   $('#management-admin').setAttribute('aria-current',administration?'page':'false');
 }
 window.addEventListener('hashchange',selectManagementView);
