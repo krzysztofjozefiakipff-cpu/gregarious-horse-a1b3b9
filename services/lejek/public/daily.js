@@ -1411,7 +1411,7 @@ function sourcePlanProposal(totals,shares,rates) {
 function copySourcePlan(donor,shares,rates) {
   if (donor.sourceTargets) return donor.sourceTargets;
   const mix=shares??[...defaultMix,0];
-  const values=sourcePlanProposal(donor.targets,mix,rates);
+  const values=sourcePlanProposal(donor.targets.map(target=>target??0),mix,rates);
   donor.funnelTargets.forEach((total,column)=>{
     if (total==null) return;
     allocateSourceTargets(total,mix).forEach((value,index)=>{values[index][column+4]=value;});
@@ -1666,45 +1666,58 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     appliedTotals=proposalInputs().join(',');
     proposalStatus.textContent='Plan wyliczony. Sprawdź podsumowanie poniżej i zapisz.';
   };
-  const copy=sellerCopyControls('Handlowiec z zapisanym planem','Kopiuj plan');
+  const copy=sellerCopyControls('Plan innego handlowca','Kopiuj plan innego handlowca');
   const picker=document.createElement('details');
   const pickerTitle=document.createElement('summary');
   pickerTitle.textContent='Skopiuj zapisany plan';
   const monthLabelField=document.createElement('label');
   const fromMonth=document.createElement('input');
   fromMonth.type='month';
-  fromMonth.value=month;
-  monthLabelField.append('Miesiąc planu źródłowego',fromMonth);
+  const [year,monthNumber]=month.split('-').map(Number);
+  fromMonth.value=monthStart(year,monthNumber-2).slice(0,7);
+  monthLabelField.append('Kopiuj z miesiąca',fromMonth);
+  const copyOwn=document.createElement('button');
+  copyOwn.type='button';
+  copyOwn.className='secondary';
+  copyOwn.textContent='Kopiuj plan tego handlowca';
   const copyStatus=document.createElement('p');
   copyStatus.setAttribute('role','status');
-  picker.append(pickerTitle,monthLabelField,copy.controls,copyStatus);
+  picker.append(pickerTitle,monthLabelField,copyOwn,copy.controls,copyStatus);
   picker.className='planning-compact';
   goalsStep.append(picker);
   let donors=[];
+  let ownPlan=null;
   let revision=0;
   const loadDonors=async()=>{
     const request=++revision;
     const selectedMonth=fromMonth.value;
     copyStatus.textContent='Wczytywanie zapisanych planów…';
     sellerCopyOptions(copy.select,copy.button,[]);
+    ownPlan=null;
+    copyOwn.disabled=true;
     if (!selectedMonth) {copyStatus.textContent='Wybierz miesiąc planu źródłowego.';return;}
     try {
       const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(selectedMonth));
       if (request!==revision||!picker.isConnected) return;
-      donors=plans.flatMap(plan=>plan.team.map(seller=>({...seller,salon:plan.salon})))
-        .filter(seller=>(seller.id!==person.id||selectedMonth!==month)&&(seller.sourceTargets||seller.complete))
-        .sort((a,b)=>Number(b.id===person.id)-Number(a.id===person.id));
-      sellerCopyOptions(copy.select,copy.button,donors.map(seller=>seller.id===person.id
-        ?{...seller,name:seller.name+' (ten sam handlowiec)'}:seller));
-      copyStatus.textContent=donors.length?'':'Brak planów do skopiowania w tym miesiącu.';
+      const team=plans.flatMap(plan=>plan.team.map(seller=>({...seller,salon:plan.salon})));
+      if (selectedMonth!==month) ownPlan=team.find(seller=>seller.id===person.id&&
+        (seller.sourceTargets||seller.targets.some(value=>value!=null)||seller.funnelTargets.some(value=>value!=null)))??null;
+      copyOwn.disabled=!ownPlan;
+      donors=team.filter(seller=>seller.id!==person.id&&(seller.sourceTargets||seller.complete));
+      sellerCopyOptions(copy.select,copy.button,donors);
+      copyStatus.textContent=selectedMonth===month?'Wybierz inny miesiąc, aby skopiować plan tego handlowca.'
+        :!ownPlan?'Ten handlowiec nie ma zapisanego planu w wybranym miesiącu.':'';
+
     } catch (error) {
       if (request===revision) copyStatus.textContent=error.message;
     }
   };
   fromMonth.onchange=loadDonors;
   picker.addEventListener('toggle',()=>{if (picker.open) loadDonors();});
-  copy.button.onclick=()=>{
-    const donor=donors.find(seller=>String(seller.id)===copy.select.value);
+  copyOwn.disabled=true;
+  copyOwn.onclick=()=>applyCopy(ownPlan);
+  copy.button.onclick=()=>applyCopy(donors.find(seller=>String(seller.id)===copy.select.value));
+  function applyCopy(donor) {
     if (!donor) return;
     const shares=profile.getProfile();
     const values=copySourcePlan(donor,shares,sourceRates);
@@ -1714,8 +1727,9 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     updateSummary();
     proposalStatus.textContent='';
     copyStatus.textContent='Wczytano plan: '+donor.name+' · '+monthLabel(fromMonth.value)+'. Sprawdź wartości przed zapisaniem.'
-      +(donor.sourceTargets?'':' Plan łączny rozdzielono '+(shares?'według profilu odbiorcy.':'według domyślnego podziału źródeł.'));
-  };
+      +(donor.sourceTargets?'':' Plan łączny rozdzielono '+(shares?'według profilu odbiorcy.':'według domyślnego podziału źródeł.'))
+      +(donor.targets.some(value=>value==null)?' Brakujące cele łączne uzupełniono zerami.':'');
+  }
   const calculationInfo=document.createElement('details');
   const calculationTitle=document.createElement('summary');
   calculationTitle.textContent='Jak liczymy działania?';
