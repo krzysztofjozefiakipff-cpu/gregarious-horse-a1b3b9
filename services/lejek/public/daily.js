@@ -872,15 +872,16 @@ function renderSeller() {
   $('#resolve').hidden=!next||day===next||waiting;
   for (const button of document.querySelectorAll('[data-kind]')) button.hidden=!next||day!==next||waiting;
   $('#reason').hidden=true;
-  $('#save').disabled=busy||Boolean(blocked)||locked;
-  const matrix=records[day]?.[5];
-  const legacy=records[day]&&!matrix;
+  $('#save').disabled=$('#approve-day').disabled=busy||Boolean(blocked)||locked;
+  const draft=personal.drafts?.[day];
+  const matrix=records[day]?.[5]??draft;
+  const legacy=records[day]&&!records[day][5];
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(([,name])=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
   const previousSource=$('#entry-grid').dataset.day===day?Number(sourceSelect.value):0;
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||blocked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
@@ -889,7 +890,9 @@ function renderSeller() {
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
-  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':locked?'Dzień rozliczony.'
+    :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
+    :draft?'Zapisano roboczo. Możesz dalej edytować wartości.':'Możesz zapisywać zmiany w ciągu dnia.';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
@@ -910,7 +913,7 @@ function renderSeller() {
   $('#progress-text').textContent=done+' z '+expected+' dni pracy rozliczonych do dziś';
   $('#progress').max=expected||1;
   $('#progress').value=done;
-  $('#fortune').textContent=records[data.today]?fortunes[dayIndex%fortunes.length]:'Otworzy się po zapisaniu dzisiejszych wyników.';
+  $('#fortune').textContent=records[data.today]?fortunes[dayIndex%fortunes.length]:'Otworzy się po zatwierdzeniu dzisiejszych wyników.';
   selectSellerTab();
   $('#daily').hidden=false;
 }
@@ -1870,13 +1873,14 @@ async function refresh() {
   $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
   showView();
 }
-async function run(operation,openCookie=false) {
+async function run(operation,openCookie=false,keepEditDay=false) {
   if (busy) return;
   busy=true;
-  $('#save').disabled=true;
+  const entryWasDisabled=$('#save').disabled;
+  $('#save').disabled=$('#approve-day').disabled=true;
   try {
     await operation();
-    editDay=null;
+    if (!keepEditDay) editDay=null;
     busy=false;
     await refresh();
     if (openCookie) $('#cookie').open=true;
@@ -1884,23 +1888,24 @@ async function run(operation,openCookie=false) {
   } catch(error) {
     $('#load').textContent=error.message;
     if(data?.role==='seller') {
-      const day=editDay??data.today;
       $('#status').textContent=error.message;
-      $('#save').disabled=Boolean(data.personal.missing[0]&&day!==data.personal.missing[0])||data.personal.exceptions[day]==='pending';
+      $('#save').disabled=$('#approve-day').disabled=entryWasDisabled;
     }
   } finally {busy=false;}
 }
 $('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows .active-source input')?.focus();};
 $('#entry').onsubmit=event=>{
   event.preventDefault();
-  if(data.role!=='seller') return;
+  if(data?.role!=='seller'||busy||$('#save').disabled) return;
   const day=editDay??data.today;
+  const draft=event.submitter!==$('#approve-day');
+  if (!draft&&!confirm('Czy na pewno chcesz zatwierdzić dzień '+dateLabel(day)+'? Po zatwierdzeniu edycja wartości będzie zablokowana.')) return;
   const rows=sources.map((_,r)=>{
     const row=Array(11).fill(0);
     for (const [index] of columns) row[index]=Number(event.target.elements['v'+r+'_'+index].value);
     return row;
   });
-  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows}),day===data.today);
+  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today,draft);
 };
 for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{
   const {kind}=button.dataset;
