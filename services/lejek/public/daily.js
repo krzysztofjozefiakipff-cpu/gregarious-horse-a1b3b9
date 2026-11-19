@@ -448,43 +448,111 @@ $('#seller-calendar').addEventListener('toggle',event=>{
   if (event.currentTarget.open&&data?.role==='seller') renderCalendar($('#seller-calendar-editor'),data.sellers,false);
 });
 
-function renderPlans(records) {
-  const [year,month]=data.today.split('-').map(Number);
-  const monthKey=data.today.slice(0,7);
-  const monthEnd=monthStart(year,month);
-  const monthPlan=data.plans.find(row=>row.month===monthKey)?.target;
-  const quarterPlan=data.plans.length===3?data.plans.reduce((total,row)=>total+row.target,0):null;
-  const toDate=Object.entries(records).filter(([day])=>day<=data.today);
-  const monthRecords=toDate.filter(([day])=>day.startsWith(monthKey));
-  const isScheduled=day=>weekday(day)&&!['leave','training'].includes(data.personal.exceptions[day]);
-  const daysLeft=remainingDays(data.today,monthEnd,isScheduled);
-  const isWorkday=isScheduled(data.today);
-  $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+daysLeft;
-  const current=records[data.today]??[];
-  const invoicePlans=new Map((data.funnelPlans??[]).map(row=>[row.month,JSON.parse(row.targets)[6]]));
-  const firstQuarterMonth=Math.floor((month-1)/3)*3+1;
-  const invoiceQuarterTargets=[0,1,2].map(offset=>invoicePlans.get(monthStart(year,firstQuarterMonth+offset-1).slice(0,7)));
-  const invoiceQuarterPlan=invoiceQuarterTargets.every(target=>target!=null)
-    ?invoiceQuarterTargets.reduce((total,target)=>total+target,0):null;
-  renderPeriodCards('#cards',7,monthPlan,quarterPlan);
-  renderPeriodCards('#invoice-cards',10,invoicePlans.get(monthKey),invoiceQuarterPlan);
+const periodType=$('#seller-period-type');
+const periodValue=$('#seller-period-value');
+let periodRevision=0;
+const periodLength={month:1,quarter:3,year:12};
+const periodLabel={month:'Miesiąc',quarter:'Kwartał',year:'Rok'};
 
-  function renderPeriodCards(selector,index,monthTarget,quarterTarget) {
-    const sum=entries=>entries.reduce((total,[,values])=>total+activityCount(values,index),0);
-    const todayCount=activityCount(current,index);
-    const monthCount=sum(monthRecords);
-    const todayGoal=dailyTarget(monthTarget,monthCount-todayCount,daysLeft,isWorkday);
-    const cards=[['Dzisiaj',todayCount,todayGoal],['Miesiąc',monthCount,monthTarget],['Kwartał',sum(toDate),quarterTarget]];
-    $(selector).innerHTML=cards.map(([name,value,target])=>{
-      const gap=target==null?null:target-value;
-      return '<section><span>'+name+'</span><strong>'+value+' / '+(target??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
-        (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
-    }).join('');
+function periodStart(month,type) {
+  if (type==='year') return month.slice(0,4)+'-01';
+  if (type==='quarter') return month.slice(0,5)+String(Math.floor((Number(month.slice(5))-1)/3)*3+1).padStart(2,'0');
+  return month;
+}
+
+function periodName(month,type) {
+  if (type==='year') return month.slice(0,4);
+  if (type==='quarter') return 'I II III IV'.split(' ')[Math.floor((Number(month.slice(5))-1)/3)]+' kwartał '+month.slice(0,4);
+  return monthLabel(month);
+}
+
+function renderPeriodPicker(anchor=data.today.slice(0,7)) {
+  const current=data.today.slice(0,7);
+  const type=periodType.value;
+  const months=new Set([current,...(data.availableMonths??[])]);
+  const firstYear=Number([...months].sort()[0].slice(0,4));
+  const [currentYear,currentMonth]=current.split('-').map(Number);
+  for (let year=firstYear;year<=currentYear;year++) {
+    const lastMonth=year===currentYear?currentMonth:12;
+    for (let month=0;month<lastMonth;month++) months.add(monthStart(year,month).slice(0,7));
   }
+  const options=[...new Set([...months].map(month=>periodStart(month,type)))].sort().reverse();
+  const previous=periodStart(anchor,type);
+  periodValue.replaceChildren(...options.map(month=>new Option(periodName(month,type),month)));
+  periodValue.value=options.includes(previous)?previous:periodStart(current,type);
+}
 
-  const funnel=data.funnelPlans?.find(row=>row.month===monthKey);
-  const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
-  const metrics=monthlyMetrics(monthRecords,current,monthPlan,funnel,reviewTarget,data.today,daysLeft,isWorkday,isScheduled);
+async function loadSellerPeriod() {
+  const type=periodType.value;
+  const month=periodValue.value;
+  const revision=++periodRevision;
+  const status=$('#seller-period-status');
+  status.hidden=false;
+  status.textContent='Wczytywanie okresu…';
+  try {
+    const snapshot=type==='month'&&month===data.today.slice(0,7)?data
+      :await api('/api/daily?month='+encodeURIComponent(month)+'&period='+type);
+    if (revision!==periodRevision) return;
+    renderPlans(snapshot,month,type);
+    renderRanking(snapshot.ranking);
+    $('#seller-plan-period').textContent=periodName(month,type);
+    status.hidden=true;
+  } catch (error) {
+    if (revision!==periodRevision) return;
+    status.textContent=error.message;
+  }
+}
+
+periodType.onchange=()=>{
+  renderPeriodPicker(periodValue.value);
+  loadSellerPeriod();
+};
+periodValue.onchange=loadSellerPeriod;
+
+function periodMetrics(snapshot,start,count) {
+  const [year,month]=start.split('-').map(Number);
+  const records=snapshot.daily.filter(row=>row.day<=snapshot.today).map(row=>[row.day,JSON.parse(row.counters)]);
+  const isScheduled=day=>weekday(day)&&!['leave','training'].includes(snapshot.personal.exceptions[day]);
+  const metricsByMonth=Array.from({length:count},(_,index)=>{
+    const first=monthStart(year,month-1+index);
+    const end=monthStart(year,month+index);
+    const key=first.slice(0,7);
+    const day=snapshot.today<first?first:snapshot.today<end?snapshot.today:new Date(Date.parse(end)-86400000).toISOString().slice(0,10);
+    const entries=records.filter(([date])=>date.startsWith(key));
+    const metrics=monthlyMetrics(entries,entries.find(([date])=>date===day)?.[1]??[],
+      snapshot.plans.find(row=>row.month===key)?.target,snapshot.funnelPlans.find(row=>row.month===key),
+      snapshot.reviewPlans.find(row=>row.month===key)?.target,day,remainingDays(day,end,isScheduled),isScheduled(day),isScheduled);
+    return metrics.map(metric=>{
+      const goal=metric.target==null?null:snapshot.today<first?0:snapshot.today>=end?metric.target:metric.goal;
+      return {...metric,goal,delta:goal==null?null:metric.actual-goal};
+    });
+  });
+  const sum=(values,key)=>values.some(value=>value[key]!=null)
+    ?values.reduce((total,value)=>total+(value[key]??0),0):null;
+  const currentIndex=metricsByMonth.findIndex((_,i)=>monthStart(year,month-1+i).slice(0,7)===snapshot.today.slice(0,7));
+  return metricsByMonth[0].map((metric,index)=>{
+    const values=metricsByMonth.map(month=>month[index]);
+    const actual=sum(values,'actual');
+    const goal=sum(values,'goal');
+    const daily=values[currentIndex];
+    return {...metric,actual,goal,target:sum(values,'target'),delta:goal==null?null:actual-goal,
+      doneToday:daily?.doneToday??0,todayTarget:daily?.todayTarget??null};
+  });
+}
+
+function renderPlans(snapshot,month,type) {
+  const metrics=periodMetrics(snapshot,month,periodLength[type]);
+  const label=periodLabel[type];
+  for (const [selector,index] of [['#cards',7],['#invoice-cards',10]]) {
+    const {actual,target,goal,doneToday,todayTarget}=metrics.find(metric=>metric.index===index);
+    const cards=[todayTarget==null?['Wykonanie narastająco',actual,goal]:['Dzisiaj',doneToday,todayTarget],[label,actual,target]];
+    $(selector).innerHTML=cards.map(([name,value,expected])=>{
+      const gap=expected==null?null:expected-value;
+      return '<section><span>'+name+'</span><strong>'+value+' / '+(expected??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
+        (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
+    }).join('')+'<section><span>Pozostało do celu</span><strong>'+
+      (target==null?'—':Math.max(0,target-actual))+'</strong></section>';
+  }
   const ratedMetrics=metrics.filter(({goal})=>goal>0);
   const average=ratedMetrics.length
     ?ratedMetrics.reduce((total,{actual,goal})=>total+actual/goal,0)/ratedMetrics.length
@@ -500,10 +568,9 @@ function renderPlans(records) {
     const style=delta<0?'behind':delta>0?'ahead':'';
     const status=delta==null?'Brak celu':delta<0?'Brakuje '+(-delta):delta>0?'Ponad planem o '+delta:'Zgodnie z planem';
     return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
-      '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel miesiąca · '+target+'</small>')+'</div>';
+      '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel okresu · '+target+'</small>')+'</div>';
   }).join('');
-  renderTodayTasks(metrics,data.previousDaily,data.today);
-  renderMotivator(metrics,data.today);
+  renderMotivator(metrics,snapshot.today);
 }
 
 function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLeft,isWorkday,isScheduled=weekday) {
@@ -920,42 +987,7 @@ function labelPanel(role,scope='',preview=false) {
   document.title=title+' · Bieg Wyżej';
 }
 
-function renderSeller() {
-  const {brand,personal,cause}=data;
-  const salon=data.sellers[0].salon;
-  labelPanel('seller',brand?.name??salon);
-  $('#logo').hidden=!brand?.logo;
-  if (brand?.logo) $('#logo').src=brand.logo;
-  const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
-  const next=personal.missing[0];
-  const day=next&&editDay===next?editDay:data.today;
-  const exception=personal.exceptions[day];
-  const waiting=personal.exceptions[next]==='pending';
-  const blocked=(next&&day!==next)||exception==='pending';
-  const locked=Boolean(records[day]||exception==='zero'||exception==='leave'||exception==='training');
-  const dayIndex=Math.floor(Date.parse(data.today)/86400000);
-  renderQuote(quotes[dayIndex%quotes.length]);
-  const lesson=data.lesson;
-  $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
-  $('#lesson-topic').textContent=lesson?.question??lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
-  const answer=$('#lesson-answer');
-  if (answer.querySelector('p').textContent!==(lesson?.topic??'')) answer.open=false;
-  answer.hidden=!lesson?.question;
-  answer.querySelector('p').textContent=lesson?.question?lesson.topic:'';
-  $('#lesson-remember').hidden=!lesson||Boolean(lesson.question);
-  $('#lesson-remember span').textContent=lesson?.remember??'';
-  renderPlans(records);
-  const pending=(data.calendar??[]).filter(row=>row.status==='pending').length;
-  const reminder=$('#calendar-reminder');
-  reminder.hidden=!pending;
-  const calendarLink=document.createElement('a');
-  calendarLink.href='#plan';
-  calendarLink.textContent='Otwórz kalendarz w zakładce Plan';
-  calendarLink.onclick=()=>{$('#seller-calendar').open=true;};
-  reminder.replaceChildren('Dni wolne czekające na zatwierdzenie: '+pending+'. ',calendarLink);
-  $('#seller-calendar summary').textContent='Kalendarz pracy i dni wolne'+(pending?' · '+pending+' oczekuje':'');
-  if ($('#seller-calendar').open) renderCalendar($('#seller-calendar-editor'),data.sellers,false);
-  const ranking=data.ranking;
+function renderRanking(ranking) {
   const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
   $('#ranking-title').textContent=ranking?.groupName?'Ranking grupy dealerskiej · '+ranking.groupName:'Ranking salonu';
   const podium=$('#ranking-podium');
@@ -980,6 +1012,49 @@ function renderSeller() {
   $('#ranking-group').textContent=ranking?.group?rankText(ranking.group):'Brak pozycji';
   $('#ranking-result').textContent=ranking?.percent==null?'Brak planu'
     :new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%';
+}
+
+function renderSeller() {
+  const {brand,personal,cause}=data;
+  const salon=data.sellers[0].salon;
+  labelPanel('seller',brand?.name??salon);
+  $('#logo').hidden=!brand?.logo;
+  if (brand?.logo) $('#logo').src=brand.logo;
+  const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
+  const next=personal.missing[0];
+  const day=next&&editDay===next?editDay:data.today;
+  const exception=personal.exceptions[day];
+  const waiting=personal.exceptions[next]==='pending';
+  const blocked=(next&&day!==next)||exception==='pending';
+  const locked=Boolean(records[day]||exception==='zero'||exception==='leave'||exception==='training');
+  const dayIndex=Math.floor(Date.parse(data.today)/86400000);
+  renderQuote(quotes[dayIndex%quotes.length]);
+  const lesson=data.lesson;
+  $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
+  $('#lesson-topic').textContent=lesson?.question??lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
+  const answer=$('#lesson-answer');
+  if (answer.querySelector('p').textContent!==(lesson?.topic??'')) answer.open=false;
+  answer.hidden=!lesson?.question;
+  answer.querySelector('p').textContent=lesson?.question?lesson.topic:'';
+  $('#lesson-remember').hidden=!lesson||Boolean(lesson.question);
+  $('#lesson-remember span').textContent=lesson?.remember??'';
+  const currentMonth=data.today.slice(0,7);
+  const isScheduled=date=>weekday(date)&&!['leave','training'].includes(personal.exceptions[date]);
+  const [year,monthNumber]=currentMonth.split('-').map(Number);
+  $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
+  renderTodayTasks(periodMetrics(data,currentMonth,1),data.previousDaily,data.today);
+  renderPeriodPicker(periodValue.value||currentMonth);
+  loadSellerPeriod();
+  const pending=(data.calendar??[]).filter(row=>row.status==='pending').length;
+  const reminder=$('#calendar-reminder');
+  reminder.hidden=!pending;
+  const calendarLink=document.createElement('a');
+  calendarLink.href='#plan';
+  calendarLink.textContent='Otwórz kalendarz w zakładce Plan';
+  calendarLink.onclick=()=>{$('#seller-calendar').open=true;};
+  reminder.replaceChildren('Dni wolne czekające na zatwierdzenie: '+pending+'. ',calendarLink);
+  $('#seller-calendar summary').textContent='Kalendarz pracy i dni wolne'+(pending?' · '+pending+' oczekuje':'');
+  if ($('#seller-calendar').open) renderCalendar($('#seller-calendar-editor'),data.sellers,false);
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
@@ -1856,34 +1931,21 @@ for (const panel of historyPanels) {
     }
     status.textContent='Wczytywanie…';
     try {
-      const seller=panel.dataset.history==='seller';
-      const response=await api((seller?'/api/daily':'/api/salon-plans')+'?month='+encodeURIComponent(month));
+      const response=await api('/api/salon-plans?month='+encodeURIComponent(month));
       if(request!==revision) return;
       status.textContent=monthLabel(month)+' · wykonanie / cel miesięczny';
-      if (seller) {
-        const records=response.daily.filter(row=>row.day.startsWith(month)).map(row=>[row.day,JSON.parse(row.counters)]);
-        const plan=response.plans.find(row=>row.month===month)?.target;
-        const funnel=response.funnelPlans.find(row=>row.month===month);
-        const reviews=response.reviewPlans.find(row=>row.month===month)?.target;
-        if (!records.length && plan==null && !funnel && reviews==null) {
-          results.textContent='Brak zapisanych wyników i celów.';
-          return;
-        }
-        results.append(historyMetrics(monthlyMetrics(records,[],plan,funnel,reviews,month+'-01',1,false)));
-      } else {
-        const plans=response.plans.filter(plan=>historySalons.has(plan.salon));
-        for (const plan of plans) {
-          const card=document.createElement('section');
-          card.className='history-salon';
-          const title=document.createElement('h3');
-          title.textContent=plan.salon;
-          card.append(title,historyMetrics(salonPlanMetrics.map((label,index)=>({
-            label,actual:plan.actuals[index],target:plan.configured[index]?plan.targets[index]:null
-          }))));
-          results.append(card);
-        }
-        if (!plans.length) results.textContent='Brak wyników dla wybranych salonów.';
+      const plans=response.plans.filter(plan=>historySalons.has(plan.salon));
+      for (const plan of plans) {
+        const card=document.createElement('section');
+        card.className='history-salon';
+        const title=document.createElement('h3');
+        title.textContent=plan.salon;
+        card.append(title,historyMetrics(salonPlanMetrics.map((label,index)=>({
+          label,actual:plan.actuals[index],target:plan.configured[index]?plan.targets[index]:null
+        }))));
+        results.append(card);
       }
+      if (!plans.length) results.textContent='Brak wyników dla wybranych salonów.';
     } catch (error) {
       if (request===revision) status.textContent=error.message;
     }
@@ -2044,7 +2106,6 @@ async function refresh() {
   const month=data.today.slice(0,7);
   const [year,number]=month.split('-').map(Number);
   for (const panel of historyPanels) panel.querySelector('input').max=monthStart(year,number-2).slice(0,7);
-  $('#seller-plan-period').textContent='Realizacja planu · '+monthLabel(month);
   $('#management-plan-period').textContent='Okres · '+monthLabel(month);
 
   const signedIn=$('#signed-in');

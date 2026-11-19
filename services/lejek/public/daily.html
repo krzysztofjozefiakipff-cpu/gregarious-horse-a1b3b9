@@ -252,6 +252,9 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 #seller-rating { font-weight:750; color:white; }
 .plan-period { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
 .plan-period p { color:var(--muted); }
+.plan-period.month-history label { display:grid; gap:4px; margin:0; }
+.plan-period select { min-height:42px; width:100%; }
+#seller-period-status { flex-basis:100%; margin:0; }
 .month-history { background:white; border:1px solid var(--line); border-radius:12px; padding:14px; }
 .month-history summary { cursor:pointer; font-weight:750; }
 .month-history label { display:inline-flex; align-items:center; flex-wrap:wrap; gap:8px; margin-block:10px; }
@@ -364,15 +367,20 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></div>
 <div data-seller-panel="plan" hidden>
-<div class="plan-period"><p id="seller-plan-period"></p></div>
+<div class="plan-period month-history">
+  <strong id="seller-plan-period"></strong>
+  <label>Widok <select id="seller-period-type"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select></label>
+  <label>Wyświetlany okres <select id="seller-period-value"></select></label>
+  <p id="seller-period-status" role="status" hidden></p>
+</div>
   <section id="seller-ranking" aria-labelledby="ranking-title">
     <div class="ranking-heading">
       <h2 id="ranking-title"></h2>
-      <p>Realizacja miesięcznego planu zamówień</p>
+      <p>Realizacja planu zamówień w wybranym okresie</p>
     </div>
     <div>
       <ol class="podium" id="ranking-podium" hidden></ol>
-      <p id="ranking-empty" hidden>Brak handlowców z planem zamówień w tym miesiącu.</p>
+      <p id="ranking-empty" hidden>Brak handlowców z planem zamówień w tym okresie.</p>
     </div>
     <div class="ranking-personal">
     <div>
@@ -387,7 +395,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
       <h3>Ocena handlowca</h3>
       <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
       <p id="seller-rating"></p>
-      <p>Średnia realizacji celów miesięcznych narastająco do dziś.</p>
+      <p>Średnia realizacja celów narastająco w wybranym okresie.</p>
     </div>
     </div>
   </section>
@@ -405,7 +413,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 
 </div>
 <section id="pace" aria-labelledby="pace-title" hidden>
-  <div class="pace-intro"><h2 id="pace-title">Realizacja działań miesięcznych na dziś</h2><p>Wykonano od początku miesiąca / cel narastająco do dziś.</p></div>
+  <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
   <div id="pace-items"></div>
 </section>
 <section id="motivation" aria-labelledby="motivation-title">
@@ -416,12 +424,6 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <p id="motivation-message"></p>
 </section>
 <div class="plan-tools">
-<details class="month-history" data-history="seller">
-  <summary>Historia zakończonych miesięcy</summary>
-  <label>Miesiąc <input type="month"></label>
-  <p class="history-status" role="status"></p>
-  <div class="history-results"></div>
-</details>
 <details id="seller-calendar" class="month-history">
   <summary>Kalendarz pracy i dni wolne</summary>
   <p id="seller-calendar-days"></p>
