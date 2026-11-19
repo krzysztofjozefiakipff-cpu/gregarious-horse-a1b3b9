@@ -558,6 +558,28 @@ function periodMetrics(snapshot,start,count) {
 
 function renderPlans(snapshot,month,type) {
   const metrics=periodMetrics(snapshot,month,periodLength[type]);
+  const [year,monthNumber]=month.split('-').map(Number);
+  const end=monthStart(year,monthNumber-1+periodLength[type]).slice(0,7);
+  const saved=(snapshot.sourcePlans??[]).filter(plan=>plan.month>=month&&plan.month<end);
+  const sourceTable=$('#seller-source-plan');
+  sourceTable.hidden=!saved.length;
+  const totals=sources.map(()=>Array(10).fill(0));
+  for (const plan of saved) JSON.parse(plan.targets).forEach((row,index)=>row.forEach((value,column)=>{totals[index][column]+=value;}));
+  $('#seller-source-rows').replaceChildren(...totals.flatMap((values,index)=>{
+    if (!values.some(Boolean)) return [];
+    const row=document.createElement('tr');
+    const name=document.createElement('th');
+    name.scope='row';
+    name.textContent=sources[index];
+    row.append(name);
+    for (const value of [values[0],values[7],...values.slice(4,7),...values.slice(8),...values.slice(1,4)]) {
+      const cell=document.createElement('td');
+      cell.textContent=value;
+      row.append(cell);
+    }
+    return [row];
+  }));
+  $('#seller-source-note').textContent='Miesiące z rozpisanym planem: '+saved.length+' / '+periodLength[type]+'.';
   const label=periodLabel[type];
   for (const [selector,index] of [['#cards',7],['#invoice-cards',10]]) {
     const {actual,target,goal,doneToday,todayTarget}=metrics.find(metric=>metric.index===index);
@@ -1377,6 +1399,53 @@ const sellerActivityPlan=[
   ['Próby kontaktu',1],['Jazdy próbne',4],['Oferty',5],['Leady',0],['Spotkania',2],['Follow-up',6]
 ];
 
+function sourcePlanProposal(totals,shares,rates) {
+  const allocated=totals.map(total=>allocateSourceTargets(total,shares));
+  return shares.map((_,index)=>{
+    const targets=allocated.map(column=>column[index]);
+    return [...targets,...sourceActivityProposal(index,targets[0],rates[index])];
+  });
+}
+
+function sourceProfileEditor(person,individual,month) {
+  const panel=document.createElement('details');
+  const title=document.createElement('summary');
+  title.textContent='Profil źródeł pozyskania';
+  const note=document.createElement('p');
+  note.textContent='Ustal procentowy udział źródeł w planie zamówień handlowca. Razem musi być 100%. Zapisany profil możesz wykorzystać w kolejnych miesiącach.';
+  const {fields,inputs}=planTargets(person.sourceProfile??sources.map(()=>0),100,sources.map(source=>source+' (%)'));
+  const status=document.createElement('p');
+  status.setAttribute('role','status');
+  const save=document.createElement('button');
+  save.type='button';
+  save.textContent='Zapisz profil';
+  let profile=person.sourceProfile;
+  const shares=()=>inputs.map(input=>input.valueAsNumber);
+  const update=()=>{
+    const sum=shares().reduce((total,value)=>total+(value||0),0);
+    status.textContent='Suma udziałów: '+sum+'%.';
+  };
+  inputs.forEach(input=>input.addEventListener('input',update));
+  update();
+  save.onclick=async()=>{
+    if (!inputs.every(input=>input.reportValidity())) return;
+    const values=shares();
+    if (values.reduce((sum,value)=>sum+value,0)!==100) {
+      status.textContent='Udziały źródeł muszą sumować się do 100%.';
+      return;
+    }
+    save.disabled=true;
+    try {
+      await api('/api/salon-plans/source-profile',{...individual,month,shares:values});
+      profile=values;
+      status.textContent='Profil zapisany.';
+    } catch (error) { status.textContent=error.message; }
+    finally { save.disabled=false; }
+  };
+  panel.append(title,note,fields,status,save);
+  return {panel,getProfile:()=>profile};
+}
+
 function sellerPlanForm(person,individual,month,sourceRates) {
   const form=document.createElement('form');
   const note=document.createElement('p');
@@ -1392,7 +1461,20 @@ function sellerPlanForm(person,individual,month,sourceRates) {
   summary.setAttribute('aria-live','polite');
   const save=document.createElement('button');
   save.textContent='Zapisz plan według źródeł';
-  form.append(note,summary);
+  const profile=sourceProfileEditor(person,individual,month);
+  const proposal=planTargets(person.targets.map(target=>target??''),1000000);
+  proposal.inputs.forEach(input=>{input.required=false;});
+  const proposalTitle=document.createElement('p');
+  proposalTitle.textContent='Cele łączne na '+monthLabel(month);
+  const proposalInputs=()=>proposal.inputs.map(input=>input.value);
+  let appliedTotals=proposalInputs().join(',');
+  const propose=document.createElement('button');
+  propose.type='button';
+  propose.className='secondary';
+  propose.textContent='Wylicz plan z zapisanego profilu';
+  const proposalStatus=document.createElement('p');
+  proposalStatus.setAttribute('role','status');
+  form.append(note,proposalTitle,proposal.fields,propose,proposalStatus,summary);
   if (!person.sourceTargets&&person.targets.some(value=>value!==null)) {
     const legacy=document.createElement('p');
     legacy.textContent='Dotychczasowy plan łączny: '+salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ')+'. Rozdziel cele między źródła przed zapisaniem nowego planu.';
@@ -1400,7 +1482,7 @@ function sellerPlanForm(person,individual,month,sourceRates) {
   }
 
   function updateSummary() {
-    const totals=rows.reduce((sum,inputs)=>sum.map((value,index)=>value+(inputs[index].valueAsNumber||0)),[0,0,0,0]);
+    const totals=rows.reduce((sum,{inputs})=>sum.map((value,index)=>value+(inputs[index].valueAsNumber||0)),[0,0,0,0]);
     summary.textContent='Razem: '+salonPlanMetrics.map((label,index)=>label+' '+totals[index]).join(' · ');
   }
 
@@ -1418,7 +1500,7 @@ function sellerPlanForm(person,individual,month,sourceRates) {
     reset.textContent='Przelicz działania dla źródła';
 
     function updateSource() {
-      title.textContent=source+' · zamówienia: '+(manual.inputs[0].valueAsNumber||0);
+      title.textContent=source+' · zamówienia: '+(manual.inputs[0].valueAsNumber||0)+' · leady: '+(activity.inputs[3].valueAsNumber||0);
       updateSummary();
     }
     function recalculate() {
@@ -1429,9 +1511,9 @@ function sellerPlanForm(person,individual,month,sourceRates) {
     }
     manual.inputs[0].addEventListener('input',recalculate);
     manual.inputs.forEach(input=>input.addEventListener('input',updateSource));
-    activity.inputs.forEach((input,i)=>input.addEventListener('input',()=>{edited[i]=true;}));
-    reset.onclick=()=>{edited.fill(false);recalculate();};
-    title.textContent=source+' · zamówienia: '+(saved?.[0]??0);
+    activity.inputs.forEach((input,i)=>input.addEventListener('input',()=>{edited[i]=true;updateSource();}));
+    reset.onclick=()=>{edited.fill(false);recalculate();updateSource();};
+    title.textContent=source+' · zamówienia: '+(saved?.[0]??0)+' · leady: '+(saved?.[7]??0);
     panel.open=Boolean(saved?.some(value=>value>0));
     for (const input of [...manual.inputs,...activity.inputs]) {
       input.addEventListener('invalid',()=>{panel.open=true;});
@@ -1442,16 +1524,51 @@ function sellerPlanForm(person,individual,month,sourceRates) {
       :'Konwersja startowa według założeń planowania.';
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
     form.append(panel);
-    return [...manual.inputs,...activity.inputs];
+    const inputs=[...manual.inputs,...activity.inputs];
+    return {inputs,apply(values){
+      inputs.forEach((input,i)=>{input.value=values[i];});
+      edited.fill(false);
+      panel.open=values.some(value=>value>0);
+      title.textContent=source+' · zamówienia: '+values[0]+' · leady: '+values[7];
+    }};
   });
   updateSummary();
+  propose.onclick=()=>{
+    const shares=profile.getProfile();
+    if (!shares) {
+      proposalStatus.textContent='Najpierw ustaw i zapisz profil źródeł.';
+      profile.panel.open=true;
+      return;
+    }
+    if (!proposal.inputs.every(input=>input.reportValidity())) return;
+    const totals=proposal.inputs.map(input=>input.valueAsNumber);
+    if (totals.some(value=>!Number.isInteger(value))) {
+      proposalStatus.textContent='Uzupełnij wszystkie cztery cele łączne. Jeśli cel wynosi zero, wpisz 0.';
+      return;
+    }
+    const values=sourcePlanProposal(totals,shares,sourceRates);
+    if (values.some(row=>row.some(value=>value>1000000))) {
+      proposalStatus.textContent='Wyliczone działania przekraczają limit. Zmniejsz cel zamówień.';
+      return;
+    }
+    rows.forEach((row,index)=>row.apply(values[index]));
+    updateSummary();
+    appliedTotals=proposalInputs().join(',');
+    proposalStatus.textContent='Plan wyliczony. Możesz skorygować wartości przed zapisaniem.';
+  };
   form.append(reference,save);
   form.onsubmit=event=>{
     event.preventDefault();
-    const sourceTargets=rows.map(inputs=>inputs.map(input=>input.valueAsNumber));
+    if (proposalInputs().join(',')!==appliedTotals) {
+      proposalStatus.textContent='Przelicz plan po zmianie celów łącznych albo przywróć poprzednie wartości.';
+      return;
+    }
+    const sourceTargets=rows.map(({inputs})=>inputs.map(input=>input.valueAsNumber));
     planAction(save,'/api/salon-plans/seller',{...individual,sourceTargets},month);
   };
-  return form;
+  const editor=document.createElement('div');
+  editor.append(profile.panel,form);
+  return editor;
 }
 
 function planAction(button,path,body,month) {

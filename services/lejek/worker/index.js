@@ -206,13 +206,14 @@ async function handle(request, env) {
   const managesSalonPlans=['group','manager'].includes(user.role);
   const sellerTargets=async (salon,month)=>{
     const rows=await list(db,`
-      SELECT a.id,a.name,p.target AS orders,r.target AS reviews,f.targets,k.version,sp.targets AS source_targets
+      SELECT a.id,a.name,p.target AS orders,r.target AS reviews,f.targets,k.version,sp.targets AS source_targets,profile.shares AS source_profile
       FROM accounts a
       LEFT JOIN plans p ON p.person=a.id AND p.month=?
       LEFT JOIN review_plans r ON r.person=a.id AND r.month=?
       LEFT JOIN funnel_plans f ON f.person=a.id AND f.month=?
       LEFT JOIN seller_plan_approvals k ON k.person=a.id AND k.month=?
       LEFT JOIN seller_source_plans sp ON sp.person=a.id AND sp.month=?
+      LEFT JOIN seller_source_profiles profile ON profile.person=a.id
       WHERE a.salon=? AND ${accountRole('a','seller')} AND ${eligibleForPlans('a')}
         AND NOT EXISTS (SELECT 1 FROM archived_users x WHERE x.email=a.email)
       ORDER BY a.id
@@ -221,7 +222,7 @@ async function handle(request, env) {
       const funnel=JSON.parse(row.targets??'[]');
       const targets=[row.orders,funnel[7]??null,funnel[6]??null,row.reviews];
       const complete=targets.every(countValid);
-      return {id:row.id,name:row.name,targets,sourceTargets:JSON.parse(row.source_targets??'null'),funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
+      return {id:row.id,name:row.name,targets,sourceProfile:JSON.parse(row.source_profile??'null'),sourceTargets:JSON.parse(row.source_targets??'null'),funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
     });
   };
   const activeContributors=salon=>list(db,`SELECT a.id,a.name FROM accounts a
@@ -342,6 +343,7 @@ async function handle(request, env) {
         UNION SELECT month FROM funnel_plans WHERE person=?1 AND EXISTS (SELECT 1 FROM json_each(targets) WHERE value IS NOT NULL)
         UNION SELECT substr(day,1,7) AS month FROM daily_results WHERE person=?1
         ORDER BY month`,user.id):[];
+      const sourcePlans=user.role==='seller'?await list(db,'SELECT month,targets FROM seller_source_plans WHERE month IN ('+placeholders+') AND '+planScope,...months,...params):[];
       const personal=user.role==='seller'?await tracking(db,user.id):null;
       if (personal) {
         const drafts=await list(db,'SELECT day,rows FROM daily_drafts WHERE person=? AND day IN (?,?)',
@@ -435,7 +437,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1 FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+reportScope,...months,...params),
@@ -451,11 +453,22 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
-  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller'].includes(path)) {
+  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller','/api/salon-plans/source-profile'].includes(path)) {
     if (!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const {salon,month,manager,targets,person}=body;
     if (!monthValid(month)||!managedSalons.has(salon)) return json({error:'Wybierz miesiąc i salon w swoim zakresie.'},403);
     const team=await sellerTargets(salon,month);
+    if (path.endsWith('/source-profile')) {
+      if (user.role!=='manager'||!team.some(row=>row.id===person))
+        return json({error:'Profil ustawia kierownik przypisanego salonu.'},403);
+      const {shares}=body;
+      if (!Array.isArray(shares)||shares.length!==sourceCount||!shares.every(value=>countValid(value)&&value<=100)||
+          shares.reduce((sum,value)=>sum+value,0)!==100)
+        return json({error:'Udziały źródeł muszą być liczbami całkowitymi od 0 do 100 i sumować się do 100%.'},400);
+      await db.prepare(`INSERT INTO seller_source_profiles(person,shares) VALUES (?,?)
+        ON CONFLICT(person) DO UPDATE SET shares=excluded.shares`).bind(person,JSON.stringify(shares)).run();
+      return json({ok:true});
+    }
     if (path.endsWith('/seller')) {
       if (user.role!=='manager'||!team.some(row=>row.id===person))
         return json({error:'Cele handlowca zmienia kierownik przypisanego salonu.'},403);

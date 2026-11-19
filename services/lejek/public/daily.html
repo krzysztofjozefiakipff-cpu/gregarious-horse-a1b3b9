@@ -422,6 +422,16 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
   <div id="pace-items"></div>
 </section>
+<details id="seller-source-plan" class="month-history" hidden>
+  <summary>Plan według źródeł pozyskania</summary>
+  <p id="seller-source-note"></p>
+  <div class="scroll">
+    <table aria-label="Cele według źródeł pozyskania">
+      <thead><tr><th scope="col">Źródło</th><th scope="col">Zamówienia</th><th scope="col">Leady</th><th scope="col">Próby kontaktu</th><th scope="col">Jazdy próbne</th><th scope="col">Oferty</th><th scope="col">Spotkania</th><th scope="col">Follow-up</th><th scope="col">Rejestracje</th><th scope="col">Faktury</th><th scope="col">Opinie Google</th></tr></thead>
+      <tbody id="seller-source-rows"></tbody>
+    </table>
+  </div>
+</details>
 <section id="motivation" aria-labelledby="motivation-title">
   <h3 id="motivation-title">Podsumowanie i następny krok</h3>
   <p id="motivation-best" class="pace-note" hidden></p>
@@ -476,7 +486,8 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 <details id="salon-plans" class="admin-block" hidden>
   <summary>Plany salonów</summary>
   <div>
-    <label>Miesiąc <input id="salon-plan-month" type="month" required></label>
+    <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
+    <p>Możesz wybrać także przyszły miesiąc.</p>
     <p id="salon-plan-status" role="status"></p>
     <div id="salon-plan-results"></div>
   </div>
