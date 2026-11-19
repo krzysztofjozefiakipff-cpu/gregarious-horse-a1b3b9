@@ -42,3 +42,26 @@ a { color: var(--ink); }
   bottom: 4px;
 }
 .product-mark::after { background: var(--accent); left: 5px; bottom: 12px; }
+
+.panel-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 0 16px;
+  padding: 6px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.panel-nav a {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 750;
+}
+.panel-nav a[aria-current="page"] { background: var(--ink); color: white; }

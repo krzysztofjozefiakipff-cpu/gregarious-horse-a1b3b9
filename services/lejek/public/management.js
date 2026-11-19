@@ -28,7 +28,7 @@ async function api(path,body) {
   return data;
 }
 let revision=0;
-let firstView=true;
+const panelNames={admin:'Panel administratora',group:'Panel szefa grupy dealerskiej',manager:'Panel kierownika salonu',seller:'Panel handlowca'};
 async function refresh() {
   const latest=++revision;
   const month=get('month').value;
@@ -38,7 +38,12 @@ async function refresh() {
   try {
     const data=await api('/api/state?month='+encodeURIComponent(month));
     if(latest!==revision) return;
+    if (data.role==='seller') { location.replace('/daily.html'); return; }
     sessionStorage.setItem('lejek-active-role',data.role);
+    const panel=panelNames[data.role];
+    get('panel-return').textContent='← '+panel;
+    get('roleLabel').textContent=panel;
+    document.title=panel+' · Bieg Wyżej';
     const prior=get('seller').value?people[+get('seller').value]?.id:null;
     people=data.sellers;
     salons=data.salons.map(({salon})=>salon);
@@ -48,12 +53,9 @@ async function refresh() {
     reviewPlans=Object.fromEntries(data.reviewPlans.map(r=>[r.month+'/'+r.person,r.target]));
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
-    get('roleLabel').textContent=get('role').selectedOptions[0].textContent;
     document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
     get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola'],accounts.map(a=>[escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role]]));
     updateFilters(prior);
-    if(firstView && data.role==='seller') { location.replace('/daily.html'); return; }
-    firstView=false;
     syncDetailedSection();
     get('dashboard').hidden=false;
     get('status').textContent=people.length?'':'Brak przypisanych handlowców.';
@@ -359,7 +361,7 @@ function syncDetailedSection() {
     button.setAttribute('aria-selected',String(active));
     get(button.dataset.tab).hidden=administration||!active;
   }
-  get('heading').textContent=administration?'Panel administracyjny':'Wykonanie planu';
+  get('heading').textContent=administration?'Administracja':'Wykonanie planu';
 }
 for (const button of reportTabs) button.addEventListener('click',()=>{
   selectedReport=button.dataset.tab;

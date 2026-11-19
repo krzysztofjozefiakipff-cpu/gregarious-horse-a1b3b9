@@ -72,18 +72,21 @@ function validAccountPassword(password) {
   return typeof password === 'string' && password.length >= 12 && password.length <= 128;
 }
 
+function serveAsset(path,method) {
+    const asset = path==='/'?'/daily.html':path;
+    if (method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});
+    return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8',
+      'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; object-src 'none'; base-uri 'none'; form-action 'self'"}});
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+  const managementPage=path==='/zarzadzanie.html';
   if (path==='/index.html'&&request.method==='GET') {
-    return new Response(null,{status:303,headers:{...headers,Location:'/zarzadzanie.html'}});
+    return new Response(null,{status:303,headers:{...headers,Location:'/daily.html'}});
   }
-  if (!path.startsWith('/api/')) {
-    const asset = path==='/'?'/daily.html':path;
-    if (request.method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});
-    return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8',
-      'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; object-src 'none'; base-uri 'none'; form-action 'self'"}});
-  }
+  if (!path.startsWith('/api/')&&!managementPage) return serveAsset(path,request.method);
   const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
   if (!email || !request.headers.get('oai-authenticated-user-id')) return json({error:'Zaloguj się do konta CARVAMO.'},401);
   const owner = request.headers.get('x-lejek-verified-admin')==='1';
@@ -100,6 +103,12 @@ async function handle(request, env) {
   const requested=url.searchParams.get('role');
   if (requested&&!roles.includes(requested)&&request.method!=='GET') return json({error:'Nie masz już wybranej roli. Odśwież widok.'},403);
   const role=roles.includes(requested)?requested:roles[0];
+  if (managementPage) {
+    return role==='seller'
+      ? new Response(null,{status:303,headers:{...headers,Location:'/daily.html'}})
+      : serveAsset(path,request.method);
+  }
+
   const user={...assigned,role,group:head?.group_name};
 
   const accountRole=(table,role)=>`(EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=${table}.id AND ar.role='${role}')

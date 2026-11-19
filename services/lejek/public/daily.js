@@ -330,15 +330,14 @@ const remainingDays = (start,end) => {
   return count;
 };
 const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString().slice(0,10);
+const panelNames={admin:'Panel administratora',group:'Panel szefa grupy dealerskiej',manager:'Panel kierownika salonu',seller:'Panel handlowca'};
 let data;
 let editDay;
 let busy=false;
-let preview=false;
 const allPreviewSalons='\u0000all-salons';
 let managerPreviewSalon='';
 let groupPreviewName='';
 let managerReturnHash='';
-let previewResult=null;
 
 async function api(path,body) {
   if (body!==undefined&&(managerPreviewSalon||groupPreviewName))
@@ -681,9 +680,9 @@ async function giphyResults(config,assignedId) {
   });
 }
 
-async function dailyGif(config,readOnly) {
+async function dailyGif(config) {
   let items=await giphyResults(config,config.id);
-  if (!config.id&&!readOnly&&items.length) {
+  if (!config.id&&items.length) {
     const {id}=await api('/api/giphy-assign',{ids:items.map(item=>item.id)});
     if (!id) return null;
     if (!items.some(item=>item.id===id)) items=await giphyResults(config,id);
@@ -702,7 +701,7 @@ function renderMemeVotes(source) {
   }
 }
 
-function renderGif(config,readOnly) {
+function renderGif(config) {
   const card=$('#giphy-card');
   const icon=$('#meme-icon');
   const caption=$('#meme-caption');
@@ -711,7 +710,7 @@ function renderGif(config,readOnly) {
   icon.hidden=false;
   caption.hidden=false;
   if (!config||matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const request=giphyRequest??=dailyGif(config,readOnly).catch(()=>null);
+  const request=giphyRequest??=dailyGif(config).catch(()=>null);
   request.then(item=>{
     if (!item||$('#meme').hidden||request!==giphyRequest) return;
     const image=$('#giphy-image');
@@ -788,11 +787,17 @@ $('#entry').addEventListener('invalid',event=>{
   if (event.target===firstInvalid) showEntrySource(Number(row.dataset.source));
 },true);
 
-function renderSeller(readOnly=false) {
+function labelPanel(role,scope='',preview=false) {
+  const title=panelNames[role];
+  $('#dealer').textContent=title;
+  $('#salon').textContent=[preview?'Podgląd':'',scope].filter(Boolean).join(' · ');
+  document.title=title+' · Bieg Wyżej';
+}
+
+function renderSeller() {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
-  $('#dealer').textContent=brand?.name??salon;
-  $('#salon').textContent=brand?salon:'';
+  labelPanel('seller',brand?.name??salon);
   $('#logo').hidden=!brand?.logo;
   if (brand?.logo) $('#logo').src=brand.logo;
   const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
@@ -838,19 +843,19 @@ function renderSeller(readOnly=false) {
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
-  $('#status').textContent=readOnly?(locked?'Zapisano przykładowy dzień.':'Podgląd · zapis próbny nie trafi do raportów.'):legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
+  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':locked?'Dzień rozliczony.':blocked?'Najpierw rozlicz zaległość.':'';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
   $('#meme-actions').hidden=!showMeme;
-  $('#meme-status').textContent=showMeme&&readOnly?'Podgląd · oceny i historie zapisują się na koncie handlowca.':'';
+  $('#meme-status').textContent='';
   if (showMeme) {
     const [title,icon,caption]=data.meme??['Na dziś wszystkie memy są rozdane.', '🙂', 'Zajrzyj jutro po kolejną scenkę z salonu.'];
     $('#meme-title').hidden=false;
     $('#meme-title').textContent=title;
     $('#meme-icon').textContent=icon;
     $('#meme-caption').textContent=caption;
-    renderGif(data.giphy,readOnly);
+    renderGif(data.giphy);
   }
   $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
   $('#cause-org').textContent=cause?.organization??'';
@@ -1152,16 +1157,18 @@ function renderAdmin() {
   $('#manager-preview-note').textContent=(groupPreview?'Podgląd szefa grupy.':'Podgląd kierownika.')+' Możesz wypróbować pola formularza. Dane salonu nie zostaną zapisane.';
   $('#management-report-link').hidden=readOnlyPreview;
   $('#management-team-shortcut').hidden=readOnlyPreview||data.role!=='manager';
-  $('#dealer').textContent=group?(selected||view.dealerGroup):manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
+  labelPanel(view.role,group?(selected||view.dealerGroup):manager?(selected||view.salon):'',readOnlyPreview);
+  $('#management-nav').setAttribute('aria-label',panelNames[view.role]);
   $('#performance-title').textContent=title;
   $('#management-performance').textContent=group?'Wyniki grupy':title;
-  $('#management-admin').textContent='Panel administracyjny';
   $('#management-team').hidden=!teamDashboard;
   $('#manager-today').hidden=!teamDashboard;
   if (teamDashboard) renderManagerDashboard(view);
   $('#admin').hidden=false;
   selectManagementView();
-  const query=multiple&&selected?'?salon='+encodeURIComponent(selected):'';
+  const params=new URLSearchParams({role:data.role});
+  if (multiple&&selected) params.set('salon',selected);
+  const query='?'+params;
   $('#management-team-link').href='/zarzadzanie.html'+query+'#administracja';
   $('#management-report-link a').href='/zarzadzanie.html'+query;
   $('#management-team-link').textContent='Ustawienia planów';
@@ -1260,6 +1267,7 @@ window.addEventListener('hashchange',()=>{
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
+  $('#logo').hidden=true;
   if (data.role==='seller') {
     renderSeller();
     return;
@@ -1287,22 +1295,7 @@ function showView() {
   }
   $('#group-preview-bar').hidden=data.role!=='admin'||Boolean(managerPreviewSalon)||!data.groups.length;
   if (groupPreviewName) $('#manager-preview-bar').hidden=true;
-  $('#preview-bar').hidden=Boolean(managerPreviewSalon||groupPreviewName);
-  $('#view-switch').textContent=preview?'Zarządzanie salonem':'Podgląd handlowca';
-  if (!preview) {
-    renderAdmin();
-    return;
-  }
-  const actual=data;
-  const [year,month]=actual.today.split('-').map(Number);
-  const quarterStart=Math.floor((month-1)/3)*3;
-  data={today:actual.today,sellers:[{salon:'Salon demonstracyjny'}],
-    plans:[0,1,2].map(offset=>({month:monthStart(year,quarterStart+offset).slice(0,7),target:12})),
-    ranking:{salon:{place:3,total:8},group:{place:7,total:24},percent:0},
-    reviewPlans:[{month:actual.today.slice(0,7),target:5}],daily:previewResult?.day===actual.today?[previewResult]:[],personal:{missing:[],exceptions:{},progress:[0,0]},
-    sidebarMode:actual.sidebarMode,cause:actual.cause,meme:actual.meme,giphy:actual.giphy,
-    lesson:{title:'Pierwszy kontakt',topic:'Przywitaj klienta, przedstaw się i zapytaj, czego potrzebuje.',remember:'Najpierw wysłuchaj, potem zaproponuj rozwiązanie.'}};
-  try { renderSeller(true); } finally { data=actual; }
+  renderAdmin();
 }
 $('#group-preview-toggle').onclick=()=>{
   if (data?.role!=='admin') return;
@@ -1340,7 +1333,6 @@ $('#manager-preview-salon').onchange=event=>{
   managerPreviewSalon=event.target.value;
   showView();
 };
-$('#view-switch').onclick=()=>{preview=!preview;previewResult=null;$('#cookie').open=false;showView();};
 $('#account-role').onchange=event=>{
   sessionStorage.setItem('lejek-active-role',event.target.value);
   location.replace('/daily.html');
@@ -1348,9 +1340,8 @@ $('#account-role').onchange=event=>{
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
   const roleSelect=$('#account-role');
-  const labels={group:'Szef grupy dealerskiej',manager:'Kierownik salonu',seller:'Handlowiec'};
   $('#account-role-bar').hidden=data.roles.length<2;
-  roleSelect.replaceChildren(...data.roles.map(role=>new Option(labels[role]??role,role)));
+  roleSelect.replaceChildren(...data.roles.map(role=>new Option(panelNames[role],role)));
   roleSelect.value=data.role;
   sessionStorage.setItem('lejek-active-role',data.role);
   $('#load').textContent='';
@@ -1380,25 +1371,13 @@ async function run(operation,openCookie=false) {
 $('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows .active-source input')?.focus();};
 $('#entry').onsubmit=event=>{
   event.preventDefault();
-  if(data.role!=='seller'&&!preview) return;
+  if(data.role!=='seller') return;
   const day=editDay??data.today;
   const rows=sources.map((_,r)=>{
     const row=Array(11).fill(0);
     for (const [index] of columns) row[index]=Number(event.target.elements['v'+r+'_'+index].value);
     return row;
   });
-  if (data.role!=='seller') {
-    if (previewResult?.day===day) return;
-    if (!rows.some(row=>row.some(value=>value>0))) {
-      $('#status').textContent='Wpisz co najmniej jedno wykonane działanie.';
-      return;
-    }
-    const totals=[1,3,4,5,7].map(index=>rows.reduce((sum,row)=>sum+row[index],0));
-    previewResult={day,counters:JSON.stringify([...totals,rows])};
-    showView();
-    $('#cookie').open=true;
-    return;
-  }
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows}),day===data.today);
 };
 for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mój dzień · Bieg Wyżej</title>
+<title>Bieg Wyżej</title>
 <link rel="stylesheet" href="/theme.css"><style>
 [hidden]{display:none!important}
 header,main,footer{max-width:1440px;margin:auto;padding:16px clamp(16px,3vw,46px)}
@@ -48,13 +48,12 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #lesson-topic{white-space:pre-wrap;overflow-wrap:anywhere}#lesson-drafts fieldset{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:8px}#lesson-drafts textarea{resize:vertical}
 @media(max-width:850px){#daily-lesson{margin:0}}
 #seller-ranking{margin-top:12px;font-weight:750;color:var(--ink)}#salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
-.management-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px}.management-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:750}.management-nav a[aria-current=page]{background:var(--blue);color:white}.management-nav+section h1,#administration-view h1{margin-bottom:9px}
+.management-nav+section h1,#administration-view h1{margin-bottom:9px}
 #pace-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}#pace-items .pace-item{display:grid;align-content:start;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:white}#pace-items .pace-count{font-size:1.2rem}.pace-month{color:var(--muted)}
 #motivation{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}#motivation h3{margin:0 0 8px;font-size:1.08rem}#motivation ol{margin:10px 0;padding-inline-start:23px}#motivation ol:empty{display:none}#motivation li+li{margin-top:6px}#motivation-message{margin-top:8px}
 #daily{max-width:900px;margin-inline:auto}
-.seller-nav{display:flex;gap:8px;margin:0 0 16px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:12px}
-.seller-nav a{flex:1;text-align:center;text-decoration:none;padding:11px 4px;border-radius:8px;font-weight:750}
-.seller-nav a[aria-current=page]{background:var(--ink);color:white}
+#admin{max-width:900px;margin-inline:auto}
+#performance-view,#manager-team-view{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
 #daily .quote,#daily-lesson,#daily .actions,#entry,#daily .order-plan,#daily #pace{margin:0 0 14px}
 #daily .quote,#daily-lesson,#daily .actions{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
 #daily .quote blockquote{font:700 clamp(1.15rem,3vw,1.8rem)/1.22 system-ui,sans-serif}
@@ -72,7 +71,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily .order-plan .cards section{border-color:var(--line)}
 @media(max-width:850px){
   body:has(#daily:not([hidden])){padding-bottom:calc(62px + env(safe-area-inset-bottom))}
-  .seller-nav{position:fixed;z-index:2;bottom:0;left:0;right:0;margin:0;padding:6px 12px calc(6px + env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;box-shadow:0 -3px 14px #30203812}
+  .seller-nav{flex-wrap:nowrap;position:fixed;z-index:2;bottom:0;left:0;right:0;margin:0;padding:6px 12px calc(6px + env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;box-shadow:0 -3px 14px #30203812}
 }
 #meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:var(--ink);color:#fff}
 #entry-grid .source-detail{display:block;margin-top:4px;font-size:.8rem;font-weight:500;line-height:1.35}
@@ -112,12 +111,12 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 </style>
 </head>
 <body>
-<header><div class="identity"><img id="logo" alt="" hidden><strong id="dealer">Mój dzień</strong><span id="salon"></span></div><span id="display-date"></span></header>
+<header><div class="identity"><img id="logo" alt="" hidden><strong id="dealer">Bieg Wyżej</strong><span id="salon"></span></div><span id="display-date"></span></header>
 <main>
 <p id="load" role="status">Wczytywanie danych…</p>
 <div id="account-role-bar" class="manager-preview-bar" hidden><label for="account-role">Aktywna rola</label> <select id="account-role"></select></div>
-<div id="preview-bar" class="heading" hidden><strong>Podgląd handlowca · dane przykładowe</strong><button type="button" class="secondary" id="view-switch">Zarządzanie salonem</button></div><div id="daily" hidden>
-<nav class="seller-nav" aria-label="Panel handlowca">
+<div id="daily" hidden>
+<nav class="panel-nav seller-nav" aria-label="Panel handlowca">
   <a href="#dzisiaj" data-seller-tab="dzisiaj">Dzisiaj</a>
   <a href="#wyniki" data-seller-tab="wyniki">Wpisz działania</a>
   <a href="#plan" data-seller-tab="plan">Plan</a>
@@ -194,10 +193,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <button type="button" id="group-preview-toggle" class="secondary">Podgląd szefa grupy</button>
 </div>
 <div id="manager-scope-bar" class="manager-preview-bar" hidden><label for="manager-scope">Salon</label> <select id="manager-scope"></select></div>
-<nav class="management-nav" aria-label="Zarządzanie salonem">
+<nav id="management-nav" class="panel-nav management-nav" aria-label="Panel">
   <a href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a href="#zespol" id="management-team" hidden>Zespół</a>
-  <a href="#administracja" id="management-admin">Panel administracyjny</a>
+  <a href="#administracja" id="management-admin">Administracja</a>
 </nav>
 <section id="performance-view">
   <h1 id="performance-title">Wykonanie planu</h1>
@@ -214,7 +213,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <div id="manager-team-list"></div>
 </section>
 <section id="administration-view" hidden>
-<h1>Panel administracyjny</h1>
+<h1>Administracja</h1>
 <p id="management-team-shortcut"><a id="management-team-link" href="/zarzadzanie.html#administracja">Konta zespołu i ustawienia planów</a></p>
 <p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
 <details id="admin-users-block" class="admin-block" name="user-tools" hidden>
