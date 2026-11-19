@@ -212,12 +212,17 @@ async function handle(request, env) {
     return json({ok:true});
   }
   if (path==='/api/group' && user.role==='admin') {
-    const {name,salons:groupSalons,headEmail}=body;
+    const {name,salons:groupSalons}=body;
+    const headEmails=body.headEmails??[body.headEmail];
     if (!textValid(name)||!Array.isArray(groupSalons)||!groupSalons.length||groupSalons.length>100||
-        !groupSalons.every(textValid)||!textValid(headEmail)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(headEmail.trim()))
-      return json({error:'Podaj nazwę grupy, adres szefa i co najmniej jeden salon.'},400);
+        !groupSalons.every(textValid)||!Array.isArray(headEmails)||!headEmails.length||headEmails.length>100||
+        !headEmails.every(address=>textValid(address)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.trim())))
+      return json({error:'Podaj nazwę grupy, co najmniej jeden poprawny adres szefa i jeden salon.'},400);
     const groupName=name.trim();
-    const headAddress=headEmail.trim().toLowerCase();
+    const headAddresses=[...new Set(headEmails.map(address=>address.trim().toLowerCase()))];
+    const otherHeads=await list(db,'SELECT email FROM dealer_group_heads WHERE group_name<>?',groupName);
+    if (otherHeads.some(row=>headAddresses.includes(row.email)))
+      return json({error:'Jeden z szefów jest już przypisany do innej grupy.'},409);
     const chosen=[...new Set(groupSalons.map(salon=>salon.trim()))];
     const occupied=await list(db,'SELECT salon FROM dealer_group_salons WHERE group_name<>?',groupName);
     if (occupied.some(({salon})=>chosen.includes(salon)))
@@ -225,7 +230,7 @@ async function handle(request, env) {
     await db.batch([
       db.prepare('INSERT INTO dealer_groups VALUES (?) ON CONFLICT DO NOTHING').bind(groupName),
       ...chosen.map(salon=>db.prepare('INSERT INTO dealer_group_salons VALUES (?,?) ON CONFLICT DO NOTHING').bind(salon,groupName)),
-      db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name').bind(headAddress,groupName)
+      ...headAddresses.map(address=>db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO NOTHING').bind(address,groupName))
     ]);
     return json({ok:true});
   }

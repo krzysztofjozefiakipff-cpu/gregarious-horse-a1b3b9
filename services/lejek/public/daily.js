@@ -1301,7 +1301,7 @@ $('#meme-form').onsubmit=async event=>{
 $('#group-editor').onsubmit=event=>{
   event.preventDefault();
   const values=Object.fromEntries(new FormData(event.target));
-  run(()=>api('/api/group',{name:values.name,headEmail:values.headEmail,salons:values.salons.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)}));
+  run(()=>api('/api/group',{name:values.name,headEmails:values.headEmails.split(/\r?\n/).map(line=>line.trim()).filter(Boolean),salons:values.salons.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)}));
 };
 const lessonEditor=$('#lesson-editor');
 const lessonDraftList=$('#lesson-drafts');

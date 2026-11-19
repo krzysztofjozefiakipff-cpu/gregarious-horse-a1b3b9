@@ -209,10 +209,10 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <button id="assignment-save">Zapisz przypisania</button>
 </form>
 <form id="group-editor" hidden><h2>Grupy dealerskie</h2>
-<p>Dodaj grupę lub przypisz do istniejącej grupy kolejne salony i szefa.</p>
+<p>Dodaj grupę lub dopisz salony i szefów do istniejącej grupy.</p>
 <div id="group-list"></div>
 <label>Nazwa grupy <input name="name" required maxlength="120"></label>
-<label>E-mail szefa grupy (konto CARVAMO) <input name="headEmail" type="email" required maxlength="120"></label>
+<label>E-maile szefów grupy (konta CARVAMO, po jednym w wierszu) <textarea name="headEmails" rows="3" required></textarea></label>
 <label>Nazwy salonów, każda w osobnym wierszu <textarea name="salons" rows="4" required></textarea></label>
 <button>Zapisz grupę i uprawnienia</button></form>
 <form id="lesson-editor">
