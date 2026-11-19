@@ -1375,6 +1375,7 @@ const salonPlans=$('#salon-plans');
 const salonPlanMonth=$('#salon-plan-month');
 const salonPlanMetrics=['Zamówienia','Rejestracje','Wystawione faktury','Opinie Google'];
 let salonPlanRevision=0;
+let openPlanningSeller=null;
 
 function planTargets(values,max,metrics=salonPlanMetrics) {
   const fields=document.createElement('div');
@@ -1533,8 +1534,17 @@ function sourceProfileEditor(person,individual,month,peers) {
 
 function sellerPlanForm(person,individual,month,sourceRates,peers) {
   const form=document.createElement('form');
-  const note=document.createElement('p');
-  note.textContent='Wpisz cele dla obsługiwanych źródeł. Z zamówień wyliczą się proponowane działania, które możesz skorygować.';
+  const step=title=>{
+    const section=document.createElement('section');
+    section.className='planning-step';
+    const heading=document.createElement('h3');
+    heading.textContent=title;
+    section.append(heading);
+    return section;
+  };
+  const profileStep=step('1. Profil źródeł');
+  const goalsStep=step('2. Cele miesięczne');
+  const reviewStep=step('3. Podgląd i korekta');
   const reference=document.createElement('p');
   const link=document.createElement('a');
   link.href='https://miesiecznikdealer.pl/rynek/wywiad/10-proc-marzy-na-samochodzie-bardzo-trudne';
@@ -1542,33 +1552,48 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
   link.rel='noopener noreferrer';
   link.textContent='Polski przykład: Miesięcznik Dealer';
   reference.append('Dla źródeł z co najmniej 30 leadami i 3 zamówieniami kalkulator korzysta z konwersji salonu z trzech poprzednich zakończonych miesięcy. Przy mniejszej próbie stosuje założenia arkusza Bieg Wyżej. Dla BDC punktem wyjścia jest baza retencyjna. ',link);
-  const summary=document.createElement('p');
-  summary.setAttribute('aria-live','polite');
+  const summary=document.createElement('dl');
+  summary.className='planning-totals';
+  const sourceDetails=document.createElement('details');
+  const sourceHeading=document.createElement('summary');
+  sourceHeading.textContent='Sprawdź lub edytuj cele według źródeł';
+  sourceDetails.append(sourceHeading);
   const save=document.createElement('button');
-  save.textContent='Zapisz plan według źródeł';
+  save.textContent='Zapisz plan';
   const profile=sourceProfileEditor(person,individual,month,peers);
   const proposal=planTargets(person.targets.map(target=>target??''),1000000);
   proposal.inputs.forEach(input=>{input.required=false;});
   const proposalTitle=document.createElement('p');
-  proposalTitle.textContent='Cele łączne na '+monthLabel(month);
   const proposalInputs=()=>proposal.inputs.map(input=>input.value);
   let appliedTotals=proposalInputs().join(',');
   const propose=document.createElement('button');
   propose.type='button';
   propose.className='secondary';
-  propose.textContent='Wylicz plan z zapisanego profilu';
+  propose.textContent='Wylicz plan';
   const proposalStatus=document.createElement('p');
   proposalStatus.setAttribute('role','status');
-  form.append(note,proposalTitle,proposal.fields,propose,proposalStatus,summary);
+  proposalTitle.textContent=monthLabel(month)+' · wpisz cele łączne';
+  goalsStep.append(proposalTitle,proposal.fields,propose,proposalStatus);
+  reviewStep.append(summary,sourceDetails);
+  form.append(goalsStep,reviewStep);
   if (!person.sourceTargets&&person.targets.some(value=>value!==null)) {
     const legacy=document.createElement('p');
     legacy.textContent='Dotychczasowy plan łączny: '+salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ')+'. Rozdziel cele między źródła przed zapisaniem nowego planu.';
-    form.append(legacy);
+    goalsStep.append(legacy);
   }
 
   function updateSummary() {
-    const totals=rows.reduce((sum,{inputs})=>sum.map((value,index)=>value+(inputs[index].valueAsNumber||0)),[0,0,0,0]);
-    summary.textContent='Razem: '+salonPlanMetrics.map((label,index)=>label+' '+totals[index]).join(' · ');
+    const totals=rows.reduce((sum,{inputs})=>sum.map((value,index)=>value+(inputs[index].valueAsNumber||0)),Array(10).fill(0));
+    const labels=[...salonPlanMetrics,...sellerActivityPlan.map(([label])=>label)];
+    summary.replaceChildren(...[0,2,1,3,7,4,8,5,6,9].map(index=>{
+      const item=document.createElement('div');
+      const name=document.createElement('dt');
+      const value=document.createElement('dd');
+      name.textContent=labels[index];
+      value.textContent=totals[index];
+      item.append(name,value);
+      return item;
+    }));
   }
 
   const rows=sources.map((source,index)=>{
@@ -1599,21 +1624,21 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     activity.inputs.forEach((input,i)=>input.addEventListener('input',()=>{edited[i]=true;updateSource();}));
     reset.onclick=()=>{edited.fill(false);recalculate();updateSource();};
     title.textContent=source+' · zamówienia: '+(saved?.[0]??0)+' · leady: '+(saved?.[7]??0);
-    panel.open=Boolean(saved?.some(value=>value>0));
+    panel.className='planning-source';
     for (const input of [...manual.inputs,...activity.inputs]) {
-      input.addEventListener('invalid',()=>{panel.open=true;});
+      input.addEventListener('invalid',()=>{sourceDetails.open=true;panel.open=true;});
     }
     const rateNote=document.createElement('p');
     rateNote.textContent=sourceRates[index]
       ?'Konwersja leadów na zamówienia w salonie: '+new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1}).format(sourceRates[index])
       :'Konwersja startowa według założeń planowania.';
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
-    form.append(panel);
+    sourceDetails.append(panel);
     const inputs=[...manual.inputs,...activity.inputs];
     return {inputs,apply(values,keepActivities=false){
       inputs.forEach((input,i)=>{input.value=values[i];});
       edited.fill(keepActivities);
-      panel.open=values.some(value=>value>0);
+      panel.open=false;
       title.textContent=source+' · zamówienia: '+values[0]+' · leady: '+values[7];
     }};
   });
@@ -1639,7 +1664,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     rows.forEach((row,index)=>row.apply(values[index]));
     updateSummary();
     appliedTotals=proposalInputs().join(',');
-    proposalStatus.textContent='Plan wyliczony. Możesz skorygować wartości przed zapisaniem.';
+    proposalStatus.textContent='Plan wyliczony. Sprawdź podsumowanie poniżej i zapisz.';
   };
   const copy=sellerCopyControls('Plan innego handlowca','Kopiuj plan');
   const picker=document.createElement('details');
@@ -1653,7 +1678,8 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
   const copyStatus=document.createElement('p');
   copyStatus.setAttribute('role','status');
   picker.append(pickerTitle,monthLabelField,copy.controls,copyStatus);
-  form.insertBefore(picker,proposalTitle);
+  picker.className='planning-compact';
+  goalsStep.append(picker);
   let donors=[];
   let revision=0;
   const loadDonors=async()=>{
@@ -1688,7 +1714,15 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     copyStatus.textContent='Wczytano plan: '+donor.name+' · '+monthLabel(fromMonth.value)+'. Sprawdź wartości przed zapisaniem.'
       +(donor.sourceTargets?'':' Plan łączny rozdzielono '+(shares?'według profilu odbiorcy.':'według domyślnego podziału źródeł.'));
   };
-  form.append(reference,save);
+  const calculationInfo=document.createElement('details');
+  const calculationTitle=document.createElement('summary');
+  calculationTitle.textContent='Jak liczymy działania?';
+  calculationInfo.append(calculationTitle,reference);
+  reviewStep.append(calculationInfo);
+  const actions=document.createElement('div');
+  actions.className='planning-actions';
+  actions.append(save);
+  form.append(actions);
   form.onsubmit=event=>{
     event.preventDefault();
     if (proposalInputs().join(',')!==appliedTotals) {
@@ -1699,7 +1733,9 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     planAction(save,'/api/salon-plans/seller',{...individual,sourceTargets},month);
   };
   const editor=document.createElement('div');
-  editor.append(profile.panel,form);
+  profileStep.append(profile.panel);
+  if (!person.sourceProfile) profile.panel.open=true;
+  editor.append(profileStep,form);
   return editor;
 }
 
@@ -1707,7 +1743,10 @@ function planAction(button,path,body,month) {
   button.disabled=true;
   return api(path,{month,...body}).then(()=>{
     return refresh().then(()=>{
-      if (salonPlanMonth.value===month) return loadSalonPlans();
+      if (salonPlanMonth.value===month) return loadSalonPlans().then(()=>{
+        const status=$('#salon-plan-status');
+        if (!status.textContent) status.textContent='Zapisano zmiany dla '+monthLabel(month)+'.';
+      });
     });
   }).catch(error=>{
     if (salonPlanMonth.value===month) $('#salon-plan-status').textContent=error.message;
@@ -1736,15 +1775,23 @@ async function loadSalonPlans() {
         ?approved+' / '+plan.team.length+' planów zatwierdzonych · '+(plan.override?'Plan po korekcie':'Plan automatyczny')
         :plan.override?'Plan salonu ustawiony ręcznie':'Brak indywidualnych planów do zatwierdzenia';
       const totals=document.createElement('dl');
+      totals.className='planning-totals';
       for (const [index,label] of salonPlanMetrics.entries()) {
         const term=document.createElement('dt');
         const value=document.createElement('dd');
         term.textContent=label;
         value.textContent=plan.actuals[index]+' / '+plan.targets[index]+' · suma celów: '+plan.automatic[index];
         value.className=plan.actuals[index]>=plan.targets[index]?'ahead':'behind';
-        totals.append(term,value);
+        const item=document.createElement('div');
+        item.append(term,value);
+        totals.append(item);
       }
-      card.append(title,state,totals);
+      const overview=document.createElement('details');
+      overview.className='planning-compact';
+      const overviewTitle=document.createElement('summary');
+      overviewTitle.textContent='Wyniki i cele salonu';
+      overview.append(overviewTitle,state,totals);
+      card.append(title,overview);
       if (plan.contributors.length) {
         const note=document.createElement('p');
         note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zatwierdzone działania liczą się do wyników salonu.';
@@ -1760,7 +1807,19 @@ async function loadSalonPlans() {
       for (const person of plan.team) {
         const row=document.createElement('details');
         const summary=document.createElement('summary');
-        summary.textContent=person.name+' · '+(person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Brak kompletu celów');
+        const badge=document.createElement('span');
+        badge.className='planning-badge';
+        badge.dataset.state=person.approved?'approved':person.complete?'ready':'empty';
+        badge.textContent=person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Do uzupełnienia';
+        summary.append(person.name,badge);
+        row.className='planning-seller';
+        row.name='planning-seller';
+        row.open=openPlanningSeller===person.id;
+        row.addEventListener('toggle',()=>{
+          if (!row.isConnected) return;
+          if (row.open) openPlanningSeller=person.id;
+          else if (openPlanningSeller===person.id) openPlanningSeller=null;
+        });
         row.append(summary);
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
@@ -1799,7 +1858,12 @@ async function loadSalonPlans() {
           planAction(save,'/api/salon-plans',{salon:plan.salon,manager:Number(manager.value),
             targets:inputs.map(input=>input.valueAsNumber)},month);
         };
-        card.append(form);
+        const correction=document.createElement('details');
+        correction.className='planning-compact';
+        const correctionTitle=document.createElement('summary');
+        correctionTitle.textContent='Korekta planu salonu';
+        correction.append(correctionTitle,form);
+        card.append(correction);
       }
       results.append(card);
     }
@@ -1809,6 +1873,14 @@ async function loadSalonPlans() {
   }
 }
 salonPlanMonth.onchange=loadSalonPlans;
+for (const [id,offset] of [['salon-plan-prev',-1],['salon-plan-current',0],['salon-plan-next',1]]) {
+  $('#'+id).onclick=()=>{
+    const current=data.today.slice(0,7);
+    const [year,month]=(salonPlanMonth.value||current).split('-').map(Number);
+    salonPlanMonth.value=offset?monthStart(year,month-1+offset).slice(0,7):current;
+    loadSalonPlans();
+  };
+}
 salonPlans.addEventListener('toggle',()=>{
   if (salonPlans.open&&!salonPlans.hidden) loadSalonPlans();
 });
