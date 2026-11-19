@@ -335,6 +335,8 @@ async function handle(request, env) {
       if (current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first())
         return json({error:'Konto jest już przypisane w Lejku. Zmianę ról wykonuje administrator.'},409);
     }
+    if (body.createOnly===true&&(current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first()))
+      return json({error:'Użytkownik już istnieje. Przejdź do sekcji Zarządzaj użytkownikami.'},409);
     const group=chosen.includes('group')&&textValid(dealerGroup)?dealerGroup.trim():null;
     if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
@@ -347,8 +349,10 @@ async function handle(request, env) {
       if (chosen.length>1) await db.batch(chosen.map(role=>db.prepare('INSERT INTO account_roles VALUES (?,?)').bind(created.id,role)));
       return json({ok:true});
     }
+    const insertAccount='INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)';
+    const updateAccount=' ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role';
     await db.batch([
-      db.prepare('INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role')
+      db.prepare(insertAccount+(body.createOnly===true?'':updateAccount))
         .bind(address,name.trim(),needsSalon?salon.trim():'',fallback),
       db.prepare('DELETE FROM account_roles WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address),
       ...chosen.map(role=>db.prepare('INSERT INTO account_roles SELECT id,? FROM accounts WHERE email=?').bind(role,address)),

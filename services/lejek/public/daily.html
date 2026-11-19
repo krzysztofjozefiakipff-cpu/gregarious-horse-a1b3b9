@@ -113,6 +113,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #user-status{overflow-wrap:anywhere}
 .user-actions{display:flex;flex-wrap:wrap;gap:8px}
 #user-archive[data-archived=false]{color:#9b292e}
+.user-fields{display:grid;gap:9px;min-width:0}
 </style>
 </head>
 <body>
@@ -221,11 +222,12 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <h1>Panel administracyjny</h1>
 <p id="management-team-shortcut"><a id="management-team-link" href="/zarzadzanie.html#administracja">Konta zespołu i ustawienia planów</a></p>
 <p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
-<details id="admin-users-block" class="admin-block" hidden>
-<summary>Użytkownicy i role</summary>
+<details id="admin-users-block" class="admin-block" name="user-tools" hidden>
+<summary>Dodaj użytkownika</summary>
 <form id="user-editor" hidden>
 
 <label id="user-picker-label">Użytkownik <select id="user-picker"></select></label>
+<div id="user-fields" class="user-fields">
 <label>Imię i nazwisko <input name="name" required maxlength="120"></label>
 <label>E-mail <input name="email" type="email" required maxlength="120"></label>
 <fieldset><legend>Role użytkownika</legend>
@@ -241,8 +243,12 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <button id="user-save">Zapisz użytkownika i role</button>
 <button type="button" class="secondary" id="user-archive" hidden>Usuń użytkownika</button>
 </div>
+</div>
 <p id="user-status" role="status"></p>
 </form>
+</details>
+<details id="admin-edit-users-block" class="admin-block" name="user-tools" hidden>
+<summary>Zarządzaj użytkownikami</summary>
 </details>
 <details id="group-add-salon-block" class="admin-block" hidden>
 <summary>Dodaj salon do grupy</summary>

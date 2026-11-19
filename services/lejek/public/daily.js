@@ -1015,6 +1015,14 @@ $('#manager-assignments').onsubmit=event=>{
 $('#manager-scope').onchange=()=>renderAdmin();
 
 const userEditor=$('#user-editor');
+const addUserBlock=$('#admin-users-block');
+const editUserBlock=$('#admin-edit-users-block');
+const editingUsers=()=>userEditor.parentElement===editUserBlock;
+for (const block of [addUserBlock,editUserBlock]) block.addEventListener('toggle',()=>{
+  if (!block.open||block.hidden||userEditor.parentElement===block) return;
+  block.append(userEditor);
+  loadUserEditor();
+});
 function updateUserRoleFields() {
   const roles=[...userEditor.querySelectorAll('input[name="roles"]:checked')].map(input=>input.value);
   const group=roles.includes('group');
@@ -1028,7 +1036,11 @@ function updateUserRoleFields() {
   userEditor.elements.salon.required=salon&&!delegated;
 }
 function loadUserEditor() {
-  const selected=data.users.find(user=>user.email===$('#user-picker').value);
+  const editing=editingUsers();
+  const selected=editing?data.users.find(user=>user.email===$('#user-picker').value):null;
+  $('#user-picker-label').hidden=!editing;
+  $('#user-fields').hidden=editing&&!selected;
+  $('#user-save').textContent=editing?'Zapisz zmiany':'Dodaj użytkownika';
   userEditor.elements.name.value=selected?.name??'';
   userEditor.elements.email.value=selected?.email??'';
   userEditor.elements.email.readOnly=Boolean(selected);
@@ -1046,7 +1058,8 @@ function loadUserEditor() {
 function renderUserEditor(view) {
   const delegated=view.role!=='admin';
   userEditor.dataset.delegated=String(delegated);
-  $('#user-picker-label').hidden=delegated;
+  editUserBlock.hidden=delegated;
+  if (delegated&&editingUsers()) addUserBlock.append(userEditor);
   for (const [id,allowed] of [['user-group-role',!delegated],['user-manager-role',view.role!=='manager']]) {
     const label=$('#'+id);
     label.hidden=!allowed;
@@ -1058,7 +1071,7 @@ function renderUserEditor(view) {
   if (view.salons.some(({salon})=>salon===selected)) salonPicker.value=selected;
   const picker=$('#user-picker');
   const prior=delegated?'':picker.value;
-  picker.replaceChildren(new Option('Dodaj użytkownika',''),...data.users.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
+  picker.replaceChildren(new Option('Wybierz użytkownika',''),...data.users.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
   if (data.users.some(user=>user.email===prior)) picker.value=prior;
   userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
   $('#user-salons').replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
@@ -1070,17 +1083,19 @@ userEditor.onsubmit=async event=>{
   event.preventDefault();
   const values=new FormData(userEditor);
   const roles=values.getAll('roles');
+  const editing=editingUsers();
+  if (editing&&!$('#user-picker').value) return;
   const button=$('#user-save');
   button.disabled=true;
   try {
     const fields=Object.fromEntries(values);
-    await api('/api/users',{...fields,salon:data.role==='admin'?fields.salon:fields.assignedSalon,roles});
+    await api('/api/users',{...fields,salon:data.role==='admin'?fields.salon:fields.assignedSalon,roles,createOnly:!editing});
     await refresh();
-    if (data.role==='admin') {
+    if (editing) {
       $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
       loadUserEditor();
     }
-    $('#user-status').textContent='Zapisano użytkownika i role.';
+    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':'Dodano użytkownika.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {
