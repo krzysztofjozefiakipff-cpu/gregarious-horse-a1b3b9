@@ -482,6 +482,12 @@ function renderPeriodPicker(anchor=data.today.slice(0,7)) {
   periodValue.value=options.includes(previous)?previous:periodStart(current,type);
 }
 
+function periodNotice(month,type,currentMonth) {
+  const current=periodStart(currentMonth,type);
+  if (month===current) return '';
+  return month<current?'Wyświetlasz zakończony okres.':'Wyświetlasz przyszły okres.';
+}
+
 async function loadSellerPeriod() {
   const type=periodType.value;
   const month=periodValue.value;
@@ -495,7 +501,11 @@ async function loadSellerPeriod() {
     if (revision!==periodRevision) return;
     renderPlans(snapshot,month,type);
     renderRanking(snapshot.ranking);
-    $('#seller-plan-period').textContent=periodName(month,type);
+    const name=periodName(month,type);
+    $('#seller-plan-period').textContent=name;
+    const message=periodNotice(month,type,snapshot.today.slice(0,7));
+    $('#seller-period-notice-text').textContent=message;
+    $('#seller-period-notice').hidden=!message;
     status.hidden=true;
   } catch (error) {
     if (revision!==periodRevision) return;
@@ -508,6 +518,12 @@ periodType.onchange=()=>{
   loadSellerPeriod();
 };
 periodValue.onchange=loadSellerPeriod;
+$('#seller-period-reset').onclick=()=>{
+  periodType.value='month';
+  renderPeriodPicker(data.today.slice(0,7));
+  periodType.focus();
+  loadSellerPeriod();
+};
 
 function periodMetrics(snapshot,start,count) {
   const [year,month]=start.split('-').map(Number);
