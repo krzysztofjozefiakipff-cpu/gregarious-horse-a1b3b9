@@ -1442,35 +1442,77 @@ function sellerCopyOptions(select,button,candidates) {
 function sourceProfileEditor(person,individual,month,peers) {
   const panel=document.createElement('details');
   const title=document.createElement('summary');
-  title.textContent='Profil źródeł pozyskania';
-  const note=document.createElement('p');
-  note.textContent='Ustal procentowy udział źródeł w planie zamówień handlowca. Razem musi być 100%. Zapisany profil możesz wykorzystać w kolejnych miesiącach.';
-  const {fields,inputs}=planTargets(person.sourceProfile??sources.map(()=>0),100,sources.map(source=>source+' (%)'));
+  const names=types=>types.map(type=>sourceProfilePresets[type].label).join(' + ');
+  const setTitle=()=>{
+    const types=person.sourceProfileTypes??[];
+    title.textContent='Profil źródeł pozyskania'+(types.length?' · '+(types.length>1?'Mieszany: ':'')+names(types):'');
+  };
+  setTitle();
+  const label=document.createElement('label');
+  label.textContent='Typ profilu ';
+  const picker=document.createElement('select');
+  const presets=Object.entries(sourceProfilePresets);
+  picker.append(new Option('Wybierz profil',''),...presets.map(([type,preset])=>new Option(preset.label,type)),
+    new Option('Mieszany','mixed'));
+  const legacyOption=new Option('Dotychczasowy profil','legacy');
+  legacyOption.hidden=true;
+  picker.append(legacyOption);
+  label.append(picker);
+  const mixed=document.createElement('fieldset');
+  const legend=document.createElement('legend');
+  legend.textContent='Wybierz 2 lub 3 typy. Każdy ma równą wagę.';
+  mixed.append(legend);
+  const checks=presets.map(([type,preset])=>{
+    const field=document.createElement('label');
+    const input=document.createElement('input');
+    input.type='checkbox';
+    input.value=type;
+    field.append(input,' '+preset.label+' ');
+    mixed.append(field);
+    return input;
+  });
+  const breakdown=document.createElement('p');
   const status=document.createElement('p');
   status.setAttribute('role','status');
   const save=document.createElement('button');
   save.type='button';
   save.textContent='Zapisz profil';
-  let profile=person.sourceProfile;
-  const shares=()=>inputs.map(input=>input.valueAsNumber);
-  const update=()=>{
-    const sum=shares().reduce((total,value)=>total+(value||0),0);
-    status.textContent='Suma udziałów: '+sum+'%.';
+  let legacyShares=null;
+  const selection=()=>{
+    if (picker.value==='legacy') return [];
+    if (picker.value!=='mixed') return picker.value?[picker.value]:[];
+    const types=checks.filter(input=>input.checked).map(input=>input.value);
+    return types.length>=2?types:[];
   };
-  inputs.forEach(input=>input.addEventListener('input',update));
-  update();
+  const update=()=>{
+    mixed.hidden=picker.value!=='mixed';
+    const shares=picker.value==='legacy'?legacyShares:sourceProfileShares(selection());
+    breakdown.textContent=shares?sources.flatMap((source,i)=>shares[i]?[source+' '+shares[i]+'%']:[]).join(' · ')
+      :picker.value==='mixed'?'Zaznacz przynajmniej dwa typy.':'Wybierz typ, aby zobaczyć podział źródeł.';
+    save.disabled=!shares;
+    status.textContent='';
+  };
+  const fill=donor=>{
+    const types=donor.sourceProfileTypes??[];
+    legacyShares=types.length?null:donor.sourceProfile;
+    legacyOption.hidden=!legacyShares;
+    picker.value=types.length>1?'mixed':types[0]??(legacyShares?'legacy':'');
+    checks.forEach(input=>{input.checked=types.includes(input.value);});
+    update();
+  };
+  picker.onchange=update;
+  checks.forEach(input=>{input.onchange=update;});
+  fill(person);
   save.onclick=async()=>{
-    if (!inputs.every(input=>input.reportValidity())) return;
-    const values=shares();
-    if (values.reduce((sum,value)=>sum+value,0)!==100) {
-      status.textContent='Udziały źródeł muszą sumować się do 100%.';
-      return;
-    }
+    const types=selection();
+    const shares=picker.value==='legacy'?legacyShares:sourceProfileShares(types);
+    if (!shares) return;
     save.disabled=true;
     try {
-      await api('/api/salon-plans/source-profile',{...individual,month,shares:values});
-      profile=values;
-      person.sourceProfile=values;
+      await api('/api/salon-plans/source-profile',{...individual,month,...(types.length?{types}:{shares})});
+      person.sourceProfile=shares;
+      person.sourceProfileTypes=types;
+      setTitle();
       status.textContent='Profil zapisany.';
     } catch (error) { status.textContent=error.message; }
     finally { save.disabled=false; }
@@ -1482,11 +1524,11 @@ function sourceProfileEditor(person,individual,month,peers) {
   copy.button.onclick=()=>{
     const donor=peers.find(peer=>String(peer.id)===copy.select.value);
     if (!donor?.sourceProfile) return;
-    donor.sourceProfile.forEach((value,index)=>{inputs[index].value=value;});
-    status.textContent='Wczytano profil: '+donor.name+'. Możesz go zmienić przed zapisaniem.';
+    fill(donor);
+    status.textContent='Wczytano profil: '+donor.name+'. Zapisz, aby go przypisać.';
   };
-  panel.append(title,note,copy.controls,fields,status,save);
-  return {panel,getProfile:()=>profile};
+  panel.append(title,copy.controls,label,mixed,breakdown,status,save);
+  return {panel,getProfile:()=>person.sourceProfile};
 }
 
 function sellerPlanForm(person,individual,month,sourceRates,peers) {

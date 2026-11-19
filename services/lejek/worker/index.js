@@ -222,7 +222,8 @@ async function handle(request, env) {
       const funnel=JSON.parse(row.targets??'[]');
       const targets=[row.orders,funnel[7]??null,funnel[6]??null,row.reviews];
       const complete=targets.every(countValid);
-      return {id:row.id,name:row.name,targets,sourceProfile:JSON.parse(row.source_profile??'null'),sourceTargets:JSON.parse(row.source_targets??'null'),funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
+      const profile=JSON.parse(row.source_profile??'null');
+      return {id:row.id,name:row.name,targets,sourceProfile:profile?.shares??profile,sourceProfileTypes:profile?.types??[],sourceTargets:JSON.parse(row.source_targets??'null'),funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
     });
   };
   const activeContributors=salon=>list(db,`SELECT a.id,a.name FROM accounts a
@@ -461,12 +462,15 @@ async function handle(request, env) {
     if (path.endsWith('/source-profile')) {
       if (user.role!=='manager'||!team.some(row=>row.id===person))
         return json({error:'Profil ustawia kierownik przypisanego salonu.'},403);
-      const {shares}=body;
+      const {types}=body;
+      const shares=types===undefined?body.shares:sourceProfileShares(types);
+      if (types!==undefined&&shares===null)
+        return json({error:'Wybierz od jednego do trzech różnych typów profilu.'},400);
       if (!Array.isArray(shares)||shares.length!==sourceCount||!shares.every(value=>countValid(value)&&value<=100)||
           shares.reduce((sum,value)=>sum+value,0)!==100)
         return json({error:'Udziały źródeł muszą być liczbami całkowitymi od 0 do 100 i sumować się do 100%.'},400);
       await db.prepare(`INSERT INTO seller_source_profiles(person,shares) VALUES (?,?)
-        ON CONFLICT(person) DO UPDATE SET shares=excluded.shares`).bind(person,JSON.stringify(shares)).run();
+        ON CONFLICT(person) DO UPDATE SET shares=excluded.shares`).bind(person,JSON.stringify(types===undefined?shares:{shares,types})).run();
       return json({ok:true});
     }
     if (path.endsWith('/seller')) {

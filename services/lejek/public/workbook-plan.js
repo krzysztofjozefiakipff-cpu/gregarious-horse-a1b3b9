@@ -1,6 +1,21 @@
 const benchmarksFromWorkbook = [[1, 0, 0.8, 0.7, 0.8, 0.3], [0.65, 0.25, 0.7, 0.45, 0.8, 0.035], [0.8, 0.4, 0.75, 0.55, 0.8, 0.06], [0.9, 0.65, 0.8, 0.7, 0.8, 0.2], [0.85, 0.45, 0.75, 0.55, 0.8, 0.075], [0.95, 0.65, 0.85, 0.7, 0.8, 0.25], [0.75, 0.35, 0.75, 0.55, 0.8, 0.07], [0.8, 0.4, 0.75, 0.6, 0.8, 0.06], [0.85, 0.45, 0.75, 0.55, 0.8, 0.07], [0.8, 0.4, 0.75, 0.5, 0.8, 0.06], [0.7, 0.3, 0.7, 0.45, 0.8, 0.04], [0.7, 0.3, 0.7, 0.45, 0.8, 0.04]];
 const defaultMix = [6, 1, 1, 4, 0, 1, 1, 1, 0, 0, 0, 0];
 
+const sourceProfilePresets={
+  salon:{label:'Salonowy',shares:[45,0,0,20,0,15,10,0,0,7,2,1,0]},
+  broker:{label:'Brokerowy',shares:[0,0,0,0,0,0,0,0,100,0,0,0,0]},
+  internet:{label:'Internetowy',shares:[0,20,25,0,30,0,0,15,0,0,0,0,10]}
+};
+
+function sourceProfileShares(types) {
+  const valid=Array.isArray(types)&&types.length>=1&&types.length<=3&&new Set(types).size===types.length
+    &&types.every(type=>typeof type==='string'&&Object.hasOwn(sourceProfilePresets,type));
+  if (!valid) return null;
+  const totals=sourceProfilePresets.salon.shares.map((_,index)=>
+    types.reduce((sum,type)=>sum+sourceProfilePresets[type].shares[index],0));
+  return allocateSourceTargets(100,totals);
+}
+
 function allocateSourceTargets(goal,mix) {
   const weight=mix.reduce((sum,v)=>sum+v,0);
   const raw=mix.map(v=>goal*v/weight);
