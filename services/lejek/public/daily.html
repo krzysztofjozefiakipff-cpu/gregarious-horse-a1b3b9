@@ -22,11 +22,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .plan-tools summary::marker { color:var(--blue); }
 .plan-tools input, .calendar-fields select, .calendar-fields input { min-height:42px; }
 #seller-calendar-days { margin:10px 0 0; color:var(--muted); font-size:.9rem; }
-.calendar-fields { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-block:12px; }
+.calendar-fields [data-calendar-person] { grid-column:1 / -1; }
+.calendar-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); align-items:end; gap:12px; margin-block:12px; }
 .calendar-fields label { display:grid; gap:5px; min-width:0; font-weight:650; }
 .calendar-fields input, .calendar-fields select { width:100%; min-width:0; }
-.calendar-fields .calendar-day-fields { display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
+.calendar-fields .calendar-day-fields { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
 [data-calendar-list] { display:grid; gap:8px; padding:0; list-style:none; }
+[data-calendar-list] li[data-calendar-origin="automatic"] { background:#f4f6fa; color:var(--muted); }
 [data-calendar-list] li { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:var(--tint); border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
 .calendar-entry { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
 .calendar-entry-actions { display:flex; flex-wrap:wrap; gap:8px; }
@@ -499,6 +501,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <label>Widok <select id="seller-period-type"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select></label>
   <label>Wyświetlany okres <select id="seller-period-value"></select></label>
   <p id="seller-period-status" role="status" hidden></p>
+  <p id="seller-absence-adjustment" hidden></p>
   <div id="seller-period-notice" hidden>
     <p id="seller-period-notice-text" role="status"></p>
     <button type="button" class="secondary" id="seller-period-reset">Wróć do bieżącego miesiąca</button>
@@ -721,13 +724,17 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 <template id="calendar-template">
   <div class="calendar-fields">
     <label data-calendar-person hidden>Handlowiec <select aria-label="Handlowiec"></select></label>
+    <label>Rodzaj <select data-calendar-kind required>
+      <option value="">Wybierz rodzaj</option>
+      <option value="leave">Urlop</option><option value="sick">Chorobowe</option>
+      <option value="training">Szkolenie</option><option value="saturday">Wolna sobota</option>
+      <option value="other">Inny dzień bez aktywności</option>
+    </select></label>
     <label>Wyświetlany miesiąc <input type="month"></label>
     <div class="calendar-day-fields">
-    <label>Data dnia wolnego <input type="date"></label>
-    <label>Rodzaj <select data-calendar-kind>
-      <option value="leave">Urlop</option><option value="saturday">Wolna sobota</option><option value="other">Inny dzień bez aktywności</option>
-    </select></label>
-    <button type="button" data-calendar-save></button>
+      <label>Data od <input data-calendar-start type="date" required></label>
+      <label data-calendar-end-label hidden>Data do <input data-calendar-end type="date"></label>
+      <button type="button" data-calendar-save disabled></button>
     </div>
   </div>
   <p data-calendar-status role="status"></p>

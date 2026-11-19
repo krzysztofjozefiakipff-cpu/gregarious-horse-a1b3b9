@@ -11,9 +11,10 @@ const extras = [
   'Odpowiedzi NPS','Promotorzy (9–10)','Krytycy (0–6)'
 ];
 const empty = () => fields.map(() => 0);
-let entries = {}, plans = {}, reviewPlans = {}, funnelPlans = {}, sourcePlans = {};
+let entries = {}, plans = {}, reviewPlans = {}, funnelPlans = {}, sourcePlans = {}, absenceAdjustments = {};
 const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const planFor = (person,month) => plans[month+'/'+people[person].id] ?? null;
+const basePlanFor = (person,month) => plans[month+'/'+people[person].id] ?? null;
+const planFor = (person,month) => effectiveCalendarTarget(basePlanFor(person,month),absenceAdjustments[people[person].id+'/'+month]);
 function record(person,source,month=get('month').value) {
   return entries[[month,people[person].id,source].join('/')] ?? empty();
 }
@@ -49,6 +50,7 @@ async function refresh() {
     document.title=panel+' · Bieg Wyżej';
     const prior=get('seller').value?people[+get('seller').value]?.id:null;
     people=data.sellers;
+    absenceAdjustments=data.absenceAdjustments??{};
     salons=data.salons.map(({salon})=>salon);
     accounts=data.accounts;
     entries=Object.fromEntries(data.results.map(r=>[[r.month,r.person,r.source].join('/'),JSON.parse(r.counters)]));
@@ -156,7 +158,7 @@ function renderWorkbookPace(scope,actual,current) {
   const sourcePlanIndex=[7,4,8,null,5,6,9,0];
   const targets=configured?scope.map((person,i)=>{
     const saved=sourcePlans[month+'/'+people[person].id];
-    return saved?saved.map(row=>sourcePlanIndex.map(index=>index===null?null:row[index])):sourceTargets(rows[i].target);
+    return saved?effectiveSourcePlan(saved,absenceAdjustments[people[person].id+'/'+month]).map(row=>sourcePlanIndex.map(index=>index===null?null:row[index])):sourceTargets(rows[i].target);
   }):null;
   const totalTarget=values=>{
     const known=values.filter(value=>value!=null);
@@ -325,7 +327,7 @@ function loadPlanInputs() {
   get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+funnelGoalLabels.map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')).join('');
   const seller=+get('planPerson').value;
   months.forEach((m,i)=>{
-    get('goal'+i).value=planFor(seller,m)??'';
+    get('goal'+i).value=basePlanFor(seller,m)??'';
     get('review-goal'+i).value=reviewPlans[m+'/'+people[seller].id]??'';
     const targets=funnelPlans[m+'/'+people[seller].id]??[];
     for(let j=0;j<funnelGoalLabels.length;j++) get('funnel-'+i+'-'+j).value=targets[j]??'';
