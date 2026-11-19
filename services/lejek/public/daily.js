@@ -1249,7 +1249,7 @@ function renderSalonSummary(view,team=[]) {
     time.className='salon-pace-time';
     time.textContent=elapsed+' z '+total+' dni roboczych miesiąca (pon.–sob.) · '+percent.format(elapsed/total)
       +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
-    summary.append(title,status,time,grid);
+    summary.append(title,status);
     const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
@@ -1321,8 +1321,8 @@ function renderSalonSummary(view,team=[]) {
       }
       sections.append(section);
     }
-    card.append(summary,sections);
-    card.open=expanded.get(plan.salon)??true;
+    card.append(summary,time,grid,sections);
+    card.open=expanded.get(plan.salon)??false;
     results.append(card);
   }
 }
