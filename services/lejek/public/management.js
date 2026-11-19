@@ -1,6 +1,6 @@
 const get = id => document.getElementById(id);
 let people = [], salons = [], accounts = [];
-const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi'];
+const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi','Odzyskane przez BDC'];
 const fields = ['Leady','Skuteczne kontakty','Kwalifikacja','Oferty','Negocjacje','Sprzedaż','Umówione wizyty','Odbyte umówione wizyty','Jazdy próbne','Klienci z follow-upem','Interakcje follow-up'];
 const extras = [
   'Leady online z pomiarem czasu reakcji','Pierwsza reakcja do 15 min',
@@ -141,11 +141,11 @@ function renderWorkbookPace(scope,actual,current) {
     months.map(m=>sum(sources.map((_,source)=>record(person,source,m)))[5])).find(r=>r.month===month));
   const configured=rows.length>0&&rows.every(r=>r?.target!=null);
   const targets=configured?scope.map((person,i)=>sourceTargets(rows[i].target,people[person].name)):null;
-  const perSource=sources.map((_,i)=>workbookSteps.map((_,j)=>targets?.reduce((n,t)=>n+t[i][j],0)??null));
+  const perSource=sources.map((_,i)=>workbookSteps.map((_,j)=>targets&&i<benchmarksFromWorkbook.length?targets.reduce((n,t)=>n+t[i][j],0):null));
   const progress=current?.progress??0;
   const counts=workbookOrder.map(k=>actual.reduce((n,r)=>n+r[k],0));
   const metrics=workbookSteps.map(([label,action],i)=>{
-    const target=configured?perSource.reduce((n,r)=>n+r[i],0):null;
+    const target=configured?perSource.reduce((n,r)=>n+(r[i]??0),0):null;
     const expected=target===null?null:target*progress;
     const value=counts[i];
     const diff=expected===null?0:value-expected;
@@ -164,7 +164,7 @@ function renderWorkbookPace(scope,actual,current) {
       display(m.expected),display(m.remaining)];
   }));
   const priorities=metrics.filter(m=>m.deficit>0).sort((a,b)=>b.deficit/(b.expected||1)-a.deficit/(a.expected||1)).slice(0,2);
-  const channel=m=>sources.map((name,i)=>[name,Math.ceil(perSource[i][m.i]*progress-actual[i][workbookOrder[m.i]]-1e-9)])
+  const channel=m=>sources.map((name,i)=>[name,perSource[i][m.i]===null?0:Math.ceil(perSource[i][m.i]*progress-actual[i][workbookOrder[m.i]]-1e-9)])
     .filter(([,gap])=>gap>0).sort((a,b)=>b[1]-a[1])[0]?.[0];
   get('workbookActions').innerHTML=!configured?'<p>Cele ustawia kierownik lub administrator.</p>':
     !progress?'<p>Ocena tempa rozpocznie się pierwszego dnia miesiąca.</p>':

@@ -7,7 +7,8 @@ const countValid = value => Number.isInteger(value) && value>=0 && value<=100000
 const textValid = value => typeof value==='string' && value.trim().length>0 && value.length<=120;
 async function list(db,sql,...params) { return (await db.prepare(sql).bind(...params).all()).results; }
 
-const sourceCount = 12;
+const sourceCount = 13;
+const supportedDailySourceCounts = [12, sourceCount];
 const dailyRowLengths = [9,10,11];
 const workday = day => ![0,6].includes(new Date(day+'T00:00:00Z').getUTCDay());
 function daysBetween(start,end) {
@@ -634,7 +635,7 @@ async function handle(request, env) {
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     const {rows}=body;
-    if (!Array.isArray(rows)||rows.length!==sourceCount||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
+    if (!Array.isArray(rows)||!supportedDailySourceCounts.includes(rows.length)||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     rows[0][1]=rows[0][0];
     rows[0][2]=rows[0][0];
     if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
@@ -670,8 +671,8 @@ async function handle(request, env) {
   if (path==='/api/results' || path==='/api/results-table') {
     const {month}=body;
     const records=path==='/api/results'?[body]:body.records;
-    if (!monthValid(month)||!Array.isArray(records)||!records.length||records.length>12||
-        records.some(record=>!record||!Number.isInteger(record.source)||record.source<0||record.source>11)||
+    if (!monthValid(month)||!Array.isArray(records)||!records.length||records.length>sourceCount||
+        records.some(record=>!record||!Number.isInteger(record.source)||record.source<0||record.source>=sourceCount)||
         new Set(records.map(({source})=>source)).size!==records.length)
       return json({error:'Sprawdź miesiąc i źródła wyników.'},400);
     for (const {source,row} of records) {

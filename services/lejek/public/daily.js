@@ -56,7 +56,7 @@ const abovePlanNotes = [
   "Prośba o dzień wolny właśnie dostała solidne uzasadnienie."
 ];
 const $ = selector => document.querySelector(selector);
-const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi'];
+const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi','Odzyskane przez BDC'];
 const sourceDetails = {
   0:'Klient przyszedł do salonu bez umówienia',
   1:'Wiadomość, komentarz lub zgłoszenie z reklamy na Facebooku',
@@ -69,7 +69,8 @@ const sourceDetails = {
   8:'VEHIS i inne portale brokerskie',
   9:'Kontakt sprzedażowy z klientem serwisu',
   10:'Kontakt z ekspozycji lub akcji w galerii handlowej',
-  11:'Kontakt pozyskany podczas targów'
+  11:'Kontakt pozyskany podczas targów',
+  12:'Lead odzyskany przez zespół BDC'
 };
 // Keep the existing daily row positions. Slot 3 is the retired scheduled-drive count.
 const columns = [
