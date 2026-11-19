@@ -356,7 +356,7 @@ async function saveForm(event,path,payload,dialog,errorId) {
     await refresh();
     if(result.invitation) get('status').textContent=result.invitation==='sent'
       ?'Dodano użytkownika i wysłano zaproszenie.'
-      :'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.';
+      :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. Możesz ją ponowić w „Zarządzaj użytkownikami”.';
   }
   catch(error) {get(errorId).textContent=error.message;}
   finally {submit.disabled=false;}
@@ -384,8 +384,7 @@ get('addAccount').onclick=()=>{
 get('cancelAccount').onclick=()=>get('accountEditor').close();
 get('accountForm').onsubmit=event=>{
   const fields=Object.fromEntries(new FormData(event.currentTarget));
-  const invite=event.currentTarget.elements.invite.checked;
-  const payload={...fields,invite,includeInReports:event.currentTarget.elements.includeInReports.checked};
+  const payload={...fields,includeInReports:event.currentTarget.elements.includeInReports.checked};
   return saveForm(event,'/api/users',{...payload,roles:[fields.role],createOnly:true},'accountEditor','accountError');
 };
 const benchmarks=sourceAssumptions.map(([close,attempts,meetings,,offers,follow],i)=>

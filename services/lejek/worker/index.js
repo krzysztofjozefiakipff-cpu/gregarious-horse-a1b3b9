@@ -185,6 +185,10 @@ async function handle(request, env) {
 
   const user={...assigned,role,group:head?.group_name};
   const signedInAs=assigned?.name?.trim()||email;
+  const invitedNewAccount=async(address,roles)=>{
+    const sent=env.inviteReady&&await env.sendInvitation(address,signedInAs,roles).catch(()=>false);
+    return json({ok:true,invitation:sent?'sent':'failed'});
+  };
 
   const accountRole=(table,role)=>`(EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=${table}.id AND ar.role='${role}')
     OR (${table}.role='${role}' AND NOT EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=${table}.id)
@@ -857,7 +861,6 @@ async function handle(request, env) {
     if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
     const fallback=chosen.includes('manager')?'manager':'seller';
-    const invite=body.createOnly===true&&body.invite===true;
     const password=body.password??'';
     if (password!==''&&!validAccountPassword(password))
       return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
@@ -870,7 +873,7 @@ async function handle(request, env) {
     const insertAccount='INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)';
     const updateAccount=' ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role';
     await db.batch([
-      db.prepare(insertAccount+(createOnly?'':updateAccount))
+      db.prepare(insertAccount+(creating?'':updateAccount))
         .bind(address,name.trim(),needsSalon?salon.trim():'',fallback),
       ...(structured?[db.prepare(`INSERT INTO account_contact_details(person,first_name,last_name,phone)
         SELECT id,?,?,? FROM accounts WHERE email=? ON CONFLICT(person) DO UPDATE SET
@@ -884,11 +887,7 @@ async function handle(request, env) {
       ...credentials,
       ...reportSetting(address,body.includeInReports)
     ]);
-    if (invite) {
-      const sent=env.inviteReady&&await env.sendInvitation(address,signedInAs,chosen).catch(()=>false);
-      return json({ok:true,invitation:sent?'sent':'failed'});
-    }
-    return json({ok:true});
+    return creating?invitedNewAccount(address,chosen):json({ok:true});
   }
   if (path==='/api/accounts' && user.role!=='seller') {
     if (body.includeInReports!==undefined&&typeof body.includeInReports!=='boolean')
@@ -912,7 +911,7 @@ async function handle(request, env) {
       ...credentials,
       ...reportSetting(targetEmail,body.includeInReports)
     ]);
-    return json({ok:true});
+    return invitedNewAccount(targetEmail,[body.role]);
   }
   if (path==='/api/brand' && canManage) {
     if (!textValid(body.salon)||!textValid(body.name)||typeof body.logo!=='string'||body.logo.length>56000||

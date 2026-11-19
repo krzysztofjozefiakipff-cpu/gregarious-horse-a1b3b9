@@ -2382,8 +2382,7 @@ function loadUserEditor() {
   userEditor.elements.email.readOnly=Boolean(selected);
   userEditor.elements.includeInReports.checked=selected?.includeInReports!==0;
   userEditor.elements.password.value='';
-  userEditor.elements.invite.checked=false;
-  $('#user-invite-label').hidden=editing;
+  $('#user-invite-note').hidden=editing;
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
@@ -2439,14 +2438,15 @@ userEditor.onsubmit=async event=>{
   button.disabled=true;
   try {
     const fields=Object.fromEntries(values);
-    const result=await api('/api/users',{...fields,roles,invite:!editing&&values.has('invite'),includeInReports:values.has('includeInReports'),createOnly:!editing});
+    const result=await api('/api/users',{...fields,roles,includeInReports:values.has('includeInReports'),createOnly:!editing});
     await refresh();
     if (editing) {
       $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
       loadUserEditor();
     }
-    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.':result.invitation==='failed'?'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.'
-      :fields.password?'Dodano użytkownika.':'Dodano użytkownika. Użytkownik może ustawić hasło przez „Nie pamiętam hasła”.';
+    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.'
+      :result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
+      :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. Możesz ją ponowić w „Zarządzaj użytkownikami”.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {

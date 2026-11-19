@@ -655,7 +655,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 </div>
 <label>E-mail <input name="email" type="email" autocomplete="email" required maxlength="120"></label>
 <label>Numer telefonu <input name="phone" type="tel" autocomplete="tel" required maxlength="32"></label>
-<label id="user-invite-label"><input type="checkbox" name="invite"> Wyślij zaproszenie e-mailem</label>
+<p id="user-invite-note">Po utworzeniu konta aplikacja wyśle zaproszenie na podany adres.</p>
 <label id="user-password-field">Hasło do Biegu Wyżej (opcjonalnie, co najmniej 8 znaków) <input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></label>
 <fieldset><legend>Role użytkownika (wybierz co najmniej jedną)</legend>
 <label id="user-group-role"><input type="checkbox" name="roles" value="group"> Szef grupy dealerskiej</label>
@@ -667,7 +667,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 <label class="report-option"><input type="checkbox" name="includeInReports" checked> Uwzględniaj w raportach</label>
 <div class="user-actions">
 <button id="user-save">Zapisz użytkownika i role</button>
-<button type="button" class="secondary" id="user-send-invite" hidden>Wyślij zaproszenie e-mailem</button>
+<button type="button" class="secondary" id="user-send-invite" hidden>Ponów wysyłkę zaproszenia</button>
 <button type="button" class="secondary" id="user-archive" hidden>Usuń użytkownika</button>
 </div>
 </div>
