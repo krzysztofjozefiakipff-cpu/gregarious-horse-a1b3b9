@@ -159,21 +159,22 @@ async function handle(request, env) {
   const managesSalonPlans=['group','manager'].includes(user.role);
   const sellerTargets=async (salon,month)=>{
     const rows=await list(db,`
-      SELECT a.id,a.name,p.target AS orders,r.target AS reviews,f.targets,k.version
+      SELECT a.id,a.name,p.target AS orders,r.target AS reviews,f.targets,k.version,sp.targets AS source_targets
       FROM accounts a
       LEFT JOIN plans p ON p.person=a.id AND p.month=?
       LEFT JOIN review_plans r ON r.person=a.id AND r.month=?
       LEFT JOIN funnel_plans f ON f.person=a.id AND f.month=?
       LEFT JOIN seller_plan_approvals k ON k.person=a.id AND k.month=?
+      LEFT JOIN seller_source_plans sp ON sp.person=a.id AND sp.month=?
       WHERE a.salon=? AND ${accountRole('a','seller')}
         AND NOT EXISTS (SELECT 1 FROM archived_users x WHERE x.email=a.email)
       ORDER BY a.id
-    `,month,month,month,month,salon);
+    `,month,month,month,month,month,salon);
     return rows.map(row=>{
       const funnel=JSON.parse(row.targets??'[]');
       const targets=[row.orders,funnel[7]??null,funnel[6]??null,row.reviews];
       const complete=targets.every(countValid);
-      return {id:row.id,name:row.name,targets,funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
+      return {id:row.id,name:row.name,targets,sourceTargets:JSON.parse(row.source_targets??'null'),funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
     });
   };
   const approvalSet=team=>team.length&&team.every(person=>person.version)
@@ -202,6 +203,23 @@ async function handle(request, env) {
         for (let i=1;i<metricIndexes.length;i++) total[i]+=source[metricIndexes[i]]??0;
       }
     }
+    const historicalRates=new Map();
+    if (user.role==='manager') {
+      const cutoff=[month,localDay().slice(0,7)].sort()[0];
+      const history=await list(db,`SELECT person,counters FROM daily_results
+        WHERE day>=date(?||'-01','-3 months') AND day<?||'-01' AND `+scope,cutoff,cutoff,...params);
+      for (const row of history) {
+        const salon=sellerSalons.get(row.person);
+        const matrix=JSON.parse(row.counters)[5];
+        if (!salon||!Array.isArray(matrix)) continue;
+        if (!historicalRates.has(salon)) historicalRates.set(salon,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
+        const totals=historicalRates.get(salon);
+        matrix.slice(0,sourceCount).forEach((source,index)=>{
+          totals[index].leads+=source[0]??0;
+          totals[index].orders+=source[7]??0;
+        });
+      }
+    }
     const plans=[];
     for (const {salon} of salons) {
       const team=await sellerTargets(salon,month);
@@ -212,7 +230,9 @@ async function handle(request, env) {
         LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
       const managers=await assignedManagers(salon);
       const override=Boolean(approvals&&saved?.approvals===approvals);
-      plans.push({salon,automatic,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
+      const sourceRates=(historicalRates.get(salon)??[]).map(({leads,orders})=>
+        leads>=30&&orders>=3&&orders<=leads?orders/leads:null);
+      plans.push({salon,automatic,sourceRates,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
         actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
         team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
@@ -306,7 +326,8 @@ async function handle(request, env) {
       user.role==='seller'?[]:list(db,`SELECT id,email,name,salon,CASE WHEN ${user.role==='manager'?'0':managers} THEN 'manager' ELSE 'seller' END AS role, ${accountStatuses}
         FROM accounts WHERE ${user.role==='manager'?members:'('+members+' OR '+managers+')'}${filters[user.role]} ORDER BY id`,...params),
     ]);
-    return json({roles,role:user.role,sellers:reportsOnly?sellers.filter(seller=>seller.includeInReports):sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
+    const sourcePlans=await list(db,'SELECT person,month,targets FROM seller_source_plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params);
+    return json({roles,role:user.role,sourcePlans,sellers:reportsOnly?sellers.filter(seller=>seller.includeInReports):sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
@@ -321,21 +342,31 @@ async function handle(request, env) {
     if (path.endsWith('/seller')) {
       if (user.role!=='manager'||!team.some(row=>row.id===person))
         return json({error:'Cele handlowca zmienia kierownik przypisanego salonu.'},403);
-      if (!Array.isArray(targets)||targets.length!==4||!targets.every(countValid))
+      const sourceTargets=body.sourceTargets;
+      if (sourceTargets!==undefined&&(!Array.isArray(sourceTargets)||sourceTargets.length!==sourceCount||
+         !sourceTargets.every(row=>Array.isArray(row)&&row.length===10&&row.every(countValid))))
+        return json({error:'Sprawdź wartości planu według źródeł.'},400);
+      if (!sourceTargets&&team.some(row=>row.id===person&&row.sourceTargets))
+        return json({error:'Ten plan edytuj według źródeł.'},409);
+      const totals=sourceTargets?.reduce((sum,row)=>sum.map((value,index)=>value+row[index]),Array(10).fill(0));
+      const manual=totals?totals.slice(0,4):targets;
+      if (!Array.isArray(manual)||manual.length!==4||!manual.every(countValid))
         return json({error:'Wpisz cztery poprawne cele handlowca.'},400);
-      const {funnelTargets}=body;
+      const funnelTargets=totals?totals.slice(4):body.funnelTargets;
       if (funnelTargets!==undefined&&(!Array.isArray(funnelTargets)||funnelTargets.length!==6||!funnelTargets.every(countValid)))
         return json({error:'Sprawdź sześć celów działań handlowca.'},400);
       const existing=await db.prepare('SELECT targets FROM funnel_plans WHERE person=? AND month=?').bind(person,month).first();
       const previous=JSON.parse(existing?.targets??'[]');
       const funnel=Array.from({length:8},(_,i)=>previous[i]??null);
       if (funnelTargets) funnel.splice(0,6,...funnelTargets);
-      funnel[6]=targets[2];
-      funnel[7]=targets[1];
+      funnel[6]=manual[2];
+      funnel[7]=manual[1];
       await db.batch([
-        db.prepare('INSERT INTO plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(person,month,targets[0]),
-        db.prepare('INSERT INTO review_plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(person,month,targets[3]),
-        db.prepare('INSERT INTO funnel_plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET targets=excluded.targets').bind(person,month,JSON.stringify(funnel))
+        db.prepare('INSERT INTO plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(person,month,manual[0]),
+        db.prepare('INSERT INTO review_plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target').bind(person,month,manual[3]),
+        db.prepare('INSERT INTO funnel_plans VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET targets=excluded.targets').bind(person,month,JSON.stringify(funnel)),
+        ...(sourceTargets?[db.prepare(`INSERT INTO seller_source_plans VALUES (?,?,?) ON CONFLICT(person,month)
+          DO UPDATE SET targets=excluded.targets`).bind(person,month,JSON.stringify(sourceTargets))]:[])
       ]);
       return json({ok:true});
     }
@@ -658,6 +689,10 @@ async function handle(request, env) {
     if (funnelTargets!==undefined&&(!Array.isArray(funnelTargets)||funnelTargets.length!==3||!funnelTargets.every(validFunnel)))
       return json({error:'Sprawdź cele lejka.'},400);
     const first=Math.floor((Number(body.month.slice(5))-1)/3)*3+1;
+    const quarter=Array.from({length:3},(_,i)=>body.month.slice(0,5)+String(first+i).padStart(2,'0'));
+    if (await db.prepare('SELECT 1 FROM seller_source_plans WHERE person=? AND month IN (?,?,?)')
+      .bind(body.person,...quarter).first())
+      return json({error:'Ten kwartał zawiera plan według źródeł. Edytuj go w Administracja → Plany salonów.'},409);
     await db.batch(body.targets.map((target,i)=>db.prepare('INSERT INTO plans(person,month,target) VALUES (?,?,?) ON CONFLICT(person,month) DO UPDATE SET target=excluded.target')
       .bind(body.person,body.month.slice(0,5)+String(first+i).padStart(2,'0'),target)).concat((reviewTargets??[]).map((target,i)=>{
         const month=body.month.slice(0,5)+String(first+i).padStart(2,'0');

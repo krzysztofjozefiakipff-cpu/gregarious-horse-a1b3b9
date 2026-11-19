@@ -1025,74 +1025,79 @@ const sellerActivityPlan=[
   ['Próby kontaktu',1],['Jazdy próbne',4],['Oferty',5],['Leady',0],['Spotkania',2],['Follow-up',6]
 ];
 
-function sellerPlanForm(person,individual,month) {
+function sellerPlanForm(person,individual,month,sourceRates) {
   const form=document.createElement('form');
-  const manual=planTargets(person.targets,1000000);
-  const activity=planTargets(person.funnelTargets,1000000,sellerActivityPlan.map(([label])=>label));
-  const label=document.createElement('strong');
-  label.textContent='Proponowane działania · możesz zmienić liczby';
-  const reset=document.createElement('button');
-  reset.type='button';
-  reset.className='secondary';
-  reset.textContent='Przywróć wyliczone wartości';
-  const breakdown=document.createElement('details');
-  const heading=document.createElement('summary');
-  heading.textContent='Założenia według źródeł';
   const note=document.createElement('p');
-  note.textContent='Propozycja korzysta z miksu i konwersji arkusza Bieg Wyżej. Źródła bez udziału w domyślnym miksie mają kreskę.';
-  const scroll=document.createElement('div');
-  scroll.className='scroll';
+  note.textContent='Wpisz cele dla obsługiwanych źródeł. Z zamówień wyliczą się proponowane działania, które możesz skorygować.';
   const reference=document.createElement('p');
-  const study=document.createElement('a');
-  study.href='https://www.foureyes.io/blog/dealership-data-study-appointment-rates';
-  study.target='_blank';
-  study.rel='noopener noreferrer';
-  study.textContent='Badanie Foureyes';
-  reference.append('Punkt odniesienia dla nowych aut w USA: 42% odbytych spotkań z leadów internetowych i 40% z telefonicznych kończyło się sprzedażą. ',study);
-  breakdown.append(heading,note,scroll,reference);
-
-  const suggestedRows=orders=>Number.isInteger(orders)&&orders>=0?sourceTargets(orders):null;
-  const totals=rows=>sellerActivityPlan.map(([,index])=>rows?.reduce((total,row)=>total+row[index],0));
-  const initial=totals(suggestedRows(person.targets[0]));
-  const edited=person.funnelTargets.map((n,index)=>n!=null&&n!==initial[index]);
-
-  function recalculate() {
-    const rows=suggestedRows(manual.inputs[0].valueAsNumber);
-    const proposed=totals(rows);
-    activity.inputs.forEach((input,index)=>{
-      if (!edited[index]) input.value=proposed[index]??'';
-    });
-    scroll.replaceChildren();
-    if (!rows) return;
-    const table=document.createElement('table');
-    const header=table.createTHead().insertRow();
-    for (const label of ['Źródło','Zamówienia','Leady','Spotkania','Jazdy próbne']) {
-      const cell=document.createElement('th');
-      cell.scope='col';
-      cell.textContent=label;
-      header.append(cell);
-    }
-    const body=table.createTBody();
-    sources.forEach((source,index)=>{
-      const row=body.insertRow();
-      row.insertCell().textContent=source;
-      const model=rows[index];
-      for (const metric of [7,0,2,4]) row.insertCell().textContent=defaultMix[index]>0?model[metric]:'—';
-    });
-    scroll.append(table);
+  const link=document.createElement('a');
+  link.href='https://miesiecznikdealer.pl/rynek/wywiad/10-proc-marzy-na-samochodzie-bardzo-trudne';
+  link.target='_blank';
+  link.rel='noopener noreferrer';
+  link.textContent='Polski przykład: Miesięcznik Dealer';
+  reference.append('Dla źródeł z co najmniej 30 leadami i 3 zamówieniami kalkulator korzysta z konwersji salonu z trzech poprzednich zakończonych miesięcy. Przy mniejszej próbie stosuje założenia arkusza Bieg Wyżej. Dla BDC punktem wyjścia jest baza retencyjna. ',link);
+  const summary=document.createElement('p');
+  summary.setAttribute('aria-live','polite');
+  const save=document.createElement('button');
+  save.textContent='Zapisz plan według źródeł';
+  form.append(note,summary);
+  if (!person.sourceTargets&&person.targets.some(value=>value!==null)) {
+    const legacy=document.createElement('p');
+    legacy.textContent='Dotychczasowy plan łączny: '+salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ')+'. Rozdziel cele między źródła przed zapisaniem nowego planu.';
+    form.append(legacy);
   }
 
-  activity.inputs.forEach((input,index)=>input.addEventListener('input',()=>{edited[index]=true;}));
-  manual.inputs[0].addEventListener('input',recalculate);
-  reset.onclick=()=>{edited.fill(false);recalculate();};
-  recalculate();
-  const save=document.createElement('button');
-  save.textContent='Zapisz cele handlowca';
-  form.append(manual.fields,label,activity.fields,reset,breakdown,save);
+  function updateSummary() {
+    const totals=rows.reduce((sum,inputs)=>sum.map((value,index)=>value+(inputs[index].valueAsNumber||0)),[0,0,0,0]);
+    summary.textContent='Razem: '+salonPlanMetrics.map((label,index)=>label+' '+totals[index]).join(' · ');
+  }
+
+  const rows=sources.map((source,index)=>{
+    const saved=person.sourceTargets?.[index];
+    const manual=planTargets(saved?.slice(0,4)??[0,0,0,0],1000000);
+    const activity=planTargets(saved?.slice(4)??Array(6).fill(0),1000000,sellerActivityPlan.map(([label])=>label));
+    const initial=sourceActivityProposal(index,saved?.[0]??0,sourceRates[index]);
+    const edited=initial.map((value,i)=>Boolean(saved&&saved[i+4]!==value));
+    const panel=document.createElement('details');
+    const title=document.createElement('summary');
+    const reset=document.createElement('button');
+    reset.type='button';
+    reset.className='secondary';
+    reset.textContent='Przelicz działania dla źródła';
+
+    function updateSource() {
+      title.textContent=source+' · zamówienia: '+(manual.inputs[0].valueAsNumber||0);
+      updateSummary();
+    }
+    function recalculate() {
+      const orders=manual.inputs[0].valueAsNumber;
+      if (!Number.isInteger(orders)||orders<0) return;
+      const proposal=sourceActivityProposal(index,orders,sourceRates[index]);
+      activity.inputs.forEach((input,i)=>{if (!edited[i]) input.value=proposal[i];});
+    }
+    manual.inputs[0].addEventListener('input',recalculate);
+    manual.inputs.forEach(input=>input.addEventListener('input',updateSource));
+    activity.inputs.forEach((input,i)=>input.addEventListener('input',()=>{edited[i]=true;}));
+    reset.onclick=()=>{edited.fill(false);recalculate();};
+    title.textContent=source+' · zamówienia: '+(saved?.[0]??0);
+    panel.open=Boolean(saved?.some(value=>value>0));
+    for (const input of [...manual.inputs,...activity.inputs]) {
+      input.addEventListener('invalid',()=>{panel.open=true;});
+    }
+    const rateNote=document.createElement('p');
+    rateNote.textContent=sourceRates[index]
+      ?'Konwersja leadów na zamówienia w salonie: '+new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1}).format(sourceRates[index])
+      :'Konwersja startowa według założeń planowania.';
+    panel.append(title,rateNote,manual.fields,activity.fields,reset);
+    form.append(panel);
+    return [...manual.inputs,...activity.inputs];
+  });
+  updateSummary();
+  form.append(reference,save);
   form.onsubmit=event=>{
     event.preventDefault();
-    planAction(save,'/api/salon-plans/seller',{...individual,targets:manual.inputs.map(input=>input.valueAsNumber),
-      funnelTargets:activity.inputs.map(input=>input.valueAsNumber)},month);
+    const sourceTargets=rows.map(inputs=>inputs.map(input=>input.valueAsNumber));
+    planAction(save,'/api/salon-plans/seller',{...individual,sourceTargets},month);
   };
   return form;
 }
@@ -1150,7 +1155,7 @@ async function loadSalonPlans() {
         row.append(summary);
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
-          row.append(sellerPlanForm(person,individual,month));
+          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[]));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');

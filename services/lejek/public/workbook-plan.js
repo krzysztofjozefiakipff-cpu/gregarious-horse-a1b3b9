@@ -19,3 +19,15 @@ function sourceTargets(goal) {
     return [lead,contacts,Math.ceil(visits/.8),visits,up(i===0?lead:visits,drive),offers,up(offers,follow),sales];
   });
 }
+
+
+function sourceActivityProposal(source,orders,observedRate) {
+  // BDC starts from the retention profile until the salon has its own assumptions.
+  const [contact,visit,drive,offer,follow,close]=benchmarksFromWorkbook[source]??benchmarksFromWorkbook[6];
+  const leads=Math.ceil(orders/(observedRate??close)-1e-9);
+  const contacts=Math.ceil(leads*contact);
+  const meetings=source===0?leads:Math.ceil(contacts*visit);
+  const drives=Math.ceil(meetings*drive);
+  const offers=Math.ceil(contacts*offer);
+  return [contacts,drives,offers,leads,meetings,Math.ceil(offers*follow)];
+}

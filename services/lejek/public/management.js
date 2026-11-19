@@ -11,7 +11,7 @@ const extras = [
   'Odpowiedzi NPS','Promotorzy (9–10)','Krytycy (0–6)'
 ];
 const empty = () => fields.map(() => 0);
-let entries = {}, plans = {}, reviewPlans = {}, funnelPlans = {};
+let entries = {}, plans = {}, reviewPlans = {}, funnelPlans = {}, sourcePlans = {};
 const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const planFor = (person,month) => plans[month+'/'+people[person].id] ?? null;
 function record(person,source,month=get('month').value) {
@@ -51,6 +51,7 @@ async function refresh() {
     entries=Object.fromEntries(data.results.map(r=>[[r.month,r.person,r.source].join('/'),JSON.parse(r.counters)]));
     plans=Object.fromEntries(data.plans.map(r=>[r.month+'/'+r.person,r.target]));
     reviewPlans=Object.fromEntries(data.reviewPlans.map(r=>[r.month+'/'+r.person,r.target]));
+    sourcePlans=Object.fromEntries((data.sourcePlans??[]).map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
     document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
@@ -140,12 +141,20 @@ function renderWorkbookPace(scope,actual,current) {
   const rows=scope.map(person=>quarterReport(months,date,months.map(m=>planFor(person,m)),
     months.map(m=>sum(sources.map((_,source)=>record(person,source,m)))[5])).find(r=>r.month===month));
   const configured=rows.length>0&&rows.every(r=>r?.target!=null);
-  const targets=configured?scope.map((person,i)=>sourceTargets(rows[i].target,people[person].name)):null;
-  const perSource=sources.map((_,i)=>workbookSteps.map((_,j)=>targets&&i<benchmarksFromWorkbook.length?targets.reduce((n,t)=>n+t[i][j],0):null));
+  const sourcePlanIndex=[7,4,8,null,5,6,9,0];
+  const targets=configured?scope.map((person,i)=>{
+    const saved=sourcePlans[month+'/'+people[person].id];
+    return saved?saved.map(row=>sourcePlanIndex.map(index=>index===null?null:row[index])):sourceTargets(rows[i].target);
+  }):null;
+  const totalTarget=values=>{
+    const known=values.filter(value=>value!=null);
+    return known.length?known.reduce((sum,value)=>sum+value,0):null;
+  };
+  const perSource=sources.map((_,i)=>workbookSteps.map((_,j)=>targets?totalTarget(targets.map(t=>t[i]?.[j])):null));
   const progress=current?.progress??0;
   const counts=workbookOrder.map(k=>actual.reduce((n,r)=>n+r[k],0));
   const metrics=workbookSteps.map(([label,action],i)=>{
-    const target=configured?perSource.reduce((n,r)=>n+(r[i]??0),0):null;
+    const target=configured?totalTarget(perSource.map(row=>row[i])):null;
     const expected=target===null?null:target*progress;
     const value=counts[i];
     const diff=expected===null?0:value-expected;
