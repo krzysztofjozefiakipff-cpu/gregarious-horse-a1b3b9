@@ -70,7 +70,7 @@ function lessonDrafts(text) {
 const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
 
 function validAccountPassword(password) {
-  return typeof password === 'string' && password.length >= 12 && password.length <= 128;
+  return typeof password === 'string' && [...password].length >= 8 && password.length <= 128;
 }
 
 function serveAsset(path,method) {
@@ -504,7 +504,8 @@ async function handle(request, env) {
     const sql=body.archived?'INSERT INTO archived_users(email) VALUES (?) ON CONFLICT DO NOTHING':'DELETE FROM archived_users WHERE email=?';
     await db.batch([
       db.prepare(sql).bind(address),
-      db.prepare('DELETE FROM lejek_sessions WHERE email=?').bind(address)
+      db.prepare('DELETE FROM lejek_sessions WHERE email=?').bind(address),
+      db.prepare('DELETE FROM lejek_password_resets WHERE email=?').bind(address)
     ]);
     return json({ok:true});
   }
@@ -535,7 +536,7 @@ async function handle(request, env) {
     const fallback=chosen.includes('manager')?'manager':'seller';
     const password=body.password??'';
     if ((body.createOnly===true||!current||password!=='')&&!validAccountPassword(password))
-      return json({error:'Hasło do Biegu Wyżej musi mieć od 12 do 128 znaków.'},400);
+      return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
     const credentials=password?await env.passwordStatements(address,password):[];
     if (!owner&&body.createOnly!==true&&!await canEditDelegated(address))
       return json({error:'Nie możesz zarządzać tym kontem.'},403);
@@ -566,7 +567,7 @@ async function handle(request, env) {
     const salon=body.salon.trim();
     if (targetEmail===env.sharedAdmin) return json({error:'Nie można zmienić konta administratora.'},403);
     if (!validAccountPassword(body.password))
-      return json({error:'Hasło do Biegu Wyżej musi mieć od 12 do 128 znaków.'},400);
+      return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
     if (user.role!=='admin'&&!managedSalons.has(salon) || user.role==='manager'&&body.role!=='seller')
       return json({error:'Nie możesz nadać tej roli w wybranym salonie.'},403);
     const current=await db.prepare('SELECT id,role,salon FROM accounts WHERE email=?').bind(targetEmail).first();

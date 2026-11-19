@@ -36,6 +36,7 @@ SMTP_USER = os.getenv("RESET_SMTP_USER")
 SMTP_PASSWORD = os.getenv("RESET_SMTP_PASSWORD")
 SMTP_HOST = os.getenv("RESET_SMTP_HOST")
 RESET_ORIGIN = "https://preview.carvamo.com"
+BIEG_WYZEJ_ADMIN = "admin@carvamo.com"
 reset_pool = ThreadPoolExecutor(max_workers=2)
 reset_slots = BoundedSemaphore(16)
 reset_lock = Lock()
@@ -72,26 +73,31 @@ def allow_reset_request(email):
             reset_attempts.setdefault((kind, value), deque()).append(now)
     return True
 
-def send_reset_link(email):
+def send_reset_link(email, bieg_wyzej=False):
     try:
         with conn() as db:
             user = db.execute(
-                "SELECT id,email,password_hash FROM users WHERE lower(email)=%s AND enabled", (email,)
+                "SELECT id,email,password_hash,role FROM users WHERE lower(email)=%s AND enabled", (email,)
             ).fetchone()
         if not user or not user["password_hash"]:
+            return
+        if bieg_wyzej and (user["email"] != BIEG_WYZEJ_ADMIN or user["role"] != "admin"):
             return
         token = reset_signer.dumps({
             "id": str(user["id"]),
             "version": credential_version_for(user["password_hash"]),
             "nonce": secrets.token_urlsafe(16),
+            "bieg_wyzej": bieg_wyzej,
         })
+        link = (f"https://biegwyzej.pl/reset-password?token=shared-{token}"
+                if bieg_wyzej else f"{RESET_ORIGIN}/accounts/#reset={token}")
         message = EmailMessage()
         message["From"] = SMTP_USER
         message["To"] = user["email"]
         message["Subject"] = "Carvamo — reset hasła"
         message.set_content(
             "Ustaw nowe hasło do konta Carvamo. Link jest ważny 20 minut.\n\n"
-            f"{RESET_ORIGIN}/accounts/#reset={token}\n\n"
+            f"{link}\n\n"
             "Jeśli nie proszono o reset, zignoruj tę wiadomość.\n"
         )
         with smtplib.SMTP_SSL(SMTP_HOST, 465, context=ssl.create_default_context(), timeout=8) as smtp:
@@ -110,7 +116,8 @@ def request_password_reset():
     email = str(data.get("email", "")).strip().lower() if isinstance(data, dict) else ""
     if len(email) <= 254 and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         if allow_reset_request(email) and reset_slots.acquire(blocking=False):
-            reset_pool.submit(send_reset_link, email)
+            bieg_wyzej = isinstance(data, dict) and data.get("bieg_wyzej") is True and email == BIEG_WYZEJ_ADMIN
+            reset_pool.submit(send_reset_link, email, bieg_wyzej)
     return jsonify({"ok": True}), 202
 
 @app.post("/api/auth/password-reset/confirm")
@@ -119,8 +126,10 @@ def confirm_password_reset():
     if not isinstance(data, dict):
         return fail("Nieprawidłowe dane resetu.")
     password, token = data.get("password"), data.get("token")
-    if not isinstance(password, str) or not 12 <= len(password) <= 256:
-        return fail("Nowe hasło musi mieć od 12 do 256 znaków.")
+    from_bieg = data.get("bieg_wyzej") is True
+    minimum = 8 if from_bieg else 12
+    if not isinstance(password, str) or not minimum <= len(password) <= 256:
+        return fail(f"Nowe hasło musi mieć od {minimum} do 256 znaków.")
     invalid = "Link do resetu jest nieprawidłowy, wygasł lub został już użyty."
     if not isinstance(token, str) or not 1 <= len(token) <= 1024:
         return fail(invalid)
@@ -128,12 +137,16 @@ def confirm_password_reset():
         payload = reset_signer.loads(token, max_age=RESET_SECONDS)
     except BadSignature:
         return fail(invalid)
+    if bool(payload.get("bieg_wyzej")) != from_bieg:
+        return fail(invalid)
     with conn() as db:
         user = db.execute(
-            "SELECT id,password_hash FROM users WHERE id=%s AND enabled FOR UPDATE",
+            "SELECT id,email,role,password_hash FROM users WHERE id=%s AND enabled FOR UPDATE",
             (payload["id"],),
         ).fetchone()
         if not user or not secrets.compare_digest(payload["version"], credential_version_for(user["password_hash"])):
+            return fail(invalid)
+        if from_bieg and (user["email"] != BIEG_WYZEJ_ADMIN or user["role"] != "admin"):
             return fail(invalid)
         db.execute("SELECT set_config('carvamo.actor_id',%s,true)", (str(user["id"]),))
         db.execute("UPDATE users SET password_hash=%s WHERE id=%s", (hasher.hash(password), user["id"]))
@@ -285,10 +298,11 @@ def change_password(actor):
     data = request.get_json(silent=True) or {}
     old = str(data.get("current_password", ""))
     new = str(data.get("new_password", ""))
-    if len(new) < 12 or len(new) > 256:
-        return fail("Nowe hasło musi mieć od 12 do 256 znaków")
+    minimum = 8 if actor["email"] == BIEG_WYZEJ_ADMIN and actor["role"] == "admin" and data.get("bieg_wyzej") is True else 12
+    if not minimum <= len(new) <= 256:
+        return fail(f"Nowe hasło musi mieć od {minimum} do 256 znaków")
     with conn() as db:
-        row = db.execute("SELECT password_hash FROM users WHERE id=%s", (actor["id"],)).fetchone()
+        row = db.execute("SELECT password_hash FROM users WHERE id=%s FOR UPDATE", (actor["id"],)).fetchone()
         try:
             hasher.verify(row["password_hash"], old)
         except (VerifyMismatchError, VerificationError, TypeError):

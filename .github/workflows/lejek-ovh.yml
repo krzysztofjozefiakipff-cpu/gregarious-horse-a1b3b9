@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify and deploy Lejek on OVH
         env:
+          RESET_SMTP_PASSWORD: ${{ secrets.RESET_SMTP_PASSWORD }}
           GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
           OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
           OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
@@ -39,7 +40,7 @@ jobs:
           "${SSH[@]}" "$HOST" 'install -d -m 700 "$HOME/carvamo-lejek"'
           "${SCP[@]}" "/tmp/$GITHUB_SHA.tgz" "$HOST:carvamo-lejek/$GITHUB_SHA.tgz"
           "${SCP[@]}" services/lejek/deploy.sh "$HOST:carvamo-lejek/deploy-$GITHUB_SHA.sh"
-          printf '%s\n' "$GIPHY_API_KEY" | "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
+          printf '%s\n' "$GIPHY_API_KEY" "$RESET_SMTP_PASSWORD" | "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
   dns:
     needs: deploy
     runs-on: ubuntu-24.04
@@ -58,6 +59,8 @@ jobs:
           for attempt in {1..24}; do
             if [ "$(curl -fsS --max-time 8 https://lejek.carvamo.com/healthz || true)" = lejek-ok ]; then
               curl -fsS https://lejek.carvamo.com/login | grep -q 'Zaloguj się do Bieg Wyżej'
+              curl -fsS https://lejek.carvamo.com/login | grep -q 'href="/forgot-password"'
+              curl -fsS https://lejek.carvamo.com/change-password | grep -q 'minlength="8"'
               test "$(curl -sS -o /dev/null -w '%{http_code}' https://lejek.carvamo.com/api/state)" = 401
               exit 0
             fi

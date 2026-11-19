@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 release="$1"
-if [ ! -t 0 ]; then IFS= read -r GIPHY_API_KEY || true; fi
+if [ ! -t 0 ]; then
+  IFS= read -r GIPHY_API_KEY || true
+  IFS= read -r RESET_SMTP_PASSWORD || true
+fi
+export RESET_SMTP_PASSWORD
+export RESET_SMTP_HOST=smtp.mail.ovh.net
+export RESET_SMTP_USER=admin@carvamo.com
 export GIPHY_API_KEY
 [[ "$release" =~ ^[0-9a-f]{40}$ ]]
 test "$(id -un)" = carvamo-deploy
@@ -34,7 +40,7 @@ fi
 run_service() {
   local deployed_image="$1" data_volume="$2"
   docker run -d --name "$service" --label com.carvamo.role=lejek --restart unless-stopped \
-    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY --read-only --tmpfs /tmp:rw,noexec,nosuid \
+    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD --read-only --tmpfs /tmp:rw,noexec,nosuid \
     --security-opt no-new-privileges --cap-drop ALL -v "$data_volume:/data" "$deployed_image" >/dev/null
 }
 if [ -n "$old_image" ]; then docker rm -f "$service" >/dev/null; fi
