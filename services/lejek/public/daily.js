@@ -335,6 +335,7 @@ let editDay;
 let busy=false;
 let preview=false;
 const demoManagerSalon='Salon demonstracyjny';
+const demoManagerOption='\u0000demo-manager';
 let managerPreviewSalon='';
 let managerReturnHash='';
 let previewResult=null;
@@ -978,14 +979,14 @@ window.addEventListener('hashchange',selectManagementView);
 function renderAdmin() {
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
   const people=managerPreview?data.sellers.filter(seller=>seller.salon===managerPreviewSalon):data.sellers;
-  const demo=managerPreview&&!data.salons.length;
+  const demo=managerPreview&&managerPreviewSalon===demoManagerOption;
   let view=managerPreview?{...data,role:'manager',salon:managerPreviewSalon,sellers:people,
     salons:[{salon:managerPreviewSalon}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
     :data;
   if (demo) {
     const month=data.today.slice(0,7);
     const sellers=['Anna Nowak','Marek Kowalski'].map((name,index)=>({id:index+1,name,salon:demoManagerSalon}));
-    view={...view,sellers,plans:sellers.map(({id})=>({person:id,month,target:10})),funnelPlans:[],reviewPlans:[],
+    view={...view,salon:demoManagerSalon,salons:[{salon:demoManagerSalon}],approvals:[],sellers,plans:sellers.map(({id})=>({person:id,month,target:10})),funnelPlans:[],reviewPlans:[],
       daily:[{person:1,day:data.today,counters:'[4,0,1,2,1]'}],
       teamDay:sellers.map(({id})=>({person:id,started:month+'-01',saved:id===1}))};
   }
@@ -1097,9 +1098,10 @@ function showView() {
   const canPreview=data.role==='admin';
   $('#manager-preview-bar').hidden=!canPreview;
   if (canPreview) {
-    const salons=data.salons.length?data.salons.map(({salon})=>salon):[demoManagerSalon];
-    salonSelect.replaceChildren(...salons.map(salon=>new Option(salon,salon)));
-    if (salons.includes(selected)) salonSelect.value=selected;
+    const salons=data.salons.map(({salon})=>salon);
+    salonSelect.replaceChildren(...salons.map(salon=>new Option(salon,salon)),
+      new Option(demoManagerSalon+' · dane przykładowe',demoManagerOption));
+    if (salons.includes(selected)||selected===demoManagerOption) salonSelect.value=selected;
     else managerPreviewSalon='';
     $('#manager-preview-toggle').textContent=managerPreviewSalon?'Wróć do panelu administratora':'Podgląd kierownika';
   }
