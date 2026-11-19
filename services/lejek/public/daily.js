@@ -387,7 +387,16 @@ function renderCalendar(host,sellers,manager) {
       if (request!==revision||!list.isConnected) return;
       for (const entry of entries) {
         const row=document.createElement('li');
-        row.textContent=dateLabel(entry.day)+' · '+calendarKinds[entry.kind]+' · '+calendarStatuses[entry.status];
+        const entryLabel=document.createElement('div');
+        entryLabel.className='calendar-entry';
+        const dateText=document.createElement('strong');
+        dateText.textContent=dateLabel(entry.day);
+        const statusLabel=document.createElement('span');
+        statusLabel.className='calendar-status';
+        statusLabel.dataset.status=entry.status;
+        statusLabel.textContent=calendarStatuses[entry.status];
+        entryLabel.append(dateText,calendarKinds[entry.kind],statusLabel);
+        row.append(entryLabel);
         if (manager||(entry.status!=='approved'&&entry.day>=data.today)) {
           const edit=document.createElement('button');
           edit.type='button';
@@ -399,7 +408,10 @@ function renderCalendar(host,sellers,manager) {
           remove.className='secondary';
           remove.textContent=entry.status==='approved'?'Przywróć dzień pracy':'Usuń zgłoszenie';
           remove.onclick=()=>change(remove,{day:entry.day,action:'remove'});
-          row.append(edit,remove);
+          const actions=document.createElement('div');
+          actions.className='calendar-entry-actions';
+          actions.append(edit,remove);
+          row.append(actions);
         }
         list.append(row);
       }
