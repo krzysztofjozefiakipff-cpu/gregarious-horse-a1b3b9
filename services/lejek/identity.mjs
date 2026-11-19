@@ -67,13 +67,11 @@ export function localIdentity(database, db) {
       const current=await verify(email,oldPassword);
       return Boolean(current&&await replacePassword(email,current.password_hash,newPassword));
     },
-    initializeInvitation(email) {
+    issueReset(email, validFor=20*60_000) {
       database.prepare(`INSERT INTO lejek_credentials (email,salt,password_hash)
         SELECT email,?,? FROM accounts WHERE email=?
         AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email=?)
         ON CONFLICT(email) DO NOTHING`).run(random(),randomBytes(64).toString('hex'),email,email);
-    },
-    issueReset(email, validFor=20*60_000) {
       const current=credentialFor(email);
       if (!current) return null;
       const token=random();

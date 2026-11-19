@@ -373,30 +373,20 @@ get('planForm').onsubmit=event=>saveForm(event,'/api/plans',{
 get('addAccount').onclick=()=>{
   const form=get('accountForm');
   form.reset();
-  updateAccountInvitation();
   get('accountSalons').replaceChildren(...salons.map(salon=>new Option(salon,salon)));
   const manager=get('role').value==='manager';
   form.elements.salon.value=get('salon').value||(salons.length===1?salons[0]:'');
   form.elements.salon.readOnly=manager&&Boolean(form.elements.salon.value);
-  form.elements.role.options[1].disabled=manager;
+  form.elements.role.querySelector('[value="manager"]').disabled=manager;
   get('accountError').textContent='';
   get('accountEditor').showModal();
 };
 get('cancelAccount').onclick=()=>get('accountEditor').close();
-function updateAccountInvitation() {
-  const form=get('accountForm');
-  const invite=form.elements.invite.checked;
-  get('account-password-field').hidden=invite;
-  form.elements.password.required=!invite;
-  form.elements.password.disabled=invite;
-}
-get('accountForm').elements.invite.onchange=updateAccountInvitation;
 get('accountForm').onsubmit=event=>{
   const fields=Object.fromEntries(new FormData(event.currentTarget));
   const invite=event.currentTarget.elements.invite.checked;
   const payload={...fields,invite,includeInReports:event.currentTarget.elements.includeInReports.checked};
-  return saveForm(event,invite?'/api/users':'/api/accounts',
-    invite?{...payload,roles:[fields.role],createOnly:true}:payload,'accountEditor','accountError');
+  return saveForm(event,'/api/users',{...payload,roles:[fields.role],createOnly:true},'accountEditor','accountError');
 };
 const benchmarks=sourceAssumptions.map(([close,attempts,meetings,,offers,follow],i)=>
   [sources[i],nf.format(attempts),pct(meetings,1),pct(offers,1),pct(follow,1),pct(close,1)]);

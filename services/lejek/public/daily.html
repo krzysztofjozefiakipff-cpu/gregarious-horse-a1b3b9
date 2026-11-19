@@ -153,6 +153,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 .user-actions{display:flex;flex-wrap:wrap;gap:8px}
 #user-archive[data-archived=false]{color:#9b292e}
 .user-fields{display:grid;gap:9px;min-width:0}
+.user-name-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:9px}
 #salon-plan-results form,.salon-plan-fields{display:grid;gap:10px}
 #salon-plan-results form label{display:grid;gap:4px}
 .salon-plan-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr))}
@@ -648,11 +649,15 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 
 <label id="user-picker-label">Użytkownik <select id="user-picker"></select></label>
 <div id="user-fields" class="user-fields">
-<label>Imię i nazwisko <input name="name" required maxlength="120"></label>
-<label>E-mail <input name="email" type="email" required maxlength="120"></label>
+<div class="user-name-fields">
+  <label>Imię <input name="firstName" autocomplete="given-name" required maxlength="60"></label>
+  <label>Nazwisko <input name="lastName" autocomplete="family-name" required maxlength="60"></label>
+</div>
+<label>E-mail <input name="email" type="email" autocomplete="email" required maxlength="120"></label>
+<label>Numer telefonu <input name="phone" type="tel" autocomplete="tel" required maxlength="32"></label>
 <label id="user-invite-label"><input type="checkbox" name="invite"> Wyślij zaproszenie e-mailem</label>
-<label id="user-password-field"><span id="user-password-label">Hasło do Biegu Wyżej</span> <input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
-<fieldset><legend>Role użytkownika</legend>
+<label id="user-password-field">Hasło do Biegu Wyżej (opcjonalnie, co najmniej 8 znaków) <input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></label>
+<fieldset><legend>Role użytkownika (wybierz co najmniej jedną)</legend>
 <label id="user-group-role"><input type="checkbox" name="roles" value="group"> Szef grupy dealerskiej</label>
 <label id="user-manager-role"><input type="checkbox" name="roles" value="manager"> Kierownik salonu</label>
 <label><input type="checkbox" name="roles" value="seller"> Handlowiec</label>

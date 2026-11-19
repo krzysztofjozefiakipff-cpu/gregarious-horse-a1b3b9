@@ -2354,7 +2354,11 @@ for (const block of [addUserBlock,editUserBlock]) block.addEventListener('toggle
   loadUserEditor();
 });
 function updateUserRoleFields() {
-  const roles=[...userEditor.querySelectorAll('input[name="roles"]:checked')].map(input=>input.value);
+  const choices=[...userEditor.querySelectorAll('input[name="roles"]')];
+  const available=choices.filter(input=>!input.disabled);
+  const roles=available.filter(input=>input.checked).map(input=>input.value);
+  for (const input of choices) input.setCustomValidity('');
+  available[0]?.setCustomValidity(roles.length?'':'Wybierz co najmniej jedną rolę użytkownika.');
   const group=roles.includes('group');
   const salon=roles.includes('manager')||roles.includes('seller');
   $('#user-group-label').hidden=!group;
@@ -2368,15 +2372,18 @@ function loadUserEditor() {
   $('#user-picker-label').hidden=!editing;
   $('#user-fields').hidden=editing&&!selected;
   $('#user-save').textContent=editing?'Zapisz zmiany':'Dodaj użytkownika';
-  userEditor.elements.name.value=selected?.name??'';
+  const [legacyFirst='',...legacyLast]=(selected?.name??'').trim().split(/\s+/);
+  userEditor.elements.firstName.value=selected?.firstName??legacyFirst;
+  userEditor.elements.lastName.value=selected?.lastName??legacyLast.join(' ');
+  userEditor.elements.lastName.required=!editing||Boolean(selected?.lastName);
+  userEditor.elements.phone.value=selected?.phone??'';
+  userEditor.elements.phone.required=!editing||Boolean(selected?.phone);
   userEditor.elements.email.value=selected?.email??'';
   userEditor.elements.email.readOnly=Boolean(selected);
   userEditor.elements.includeInReports.checked=selected?.includeInReports!==0;
   userEditor.elements.password.value='';
   userEditor.elements.invite.checked=false;
   $('#user-invite-label').hidden=editing;
-  updateInviteFields();
-  $('#user-password-label').textContent=editing?'Nowe hasło (opcjonalnie)':'Hasło do Biegu Wyżej (co najmniej 8 znaków)';
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
@@ -2421,16 +2428,7 @@ function renderUserEditor(view) {
   loadUserEditor();
 }
 $('#user-picker').onchange=loadUserEditor;
-function updateInviteFields() {
-  const inviting=!editingUsers()&&userEditor.elements.invite.checked;
-  $('#user-password-field').hidden=inviting;
-  userEditor.elements.password.disabled=inviting;
-  userEditor.elements.password.required=!editingUsers()&&!inviting;
-}
-userEditor.onchange=()=>{
-  updateUserRoleFields();
-  updateInviteFields();
-};
+userEditor.onchange=updateUserRoleFields;
 userEditor.onsubmit=async event=>{
   event.preventDefault();
   const values=new FormData(userEditor);
@@ -2447,7 +2445,8 @@ userEditor.onsubmit=async event=>{
       $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
       loadUserEditor();
     }
-    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.':result.invitation==='failed'?'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.':'Dodano użytkownika.';
+    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.':result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.':result.invitation==='failed'?'Dodano użytkownika, ale nie udało się wysłać zaproszenia. Użytkownik może skorzystać z opcji „Nie pamiętam hasła”.'
+      :fields.password?'Dodano użytkownika.':'Dodano użytkownika. Użytkownik może ustawić hasło przez „Nie pamiętam hasła”.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {

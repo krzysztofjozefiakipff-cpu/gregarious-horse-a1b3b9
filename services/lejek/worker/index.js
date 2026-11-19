@@ -496,10 +496,12 @@ async function handle(request, env) {
         ORDER BY a.name,a.id,m.salon`):[];
       const users=!canManage?[]:await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
         COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived,
-        NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=a.id) AS includeInReports
-        FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email WHERE `+
+        NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=a.id) AS includeInReports,
+        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone
+        FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email
+        LEFT JOIN account_contact_details contact ON contact.person=a.id WHERE `+
         (owner?`a.role<>'admin'
-          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1 FROM dealer_group_heads h
+          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1,NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
       return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
@@ -821,14 +823,26 @@ async function handle(request, env) {
   if (path==='/api/users' && canManage) {
     if (body.includeInReports!==undefined&&typeof body.includeInReports!=='boolean')
       return json({error:'Nieprawidłowe ustawienie raportów.'},400);
-    const {name,roles:chosen,salon,dealerGroup}=body;
+    const {firstName,lastName,phone,roles:chosen,salon,dealerGroup}=body;
     const needsSalon=Array.isArray(chosen)&&chosen.some(role=>role!=='group');
-    if (!textValid(name)||!Array.isArray(chosen)||!chosen.length||chosen.length>3||new Set(chosen).size!==chosen.length||
+    if (!Array.isArray(chosen)||!chosen.length||chosen.length>3||new Set(chosen).size!==chosen.length||
         !chosen.every(role=>['group','manager','seller'].includes(role))||
         (needsSalon&&!textValid(salon))||!textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim()))
       return json({error:'Podaj dane użytkownika i zaznacz co najmniej jedną rolę. Dla kierownika lub handlowca wybierz salon.'},400);
     const address=body.email.trim().toLowerCase();
     const current=await db.prepare('SELECT id,role FROM accounts WHERE email=?').bind(address).first();
+    const creating=body.createOnly===true||!current;
+    const structured=creating||firstName!==undefined||lastName!==undefined||phone!==undefined;
+    const validName=value=>typeof value==='string'&&value.trim().length>0&&value.length<=60;
+    const validPhone=typeof phone==='string'&&phone.length<=32&&/^\+?[0-9() .-]+$/.test(phone.trim())
+      &&/^\d{7,15}$/.test(phone.replace(/\D/g,''));
+    if (structured&&(!validName(firstName)||(creating?!validName(lastName):lastName!==''&&!validName(lastName))))
+      return json({error:'Uzupełnij imię i nazwisko.'},400);
+    if (structured&&(creating||phone!=='')&&!validPhone)
+      return json({error:'Podaj poprawny numer telefonu (od 7 do 15 cyfr).'},400);
+    const name=structured?[firstName.trim(),lastName.trim()].filter(Boolean).join(' '):body.name;
+    if (!structured&&!textValid(name))
+      return json({error:'Uzupełnij dane użytkownika.'},400);
     if (address===env.sharedAdmin||address===email||current?.role==='admin') return json({error:'Tym formularzem nie można zmienić konta administratora.'},403);
     if (user.role!=='admin') {
       if (!needsSalon||!managedSalons.has(salon.trim())||chosen.some(role=>role==='group'||user.role==='manager'&&role!=='seller'))
@@ -844,9 +858,8 @@ async function handle(request, env) {
       return json({error:'Wybierz grupę dealerską.'},400);
     const fallback=chosen.includes('manager')?'manager':'seller';
     const invite=body.createOnly===true&&body.invite===true;
-    if (invite&&!env.inviteReady) return json({error:'Wysyłka zaproszeń z admin@biegwyzej.pl nie jest skonfigurowana.'},503);
-    const password=invite?crypto.randomUUID()+(crypto.randomUUID()):(body.password??'');
-    if ((body.createOnly===true||!current||password!=='')&&!validAccountPassword(password))
+    const password=body.password??'';
+    if (password!==''&&!validAccountPassword(password))
       return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
     const credentials=password?await env.passwordStatements(address,password):[];
     if (!owner&&body.createOnly!==true&&!await canEditDelegated(address))
@@ -859,6 +872,10 @@ async function handle(request, env) {
     await db.batch([
       db.prepare(insertAccount+(createOnly?'':updateAccount))
         .bind(address,name.trim(),needsSalon?salon.trim():'',fallback),
+      ...(structured?[db.prepare(`INSERT INTO account_contact_details(person,first_name,last_name,phone)
+        SELECT id,?,?,? FROM accounts WHERE email=? ON CONFLICT(person) DO UPDATE SET
+          first_name=excluded.first_name,last_name=excluded.last_name,phone=excluded.phone
+        `).bind(firstName.trim(),lastName.trim(),phone.trim(),address)]:[]),
       db.prepare('DELETE FROM account_roles WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address),
       ...chosen.map(role=>db.prepare('INSERT INTO account_roles SELECT id,? FROM accounts WHERE email=?').bind(role,address)),
       group?db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name').bind(address,group)
@@ -868,7 +885,7 @@ async function handle(request, env) {
       ...reportSetting(address,body.includeInReports)
     ]);
     if (invite) {
-      const sent=await env.sendInvitation(address,signedInAs,chosen).catch(()=>false);
+      const sent=env.inviteReady&&await env.sendInvitation(address,signedInAs,chosen).catch(()=>false);
       return json({ok:true,invitation:sent?'sent':'failed'});
     }
     return json({ok:true});
