@@ -33,18 +33,57 @@ const DB = {
 };
 const cookie='__Host-lejek';
 const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
-const loginPage=`<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logowanie · Lejek</title><style>body{font:18px system-ui;background:#f5f4ef;color:#23392f}main{max-width:390px;margin:12vh auto;padding:22px}input,button{display:block;width:100%;box-sizing:border-box;font:inherit;padding:10px;margin:4px 0 16px}button{background:#284d3a;color:white;border:0;border-radius:8px}</style><main><h1>Zaloguj się do lejka</h1><form method="post" action="/login"><input type="hidden" name="csrf" value="LOGIN_CSRF"><label>E-mail <input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Hasło <input name="password" type="password" autocomplete="current-password" maxlength="512" required></label><button>Zaloguj się</button></form>ERROR</main></html>`;
+const theme = readFileSync('public/theme.css','utf8');
+const loginPage = `<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf6ed">
+  <title>Zaloguj się do Bieg Wyżej</title>
+  <link rel="stylesheet" href="/theme.css">
+  <style>
+    .login { width: min(100%, 480px); margin: clamp(24px, 10vh, 96px) auto; padding: 0 16px; }
+    .login-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 6vw, 36px); }
+    .product-brand { font-weight: 750; font-size: 1.125rem; }
+    h1 { margin: 20px 0 24px; font-size: clamp(1.65rem, 6vw, 2.25rem); }
+    form, label { display: grid; gap: 6px; }
+    form { gap: 16px; }
+    label { font-weight: 700; }
+    input, button { min-width: 0; min-height: 48px; border-radius: 8px; padding: 10px 12px; font: inherit; }
+    input { background: white; border: 1px solid var(--muted); color: var(--ink); }
+    button { background: var(--ink); color: white; border: 0; font-weight: 750; cursor: pointer; }
+    button:hover { background: var(--muted); }
+    [role="alert"] { color: var(--error); margin: 0; }
+  </style>
+</head>
+<body>
+  <main class="login">
+    <section class="login-card" aria-labelledby="login-heading">
+      <div class="product-brand"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</div>
+      <h1 id="login-heading">Zaloguj się do Bieg Wyżej</h1>
+      <form method="post" action="/login">
+        <input type="hidden" name="csrf" value="LOGIN_CSRF">
+        <label>E-mail<input name="email" type="email" autocomplete="username" maxlength="254" required></label>
+        <label>Hasło<input name="password" type="password" autocomplete="current-password" maxlength="512" required></label>
+        LOGIN_ERROR
+        <button>Zaloguj się</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>`;
 const headers = {'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow','Referrer-Policy':'no-referrer'};
 const reply = (text,status=200,extra={})=>new Response(text,{status,headers:{...headers,...extra}});
 const redirect=(to,extra={})=>reply(null,303,{Location:to,...extra});
 const loginCsrfCookie='__Host-lejek-login';
 function loginForm(error='',status=200) {
   const csrf=randomBytes(32).toString('hex');
-  const page=loginPage.replace('LOGIN_CSRF',csrf).replace('ERROR',error?'<p role="alert">'+error+'</p>':'');
+  const page=loginPage.replace('LOGIN_CSRF',csrf).replace('LOGIN_ERROR',error?'<p role="alert">'+error+'</p>':'');
   return reply(page,status,{
     'Content-Type':'text/html; charset=utf-8',
     'Set-Cookie':loginCsrfCookie+'='+csrf+cookieOptions+'; Max-Age=1800',
-    'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
+    'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
   });
 }
 async function handle(request) {
@@ -52,6 +91,9 @@ async function handle(request) {
   if (path==='/healthz' && request.method==='GET') {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
     return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing'});
+  }
+  if (path==='/theme.css' && (request.method==='GET'||request.method==='HEAD')) {
+    return reply(request.method==='HEAD'?null:theme,200,{'Content-Type':'text/css; charset=utf-8'});
   }
   if (path==='/login') {
     if (request.method==='GET') return loginForm();

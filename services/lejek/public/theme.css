@@ -1,0 +1,44 @@
+/* Shared visual identity of Bieg Wyżej. */
+:root {
+  --paper: #faf6ed;
+  --ink: #302038;
+  --muted: #655969;
+  --blue: var(--ink);
+  --line: #ded7dc;
+  --accent: #ff7547;
+  --yellow: #fff0e8;
+  --tint: #f4eff5;
+  --accent-ink: #a23a1c;
+  --error: #a12528;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.45 system-ui, sans-serif;
+}
+h1, h2 { letter-spacing: -.045em; line-height: 1.12; }
+a { color: var(--ink); }
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.product-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+.product-mark { width: 24px; height: 21px; position: relative; }
+.product-mark::before, .product-mark::after {
+  content: "";
+  position: absolute;
+  width: 19px;
+  height: 5px;
+  background: var(--ink);
+  transform: skewY(-26deg);
+  left: 0;
+  bottom: 4px;
+}
+.product-mark::after { background: var(--accent); left: 5px; bottom: 12px; }
