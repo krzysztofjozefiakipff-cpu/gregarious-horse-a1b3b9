@@ -22,12 +22,21 @@ if (!database.prepare("SELECT sql FROM sqlite_schema WHERE name='work_calendar'"
     database.exec('COMMIT');
   } catch(error) { database.exec('ROLLBACK'); throw error; }
 }
-// Legacy archives recorded only the email. Use the rollout month for those accounts.
-const archiveCutoff=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit'}).format(new Date());
-database.prepare(`INSERT INTO archive_report_periods (email,from_month)
-  SELECT email,? FROM archived_users a WHERE NOT EXISTS (
-    SELECT 1 FROM archive_report_periods p WHERE p.email=a.email AND p.until_month IS NULL
-  ) ON CONFLICT(email,from_month) DO UPDATE SET until_month=NULL`).run(archiveCutoff);
+const dailyArchiveReady=database.prepare("SELECT 1 FROM sqlite_schema WHERE name='archive_report_days'");
+if (!dailyArchiveReady.get()) {
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    if (!dailyArchiveReady.get()) {
+      database.exec(readFileSync('drizzle/0030_archive_report_days.sql','utf8'));
+      const rolloutDay=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
+      database.prepare(`INSERT INTO archive_report_days (email,first_excluded_day)
+        SELECT email,date(?,'+1 day') FROM archived_users a WHERE NOT EXISTS (
+          SELECT 1 FROM archive_report_days p WHERE p.email=a.email AND p.restored_day IS NULL
+        )`).run(rolloutDay);
+    }
+    database.exec('COMMIT');
+  } catch(error) { database.exec('ROLLBACK'); throw error; }
+}
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
 const DB = {
   prepare(sql) {
