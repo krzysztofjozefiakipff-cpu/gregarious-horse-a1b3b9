@@ -583,7 +583,9 @@ async function handle(request, env) {
     if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
     const fallback=chosen.includes('manager')?'manager':'seller';
-    const password=body.password??'';
+    const invite=body.createOnly===true&&body.invite===true;
+    if (invite&&!env.inviteReady) return json({error:'Wysyłka zaproszeń z admin@biegwyzej.pl nie jest skonfigurowana.'},503);
+    const password=invite?crypto.randomUUID()+(crypto.randomUUID()):(body.password??'');
     if ((body.createOnly===true||!current||password!=='')&&!validAccountPassword(password))
       return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
     const credentials=password?await env.passwordStatements(address,password):[];
@@ -605,6 +607,10 @@ async function handle(request, env) {
       ...credentials,
       ...reportSetting(address,body.includeInReports)
     ]);
+    if (invite) {
+      const sent=await env.sendInvitation(address,signedInAs,chosen).catch(()=>false);
+      return json({ok:true,invitation:sent?'sent':'failed'});
+    }
     return json({ok:true});
   }
   if (path==='/api/accounts' && user.role!=='seller') {

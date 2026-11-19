@@ -5,21 +5,24 @@ import ssl
 import sys
 from email.message import EmailMessage
 
-def connect():
+def connect(host):
     return smtplib.SMTP_SSL(
-        os.environ["RESET_SMTP_HOST"], 465, context=ssl.create_default_context(), timeout=8
+        host, 465, context=ssl.create_default_context(), timeout=8
     )
 
 
 def main():
-    with connect() as smtp:
-        smtp.login(os.environ["RESET_SMTP_USER"], os.environ["RESET_SMTP_PASSWORD"])
+    invite = sys.argv[1:] == ["--invite"]
+    sender = "admin@biegwyzej.pl" if invite else os.environ["RESET_SMTP_USER"]
+    password = os.environ["INVITE_SMTP_PASSWORD" if invite else "RESET_SMTP_PASSWORD"]
+    with connect(os.environ["RESET_SMTP_HOST"]) as smtp:
+        smtp.login(sender, password)
         if sys.argv[1:] == ["--check"]:
             print("Bieg Wyżej: SMTP authentication succeeded")
             return
-        recipient, url = json.load(sys.stdin)
+        recipient, url, *details = json.load(sys.stdin)
         message = EmailMessage()
-        message["From"] = os.environ["RESET_SMTP_USER"]
+        message["From"] = sender
         message["To"] = recipient
         message["Subject"] = "Bieg Wyżej — reset hasła"
         message.set_content(
@@ -27,6 +30,23 @@ def main():
             f"{url}\n\n"
             "Jeśli nie proszono o reset, zignoruj tę wiadomość.\n"
         )
+        if invite:
+            inviter, roles = details
+            descriptions = {
+                "seller": "Handlowiec: uzupełniasz działania i wyniki, śledzisz własny lejek i cele oraz korzystasz z lekcji dnia.",
+                "manager": "Kierownik salonu: zarządzasz zespołem w przypisanych salonach, ustawiasz plany i sprawdzasz wyniki handlowców.",
+                "group": "Szef grupy dealerskiej: przeglądasz i porównujesz wyniki salonów w swojej grupie oraz zarządzasz salonami i użytkownikami w zakresie swoich uprawnień.",
+            }
+            permissions = "\n".join("- " + descriptions[role] for role in roles)
+            message.replace_header("Subject", "Bieg Wyżej — zaproszenie do aplikacji")
+            message.set_content(
+                f"{inviter} zaprasza Cię do aplikacji Bieg Wyżej.\n\n"
+                f"Twoje uprawnienia:\n{permissions}\n\n"
+                "Pierwsze logowanie:\n"
+                f"1. Otwórz link i ustaw własne hasło (co najmniej 8 znaków):\n{url}\n"
+                f"2. Wejdź na https://biegwyzej.pl/login i zaloguj się jako {recipient} nowym hasłem.\n"
+                "Link jest jednorazowy i ważny przez 24 godziny. Po jego wygaśnięciu użyj opcji „Nie pamiętam hasła” na stronie logowania.\n"
+            )
         smtp.send_message(message)
 
 
