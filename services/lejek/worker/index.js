@@ -232,10 +232,10 @@ async function handle(request, env) {
   if (path==='/api/group' && user.role==='admin') {
     const {name,salons:groupSalons}=body;
     const headEmails=body.headEmails??(body.headEmail?[body.headEmail]:[]);
-    if (!textValid(name)||!Array.isArray(groupSalons)||!groupSalons.length||groupSalons.length>100||
+    if (!textValid(name)||!Array.isArray(groupSalons)||groupSalons.length>100||
         !groupSalons.every(textValid)||!Array.isArray(headEmails)||headEmails.length>100||
         !headEmails.every(address=>textValid(address)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.trim())))
-      return json({error:'Podaj nazwę grupy i co najmniej jeden salon.'},400);
+      return json({error:'Podaj nazwę grupy i sprawdź nazwy salonów.'},400);
     const groupName=name.trim();
     const headAddresses=[...new Set(headEmails.map(address=>address.trim().toLowerCase()))];
     const otherHeads=await list(db,'SELECT email FROM dealer_group_heads WHERE group_name<>?',groupName);
@@ -249,6 +249,31 @@ async function handle(request, env) {
       db.prepare('INSERT INTO dealer_groups VALUES (?) ON CONFLICT DO NOTHING').bind(groupName),
       ...chosen.map(salon=>db.prepare('INSERT INTO dealer_group_salons VALUES (?,?) ON CONFLICT DO NOTHING').bind(salon,groupName)),
       ...headAddresses.map(address=>db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO NOTHING').bind(address,groupName))
+    ]);
+    return json({ok:true});
+  }
+  if (path==='/api/group/remove' && user.role==='admin') {
+    const {name,salon,email:headEmail}=body;
+    if (!textValid(name)||(salon!==undefined&&!textValid(salon))||
+        (headEmail!==undefined&&!textValid(headEmail))||(salon!==undefined&&headEmail!==undefined))
+      return json({error:'Sprawdź grupę i wskazane przypisanie.'},400);
+    if (salon!==undefined) {
+      await db.prepare('DELETE FROM dealer_group_salons WHERE group_name=? AND salon=?').bind(name,salon).run();
+      return json({ok:true});
+    }
+    const headScope=headEmail===undefined?'group_name=?':'group_name=? AND email=?';
+    const args=headEmail===undefined?[name]:[name,headEmail];
+    await db.batch([
+      db.prepare(`INSERT INTO account_roles(person,role)
+        SELECT a.id,'group' FROM accounts a
+        JOIN dealer_group_heads h ON h.email=a.email
+        WHERE h.email IN (SELECT email FROM dealer_group_heads WHERE ${headScope})
+        AND NOT EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=a.id)`).bind(...args),
+      db.prepare('DELETE FROM dealer_group_heads WHERE '+headScope).bind(...args),
+      ...(headEmail===undefined?[
+        db.prepare('DELETE FROM dealer_group_salons WHERE group_name=?').bind(name),
+        db.prepare('DELETE FROM dealer_groups WHERE name=?').bind(name)
+      ]:[])
     ]);
     return json({ok:true});
   }

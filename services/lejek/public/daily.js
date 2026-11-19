@@ -1103,7 +1103,7 @@ function renderAdmin() {
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
-  $('#group-list').textContent=view.groups.map(group=>group.name+' · '+(group.salons??'').replaceAll('\n',', ')+' · '+(group.heads??'').replaceAll('\n',', ')).join(' / ');
+  if (view.role==='admin') renderDealerGroups(view.groups);
   $('#absence-panel').hidden=view.role==='group';
   $('#lesson-editor').hidden=view.role==='group';
   $('#team').textContent=view.sellers.length+' handlowców';
@@ -1364,6 +1364,39 @@ $('#meme-form').onsubmit=async event=>{
     submit.disabled=false;
   }
 };
+function renderDealerGroups(groups) {
+  const list=$('#group-list');
+  list.replaceChildren();
+  if (!groups.length) list.textContent='Brak grup dealerskich.';
+  for (const group of groups) {
+    const section=document.createElement('section');
+    const heading=document.createElement('h3');
+    heading.textContent=group.name;
+    section.append(heading);
+    const removeButton=(label,question,payload)=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='secondary';
+      button.textContent=label;
+      button.onclick=()=>{
+        if (confirm(question)) run(()=>api('/api/group/remove',{name:group.name,...payload}));
+      };
+      return button;
+    };
+    for (const salon of (group.salons??'').split('\n').filter(Boolean)) {
+      const row=document.createElement('div');
+      row.append(salon+' ',removeButton('Odłącz salon','Odłączyć salon „'+salon+'” od grupy „'+group.name+'”? Dane salonu zostaną zachowane.',{salon}));
+      section.append(row);
+    }
+    for (const email of (group.heads??'').split('\n').filter(Boolean)) {
+      const row=document.createElement('div');
+      row.append(email+' ',removeButton('Odłącz szefa','Odłączyć to konto od grupy „'+group.name+'”?',{email}));
+      section.append(row);
+    }
+    section.append(removeButton('Usuń grupę','Usunąć grupę „'+group.name+'” i jej przypisania? Wyniki, konta i plany pozostaną zapisane.',{}));
+    list.append(section);
+  }
+}
 $('#group-editor').onsubmit=event=>{
   event.preventDefault();
   const values=Object.fromEntries(new FormData(event.target));
