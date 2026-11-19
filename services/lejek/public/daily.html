@@ -6,7 +6,7 @@
 <title>Bieg Wyżej</title>
 <link rel="stylesheet" href="/theme.css"><style>
 [hidden]{display:none!important}
-header,main,footer{max-width:1440px;margin:auto;padding:16px clamp(16px,3vw,46px)}
+header,main,footer{max-width:1720px;margin:auto;padding:16px clamp(16px,2.4vw,40px)}
 header,footer,.heading,.save{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;letter-spacing:-.045em}#logo{max-height:42px;max-width:110px;object-fit:contain}
 .identity{display:flex;align-items:center;gap:14px;min-width:0}#salon{color:var(--muted)}footer{border-top:1px solid var(--line);font-size:.9rem}
@@ -51,8 +51,6 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .management-nav+section h1,#administration-view h1{margin-bottom:9px}
 #pace-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}#pace-items .pace-item{display:grid;align-content:start;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:white}#pace-items .pace-count{font-size:1.2rem}.pace-month{color:var(--muted)}
 #motivation{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}#motivation h3{margin:0 0 8px;font-size:1.08rem}#motivation ol{margin:10px 0;padding-inline-start:23px}#motivation ol:empty{display:none}#motivation li+li{margin-top:6px}#motivation-message{margin-top:8px}
-#daily{max-width:900px;margin-inline:auto}
-#admin{max-width:900px;margin-inline:auto}
 #performance-view,#manager-team-view{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
 #daily .quote,#daily-lesson,#daily .actions,#entry,#daily .order-plan,#daily #pace{margin:0 0 14px}
 #daily .quote,#daily-lesson,#daily .actions{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
@@ -90,7 +88,6 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .manager-preview-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px;margin-bottom:14px;background:white;border:1px solid var(--line);border-radius:10px}
 .manager-preview-bar select{min-width:0;max-width:100%}
 #manager-preview-note{margin:10px 0}
-#administration-view{max-width:800px}
 #administration-view .admin-block{margin:10px 0;border:1px solid var(--line);border-radius:12px;background:white;overflow:hidden}
 #administration-view .admin-block>summary{cursor:pointer;padding:14px 16px;color:var(--ink);font-weight:750;min-height:44px}
 #administration-view .admin-block[open]>summary{background:var(--tint);border-bottom:1px solid var(--line)}
@@ -120,6 +117,48 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .salon-progress-grid progress::-webkit-progress-bar{background:var(--line)}
 .salon-progress-grid progress::-webkit-progress-value{background:var(--plan-progress)}
 .salon-progress-grid progress::-moz-progress-bar{background:var(--plan-progress)}
+
+[data-seller-panel] > *, #administration-view > *, #salon-results > *, #manager-team-list > * { min-width: 0; }
+#salon-results, #manager-team-list { display:grid; gap:12px; }
+#salon-results details, #manager-team-list details { margin:0; }
+@media (min-width: 1051px) {
+  [data-seller-panel="dzisiaj"] {
+    display:grid;
+    grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
+    grid-template-areas:"quote quote" "work lesson" "sidebar sidebar";
+    gap:14px 20px;
+    align-items:start;
+  }
+  [data-seller-panel="dzisiaj"] > .quote { grid-area:quote; }
+  [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
+  #daily-lesson { grid-area:lesson; }
+  .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
+  #sidebar-feature { grid-area:sidebar; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
+  #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
+  [data-seller-panel="plan"] {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);
+    gap:20px;
+    align-items:start;
+  }
+  #daily [data-seller-panel="plan"] > * { margin:0; }
+  #salon-results, #manager-team-list, #administration-view {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:start;
+  }
+  #administration-view { display:grid; gap:10px 16px; }
+  #administration-view > .admin-block { margin:0; }
+  #administration-view > :not(.admin-block), #administration-view > .admin-block[open] { grid-column:1 / -1; }
+  #administration-view > .admin-block[open] > form { max-width:60rem; }
+}
+@media(max-width: 1050px) {
+  #daily, #admin { max-width:900px; margin-inline:auto; }
+}
+@media(max-width: 560px) {
+  .management-nav a { font-size:.9rem; }
+  #performance-view, #manager-team-view { padding:12px; }
+  #manager-team-list details { padding:12px; }
+}
 </style>
 </head>
 <body>
@@ -136,14 +175,16 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <div data-seller-panel="dzisiaj">
 
 <div class="quote"><div class="eyebrow">Hasło dnia</div><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
+<div class="daily-work">
+<section class="actions"><h2>Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><ul id="tasks"></ul><p id="followup-reminder" class="task-note" hidden></p><p id="tasks-closing" hidden></p></section>
+<a class="entry-link" href="#wyniki">Wpisz działania</a>
+</div>
 <section id="daily-lesson" aria-labelledby="lesson-title">
   <div class="eyebrow">Lekcja na dziś</div>
   <h2 id="lesson-title"></h2>
   <p id="lesson-topic"></p>
   <p id="lesson-remember" hidden><strong>Zapamiętaj!</strong> <span></span></p>
 </section>
-<section class="actions"><h2>Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><ul id="tasks"></ul><p id="followup-reminder" class="task-note" hidden></p><p id="tasks-closing" hidden></p></section>
-<a class="entry-link" href="#wyniki">Wpisz działania</a>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 <section id="meme" hidden><div class="eyebrow">Z życia salonu</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
 <div id="meme-actions" hidden><div id="meme-votes" role="group" aria-label="Oceń mem"><button type="button" data-meme-vote="1" class="secondary" aria-pressed="false">👍 Podoba mi się</button> <button type="button" data-meme-vote="-1" class="secondary" aria-pressed="false">👎 Nie podoba mi się</button></div><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
