@@ -36,7 +36,11 @@ const DB = {
 const identity=localIdentity(database,DB);
 const cookie='__Host-lejek';
 const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
-const theme = readFileSync('public/theme.css','utf8');
+const publicPages = new Map([
+  ['/', ['text/html', readFileSync('public/home.html', 'utf8')]],
+  ['/home.css', ['text/css', readFileSync('public/home.css', 'utf8')]],
+  ['/theme.css', ['text/css', readFileSync('public/theme.css', 'utf8')]]
+]);
 const loginPage = `<!doctype html>
 <html lang="pl">
 <head>
@@ -144,8 +148,16 @@ async function handle(request) {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
     return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing','X-Lejek-Reset-Mail':smtpReady?'configured':'missing'});
   }
-  if (path==='/theme.css' && (request.method==='GET'||request.method==='HEAD')) {
-    return reply(request.method==='HEAD'?null:theme,200,{'Content-Type':'text/css; charset=utf-8'});
+  const publicPage = publicPages.get(path);
+  if (publicPage && (request.method === 'GET' || request.method === 'HEAD')) {
+    const [type, body] = publicPage;
+    const response = reply(request.method === 'HEAD' ? null : body, 200, {
+      'Content-Type': type + '; charset=utf-8'
+    });
+    if (path === '/' && new URL(request.url).hostname === 'biegwyzej.pl') {
+      response.headers.delete('X-Robots-Tag');
+    }
+    return response;
   }
   if (Object.hasOwn(forms,path)) {
     const render=(message='',status=200,token='')=>loginForm(message,status,path,token);
