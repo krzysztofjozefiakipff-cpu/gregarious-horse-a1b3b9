@@ -952,7 +952,6 @@ function renderManagerDashboard(view) {
   const team=sellers.map(seller=>{
     const entry=teamDay.find(row=>row.person===seller.id);
     const active=Boolean(entry?.started&&entry.started<=today);
-    const expected=seller.accountStatus==='active'&&weekday(today)&&active&&!statuses[entry?.kind];
     const status=entry?.saved?'Wpisano działania':statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
     const records=entries.get(seller.id)??[];
     const current=records.find(([day])=>day===today)?.[1];
@@ -960,32 +959,8 @@ function renderManagerDashboard(view) {
       forSeller(reviewPlans,seller.id)?.target,today,daysLeft,weekday(today)&&!['leave','training','zero'].includes(entry?.kind));
     const weakest=metrics.filter(metric=>metric.delta<0)
       .sort((a,b)=>a.actual/a.goal-b.actual/b.goal||a.delta-b.delta)[0];
-    return {seller,expected,saved:Boolean(entry?.saved),status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
+    return {seller,status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
   });
-  const missing=team.filter(person=>person.expected&&!person.saved);
-  const reportTeam=team.filter(person=>person.seller.includeInReports);
-  const planned=reportTeam.filter(person=>person.orders.todayTarget!=null);
-  const todayOrders=(planned.length?planned:reportTeam).reduce((sum,person)=>sum+person.orders.doneToday,0);
-  const todayTarget=planned.reduce((sum,person)=>sum+person.orders.todayTarget,0);
-  const gaps=columns.map(([index,label],i)=>{
-    const gap=reportTeam.reduce((sum,person)=>sum+Math.max(0,-person.metrics[i].delta),0);
-    const goal=reportTeam.reduce((sum,person)=>sum+(person.metrics[i].goal??0),0);
-    return {label,gap,goal};
-  }).filter(row=>row.gap>0).sort((a,b)=>b.gap/b.goal-a.gap/a.goal);
-  const priority=gaps[0];
-  const cards=$('#manager-cards');
-  cards.replaceChildren();
-  for (const [label,value] of [
-    ['Zamówienia dziś',planned.length?todayOrders+' / '+todayTarget:todayOrders+' · brak planu'],
-    ['Wpisy do uzupełnienia',String(missing.length)],
-    ['Priorytet w lejku',priority?priority.label+' · brakuje '+priority.gap:reportTeam.some(person=>person.metrics.some(metric=>metric.target>0))?'Brak zaległości względem tempa':'Brak celów zespołu']
-  ]) {
-    const card=document.createElement('article');
-    const valueNode=document.createElement('strong');
-    valueNode.textContent=value;
-    card.append(label,valueNode);
-    cards.append(card);
-  }
   const list=$('#manager-team-list');
   list.replaceChildren();
   if (!team.length) list.textContent='Brak przypisanych handlowców.';
@@ -1345,17 +1320,16 @@ function renderAdmin() {
     :managerPreview?{...baseView,role:'manager',salon:'Wszystkie salony'}:baseView;
   const manager=view.role==='manager';
   const teamDashboard=manager||group;
-  const title=group?(selected?'Dziś w salonie':'Dziś w grupie'):manager?(multiple&&!selected?'Dziś w salonach':'Dziś w salonie'):'Wykonanie planu';
+
   $('#manager-preview-note').hidden=!readOnlyPreview;
   $('#manager-preview-note').textContent=(groupPreview?'Podgląd szefa grupy.':'Podgląd kierownika.')+' Możesz wypróbować pola formularza. Dane salonu nie zostaną zapisane.';
   $('#management-report-link').hidden=readOnlyPreview;
   $('#management-team-shortcut').hidden=readOnlyPreview||data.role!=='manager';
   labelPanel(view.role,group?(selected||view.dealerGroup):manager?(selected||view.salon):'',readOnlyPreview);
   $('#management-nav').setAttribute('aria-label',panelNames[view.role]);
-  $('#performance-title').textContent=title;
-  $('#management-performance').textContent=group?'Wyniki grupy':title;
+  $('#performance-title').textContent=teamDashboard?'Realizacja planów salonów':'Wykonanie planu';
+  $('#management-performance').textContent=teamDashboard?'Realizacja planów':'Wykonanie planu';
   $('#management-team').hidden=!teamDashboard;
-  $('#manager-today').hidden=!teamDashboard;
   const team=teamDashboard?renderManagerDashboard(view):[];
   $('#admin').hidden=false;
   selectManagementView();

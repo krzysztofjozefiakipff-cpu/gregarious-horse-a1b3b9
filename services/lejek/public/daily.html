@@ -80,10 +80,8 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily .task-action strong{font-size:1.65rem}
 #tasks-intro{margin:0 0 6px;background:var(--tint);color:var(--ink)}
 #tasks-closing{margin-top:12px;padding:12px 14px;border-inline-start:4px solid var(--accent);border-radius:8px;background:var(--ink);color:#fff;font-size:1rem;font-weight:700;line-height:1.45}
-#manager-today,#manager-team-view{margin-bottom:20px}
-.manager-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin:14px 0}
-.manager-cards article,#manager-team-list details{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--ink)}
-.manager-cards strong{display:block;font-size:1.2rem;margin-top:4px}
+#manager-team-view{margin-bottom:20px}
+#manager-team-list details{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--ink)}
 #manager-team-list details{margin:0 0 8px}
 #manager-team-list summary{cursor:pointer;overflow-wrap:anywhere}
 #manager-team-list summary strong{display:block}
@@ -214,11 +212,8 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 </nav>
 <section id="performance-view">
   <h1 id="performance-title">Wykonanie planu</h1>
-  <section id="manager-today" hidden aria-label="Podsumowanie dnia">
-    <div id="manager-cards" class="manager-cards"></div>
-  </section>
   <p id="team"></p>
-  <section id="salon-summary"><h2>Realizacja planów salonów</h2><p id="salon-period"></p><div id="salon-results"></div></section>
+  <section id="salon-summary" aria-labelledby="performance-title"><p id="salon-period"></p><div id="salon-results"></div></section>
   <p id="management-report-link"><a href="/zarzadzanie.html">Szczegółowe wyniki i raport kwartalny</a></p>
 </section>
 <section id="manager-team-view" hidden>
