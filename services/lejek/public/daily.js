@@ -766,7 +766,8 @@ function showEntrySource(index) {
 function updateSourceStatuses() {
   for (const [index,row] of Array.from($('#rows').rows).entries()) {
     const inputs=Array.from(row.querySelectorAll('input'));
-    const hasResults=inputs.some(input=>Number(input.value)>0);
+    for (const input of inputs) input.classList.toggle('has-value',input.valueAsNumber>0);
+    const hasResults=inputs.some(input=>input.valueAsNumber>0);
     sourceSelect.options[index].textContent=sources[index]+(hasResults?' — wpisano wyniki':'');
   }
 }
@@ -801,10 +802,14 @@ $('#rows').addEventListener('input',event=>{
     const row=input.closest('tr');
     for (const name of ['v0_1','v0_2']) {
       const field=row.querySelector('[name="'+name+'"]');
-      field.value=input.value;
+      field.value=input.valueAsNumber>0?input.value:'';
     }
   }
   updateSourceStatuses();
+});
+$('#rows').addEventListener('focusout',event=>{
+  const input=event.target;
+  if (input.valueAsNumber===0) input.value='';
 });
 $('#entry').addEventListener('invalid',event=>{
   const row=event.target.closest('[data-source]');
@@ -881,7 +886,7 @@ function renderSeller() {
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]??'')+'"'+(locked||blocked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(locked||blocked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
