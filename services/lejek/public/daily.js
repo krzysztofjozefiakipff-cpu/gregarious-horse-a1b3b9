@@ -1457,6 +1457,8 @@ function renderAdmin() {
   $('#management-team-link').textContent='Ustawienia planów';
   $('#salon-summary').hidden=!teamDashboard;
   if (teamDashboard) renderSalonSummary(view,team);
+  historySalons=new Set(view.salons.map(({salon})=>salon));
+  $('[data-history="management"]').reloadHistory();
   userEditor.hidden=false;
   renderUserEditor(view);
   $('#group-add-salon-block').hidden=!group;
@@ -1548,6 +1550,81 @@ window.addEventListener('hashchange',()=>{
   window.scrollTo(0,0);
 });
 
+const historyPanels=[...document.querySelectorAll('[data-history]')];
+const monthLabel=month=>dateLabel(month+'-01',{month:'long',year:'numeric'});
+let historySalons=new Set();
+
+function historyMetrics(items) {
+  const grid=document.createElement('div');
+  grid.className='history-metrics';
+  for (const {label,actual,target} of items) {
+    const cell=document.createElement('div');
+    cell.className='pace-item';
+    const name=document.createElement('span');
+    name.textContent=label;
+    const value=document.createElement('strong');
+    value.textContent=actual+' / '+(target??'—');
+    if (target>0) value.className=actual>=target?'ahead':'behind';
+    cell.append(name,value);
+    grid.append(cell);
+  }
+  return grid;
+}
+
+for (const panel of historyPanels) {
+  const input=panel.querySelector('input');
+  const status=panel.querySelector('.history-status');
+  const results=panel.querySelector('.history-results');
+  let revision=0;
+  const load=async()=>{
+    const request=++revision;
+    const month=input.value;
+    results.replaceChildren();
+    status.textContent='';
+    if (!month) return;
+    if (!input.validity.valid || month>=data.today.slice(0,7)) {
+      status.textContent='Wybierz zakończony miesiąc.';
+      return;
+    }
+    status.textContent='Wczytywanie…';
+    try {
+      const seller=panel.dataset.history==='seller';
+      const response=await api((seller?'/api/daily':'/api/salon-plans')+'?month='+encodeURIComponent(month));
+      if(request!==revision) return;
+      status.textContent=monthLabel(month)+' · wykonanie / cel miesięczny';
+      if (seller) {
+        const records=response.daily.filter(row=>row.day.startsWith(month)).map(row=>[row.day,JSON.parse(row.counters)]);
+        const plan=response.plans.find(row=>row.month===month)?.target;
+        const funnel=response.funnelPlans.find(row=>row.month===month);
+        const reviews=response.reviewPlans.find(row=>row.month===month)?.target;
+        if (!records.length && plan==null && !funnel && reviews==null) {
+          results.textContent='Brak zapisanych wyników i celów.';
+          return;
+        }
+        results.append(historyMetrics(monthlyMetrics(records,[],plan,funnel,reviews,month+'-01',1,false)));
+      } else {
+        const plans=response.plans.filter(plan=>historySalons.has(plan.salon));
+        for (const plan of plans) {
+          const card=document.createElement('section');
+          card.className='history-salon';
+          const title=document.createElement('h3');
+          title.textContent=plan.salon;
+          card.append(title,historyMetrics(salonPlanMetrics.map((label,index)=>({
+            label,actual:plan.actuals[index],target:plan.configured[index]?plan.targets[index]:null
+          }))));
+          results.append(card);
+        }
+        if (!plans.length) results.textContent='Brak wyników dla wybranych salonów.';
+      }
+    } catch (error) {
+      if (request===revision) status.textContent=error.message;
+    }
+  };
+  input.addEventListener('change',load);
+  panel.addEventListener('toggle',()=>{if(panel.open && !input.value){input.value=input.max;load();}});
+  panel.reloadHistory=()=>{if(panel.open && input.value) load();};
+}
+
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
@@ -1623,6 +1700,12 @@ $('#account-role').onchange=event=>{
 };
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
+  const month=data.today.slice(0,7);
+  const [year,number]=month.split('-').map(Number);
+  for (const panel of historyPanels) panel.querySelector('input').max=monthStart(year,number-2).slice(0,7);
+  $('#seller-plan-period').textContent='Realizacja planu · '+monthLabel(month);
+  $('#management-plan-period').textContent='Okres · '+monthLabel(month);
+
   const signedIn=$('#signed-in');
   signedIn.querySelector('strong').textContent=data.signedInAs??'';
   signedIn.hidden=!data.signedInAs;

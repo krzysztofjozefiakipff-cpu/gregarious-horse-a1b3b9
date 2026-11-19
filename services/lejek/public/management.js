@@ -379,7 +379,9 @@ function syncDetailedSection() {
     button.setAttribute('aria-selected',String(active));
     get(button.dataset.tab).hidden=administration||!active;
   }
-  get('heading').textContent=administration?'Administracja':'Wykonanie planu';
+  const month=get('month').value;
+  const period=month?new Date(month+'-01T12:00:00Z').toLocaleDateString('pl-PL',{month:'long',year:'numeric'}):'';
+  get('heading').textContent=administration?'Administracja':['Wykonanie planu',period].filter(Boolean).join(' · ');
 }
 for (const button of reportTabs) button.addEventListener('click',()=>{
   selectedReport=button.dataset.tab;
