@@ -138,8 +138,9 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
   #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
   .plan-top {
-    grid-template-columns:minmax(0,1fr) minmax(13rem, .3fr);
-    grid-template-areas:"orders ranking" "invoices ranking";
+    grid-template-columns:repeat(2,minmax(0,1fr)) minmax(13rem,.7fr);
+    grid-template-areas:"orders invoices ranking";
+    align-items:start;
   }
   .plan-orders { grid-area:orders; }
   .plan-invoices { grid-area:invoices; }
@@ -194,6 +195,25 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #seller-ranking dt { color:var(--muted); font-size:.875rem; }
 #seller-ranking dd { margin:0; color:var(--accent-ink); font-weight:750; }
 .order-plan .cards strong { overflow-wrap:anywhere; }
+#daily .plan-top .order-plan { padding:12px; }
+#daily .plan-top .order-plan h2 { font-size:1.16rem; }
+#daily .plan-top .cards { gap:5px; margin-top:8px; }
+#daily .plan-top .cards section { padding:7px; font-size:.875rem; }
+#daily .plan-top .cards strong { font-size:clamp(1rem,1.5vw,1.35rem); color:var(--ink); }
+#daily .plan-top .cards small { font-size:.8rem; }
+.podium { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; gap:5px; margin-bottom:8px; }
+.podium span { display:grid; place-items:center; min-height:30px; border-radius:5px 5px 0 0; background:var(--tint); color:var(--muted); font-weight:800; }
+.podium span:first-child { min-height:38px; }
+.podium span:nth-child(2) { min-height:48px; }
+.podium[data-place="2"] span:first-child, .podium[data-place="1"] span:nth-child(2),
+.podium[data-place="3"] span:last-child { background:#f9cb64; color:#332000; }
+.rating { border-top:1px solid var(--line); padding-top:8px; }
+.rating h3 { margin:0; font-size:1rem; }
+.rating-stars { display:inline-block; white-space:nowrap; font-size:1.55rem; letter-spacing:.08em; color:#946300; }
+@supports (background-clip:text) {
+  .rating-stars { background:linear-gradient(90deg,#946300 var(--rating-fill,0%),#d5dbe3 var(--rating-fill,0%)); background-clip:text; color:transparent; }
+}
+.rating p { font-size:.875rem; }
 </style>
 </head>
 <body>
@@ -265,11 +285,18 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   </section>
   <section id="seller-ranking" aria-labelledby="ranking-title">
     <h2 id="ranking-title">Ranking miesiąca</h2>
+    <div class="podium" id="ranking-podium" aria-hidden="true" hidden><span>2</span><span>1</span><span>3</span></div>
     <dl>
       <div><dt>Salon</dt><dd id="ranking-salon"></dd></div>
       <div id="ranking-group-row" hidden><dt>Grupa</dt><dd id="ranking-group"></dd></div>
       <div id="ranking-result-row" hidden><dt>Realizacja zamówień</dt><dd id="ranking-result"></dd></div>
     </dl>
+    <div class="rating">
+      <h3>Ocena handlowca</h3>
+      <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
+      <p id="seller-rating"></p>
+      <p>Średnia realizacji celów miesięcznych narastająco do dziś.</p>
+    </div>
   </section>
 </div>
 <section id="pace" aria-labelledby="pace-title" hidden>

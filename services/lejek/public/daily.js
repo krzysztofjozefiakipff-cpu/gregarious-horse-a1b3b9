@@ -387,6 +387,16 @@ function renderPlans(records) {
   const funnel=data.funnelPlans?.find(row=>row.month===monthKey);
   const reviewTarget=data.reviewPlans?.find(row=>row.month===monthKey)?.target;
   const metrics=monthlyMetrics(monthRecords,current,monthPlan,funnel,reviewTarget,data.today,daysLeft,isWorkday);
+  const ratedMetrics=metrics.filter(({goal})=>goal>0);
+  const average=ratedMetrics.length
+    ?ratedMetrics.reduce((total,{actual,goal})=>total+actual/goal,0)/ratedMetrics.length
+    :null;
+  const stars=average===null?null:Math.min(5,average*5);
+  const format=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
+  $('#rating-stars').hidden=stars===null;
+  $('#rating-stars').style.setProperty('--rating-fill',((stars??0)*20)+'%');
+  $('#seller-rating').textContent=stars===null?'Brak celów do oceny'
+    :format.format(stars)+' / 5 · '+format.format(average*100)+'% realizacji';
   $('#pace').hidden=false;
   $('#pace-items').innerHTML=metrics.map(({label,actual,target,goal,delta})=>{
     const style=delta<0?'behind':delta>0?'ahead':'';
@@ -832,6 +842,8 @@ function renderSeller() {
   const ranking=data.ranking;
   const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
   $('#ranking-salon').textContent=ranking?.salon?rankText(ranking.salon):'Brak pozycji';
+  $('#ranking-podium').dataset.place=ranking?.salon?.place??'';
+  $('#ranking-podium').hidden=!ranking?.salon;
   $('#ranking-group-row').hidden=!ranking?.group;
   $('#ranking-group').textContent=ranking?.group?rankText(ranking.group):'';
   $('#ranking-result-row').hidden=!ranking;
