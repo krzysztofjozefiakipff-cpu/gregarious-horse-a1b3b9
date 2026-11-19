@@ -1007,13 +1007,13 @@ function renderSalonSummary(view,team=[]) {
     const members=new Set(plan.team.map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
-      const contributors=metrics.map(person=>({seller:person.seller,...person.metrics[column]}))
-        .filter(metric=>metric.goal>0);
+      const results=metrics.map(person=>({seller:person.seller,...person.metrics[column]}));
       const salonIndex=[7,8,10,9].indexOf(index);
-      const target=plan.targets[salonIndex];
-      const salonDelta=plan.configured[salonIndex]&&target>0
-        ?plan.actuals[salonIndex]-target*elapsed/total:null;
-      return {index,label,contributors,salonDelta};
+      const hasSalonPlan=plan.configured[salonIndex];
+      const goal=hasSalonPlan?plan.targets[salonIndex]*elapsed/total
+        :results.reduce((sum,metric)=>sum+(metric.goal??0),0);
+      const actual=hasSalonPlan?plan.actuals[salonIndex]:results.reduce((sum,metric)=>sum+metric.actual,0);
+      return {index,label,contributors:results.filter(metric=>metric.goal>0),actual,goal,delta:actual-goal};
     });
     const sections=document.createElement('div');
     sections.className='salon-coaching';
@@ -1023,16 +1023,15 @@ function renderSalonSummary(view,team=[]) {
       const heading=document.createElement('h3');
       heading.textContent=needsAction?'Wymaga reakcji':'Co działa';
       section.append(heading);
-      for (const {index,label,contributors,salonDelta} of areas) {
+      for (const {index,label,contributors,actual,goal,delta} of areas) {
+        if (goal<=0||(delta<0)!==needsAction) continue;
         const people=contributors.filter(metric=>needsAction?metric.delta<0:metric.delta>=0)
           .sort((a,b)=>needsAction?a.delta-b.delta:b.delta-a.delta);
-        const matchesSalon=salonDelta!==null&&(needsAction?salonDelta<0:salonDelta>=0);
-        if (!people.length&&!matchesSalon) continue;
         const row=document.createElement('div');
         row.className='coaching-metric';
         const name=document.createElement('strong');
-        name.textContent=label+(matchesSalon
-          ?needsAction?' · salonowi brakuje '+Math.ceil(-salonDelta)+' do tempa':' · salon zgodnie z tempem':'');
+        name.textContent=label+' · '+number.format(actual)+' / '+number.format(goal)+' na dziś'
+          +(needsAction?' · brakuje '+Math.ceil(-delta):' · zgodnie z tempem');
         row.append(name);
         if (needsAction) {
           const action=document.createElement('p');
@@ -1048,8 +1047,7 @@ function renderSalonSummary(view,team=[]) {
           link.target='_blank';
           link.rel='noopener';
           link.setAttribute('aria-label',metric.seller.name+' – szczegóły lejka w nowej karcie');
-          item.append(link,' · '+metric.actual+' / '+metric.goal+' na dziś · '+
-            (metric.delta<0?'brakuje '+(-metric.delta):metric.delta>0?'nadwyżka '+metric.delta:'zgodnie z planem'));
+          item.append(link);
           list.append(item);
         }
         if (list.children.length) row.append(list);
@@ -1731,7 +1729,8 @@ function renderSellerDetail() {
     heading.scope='row';
     heading.textContent=metric.label;
     row.append(heading);
-    for (const value of [metric.actual,metric.goal,metric.target,metric.delta===null?null:
+    if (metric.goal>0) row.className=metric.delta<0?'detail-behind':'detail-ahead';
+    for (const value of [metric.actual,metric.goal,metric.target,!(metric.goal>0)?null:
       metric.delta<0?'Brakuje '+(-metric.delta):metric.delta>0?'Nadwyżka '+metric.delta:'Zgodnie z tempem']) {
       const cell=document.createElement('td');
       cell.textContent=value??'—';
