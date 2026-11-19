@@ -842,28 +842,26 @@ async function handle(request, env) {
     if (!structured&&!textValid(name))
       return json({error:'Uzupełnij dane użytkownika.'},400);
     if (address===env.sharedAdmin||address===email||current?.role==='admin') return json({error:'Tym formularzem nie można zmienić konta administratora.'},403);
-    if (user.role!=='admin') {
-      if (!needsSalon||!managedSalons.has(salon.trim())||chosen.some(role=>role==='group'||user.role==='manager'&&role!=='seller'))
-        return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
-      if (body.createOnly!==true&&!await canEditDelegated(address))
-        return json({error:'Nie możesz zarządzać tym kontem.'},403);
-    }
-    if (body.createOnly===true&&(current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first()))
-      return json({error:'Użytkownik już istnieje. Przejdź do sekcji Zarządzaj użytkownikami.'},409);
+    const wantsGroup=chosen.includes('group');
+    const createOnly=body.createOnly===true;
+    if (wantsGroup&&user.role==='group'&&(!createOnly||dealerGroup!=null&&dealerGroup!==''&&dealerGroup!==user.group))
+      return json({error:'Szef grupy może nadać tę rolę tylko nowemu użytkownikowi w swojej grupie.'},403);
+    if (user.role==='manager'&&chosen.some(role=>role!=='seller') ||
+        !owner&&needsSalon&&!managedSalons.has(salon.trim()))
+      return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
+    if (!owner&&!createOnly&&!await canEditDelegated(address))
+      return json({error:'Nie możesz zarządzać tym kontem.'},403);
+    if (createOnly&&(current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first()))
+      return json({error:'Konto z tym adresem e-mail już istnieje.'},409);
     if (needsSalon&&!managedSalons.has(salon.trim())) return json({error:'Wybierz salon z listy dodanych salonów.'},400);
-    const group=chosen.includes('group')&&textValid(dealerGroup)?dealerGroup.trim():null;
-    if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
+    const group=wantsGroup?(user.role==='group'?user.group:(textValid(dealerGroup)?dealerGroup.trim():null)):null;
+    if (wantsGroup&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
     const fallback=chosen.includes('manager')?'manager':'seller';
     const password=body.password??'';
     if (password!==''&&!validAccountPassword(password))
       return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
     const credentials=password?await env.passwordStatements(address,password):[];
-    if (!owner&&body.createOnly!==true&&!await canEditDelegated(address))
-      return json({error:'Nie możesz zarządzać tym kontem.'},403);
-    const createOnly=body.createOnly===true;
-    if (!owner&&createOnly&&await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first())
-      return json({error:'Użytkownik już istnieje.'},409);
     const insertAccount='INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)';
     const updateAccount=' ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role';
     await db.batch([
@@ -875,7 +873,8 @@ async function handle(request, env) {
         `).bind(firstName.trim(),lastName.trim(),phone.trim(),address)]:[]),
       db.prepare('DELETE FROM account_roles WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address),
       ...chosen.map(role=>db.prepare('INSERT INTO account_roles SELECT id,? FROM accounts WHERE email=?').bind(role,address)),
-      group?db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name').bind(address,group)
+      group?db.prepare('INSERT INTO dealer_group_heads VALUES (?,?)'+
+        (createOnly?'':' ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name')).bind(address,group)
         :db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(address),
       ...(!chosen.includes('manager')&&current?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
       ...credentials
