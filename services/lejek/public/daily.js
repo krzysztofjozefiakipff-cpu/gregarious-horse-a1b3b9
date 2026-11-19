@@ -1204,6 +1204,8 @@ function renderSalonSummary(view,team=[]) {
     const summary=document.createElement('summary');
     const title=document.createElement('strong');
     title.textContent=plan.salon;
+    const quickTotals=document.createElement('span');
+    quickTotals.className='salon-quick-totals';
     const grid=document.createElement('span');
     grid.className='salon-progress-grid';
     for (const [index,label] of salonPlanMetrics.entries()) {
@@ -1214,6 +1216,13 @@ function renderSalonSummary(view,team=[]) {
       const actual=plan.actuals[index];
       const target=plan.targets[index];
       const configured=plan.configured[index];
+      const quickTotal=document.createElement('span');
+      quickTotal.title=label+(configured?' · wykonanie / plan miesiąca':' · brak planu');
+      const shortLabel=document.createElement('abbr');
+      shortLabel.title=label;
+      shortLabel.textContent=salonPlanAbbreviations[index];
+      quickTotal.append(shortLabel,': '+number.format(actual)+'/'+(configured?number.format(target):'—'));
+      quickTotals.append(quickTotal);
       const ratio=target>0?actual/target:null;
       const pace=ratio===null?null:salonPace(actual,target,elapsed,total);
       values.textContent=actual+' / '+(configured?target:'—')+
@@ -1249,7 +1258,7 @@ function renderSalonSummary(view,team=[]) {
     time.className='salon-pace-time';
     time.textContent=elapsed+' z '+total+' dni roboczych miesiąca (pon.–sob.) · '+percent.format(elapsed/total)
       +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
-    summary.append(title,status);
+    summary.append(title,status,quickTotals);
     const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
@@ -1410,6 +1419,7 @@ function renderManagerDashboard(view,detailOnly=false) {
 const salonPlans=$('#salon-plans');
 const salonPlanMonth=$('#salon-plan-month');
 const salonPlanMetrics=['Zamówienia','Rejestracje','Wystawione faktury','Opinie Google'];
+const salonPlanAbbreviations=['Z','R','F','O'];
 let salonPlanRevision=0;
 let openPlanningSeller=null;
 
