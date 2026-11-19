@@ -133,10 +133,11 @@ function sendReset(email,token) {
 }
 async function sendInvitation(email,inviter,roles) {
   if (!inviteReady||activeMailJobs>=4) return false;
+  identity.initializeInvitation(email);
   const token=identity.issueReset(email,24*60*60_000);
   if (!token) return false;
   const delivered=await new Promise(resolve=>{
-    const mail=spawn('python3',['scripts/reset-mail.py','--invite'],{stdio:['pipe','ignore','ignore'],timeout:15000});
+    const mail=spawn('python3',['scripts/reset-mail.py','--invite'],{stdio:['pipe','ignore','inherit'],timeout:15000});
     activeMailJobs++;
     mail.stdin.on('error',()=>{});
     mail.on('error',()=>resolve(false));

@@ -41,6 +41,15 @@ if [[ -n "${RESET_SMTP_PASSWORD:-}" ]]; then
     --security-opt no-new-privileges -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD \
     "$image" python3 scripts/reset-mail.py --check
 fi
+if [[ -n "${INVITE_SMTP_PASSWORD:-}" ]]; then
+  if docker run --rm --network "$mail_network" --read-only --cap-drop ALL \
+    --security-opt no-new-privileges -e RESET_SMTP_HOST -e INVITE_SMTP_PASSWORD \
+    "$image" python3 scripts/reset-mail.py --invite --check; then
+    echo "Bieg Wyżej: invitation SMTP verified"
+  else
+    echo "::warning::Bieg Wyżej: invitation SMTP authentication failed"
+  fi
+fi
 old_image=
 old_volume=
 if docker container inspect "$service" >/dev/null 2>&1; then
