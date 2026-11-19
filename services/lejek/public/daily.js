@@ -2354,13 +2354,93 @@ $('#manager-scope').onchange=()=>renderAdmin();
 const userEditor=$('#user-editor');
 const addUserBlock=$('#admin-users-block');
 const editUserBlock=$('#admin-edit-users-block');
+const userSearchSalon=$('#user-search-salon');
+const userSearchName=$('#user-search-name');
+const userSearchPhone=$('#user-search-phone');
+const userSearchResults=$('#user-search-results');
 let editableUsers=[];
+let selectedUserEmail='';
+const selectedEditableUser=()=>editableUsers.find(user=>user.email===selectedUserEmail);
 const editingUsers=()=>userEditor.parentElement===editUserBlock;
 for (const block of [addUserBlock,editUserBlock]) block.addEventListener('toggle',()=>{
   if (!block.open||block.hidden||userEditor.parentElement===block) return;
   block.append(userEditor);
   loadUserEditor();
 });
+function userSurname(user) {
+  return user.lastName??(user.name===user.email?'':user.name.trim().split(/\s+/).slice(1).join(' '));
+}
+
+function normalizedSurname(value) {
+  return value.trim().toLocaleLowerCase('pl').normalize('NFD').replace(/\p{M}/gu,'').replace(/ł/g,'l').replace(/\s+/g,' ');
+}
+
+function normalizedPhone(value) {
+  const digits=value.replace(/\D/g,'');
+  if (/^(?:0048|48)\d{9}$/.test(digits)) return digits.slice(-9);
+  return digits.startsWith('00')?digits.slice(2):digits;
+}
+
+function renderUserSearch() {
+  const salon=userSearchSalon.value;
+  const surname=normalizedSurname(userSearchName.value);
+  const phoneQuery=userSearchPhone.value.trim();
+  const phone=normalizedPhone(phoneQuery);
+  const matches=editableUsers.filter(user=>
+    (!salon||user.salon===salon)&&
+    (!surname||normalizedSurname(userSurname(user)).includes(surname))&&
+    (!phoneQuery||Boolean(phone&&user.phone&&normalizedPhone(user.phone)===phone)));
+  $('#user-search-status').textContent=matches.length?'Wyniki: '+matches.length
+    :editableUsers.length?'Nie znaleziono użytkowników pasujących do filtrów.':'Brak użytkowników w tym zakresie.';
+  userSearchResults.replaceChildren();
+  for (const archived of [false,true]) {
+    const users=matches.filter(user=>Boolean(user.archived)===archived);
+    if (!users.length) continue;
+    const section=document.createElement('section');
+    const heading=document.createElement('h3');
+    heading.textContent=archived?'Usunięci użytkownicy':'Aktywni użytkownicy';
+    const list=document.createElement('ul');
+    for (const user of users) {
+      const item=document.createElement('li');
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='secondary user-result';
+      button.dataset.email=user.email;
+      const label=document.createElement('span');
+      const name=document.createElement('strong');
+      name.textContent=user.name;
+      const details=document.createElement('small');
+      details.textContent=[user.salon||user.dealerGroup,user.phone,user.name!==user.email?user.email:''].filter(Boolean).join(' · ');
+      label.append(name,details);
+      const arrow=document.createElement('span');
+      arrow.setAttribute('aria-hidden','true');
+      arrow.textContent='›';
+      button.append(label,arrow);
+      item.append(button);
+      list.append(item);
+    }
+    section.append(heading,list);
+    userSearchResults.append(section);
+  }
+}
+
+userSearchSalon.onchange=renderUserSearch;
+userSearchName.oninput=userSearchPhone.oninput=renderUserSearch;
+userSearchResults.onclick=event=>{
+  const button=event.target.closest('button[data-email]');
+  if (!button) return;
+  selectedUserEmail=button.dataset.email;
+  loadUserEditor();
+  $('#user-edit-heading').focus();
+};
+$('#user-back-to-search').onclick=()=>{
+  const previous=selectedUserEmail;
+  selectedUserEmail='';
+  loadUserEditor();
+  const result=[...userSearchResults.querySelectorAll('button')].find(button=>button.dataset.email===previous);
+  (result??userSearchSalon).focus();
+};
+
 function updateUserRoleFields() {
   const choices=[...userEditor.querySelectorAll('input[name="roles"]')];
   const available=choices.filter(input=>!input.disabled);
@@ -2376,13 +2456,16 @@ function updateUserRoleFields() {
 }
 function loadUserEditor() {
   const editing=editingUsers();
-  const selected=editing?editableUsers.find(user=>user.email===$('#user-picker').value):null;
-  $('#user-picker-label').hidden=!editing;
-  $('#user-fields').hidden=editing&&!selected;
+  const selected=editing?selectedEditableUser():null;
+  userEditor.hidden=editing&&!selected;
+  $('#user-search').hidden=Boolean(selected);
+  $('#user-edit-navigation').hidden=!selected;
+  $('#user-edit-heading').textContent=selected?.name??'';
+  if (userEditor.hidden) return;
   $('#user-save').textContent=editing?'Zapisz zmiany':'Dodaj użytkownika';
-  const [legacyFirst='',...legacyLast]=(selected?.name??'').trim().split(/\s+/);
+  const legacyFirst=(selected?.name??'').trim().split(/\s+/,1)[0];
   userEditor.elements.firstName.value=selected?.firstName??legacyFirst;
-  userEditor.elements.lastName.value=selected?.lastName??legacyLast.join(' ');
+  userEditor.elements.lastName.value=selected?userSurname(selected):'';
   userEditor.elements.lastName.required=!editing||Boolean(selected?.lastName);
   userEditor.elements.phone.value=selected?.phone??'';
   userEditor.elements.phone.required=!editing||Boolean(selected?.phone);
@@ -2418,39 +2501,28 @@ function renderUserEditor(view) {
   const salonPicker=userEditor.elements.salon;
   salonPicker.replaceChildren(new Option(view.salons.length?'Wybierz salon':'Brak dodanych salonów',''),
     ...view.salons.map(({salon})=>new Option(salon,salon)));
-  const picker=$('#user-picker');
-  const prior=picker.value;
-  const groups=[false,true].map(archived=>{
-    const group=document.createElement('optgroup');
-    group.label=archived?'Usunięci użytkownicy':'Aktywni użytkownicy';
-    group.append(...editableUsers.filter(user=>Boolean(user.archived)===archived)
-      .map(user=>new Option(user.name===user.email?user.email:user.name+' · '+user.email,user.email)));
-    return group;
-  });
-  picker.replaceChildren(new Option(editableUsers.length?'Wybierz użytkownika':'Brak użytkowników w tym zakresie',''),
-    ...groups.filter(group=>group.children.length));
-  if (editableUsers.some(user=>user.email===prior)) picker.value=prior;
+  const previousSalon=userSearchSalon.value;
+  userSearchSalon.replaceChildren(new Option('Wszystkie dostępne salony',''),
+    ...view.salons.map(({salon})=>new Option(salon,salon)));
+  if (visibleSalons.has(previousSalon)) userSearchSalon.value=previousSalon;
+  if (!selectedEditableUser()) selectedUserEmail='';
+  renderUserSearch();
   userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
   loadUserEditor();
 }
-$('#user-picker').onchange=loadUserEditor;
 userEditor.onchange=updateUserRoleFields;
 userEditor.onsubmit=async event=>{
   event.preventDefault();
   const values=new FormData(userEditor);
   const roles=values.getAll('roles');
   const editing=editingUsers();
-  if (editing&&!$('#user-picker').value) return;
+  if (editing&&!selectedEditableUser()) return;
   const button=$('#user-save');
   button.disabled=true;
   try {
     const fields=Object.fromEntries(values);
     const result=await api('/api/users',{...fields,roles,includeInReports:values.has('includeInReports'),createOnly:!editing});
     await refresh();
-    if (editing) {
-      $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
-      loadUserEditor();
-    }
     $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.'
       :result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
       :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. Możesz ją ponowić w „Zarządzaj użytkownikami”.';
@@ -2463,7 +2535,7 @@ userEditor.onsubmit=async event=>{
 
 $('#user-send-invite').onclick=async event=>{
   const button=event.currentTarget;
-  const selected=editableUsers.find(user=>user.email===$('#user-picker').value);
+  const selected=selectedEditableUser();
   if (!selected||selected.archived) return;
   button.disabled=true;
   $('#user-status').textContent='Wysyłam zaproszenie na '+selected.email+'…';
@@ -2479,7 +2551,7 @@ $('#user-send-invite').onclick=async event=>{
 
 $('#user-archive').onclick=async event=>{
   const button=event.currentTarget;
-  const selected=editableUsers.find(user=>user.email===$('#user-picker').value);
+  const selected=selectedEditableUser();
   if (!selected) return;
   const archived=!selected.archived;
   if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Od bieżącego miesiąca osoba ta wypadnie z raportów. Wyniki wcześniejszych miesięcy zostaną w historii.')) return;
@@ -2487,10 +2559,6 @@ $('#user-archive').onclick=async event=>{
   try {
     await api('/api/users/archive',{email:selected.email,archived});
     await refresh();
-    if (archived) {
-      $('#user-picker').value='';
-      loadUserEditor();
-    }
     $('#user-status').textContent=archived?'Użytkownik usunięty z aktywnych kont Lejka.':'Przywrócono dostęp użytkownika.';
   } catch(error) {
     $('#user-status').textContent=error.message;
@@ -2537,7 +2605,6 @@ function renderAdmin() {
   if (teamDashboard) renderSalonSummary(view,team);
   historySalons=new Set(view.salons.map(({salon})=>salon));
   $('[data-history="management"]').reloadHistory();
-  userEditor.hidden=false;
   renderUserEditor(view);
   $('#group-add-salon-block').hidden=!group;
   $('#manager-assignments').hidden=view.role!=='admin';
