@@ -1041,7 +1041,7 @@ function loadUserEditor() {
   userEditor.elements.name.value=selected?.name??'';
   userEditor.elements.email.value=selected?.email??'';
   userEditor.elements.email.readOnly=Boolean(selected);
-  if (editing||!userEditor.elements.salon.value) userEditor.elements.salon.value=selected?.salon??'';
+  userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
   const archiveButton=$('#user-archive');
@@ -1062,10 +1062,8 @@ function renderUserEditor(view) {
     label.querySelector('input').disabled=!allowed;
   }
   const salonPicker=userEditor.elements.salon;
-  const selected=salonPicker.value;
   salonPicker.replaceChildren(new Option(view.salons.length?'Wybierz salon':'Brak dodanych salonów',''),
     ...view.salons.map(({salon})=>new Option(salon,salon)));
-  if (view.salons.some(({salon})=>salon===selected)) salonPicker.value=selected;
   const picker=$('#user-picker');
   const prior=delegated?'':picker.value;
   picker.replaceChildren(new Option('Wybierz użytkownika',''),...data.users.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
