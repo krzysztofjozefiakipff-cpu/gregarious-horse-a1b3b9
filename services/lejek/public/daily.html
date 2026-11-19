@@ -13,7 +13,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .layout{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(250px,1fr);gap:20px}.layout>*{min-width:0}h1,h2,p,blockquote{margin:0}h1,h2{letter-spacing:-.045em;line-height:1.12}h2{font-size:1.45rem;margin-bottom:12px}
 .quote{background:var(--yellow);padding:22px 25px;border-radius:16px;margin-bottom:24px}.eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}.quote blockquote{font:italic clamp(1.6rem,3vw,3.3rem)/1.12 Georgia,serif;margin-top:8px}
 .quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--blue)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
-.actions ul{list-style:none;padding:0;margin:0 0 18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.actions li,.cards section{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.task-action{display:flex;align-items:baseline;gap:0 .28em;flex-wrap:wrap;font-weight:650}.task-action strong{color:var(--blue);font-size:clamp(2.5rem,5vw,3.75rem);font-weight:850;font-variant-numeric:tabular-nums;letter-spacing:-.05em;line-height:1.05}.task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--blue);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}@media(max-width:680px){.actions ul{grid-template-columns:1fr}}
+.cards section{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--blue);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 12px}.cards strong{display:block;font-size:clamp(1.3rem,3vw,2rem);line-height:1.15;font-variant-numeric:tabular-nums}
 .behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
 #meme{background:var(--yellow);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--blue);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--yellow)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
@@ -59,7 +59,6 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily #cause .eyebrow{color:#c4dcff}
 #lesson-remember{background:var(--ink);color:white;padding:10px 12px}
 #lesson-remember strong{color:#b5d2ff}
-#daily .task-action strong{color:var(--accent-ink)}
 .entry-link{display:block;text-align:center;text-decoration:none;font-weight:800;background:var(--blue);color:white;padding:12px;border-radius:10px;margin:0 0 18px}
 #daily .order-plan,#daily #motivation{background:var(--tint);border-color:var(--line)}
 #daily .order-plan h2,#daily .order-plan p,#daily #seller-ranking{color:var(--ink)}
@@ -163,26 +162,27 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   #manager-team-list details { padding:12px; }
 }
 
-#tasks { display:grid; gap:12px; }
-#tasks .task-group { border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
-#tasks .task-group:first-child { border-inline-start:4px solid var(--blue); background:var(--tint); }
-.task-group h3 { margin:0 0 4px; font-size:.9rem; }
-#daily .task-group ol { list-style:none; margin:0; padding:0; }
-#daily .task-group li { border:0; border-radius:0; padding:7px 0; }
-#daily .task-group li+li { border-top:1px solid var(--line); }
+#tasks { display:grid; gap:10px; }
+.task-group { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.task-group h3 { margin:0; padding:7px 11px; font-size:.9rem; background:var(--tint); }
+.task-group[data-priority="0"] { border-color:var(--accent-ink); }
+.task-group[data-priority="0"] h3 { background:var(--accent-ink); color:white; }
+.task-group[data-priority="2"] h3 { background:var(--paper); color:var(--muted); }
+.task-group ol { list-style:none; margin:0; padding:6px; display:grid; gap:5px; }
+.task-action {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  min-width:0; padding:5px 8px; border:1px solid var(--line); border-radius:6px;
+  font-size:.95rem; font-weight:650; line-height:1.25; overflow-wrap:anywhere;
+}
+.task-action strong {
+  display:grid; place-items:center; min-width:2em; padding:3px 5px;
+  border-radius:5px; background:var(--tint); color:var(--accent-ink);
+  font-size:1rem; font-variant-numeric:tabular-nums;
+}
 #followup-reminder { margin:8px 0 12px; }
 @media (min-width: 1051px) {
-  #tasks { gap:8px; }
-  #tasks .task-group { padding:6px 10px; }
-  #daily .task-group ol {
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    column-gap:12px;
-  }
-  #daily .task-group li { padding:3px 0; }
-  #daily .task-group li+li { border-top:0; }
-  #daily .task-action { font-size:.95rem; line-height:1.35; }
-  #daily .task-action strong { font-size:1.05rem; font-variant-numeric:tabular-nums; }
+  .task-group ol { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .task-action { padding-block:3px; }
 }
 </style>
 </head>

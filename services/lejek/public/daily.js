@@ -352,13 +352,6 @@ async function api(path,body) {
   return result;
 }
 
-function pluralForm(count,forms) {
-  if (count===1) return forms[0];
-  const last=count%10;
-  const lastTwo=count%100;
-  return last>=2&&last<=4&&(lastTwo<12||lastTwo>14)?forms[1]:forms[2];
-}
-
 function renderPlans(records) {
   const [year,month]=data.today.split('-').map(Number);
   const monthKey=data.today.slice(0,7);
@@ -423,17 +416,17 @@ function activityCount(values,index) {
     :values?.[legacyIndex[index]]??0;
 }
 
-const taskWording={
-  0:['Obsłuż',['nowe zapytanie','nowe zapytania','nowych zapytań']],
-  1:['Wykonaj',['próbę kontaktu','próby kontaktu','prób kontaktu']],
-  2:['Przeprowadź',['spotkanie','spotkania','spotkań']],
-  4:['Przeprowadź',['jazdę próbną','jazdy próbne','jazd próbnych']],
-  5:['Wyślij',['ofertę','oferty','ofert']],
-  6:['Zrób',['follow-up','follow-upy','follow-upów']],
-  7:['Domknij',['zamówienie','zamówienia','zamówień']],
-  8:['Zarejestruj',['auto','auta','aut']],
-  9:['Zdobądź',['opinię w Google','opinie w Google','opinii w Google']],
-  10:['Wystaw',['fakturę','faktury','faktur']]
+const taskLabels={
+  0:'Obsłuż nowe zapytania',
+  1:'Wykonaj próby kontaktu',
+  2:'Przeprowadź spotkania',
+  4:'Przeprowadź jazdy próbne',
+  5:'Wyślij oferty',
+  6:'Wróć do wysłanych ofert',
+  7:'Domknij zamówienia',
+  8:'Zarejestruj auta',
+  9:'Zdobądź opinie w Google',
+  10:'Wystaw faktury'
 };
 
 function dailyTarget(monthTarget,doneBeforeToday,daysLeft,isWorkday) {
@@ -565,14 +558,13 @@ function renderTodayTasks(metrics,previous,day) {
   const variant=Math.floor(Date.parse(day)/86400000)%messages.length;
   intro.textContent=[...highlights,messages[variant]].join(' ');
   const tasksByIndex=new Map(tasks.map(task=>[task.index,task]));
-  const groups=taskPriorities.map(([label,indexes])=>{
+  const groups=taskPriorities.map(([label,indexes],priority)=>{
     const items=indexes.filter(index=>tasksByIndex.has(index)).map(index=>{
       const {doneToday,todayTarget}=tasksByIndex.get(index);
-      const [verb,forms]=taskWording[index];
       const gap=todayTarget-doneToday;
-      return '<li><span class="task-action">'+verb+' <strong>'+gap+'</strong> '+pluralForm(gap,forms)+'</span></li>';
+      return '<li class="task-action"><span>'+taskLabels[index]+'</span> <strong>'+gap+'</strong></li>';
     }).join('');
-    return items?'<section class="task-group"><h3>'+label+'</h3><ol>'+items+'</ol></section>':'';
+    return items?'<section class="task-group" data-priority="'+priority+'"><h3>'+label+'</h3><ol>'+items+'</ol></section>':'';
   }).join('');
   $('#tasks').innerHTML=groups||'<p class="task-message">'+(hasPlan?'Na dziś nie zostały żadne zadania z planu.':'Ustal z kierownikiem cel, a tutaj pojawią się Twoje zadania.')+'</p>';
 
