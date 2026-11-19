@@ -334,6 +334,7 @@ let data;
 let editDay;
 let busy=false;
 let preview=false;
+const demoManagerSalon='Salon demonstracyjny';
 let managerPreviewSalon='';
 let managerReturnHash='';
 let previewResult=null;
@@ -977,11 +978,21 @@ window.addEventListener('hashchange',selectManagementView);
 function renderAdmin() {
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
   const people=managerPreview?data.sellers.filter(seller=>seller.salon===managerPreviewSalon):data.sellers;
-  const view=managerPreview?{...data,role:'manager',salon:managerPreviewSalon,sellers:people,
+  const demo=managerPreview&&!data.salons.length;
+  let view=managerPreview?{...data,role:'manager',salon:managerPreviewSalon,sellers:people,
     salons:[{salon:managerPreviewSalon}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
     :data;
+  if (demo) {
+    const month=data.today.slice(0,7);
+    const sellers=['Anna Nowak','Marek Kowalski'].map((name,index)=>({id:index+1,name,salon:demoManagerSalon}));
+    view={...view,sellers,plans:sellers.map(({id})=>({person:id,month,target:10})),funnelPlans:[],reviewPlans:[],
+      daily:[{person:1,day:data.today,counters:'[4,0,1,2,1]'}],
+      teamDay:sellers.map(({id})=>({person:id,started:month+'-01',saved:id===1}))};
+  }
   const manager=view.role==='manager';
   $('#manager-preview-note').hidden=!managerPreview;
+  $('#manager-preview-note').textContent=demo?'Salon demonstracyjny · dane przykładowe.':'Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.';
+  $('#manager-preview-bar label').textContent=demo?'Podgląd kierownika · dane przykładowe':'Salon do podglądu';
   $('#management-report-link').hidden=managerPreview;
   $('#management-team-link').hidden=managerPreview;
   $('#absence-panel').inert=managerPreview;
@@ -1083,11 +1094,12 @@ function showView() {
   }
   const salonSelect=$('#manager-preview-salon');
   const selected=managerPreviewSalon||salonSelect.value;
-  const canPreview=data.role==='admin'&&data.salons.length>0;
+  const canPreview=data.role==='admin';
   $('#manager-preview-bar').hidden=!canPreview;
   if (canPreview) {
-    salonSelect.replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
-    if (data.salons.some(({salon})=>salon===selected)) salonSelect.value=selected;
+    const salons=data.salons.length?data.salons.map(({salon})=>salon):[demoManagerSalon];
+    salonSelect.replaceChildren(...salons.map(salon=>new Option(salon,salon)));
+    if (salons.includes(selected)) salonSelect.value=selected;
     else managerPreviewSalon='';
     $('#manager-preview-toggle').textContent=managerPreviewSalon?'Wróć do panelu administratora':'Podgląd kierownika';
   }
