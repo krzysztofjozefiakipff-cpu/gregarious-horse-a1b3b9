@@ -12,12 +12,12 @@ def connect(host):
 
 
 def main():
-    invite = sys.argv[1:] == ["--invite"]
+    invite = "--invite" in sys.argv[1:]
     sender = "admin@biegwyzej.pl" if invite else os.environ["RESET_SMTP_USER"]
     password = os.environ["INVITE_SMTP_PASSWORD" if invite else "RESET_SMTP_PASSWORD"]
     with connect(os.environ["RESET_SMTP_HOST"]) as smtp:
         smtp.login(sender, password)
-        if sys.argv[1:] == ["--check"]:
+        if "--check" in sys.argv[1:]:
             print("Bieg Wyżej: SMTP authentication succeeded")
             return
         recipient, url, *details = json.load(sys.stdin)
@@ -53,6 +53,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, smtplib.SMTPException) as error:
+    except Exception as error:
         print(f"Bieg Wyżej: SMTP failed ({type(error).__name__})", file=sys.stderr)
         raise SystemExit(1) from None

@@ -547,13 +547,11 @@ async function handle(request, env) {
     const address=body.email.trim().toLowerCase();
     if (address===email||address===env.sharedAdmin||(!owner&&!await canEditDelegated(address)))
       return json({error:'Nie możesz zaprosić tej osoby.'},403);
-    const account=await db.prepare(`SELECT a.id,a.role,h.group_name,
-      EXISTS (SELECT 1 FROM lejek_credentials c WHERE c.email=a.email) AS hasPassword
+    const account=await db.prepare(`SELECT a.id,a.role,h.group_name
       FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email
       WHERE a.email=? AND NOT EXISTS (SELECT 1 FROM archived_users x WHERE x.email=a.email)`)
       .bind(address).first();
     if (!account||account.role==='admin') return json({error:'Wybierz aktywne konto użytkownika.'},404);
-    if (!account.hasPassword) return json({error:'To konto nie ma jeszcze hasła. Ustaw hasło w formularzu, zapisz zmiany i ponów zaproszenie.'},409);
     if (!env.inviteReady) return json({error:'Wysyłka zaproszeń jest chwilowo niedostępna.'},503);
     const explicit=await list(db,'SELECT role FROM account_roles WHERE person=?',account.id);
     const roles=(explicit.length?explicit.map(row=>row.role):[account.group_name?'group':account.role])

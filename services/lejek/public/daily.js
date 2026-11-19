@@ -1494,6 +1494,7 @@ $('#user-send-invite').onclick=async event=>{
   const selected=editableUsers.find(user=>user.email===$('#user-picker').value);
   if (!selected||selected.archived) return;
   button.disabled=true;
+  $('#user-status').textContent='Wysyłam zaproszenie na '+selected.email+'…';
   try {
     await api('/api/users/invite',{email:selected.email});
     $('#user-status').textContent='Wysłano zaproszenie na '+selected.email+'.';
