@@ -104,6 +104,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <header><div class="identity"><img id="logo" alt="" hidden><strong id="dealer">Mój dzień</strong><span id="salon"></span></div><span id="display-date"></span></header>
 <main>
 <p id="load" role="status">Wczytywanie danych…</p>
+<div id="account-role-bar" class="manager-preview-bar" hidden><label for="account-role">Aktywna rola</label> <select id="account-role"></select></div>
 <div id="preview-bar" class="heading" hidden><strong>Podgląd handlowca · dane przykładowe</strong><button type="button" class="secondary" id="view-switch">Zarządzanie salonem</button></div><div id="daily" hidden>
 <nav class="seller-nav" aria-label="Panel handlowca">
   <a href="#dzisiaj" data-seller-tab="dzisiaj">Dzisiaj</a>
@@ -201,6 +202,22 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <p id="management-team-shortcut"><a id="management-team-link" href="/zarzadzanie.html#administracja">Konta zespołu i ustawienia planów</a></p>
 <p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
 <div id="absence-panel"><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div></div>
+<form id="user-editor" hidden>
+<h2>Użytkownicy</h2>
+<label>Użytkownik <select id="user-picker"></select></label>
+<label>Imię i nazwisko <input name="name" required maxlength="120"></label>
+<label>E-mail konta CARVAMO <input name="email" type="email" required maxlength="120"></label>
+<fieldset><legend>Role użytkownika</legend>
+<label><input type="checkbox" name="roles" value="group"> Szef grupy dealerskiej</label>
+<label><input type="checkbox" name="roles" value="manager"> Kierownik salonu</label>
+<label><input type="checkbox" name="roles" value="seller"> Handlowiec</label>
+</fieldset>
+<label id="user-group-label" hidden>Grupa dealerska <select name="dealerGroup"></select></label>
+<label id="user-salon-label" hidden>Salon handlowca lub główny salon kierownika <input name="salon" list="user-salons" maxlength="120"></label>
+<datalist id="user-salons"></datalist>
+<button>Zapisz użytkownika i role</button>
+<p id="user-status" role="status"></p>
+</form>
 <form id="manager-assignments" hidden>
 <h2>Salony kierowników</h2>
 <label>Kierownik <select id="assignment-manager" required></select></label>
@@ -209,10 +226,9 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <button id="assignment-save">Zapisz przypisania</button>
 </form>
 <form id="group-editor" hidden><h2>Grupy dealerskie</h2>
-<p>Dodaj grupę lub dopisz salony i szefów do istniejącej grupy.</p>
+<p>Dodaj grupę lub dopisz do niej salony. Szefów przypiszesz w sekcji Użytkownicy.</p>
 <div id="group-list"></div>
 <label>Nazwa grupy <input name="name" required maxlength="120"></label>
-<label>E-maile szefów grupy (konta CARVAMO, po jednym w wierszu) <textarea name="headEmails" rows="3" required></textarea></label>
 <label>Nazwy salonów, każda w osobnym wierszu <textarea name="salons" rows="4" required></textarea></label>
 <button>Zapisz grupę i uprawnienia</button></form>
 <form id="lesson-editor">

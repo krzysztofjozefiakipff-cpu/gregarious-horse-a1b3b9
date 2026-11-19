@@ -340,7 +340,10 @@ let managerReturnHash='';
 let previewResult=null;
 
 async function api(path,body) {
-  const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
+  const url=new URL(path,location.origin);
+  const selectedRole=sessionStorage.getItem('lejek-active-role');
+  if (selectedRole) url.searchParams.set('role',selectedRole);
+  const response=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
   const result=await response.json();
   if (!response.ok) throw new Error(result.error);
   return result;
@@ -1008,6 +1011,57 @@ $('#manager-assignments').onsubmit=event=>{
 };
 $('#manager-scope').onchange=()=>renderAdmin();
 
+const userEditor=$('#user-editor');
+function updateUserRoleFields() {
+  const roles=[...userEditor.querySelectorAll('input[name="roles"]:checked')].map(input=>input.value);
+  const group=roles.includes('group');
+  const salon=roles.includes('manager')||roles.includes('seller');
+  $('#user-group-label').hidden=!group;
+  $('#user-salon-label').hidden=!salon;
+  userEditor.elements.dealerGroup.required=group;
+  userEditor.elements.salon.required=salon;
+}
+function loadUserEditor() {
+  const selected=data.users.find(user=>user.email===$('#user-picker').value);
+  userEditor.elements.name.value=selected?.name??'';
+  userEditor.elements.email.value=selected?.email??'';
+  userEditor.elements.email.readOnly=Boolean(selected);
+  userEditor.elements.salon.value=selected?.salon??'';
+  userEditor.elements.dealerGroup.value=selected?.dealerGroup??'';
+  for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
+  $('#user-status').textContent='';
+  updateUserRoleFields();
+}
+function renderUserEditor() {
+  const picker=$('#user-picker');
+  const prior=picker.value;
+  picker.replaceChildren(new Option('Dodaj użytkownika',''),...data.users.map(user=>new Option(user.name+' · '+user.email,user.email)));
+  if (data.users.some(user=>user.email===prior)) picker.value=prior;
+  userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
+  $('#user-salons').replaceChildren(...data.salons.map(({salon})=>new Option(salon,salon)));
+  loadUserEditor();
+}
+$('#user-picker').onchange=loadUserEditor;
+userEditor.onchange=updateUserRoleFields;
+userEditor.onsubmit=async event=>{
+  event.preventDefault();
+  const values=new FormData(userEditor);
+  const roles=values.getAll('roles');
+  const button=userEditor.querySelector('button');
+  button.disabled=true;
+  try {
+    await api('/api/users',{...Object.fromEntries(values),roles});
+    await refresh();
+    $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
+    loadUserEditor();
+    $('#user-status').textContent='Zapisano użytkownika i role.';
+  } catch(error) {
+    $('#user-status').textContent=error.message;
+  } finally {
+    button.disabled=false;
+  }
+};
+
 function renderAdmin() {
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
   const managerScope=$('#manager-scope');
@@ -1044,6 +1098,8 @@ function renderAdmin() {
   $('#management-report-link a').href='/zarzadzanie.html'+query;
   $('#management-team-link').textContent=view.role==='group'?'Konta zespołu':'Konta zespołu i ustawienia planów';
   renderSalonSummary(view);
+  userEditor.hidden=view.role!=='admin';
+  if (view.role==='admin') renderUserEditor();
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
@@ -1178,8 +1234,18 @@ $('#manager-preview-salon').onchange=event=>{
   showView();
 };
 $('#view-switch').onclick=()=>{preview=!preview;previewResult=null;$('#cookie').open=false;showView();};
+$('#account-role').onchange=event=>{
+  sessionStorage.setItem('lejek-active-role',event.target.value);
+  location.replace('/daily.html');
+};
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
+  const roleSelect=$('#account-role');
+  const labels={group:'Szef grupy dealerskiej',manager:'Kierownik salonu',seller:'Handlowiec'};
+  $('#account-role-bar').hidden=data.roles.length<2;
+  roleSelect.replaceChildren(...data.roles.map(role=>new Option(labels[role]??role,role)));
+  roleSelect.value=data.role;
+  sessionStorage.setItem('lejek-active-role',data.role);
   $('#load').textContent='';
   $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
   showView();
@@ -1301,7 +1367,7 @@ $('#meme-form').onsubmit=async event=>{
 $('#group-editor').onsubmit=event=>{
   event.preventDefault();
   const values=Object.fromEntries(new FormData(event.target));
-  run(()=>api('/api/group',{name:values.name,headEmails:values.headEmails.split(/\r?\n/).map(line=>line.trim()).filter(Boolean),salons:values.salons.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)}));
+  run(()=>api('/api/group',{name:values.name,salons:values.salons.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)}));
 };
 const lessonEditor=$('#lesson-editor');
 const lessonDraftList=$('#lesson-drafts');

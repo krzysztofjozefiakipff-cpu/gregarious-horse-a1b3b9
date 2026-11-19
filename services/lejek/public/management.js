@@ -19,7 +19,10 @@ function record(person,source,month=get('month').value) {
 }
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 async function api(path,body) {
-  const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const url=new URL(path,location.origin);
+  const selectedRole=sessionStorage.getItem('lejek-active-role');
+  if (selectedRole) url.searchParams.set('role',selectedRole);
+  const response=await fetch(url,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await response.json();
   if(!response.ok) throw new Error(data.error);
   return data;
@@ -35,6 +38,7 @@ async function refresh() {
   try {
     const data=await api('/api/state?month='+encodeURIComponent(month));
     if(latest!==revision) return;
+    sessionStorage.setItem('lejek-active-role',data.role);
     const prior=get('seller').value?people[+get('seller').value]?.id:null;
     people=data.sellers;
     salons=data.salons.map(({salon})=>salon);
