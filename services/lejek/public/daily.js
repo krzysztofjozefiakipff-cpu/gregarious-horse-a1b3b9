@@ -1018,9 +1018,12 @@ function updateUserRoleFields() {
   const group=roles.includes('group');
   const salon=roles.includes('manager')||roles.includes('seller');
   $('#user-group-label').hidden=!group;
-  $('#user-salon-label').hidden=!salon;
+  const delegated=userEditor.dataset.delegated==='true';
+  $('#user-salon-label').hidden=!salon||delegated;
+  $('#delegated-salon-label').hidden=!salon||!delegated;
+  userEditor.elements.assignedSalon.required=salon&&delegated;
   userEditor.elements.dealerGroup.required=group;
-  userEditor.elements.salon.required=salon;
+  userEditor.elements.salon.required=salon&&!delegated;
 }
 function loadUserEditor() {
   const selected=data.users.find(user=>user.email===$('#user-picker').value);
@@ -1038,9 +1041,22 @@ function loadUserEditor() {
   $('#user-status').textContent=selected?.archived?'Użytkownik usunięty z aktywnych kont Lejka.':'';
   updateUserRoleFields();
 }
-function renderUserEditor() {
+function renderUserEditor(view,readOnly) {
+  const delegated=view.role!=='admin';
+  userEditor.dataset.delegated=String(delegated);
+  userEditor.inert=readOnly;
+  $('#user-picker-label').hidden=delegated;
+  for (const [id,allowed] of [['user-group-role',!delegated],['user-manager-role',view.role!=='manager']]) {
+    const label=$('#'+id);
+    label.hidden=!allowed;
+    label.querySelector('input').disabled=!allowed;
+  }
+  const salonPicker=userEditor.elements.assignedSalon;
+  const selected=salonPicker.value;
+  salonPicker.replaceChildren(...view.salons.map(({salon})=>new Option(salon,salon)));
+  if (view.salons.some(({salon})=>salon===selected)) salonPicker.value=selected;
   const picker=$('#user-picker');
-  const prior=picker.value;
+  const prior=delegated?'':picker.value;
   picker.replaceChildren(new Option('Dodaj użytkownika',''),...data.users.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
   if (data.users.some(user=>user.email===prior)) picker.value=prior;
   userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
@@ -1051,15 +1067,19 @@ $('#user-picker').onchange=loadUserEditor;
 userEditor.onchange=updateUserRoleFields;
 userEditor.onsubmit=async event=>{
   event.preventDefault();
+  if (userEditor.inert) return;
   const values=new FormData(userEditor);
   const roles=values.getAll('roles');
   const button=$('#user-save');
   button.disabled=true;
   try {
-    await api('/api/users',{...Object.fromEntries(values),roles});
+    const fields=Object.fromEntries(values);
+    await api('/api/users',{...fields,salon:data.role==='admin'?fields.salon:fields.assignedSalon,roles});
     await refresh();
-    $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
-    loadUserEditor();
+    if (data.role==='admin') {
+      $('#user-picker').value=String(values.get('email')).trim().toLowerCase();
+      loadUserEditor();
+    }
     $('#user-status').textContent='Zapisano użytkownika i role.';
   } catch(error) {
     $('#user-status').textContent=error.message;
@@ -1073,6 +1093,7 @@ $('#user-archive').onclick=async event=>{
   const selected=data.users.find(user=>user.email===$('#user-picker').value);
   if (!selected) return;
   const archived=!selected.archived;
+  if (data.role!=='admin') return;
   if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach.')) return;
   button.disabled=true;
   try {
@@ -1118,13 +1139,14 @@ function renderAdmin() {
   $('#manager-preview-note').hidden=!readOnlyPreview;
   $('#manager-preview-note').textContent=groupPreview?'Podgląd szefa grupy.': 'Podgląd kierownika.';
   $('#management-report-link').hidden=readOnlyPreview;
-  $('#management-team-shortcut').hidden=readOnlyPreview||data.role==='admin';
-  $('#absence-panel').inert=managerPreview;
-  $('#lesson-editor').inert=managerPreview;
+  $('#management-team-shortcut').hidden=readOnlyPreview||data.role!=='manager';
+  $('#absence-panel').inert=readOnlyPreview;
+  $('#lesson-editor').inert=readOnlyPreview;
+  $('#settings').inert=readOnlyPreview;
   $('#dealer').textContent=group?(selected||view.dealerGroup):manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
   $('#performance-title').textContent=title;
   $('#management-performance').textContent=group?'Wyniki grupy':title;
-  $('#management-admin').textContent=group?'Konta zespołu':manager?'Zarządzanie':'Panel administracyjny';
+  $('#management-admin').textContent='Panel administracyjny';
   $('#management-team').hidden=!teamDashboard;
   $('#manager-today').hidden=!teamDashboard;
   if (teamDashboard) renderManagerDashboard(view);
@@ -1133,16 +1155,18 @@ function renderAdmin() {
   const query=multiple&&selected?'?salon='+encodeURIComponent(selected):'';
   $('#management-team-link').href='/zarzadzanie.html'+query+'#administracja';
   $('#management-report-link a').href='/zarzadzanie.html'+query;
-  $('#management-team-link').textContent=view.role==='group'?'Konta zespołu':'Konta zespołu i ustawienia planów';
+  $('#management-team-link').textContent='Ustawienia planów';
   renderSalonSummary(view);
-  userEditor.hidden=view.role!=='admin';
-  if (view.role==='admin') renderUserEditor();
+  userEditor.hidden=false;
+  renderUserEditor(view,readOnlyPreview);
+  $('#group-add-salon-block').hidden=!group;
+  $('#group-add-salon').inert=readOnlyPreview;
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
   if (view.role==='admin') renderDealerGroups(view.groups);
-  $('#absence-panel').hidden=view.role==='group';
-  $('#lesson-editor').hidden=view.role==='group';
+  $('#absence-panel').hidden=false;
+  $('#lesson-editor').hidden=false;
   $('#team').textContent=view.sellers.length+' handlowców';
   const reviews=$('#reviews');
   reviews.replaceChildren();
@@ -1162,7 +1186,9 @@ function renderAdmin() {
     }
     reviews.append(card);
   }
-  $('#settings').hidden=view.role!=='admin';
+  $('#settings').hidden=false;
+  $('#global-sidebar-settings').hidden=view.role!=='admin';
+  $('#global-charity-settings').hidden=view.role!=='admin';
   for (const [block,content] of [
     ['admin-users-block','user-editor'],['admin-groups-block','group-editor'],
     ['admin-salons-block','manager-assignments'],['admin-absence-block','absence-panel'],
@@ -1174,22 +1200,24 @@ function renderAdmin() {
   lessonSalon.replaceChildren(...(lessonSalons.length>1?[new Option('Wybierz salon','')]:[]),...lessonSalons.map(salon=>new Option(salon,salon)));
   if (lessonSalons.includes(selectedSalon)) lessonSalon.value=selectedSalon;
   $('#lesson-salon-label').hidden=view.role!=='admin'&&lessonSalons.length<=1;
-  if (view.role==='admin') {
+  {
     const form=$('#brand');
     const selected=form.elements.salon.value;
     form.elements.salon.replaceChildren(...view.salons.map(({salon})=>new Option(salon,salon)));
-    if (selected) form.elements.salon.value=selected;
-    renderStoryQueue();
+    if (view.salons.some(({salon})=>salon===selected)) form.elements.salon.value=selected;
+    renderStoryQueue(readOnlyPreview?[]:view.memeStories);
+  }
+  if (view.role==='admin') {
     $('#giphy-option').disabled=!view.giphyAvailable;
     $('#sidebar-settings').elements.mode.value=view.giphy?'giphy':view.sidebarMode;
     $('#charity').elements.month.value ||= view.today.slice(0,7);
   }
 }
-function renderStoryQueue() {
+function renderStoryQueue(stories) {
   const queue=$('#story-queue');
   queue.replaceChildren();
-  if (!data.memeStories.length) queue.textContent='Brak nowych zgłoszeń.';
-  for (const {id,title,caption} of data.memeStories) {
+  if (!stories.length) queue.textContent='Brak nowych zgłoszeń.';
+  for (const {id,title,caption} of stories) {
     const form=document.createElement('form');
     form.innerHTML='<label>Tytuł <input name="title" maxlength="120" required></label><label>Historia <textarea name="caption" maxlength="500" required></textarea></label><div><button>Zatwierdź</button> <button type="button" class="secondary">Odrzuć</button></div>';
     form.elements.title.value=title;
@@ -1468,6 +1496,12 @@ function renderDealerGroups(groups) {
     list.append(section);
   }
 }
+$('#group-add-salon').onsubmit=event=>{
+  event.preventDefault();
+  const form=event.currentTarget;
+  if (form.inert) return;
+  run(async()=>{await api('/api/group/salon',{salon:form.elements.salon.value});form.reset();});
+};
 $('#group-editor').onsubmit=event=>{
   event.preventDefault();
   const values=Object.fromEntries(new FormData(event.target));

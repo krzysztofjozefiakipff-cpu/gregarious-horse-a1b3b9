@@ -115,6 +115,8 @@ async function handle(request, env) {
     :user.role==='manager'?await list(db,'SELECT ? AS salon UNION SELECT salon FROM manager_salons WHERE manager=? ORDER BY salon',...params)
     :[{salon:user.salon}];
   const managedSalons=new Set(salons.map(({salon})=>salon));
+  const canManage=['admin','group','manager'].includes(user.role);
+  const storyScope=user.role==='admin'?'':' AND '+scope;
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
@@ -155,7 +157,7 @@ async function handle(request, env) {
       if (personal&&meme&&memeVotes.local==null&&await db.prepare('SELECT 1 FROM meme_reactions WHERE person=? AND day=?').bind(user.id,today).first()) {
         memeVotes.local=1;
       }
-      const memeStories=user.role==='admin'?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending' ORDER BY id LIMIT 50"):[];
+      const memeStories=canManage?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending'"+storyScope+' ORDER BY id LIMIT 50',...params):[];
       const series=personal?await db.prepare('SELECT published_day,lessons FROM salon_lessons WHERE salon=?').bind(user.salon).first():null;
       const lessons=series?JSON.parse(series.lessons):[];
       const position=lessons.length?Math.max(0,lessonDay(today)-lessonDay(series.published_day))%lessons.length:0;
@@ -206,7 +208,7 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
-  if (['/api/lesson-import','/api/lessons'].includes(path) && ['admin','manager'].includes(user.role)) {
+  if (['/api/lesson-import','/api/lessons'].includes(path) && canManage) {
     const salon=body.salon||(user.role==='manager'&&salons.length===1?salons[0].salon:null);
     if (!textValid(salon) || !managedSalons.has(salon))
       return json({error:'Wybierz salon.'},400);
@@ -230,6 +232,20 @@ async function handle(request, env) {
     await db.prepare('INSERT INTO salon_lessons VALUES (?,?,?) ON CONFLICT(salon) DO UPDATE SET published_day=excluded.published_day,lessons=excluded.lessons')
       .bind(salon,localDay(),JSON.stringify(lessons)).run();
     return json({ok:true});
+  }
+  if (path==='/api/group/salon' && user.role==='group') {
+    if (!textValid(body.salon)) return json({error:'Podaj nazwę salonu.'},400);
+    const salon=body.salon.trim();
+    if (managedSalons.has(salon)) return json({ok:true});
+    const inserted=await db.prepare(`INSERT INTO dealer_group_salons(salon,group_name)
+      SELECT ?,? WHERE NOT EXISTS (
+        SELECT salon FROM dealer_group_salons WHERE salon=? UNION ALL
+        SELECT salon FROM accounts WHERE salon=? UNION ALL
+        SELECT salon FROM dealer_brand WHERE salon=? UNION ALL
+        SELECT salon FROM salon_lessons WHERE salon=? UNION ALL
+        SELECT salon FROM manager_salons WHERE salon=?
+      )`).bind(salon,user.group,salon,salon,salon,salon,salon).run();
+    return inserted.meta.changes?json({ok:true}):json({error:'Salon już istnieje. Poproś administratora o przypisanie go do grupy.'},409);
   }
   if (path==='/api/group' && user.role==='admin') {
     const {name,salons:groupSalons}=body;
@@ -303,7 +319,7 @@ async function handle(request, env) {
     await db.prepare(sql).bind(address).run();
     return json({ok:true});
   }
-  if (path==='/api/users' && user.role==='admin') {
+  if (path==='/api/users' && canManage) {
     const {name,roles:chosen,salon,dealerGroup}=body;
     const needsSalon=Array.isArray(chosen)&&chosen.some(role=>role!=='group');
     if (!textValid(name)||!Array.isArray(chosen)||!chosen.length||chosen.length>3||new Set(chosen).size!==chosen.length||
@@ -313,10 +329,24 @@ async function handle(request, env) {
     const address=body.email.trim().toLowerCase();
     const current=await db.prepare('SELECT id,role FROM accounts WHERE email=?').bind(address).first();
     if (address===email||current?.role==='admin') return json({error:'Tym formularzem nie można zmienić konta administratora.'},403);
+    if (user.role!=='admin') {
+      if (!needsSalon||!managedSalons.has(salon.trim())||chosen.some(role=>role==='group'||user.role==='manager'&&role!=='seller'))
+        return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
+      if (current||await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(address).first())
+        return json({error:'Konto jest już przypisane w Lejku. Zmianę ról wykonuje administrator.'},409);
+    }
     const group=chosen.includes('group')&&textValid(dealerGroup)?dealerGroup.trim():null;
     if (chosen.includes('group')&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
     const fallback=chosen.includes('manager')?'manager':'seller';
+    if (user.role!=='admin') {
+      const created=await db.prepare(`INSERT INTO accounts(email,name,salon,role)
+        SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM dealer_group_heads WHERE email=?)
+        ON CONFLICT(email) DO NOTHING RETURNING id`).bind(address,name.trim(),salon.trim(),fallback,address).first();
+      if (!created) return json({error:'Konto jest już przypisane w Lejku.'},409);
+      if (chosen.length>1) await db.batch(chosen.map(role=>db.prepare('INSERT INTO account_roles VALUES (?,?)').bind(created.id,role)));
+      return json({ok:true});
+    }
     await db.batch([
       db.prepare('INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role')
         .bind(address,name.trim(),needsSalon?salon.trim():'',fallback),
@@ -353,9 +383,10 @@ async function handle(request, env) {
     ]);
     return json({ok:true});
   }
-  if (path==='/api/brand' && user.role==='admin') {
+  if (path==='/api/brand' && canManage) {
     if (!textValid(body.salon)||!textValid(body.name)||typeof body.logo!=='string'||body.logo.length>56000||
         (body.logo&&!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(body.logo))) return json({error:'Sprawdź nazwę i logo dealera.'},400);
+    if (user.role!=='admin'&&!managedSalons.has(body.salon.trim())) return json({error:'Nie masz dostępu do salonu.'},403);
     await db.prepare('INSERT INTO dealer_brand VALUES (?,?,?) ON CONFLICT(salon) DO UPDATE SET name=excluded.name,logo=excluded.logo')
       .bind(body.salon.trim(),body.name.trim(),body.logo).run();
     return json({ok:true});
@@ -379,12 +410,12 @@ async function handle(request, env) {
       .bind(user.id,body.title.trim(),body.caption.trim()).run();
     return json({ok:true});
   }
-  if (path==='/api/meme-review' && user.role==='admin') {
+  if (path==='/api/meme-review' && canManage) {
     if (!Number.isSafeInteger(body.id)||typeof body.approve!=='boolean'||(body.approve&&!storyValid()))
       return json({error:'Sprawdź treść i decyzję.'},400);
     const change=body.approve
-      ?await db.prepare("UPDATE meme_stories SET title=?,caption=?,status='approved' WHERE id=? AND status='pending'").bind(body.title.trim(),body.caption.trim(),body.id).run()
-      :await db.prepare("UPDATE meme_stories SET status='rejected' WHERE id=? AND status='pending'").bind(body.id).run();
+      ?await db.prepare("UPDATE meme_stories SET title=?,caption=?,status='approved' WHERE id=? AND status='pending'"+storyScope).bind(body.title.trim(),body.caption.trim(),body.id,...params).run()
+      :await db.prepare("UPDATE meme_stories SET status='rejected' WHERE id=? AND status='pending'"+storyScope).bind(body.id,...params).run();
     return change.meta.changes?json({ok:true}):json({error:'Historia jest już rozpatrzona.'},409);
   }
   if (path==='/api/giphy-assign' && user.role==='seller' && env.GIPHY_API_KEY) {
@@ -417,7 +448,6 @@ async function handle(request, env) {
       .bind(body.month,body.title.trim(),body.organization.trim(),body.description.trim()).run();
     return json({ok:true});
   }
-  if (user.role==='group') return json({error:'Ten poziom dostępu służy do przeglądania wyników i zarządzania zespołem.'},403);
   if (!sellers.some(p=>p.id===body.person)) return json({error:'Brak uprawnień do tego handlowca.'},403);
   if (path==='/api/review' && user.role!=='seller') {
     if (!dayValid(body.day)||typeof body.approve!=='boolean') return json({error:'Sprawdź decyzję.'},400);
@@ -425,6 +455,7 @@ async function handle(request, env) {
       .bind(body.approve?'zero':'rejected',body.person,body.day).run();
     return changed.meta.changes?json({ok:true}):json({error:'Zgłoszenie jest już rozliczone.'},409);
   }
+  if (user.role==='group') return json({error:'Ten poziom dostępu służy do przeglądania wyników i zarządzania zespołem.'},403);
   if (path==='/api/daily' || path==='/api/day-exception') {
     if (user.role!=='seller') return json({error:'Dzienny wpis zapisuje handlowiec.'},403);
     const {day}=body;

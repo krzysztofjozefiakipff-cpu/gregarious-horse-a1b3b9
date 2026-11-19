@@ -225,23 +225,28 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <summary>Użytkownicy i role</summary>
 <form id="user-editor" hidden>
 
-<label>Użytkownik <select id="user-picker"></select></label>
+<label id="user-picker-label">Użytkownik <select id="user-picker"></select></label>
 <label>Imię i nazwisko <input name="name" required maxlength="120"></label>
 <label>E-mail <input name="email" type="email" required maxlength="120"></label>
 <fieldset><legend>Role użytkownika</legend>
-<label><input type="checkbox" name="roles" value="group"> Szef grupy dealerskiej</label>
-<label><input type="checkbox" name="roles" value="manager"> Kierownik salonu</label>
+<label id="user-group-role"><input type="checkbox" name="roles" value="group"> Szef grupy dealerskiej</label>
+<label id="user-manager-role"><input type="checkbox" name="roles" value="manager"> Kierownik salonu</label>
 <label><input type="checkbox" name="roles" value="seller"> Handlowiec</label>
 </fieldset>
 <label id="user-group-label" hidden>Grupa dealerska <select name="dealerGroup"></select></label>
 <label id="user-salon-label" hidden>Salon handlowca lub główny salon kierownika <input name="salon" list="user-salons" maxlength="120"></label>
 <datalist id="user-salons"></datalist>
+<label id="delegated-salon-label" hidden>Salon <select name="assignedSalon"></select></label>
 <div class="user-actions">
 <button id="user-save">Zapisz użytkownika i role</button>
 <button type="button" class="secondary" id="user-archive" hidden>Usuń użytkownika</button>
 </div>
 <p id="user-status" role="status"></p>
 </form>
+</details>
+<details id="group-add-salon-block" class="admin-block" hidden>
+<summary>Dodaj salon do grupy</summary>
+<form id="group-add-salon"><label>Nazwa nowego salonu <input name="salon" required maxlength="120"></label><button>Dodaj salon</button></form>
 </details>
 <details id="admin-groups-block" class="admin-block" hidden>
 <summary>Grupy dealerskie</summary>
@@ -283,8 +288,8 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <div id="settings" hidden>
 <details><summary>Historie do moderacji</summary><div id="story-queue"></div></details>
 <details><summary>Dane dealera</summary><form id="brand"><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form></details>
-<details><summary>Co pokazać handlowcom?</summary><form id="sidebar-settings"><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Memy z naszej bazy</option><option id="giphy-option" value="giphy">Nasze memy i GIF-y z GIPHY</option></select></label><button>Zapisz wybór</button></form></details>
-<details><summary>Cel miesiąca</summary><form id="charity"><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form></details>
+<details id="global-sidebar-settings"><summary>Co pokazać handlowcom?</summary><form id="sidebar-settings"><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Memy z naszej bazy</option><option id="giphy-option" value="giphy">Nasze memy i GIF-y z GIPHY</option></select></label><button>Zapisz wybór</button></form></details>
+<details id="global-charity-settings"><summary>Cel miesiąca</summary><form id="charity"><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form></details>
 </div>
 </details>
 </section></section>
