@@ -804,7 +804,8 @@ async function handle(request, env) {
     const {day}=body;
     if (!dayValid(day)||day>localDay()) return json({error:'Sprawdź datę wpisu.'},400);
     const {missing,exceptions}=await tracking(db,user.id);
-    if (day !== (missing[0] ?? localDay()))
+    const reportingToday=path==='/api/day-exception'&&body.kind==='pending'&&day===localDay();
+    if (day !== (missing[0] ?? localDay())&&!reportingToday)
       return json({error:'Najpierw rozlicz najstarszy zaległy dzień.'},409);
     if (['pending','leave','training','zero'].includes(exceptions[day])) return json({error:'Ten dzień ma już status rozliczenia.'},409);
     if (path==='/api/day-exception') {

@@ -880,7 +880,13 @@ function renderSeller() {
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
   $('#resolve').hidden=!next||day===next||waiting;
   for (const button of document.querySelectorAll('[data-kind]')) button.hidden=!next||day!==next||waiting;
-  $('#reason').hidden=true;
+  const noActivity=$('#no-activity');
+  if (noActivity.dataset.day!==day||exception==='pending') {
+    noActivity.open=false;
+    $('#reason').value='';
+  }
+  noActivity.dataset.day=day;
+  noActivity.hidden=locked||exception==='pending';
   $('#save').disabled=$('#approve-day').disabled=busy||Boolean(blocked)||locked;
   const draft=personal.drafts?.[day];
   const matrix=records[day]?.[5]??draft;
@@ -1969,10 +1975,24 @@ $('#entry').onsubmit=event=>{
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today,draft);
 };
 for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{
-  const {kind}=button.dataset;
+  run(()=>api('/api/day-exception',{person:data.sellers[0].id,day:editDay,kind:button.dataset.kind}));
+};
+$('#send-no-activity').onclick=async event=>{
+  const button=event.currentTarget;
+  const panel=$('#no-activity');
+  if (busy||panel.hidden) return;
   const reason=$('#reason');
-  if(kind==='pending'&&(!reason.value.trim()||reason.hidden)){reason.hidden=false;reason.focus();return;}
-  run(()=>api('/api/day-exception',{person:data.sellers[0].id,day:editDay,kind,reason:reason.value})).then(()=>{if(reason.hidden) reason.value='';});
+  if (!reason.value.trim()) {
+    $('#status').textContent='Podaj powód dnia bez aktywności.';
+    reason.focus();
+    return;
+  }
+  button.disabled=true;
+  try {
+    await run(()=>api('/api/day-exception',{person:data.sellers[0].id,day:panel.dataset.day,kind:'pending',reason:reason.value}),false,true);
+  } finally {
+    button.disabled=false;
+  }
 };
 $('#brand').onsubmit=event=>{
   event.preventDefault();
