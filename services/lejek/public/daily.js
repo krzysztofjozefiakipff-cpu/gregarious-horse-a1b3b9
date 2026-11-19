@@ -1183,6 +1183,35 @@ function coachingSellerLink(seller) {
   return link;
 }
 
+function salonQuickTotals(plan,elapsed,total,number) {
+  const quickTotals=document.createElement('span');
+  quickTotals.className='salon-quick-totals';
+  for (const [index,label] of salonPlanMetrics.entries()) {
+    const actual=plan.actuals[index];
+    const target=plan.targets[index];
+    const configured=plan.configured[index];
+    const partial=plan.partial?.[index];
+    const pace=configured&&target>0&&!partial?salonPace(actual,target,elapsed,total):null;
+    const quickTotal=document.createElement('span');
+    const tone=pace?.tone||'neutral';
+    quickTotal.dataset.pace=tone;
+    const paceLabel=pace?.status??(partial?'Plan obejmuje część salonów':configured?'Cel zerowy':'Brak planu');
+    quickTotal.title=label+' · '+paceLabel;
+    const icon=document.createElement('span');
+    icon.setAttribute('aria-hidden','true');
+    icon.textContent=salonPaceIcons[tone];
+    const shortLabel=document.createElement('abbr');
+    shortLabel.title=label;
+    shortLabel.textContent=salonPlanAbbreviations[index];
+    const accessiblePace=document.createElement('span');
+    accessiblePace.className='salon-pace-description';
+    accessiblePace.textContent=' · '+paceLabel;
+    quickTotal.append(icon,' ',shortLabel,': '+number.format(actual)+'/'+(configured?number.format(target):'—')+(partial?'*':''),accessiblePace);
+    quickTotals.append(quickTotal);
+  }
+  return quickTotals;
+}
+
 function renderSalonSummary(view,team=[]) {
   const results=$('#salon-results');
   const paceKey=$('#salon-pace-key');
@@ -1202,14 +1231,32 @@ function renderSalonSummary(view,team=[]) {
   const salons=new Set(view.salons.map(({salon})=>salon));
   const plans=data.salonPerformance.filter(plan=>salons.has(plan.salon));
   paceKey.hidden=!plans.length;
+  if (plans.length>1) {
+    const planned=salonPlanMetrics.map((_,index)=>plans.filter(plan=>plan.configured[index]));
+    const overall={
+      actuals:salonPlanMetrics.map((_,index)=>plans.reduce((sum,plan)=>sum+plan.actuals[index],0)),
+      targets:planned.map((entries,index)=>entries.reduce((sum,plan)=>sum+plan.targets[index],0)),
+      configured:planned.map(entries=>entries.length>0),
+      partial:planned.map(entries=>entries.length>0&&entries.length<plans.length)
+    };
+    const card=document.createElement('div');
+    card.className='salon-overall-totals';
+    const heading=document.createElement('strong');
+    heading.textContent='Wszystkie salony · razem';
+    card.append(heading,salonQuickTotals(overall,elapsed,total,number));
+    if (overall.partial.some(Boolean)) {
+      const note=document.createElement('p');
+      note.textContent='* Plan obejmuje część salonów';
+      card.append(note);
+    }
+    results.append(card);
+  }
   for (const plan of plans) {
     const card=document.createElement('details');
     card.dataset.salon=plan.salon;
     const summary=document.createElement('summary');
     const title=document.createElement('strong');
     title.textContent=plan.salon;
-    const quickTotals=document.createElement('span');
-    quickTotals.className='salon-quick-totals';
     const grid=document.createElement('span');
     grid.className='salon-progress-grid';
     for (const [index,label] of salonPlanMetrics.entries()) {
@@ -1222,22 +1269,6 @@ function renderSalonSummary(view,team=[]) {
       const configured=plan.configured[index];
       const ratio=configured&&target>0?actual/target:null;
       const pace=ratio===null?null:salonPace(actual,target,elapsed,total);
-      const quickTotal=document.createElement('span');
-      const tone=pace?.tone||'neutral';
-      quickTotal.dataset.pace=tone;
-      const paceLabel=pace?.status??(configured?'Cel zerowy':'Brak planu');
-      quickTotal.title=label+' · '+paceLabel;
-      const icon=document.createElement('span');
-      icon.setAttribute('aria-hidden','true');
-      icon.textContent=salonPaceIcons[tone];
-      const shortLabel=document.createElement('abbr');
-      shortLabel.title=label;
-      shortLabel.textContent=salonPlanAbbreviations[index];
-      const accessiblePace=document.createElement('span');
-      accessiblePace.className='salon-pace-description';
-      accessiblePace.textContent=' · '+paceLabel;
-      quickTotal.append(icon,' ',shortLabel,': '+number.format(actual)+'/'+(configured?number.format(target):'—'),accessiblePace);
-      quickTotals.append(quickTotal);
       values.textContent=actual+' / '+(configured?target:'—')+
         (ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
       if (pace) values.className=pace.tone;
@@ -1271,7 +1302,7 @@ function renderSalonSummary(view,team=[]) {
     time.className='salon-pace-time';
     time.textContent=elapsed+' z '+total+' dni roboczych miesiąca (pon.–sob.) · '+percent.format(elapsed/total)
       +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
-    summary.append(title,status,quickTotals);
+    summary.append(title,status,salonQuickTotals(plan,elapsed,total,number));
     const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
