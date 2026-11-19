@@ -842,8 +842,12 @@ function renderSeller() {
   renderQuote(quotes[dayIndex%quotes.length]);
   const lesson=data.lesson;
   $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
-  $('#lesson-topic').textContent=lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
-  $('#lesson-remember').hidden=!lesson;
+  $('#lesson-topic').textContent=lesson?.question??lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
+  const answer=$('#lesson-answer');
+  if (answer.querySelector('p').textContent!==(lesson?.topic??'')) answer.open=false;
+  answer.hidden=!lesson?.question;
+  answer.querySelector('p').textContent=lesson?.question?lesson.topic:'';
+  $('#lesson-remember').hidden=!lesson||Boolean(lesson.question);
   $('#lesson-remember span').textContent=lesson?.remember??'';
   renderPlans(records);
   const ranking=data.ranking;
@@ -1635,6 +1639,7 @@ function renderAdmin() {
   lessonSalon.replaceChildren(...(lessonSalons.length>1?[new Option('Wybierz salon','')]:[]),...lessonSalons.map(salon=>new Option(salon,salon)));
   if (lessonSalons.includes(selectedSalon)) lessonSalon.value=selectedSalon;
   $('#lesson-salon-label').hidden=view.role!=='admin'&&lessonSalons.length<=1;
+  if ($('#admin-lessons-block').open&&!$('#admin-lessons-block').hidden) loadLessonPacks();
   {
     const form=$('#brand');
     const selected=form.elements.salon.value;
@@ -2079,6 +2084,66 @@ $('#group-editor').onsubmit=event=>{
 const lessonEditor=$('#lesson-editor');
 const lessonDraftList=$('#lesson-drafts');
 let lessonBusy=false;
+let lessonPackRevision=0;
+async function loadLessonPacks() {
+  const revision=++lessonPackRevision;
+  const salon=$('#lesson-salon').value;
+  const container=$('#lesson-packs');
+  container.textContent=salon?'Wczytywanie paczek…':'Wybierz salon.';
+  if (!salon) return;
+  const path='/api/lesson-packs?salon='+encodeURIComponent(salon);
+  try {
+    const {packs}=await api(path);
+    if (revision!==lessonPackRevision) return;
+    container.replaceChildren();
+    if (!packs.length) container.textContent='Brak zapisanych paczek.';
+    for (const pack of packs) {
+      const row=document.createElement('fieldset');
+      const name=document.createElement('legend');
+      name.textContent=pack.name;
+      const toggle=document.createElement('button');
+      toggle.type='button';
+      toggle.className='secondary';
+      toggle.textContent=pack.active?'Wyłącz paczkę':'Włącz paczkę';
+      toggle.onclick=async()=>{
+        toggle.disabled=true;
+        try {
+          await api('/api/lesson-packs',{salon,id:pack.id,active:!pack.active});
+          await loadLessonPacks();
+        } catch (error) {
+          $('#lesson-status').textContent=error.message;
+          toggle.disabled=false;
+        }
+      };
+      const preview=document.createElement('details');
+      const summary=document.createElement('summary');
+      summary.textContent=pack.count+' pytań lub lekcji · '+(pack.active?'Wyświetlana':'Wyłączona');
+      const list=document.createElement('ol');
+      preview.append(summary,list);
+      preview.ontoggle=async()=>{
+        if (!preview.open||list.children.length) return;
+        try {
+          const {lessons}=await api(path+'&id='+pack.id);
+          list.replaceChildren(...lessons.map(lesson=>{
+            const item=document.createElement('li');
+            item.textContent=(lesson.question?lesson.question+' Odpowiedź: ':lesson.title+' · ')+lesson.topic;
+            return item;
+          }));
+        } catch (error) {
+          $('#lesson-status').textContent=error.message;
+        }
+      };
+      row.append(name,preview,toggle);
+      container.append(row);
+    }
+  } catch (error) {
+    if (revision===lessonPackRevision) container.textContent=error.message;
+  }
+}
+$('#lesson-salon').addEventListener('change',loadLessonPacks);
+$('#admin-lessons-block').addEventListener('toggle',event=>{
+  if (event.currentTarget.open) loadLessonPacks();
+});
 function updateLessonButtons() {
   const total=lessonDraftList.children.length;
   $('#lesson-publish').disabled=lessonBusy||total===0;
@@ -2109,9 +2174,9 @@ $('#lesson-import').onclick=async ()=>{
       reader.readAsDataURL(file);
     });
     const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded});
-    lessonDraftList.replaceChildren();
-    for (const lesson of result.lessons) appendLesson(lesson);
-    status.textContent='Wybrano zagadnienia: '+result.lessons.length+'. Sprawdź szkice przed publikacją.';
+    $('#lesson-file').value='';
+    status.textContent='Zapisano '+result.count+' pytań w paczce „'+file.name+'”. Sprawdź treść i włącz paczkę, gdy będzie gotowa.';
+    await loadLessonPacks();
   } catch(error) {status.textContent=error.message;}
   finally {lessonBusy=false;updateLessonButtons();}
 };
@@ -2123,7 +2188,9 @@ lessonEditor.onsubmit=async event=>{
   updateLessonButtons();
   try {
     await api('/api/lessons',{salon:$('#lesson-salon').value,lessons});
-    status.textContent='Opublikowano serię. Pierwsza lekcja jest już widoczna w salonie.';
+    lessonDraftList.replaceChildren();
+    status.textContent='Zapisano lekcje ręczne i włączono ich paczkę.';
+    await loadLessonPacks();
   } catch(error) {status.textContent=error.message;}
   finally {lessonBusy=false;updateLessonButtons();}
 };

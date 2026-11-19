@@ -17,7 +17,7 @@ export async function extractLessonText(filename,encoded) {
     await writeFile(file,bytes,{mode:0o600});
     const options={timeout:8000,maxBuffer:512_000};
     const {stdout}=ext==='pdf'
-      ?await exec('pdftotext',['-f','1','-l','40','-enc','UTF-8',file,'-'],options)
+      ?await exec('pdftotext',['-enc','UTF-8',file,'-'],options)
       :await exec('python3',ext==='docx'?['scripts/extract-docx.py',file]:['scripts/extract-office.py',file,ext],options);
     return stdout;
   } finally {

@@ -63,7 +63,8 @@ function lessonDrafts(text) {
     ['Oferta i finansowanie', /ofert|finansowan|leasing|kredyt|ubezpiecze|rabat|wycen|odkup/iu],
     ['Kontakt po spotkaniu', /follow[ -]?up|ponown.{0,10}kontakt|po spotkaniu|po wizycie|po wysłaniu|następn.{0,8}krok/iu],
     ['Obiekcje i domknięcie sprzedaży', /obiekcj|zastrzeże|negocjac|domkni|zamówieni|podpisani|decyzj.{0,12}klient/iu],
-    ['Wydanie auta i obsługa posprzedażowa', /wydani.{0,12}(aut|pojazd|samoch)|po zakupie|po odbiorze|posprzedaż|opini.{0,10}google|serwis/iu]
+    ['Wydanie auta i obsługa posprzedażowa', /wydani.{0,12}(aut|pojazd|samoch)|po zakupie|po odbiorze|posprzedaż|opini.{0,10}google|serwis/iu],
+    ['Standard pracy w salonie', /procedur|dokument|zgod|crm|rejestr|faktur|termin|salon|klient/iu]
   ];
   const actionable=/należy|powinien|powinna|trzeba|wymaga|obowiązk|standard|zapytaj|zaproponuj|przedstaw|wyjaśnij|potwierdź|ustal|sprawdź|przekaż|zaprezentuj/iu;
   const gap=/\b(?:nie|brak|pominięto|niewykonano)\b|niezgodnoś|pominął|pominęła/iu;
@@ -75,7 +76,7 @@ function lessonDrafts(text) {
     const lines=block.split('\n').map(line=>line.trim()).filter(line=>line&&!metadata.test(line));
     const heading=lines.length>1&&lines[0].length<=100&&!/[.!?]$/.test(lines[0])&&!actionable.test(lines[0])
       ?lines.shift():'';
-    const segments=lines.join('\n').split(/\n(?=\s*(?:[•·▪]|- |\d+[.)] ))/u)
+    const segments=lines
       .flatMap(part=>Array.from(segmenter.segment(part),({segment})=>segment));
     for (const segment of segments) {
       const fact=segment.replace(/\s+/g,' ').replace(/^(?:[•·▪]|- |\d+[.)] )\s*/u,'').trim();
@@ -91,17 +92,17 @@ function lessonDrafts(text) {
       topics[topic].push({fact,priority});
     }
   }
-  return topics.flatMap((items,index)=>{
-    if (!items.length) return [];
-    items.sort((a,b)=>b.priority-a.priority);
-    const title=skills[index][0];
-    const [first,...rest]=items.map(item=>item.fact);
-    const supporting=rest.find(fact=>first.length+fact.length<=640);
-    const remember=gap.test(first)
-      ?'Przećwicz, jak unikniesz wskazanego błędu podczas rozmowy z klientem.'
-      :'Wyjaśnij własnymi słowami, jak wykorzystasz tę informację w rozmowie z klientem.';
-    return [{title,topic:[first,supporting].filter(Boolean).join('\n\n'),remember,priority:items[0].priority}];
-  }).sort((a,b)=>b.priority-a.priority).map(({title,topic,remember})=>({title,topic,remember}));
+  return topics.flatMap((items,index)=>items.map(({fact,priority})=>{
+    const [title,pattern]=skills[index];
+    const match=fact.match(/\b\d+(?:[,.]\d+)?\s*(?:%|km\b|kWh\b|godzin\p{L}*|minut\p{L}*|dni\b|zł\b)/iu)
+      ??fact.match(pattern)??fact.match(/\p{L}{6,}/u);
+    if (!match) return null;
+    const before=fact.slice(0,match.index);
+    const after=fact.slice(match.index+match[0].length);
+    const question=before.replace(/\p{L}+$/u,'')+'[…]'+after.replace(/^\p{L}+/u,'');
+    return {title,question,topic:fact,remember:'Przypomnij sobie tę zasadę przed następną rozmową z klientem.',priority};
+  })).filter(Boolean).sort((a,b)=>b.priority-a.priority)
+    .map(({priority,...lesson})=>lesson);
 }
 const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
 
@@ -285,6 +286,18 @@ async function handle(request, env) {
     }
     return json({plans});
   }
+  if (request.method==='GET' && path==='/api/lesson-packs') {
+    const salon=url.searchParams.get('salon');
+    if (!canManage||!managedSalons.has(salon)) return json({error:'Brak dostępu do salonu.'},403);
+    const id=url.searchParams.get('id');
+    if (id!==null) {
+      const pack=await db.prepare('SELECT lessons FROM lesson_packs WHERE salon=? AND id=?').bind(salon,id).first();
+      return pack?json({lessons:JSON.parse(pack.lessons)}):json({error:'Nie znaleziono paczki.'},404);
+    }
+    const packs=await list(db,`SELECT id,name,active,json_array_length(lessons) AS count
+      FROM lesson_packs WHERE salon=? ORDER BY id DESC`,salon);
+    return json({packs});
+  }
   if (request.method==='GET' && path==='/api/daily/reopen') {
     const person=Number(url.searchParams.get('person'));
     if (user.role!=='manager'||!sellers.some(seller=>seller.id===person&&seller.accountStatus!=='inactive'))
@@ -339,9 +352,10 @@ async function handle(request, env) {
         memeVotes.local=1;
       }
       const memeStories=canManage?await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='pending'"+storyScope+' ORDER BY id LIMIT 50',...params):[];
-      const series=personal?await db.prepare('SELECT published_day,lessons FROM salon_lessons WHERE salon=?').bind(user.salon).first():null;
-      const lessons=series?JSON.parse(series.lessons):[];
-      const position=lessons.length?Math.max(0,lessonDay(today)-lessonDay(series.published_day))%lessons.length:0;
+      const packs=personal?await list(db,`SELECT published_day,lessons FROM lesson_packs
+        WHERE salon=? AND active=1 ORDER BY published_day,id`,user.salon):[];
+      const lessons=packs.flatMap(pack=>JSON.parse(pack.lessons));
+      const position=lessons.length?Math.max(0,lessonDay(today)-lessonDay(packs[0].published_day))%lessons.length:0;
       const lesson=lessons[position]??null;
       let ranking=null;
       if (personal) {
@@ -464,18 +478,32 @@ async function handle(request, env) {
     ]);
     return json({ok:true});
   }
-  if (['/api/lesson-import','/api/lessons'].includes(path) && canManage) {
+  if (['/api/lesson-import','/api/lessons','/api/lesson-packs'].includes(path) && canManage) {
     const salon=body.salon||(user.role==='manager'&&salons.length===1?salons[0].salon:null);
     if (!textValid(salon) || !managedSalons.has(salon))
       return json({error:'Wybierz salon.'},400);
+    if (path==='/api/lesson-packs') {
+      if (!Number.isSafeInteger(body.id)||typeof body.active!=='boolean')
+        return json({error:'Sprawdź paczkę pytań.'},400);
+      const result=await db.prepare(`UPDATE lesson_packs SET active=?,published_day=CASE
+        WHEN active=0 AND ?=1 THEN ? ELSE published_day END WHERE salon=? AND id=?`)
+        .bind(Number(body.active),Number(body.active),localDay(),salon,body.id).run();
+      return result.meta.changes?json({ok:true}):json({error:'Nie znaleziono paczki w tym salonie.'},404);
+    }
     if (path==='/api/lesson-import') {
-      if (typeof body.filename!=='string'||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
+      if (typeof body.filename!=='string'||body.filename.length>255||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
           typeof body.file!=='string'||!body.file||body.file.length>20_971_520)
         return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 15 MB.'},400);
       try {
-        const text=(await env.extractLessonText(body.filename,body.file)).slice(0,120_000);
+        const text=(await env.extractLessonText(body.filename,body.file));
         const lessons=lessonDrafts(text);
-        if (lessons.length) return json({lessons});
+        if (lessons.length) {
+          await db.prepare(`INSERT INTO lesson_packs(salon,name,published_day,lessons)
+            VALUES (?,?,?,?) ON CONFLICT(salon,name) DO UPDATE
+            SET active=0,published_day=excluded.published_day,lessons=excluded.lessons`)
+            .bind(salon,body.filename,localDay(),JSON.stringify(lessons)).run();
+          return json({count:lessons.length});
+        }
         if (text.trim()) return json({error:'Nie znaleziono zagadnień sprzedażowych. Wybierz dokument ze standardami obsługi, oceną wizyty lub informacjami o produkcie albo dodaj lekcję ręcznie.'},422);
         return json({error:'Brak tekstu do odczytania. Jeśli to skan, użyj pliku z rozpoznanym tekstem lub dodaj lekcję ręcznie.'},422);
       } catch {
@@ -487,7 +515,9 @@ async function handle(request, env) {
           lesson.topic.trim()&&lesson.topic.length<=650&&typeof lesson.remember==='string'&&lesson.remember.trim()&&lesson.remember.length<=220))
       return json({error:'Uzupełnij tytuł, zagadnienie i „Zapamiętaj!” dla każdej lekcji.'},400);
     const lessons=body.lessons.map(({title,topic,remember})=>({title:title.trim(),topic:topic.trim(),remember:remember.trim()}));
-    await db.prepare('INSERT INTO salon_lessons VALUES (?,?,?) ON CONFLICT(salon) DO UPDATE SET published_day=excluded.published_day,lessons=excluded.lessons')
+    await db.prepare(`INSERT INTO lesson_packs(salon,name,active,published_day,lessons)
+      VALUES (?,'Lekcje dodane ręcznie',1,?,?) ON CONFLICT(salon,name)
+      DO UPDATE SET active=1,published_day=excluded.published_day,lessons=excluded.lessons`)
       .bind(salon,localDay(),JSON.stringify(lessons)).run();
     return json({ok:true});
   }
@@ -500,7 +530,7 @@ async function handle(request, env) {
         SELECT salon FROM dealer_group_salons WHERE salon=? UNION ALL
         SELECT salon FROM accounts WHERE salon=? UNION ALL
         SELECT salon FROM dealer_brand WHERE salon=? UNION ALL
-        SELECT salon FROM salon_lessons WHERE salon=? UNION ALL
+        SELECT salon FROM lesson_packs WHERE salon=? UNION ALL
         SELECT salon FROM manager_salons WHERE salon=?
       )`).bind(salon,user.group,salon,salon,salon,salon,salon).run();
     return inserted.meta.changes?json({ok:true}):json({error:'Salon już istnieje. Poproś administratora o przypisanie go do grupy.'},409);
