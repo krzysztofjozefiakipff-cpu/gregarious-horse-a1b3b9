@@ -2,8 +2,10 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const assets = Object.fromEntries(['zarzadzanie.html','quarter.js','workbook-plan.js','management.js','daily.html','daily.js'].map(name =>
   ['/'+name, readFileSync('public/'+name,'utf8')]));
-const dailyVersion=createHash('sha256').update(assets['/daily.js']).digest('hex').slice(0,12);
-assets['/daily.html']=assets['/daily.html'].replace('src="daily.js"','src="daily.js?v='+dailyVersion+'"');
+for (const script of ['daily.js','workbook-plan.js']) {
+  const version=createHash('sha256').update(assets['/'+script]).digest('hex').slice(0,12);
+  assets['/daily.html']=assets['/daily.html'].replace('src="'+script+'"','src="'+script+'?v='+version+'"');
+}
 const memes = JSON.parse(readFileSync('worker/memes.json','utf8'));
 const scenes = JSON.parse(readFileSync('worker/meme-scenes.json','utf8'));
 for (const [icon,titles,captions] of scenes) {
