@@ -120,14 +120,23 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   [data-seller-panel="dzisiaj"] {
     display:grid;
     grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
-    grid-template-areas:"work inspiration" "sidebar sidebar";
+    grid-template-areas:"work quote" "work lesson" "work meme" "cause cause";
+    grid-template-rows:min-content min-content auto auto;
     gap:14px 20px;
     align-items:start;
   }
-  [data-seller-panel="dzisiaj"] > .daily-inspiration { grid-area:inspiration; }
+  .daily-inspiration, #sidebar-feature { display:contents; }
+  #daily .daily-inspiration > *, #daily #sidebar-feature > * { margin:0; }
+  #daily .daily-inspiration > .quote { grid-area:quote; }
+  #daily-lesson { grid-area:lesson; }
+  #meme { grid-area:meme; }
+  [data-seller-panel="dzisiaj"]:has(#meme[hidden]) {
+    grid-template-areas:"work quote" "work lesson" "cause cause";
+    grid-template-rows:min-content auto auto;
+  }
+  #cause { grid-area:cause; }
   [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
   .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
-  #sidebar-feature { grid-area:sidebar; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
   #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
   [data-seller-panel="plan"] {
     display:grid;
@@ -162,6 +171,19 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily .task-group li { border:0; border-radius:0; padding:7px 0; }
 #daily .task-group li+li { border-top:1px solid var(--line); }
 #followup-reminder { margin:8px 0 12px; }
+@media (min-width: 1051px) {
+  #tasks { gap:8px; }
+  #tasks .task-group { padding:6px 10px; }
+  #daily .task-group ol {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    column-gap:12px;
+  }
+  #daily .task-group li { padding:3px 0; }
+  #daily .task-group li+li { border-top:0; }
+  #daily .task-action { font-size:.95rem; line-height:1.35; }
+  #daily .task-action strong { font-size:1.05rem; font-variant-numeric:tabular-nums; }
+}
 </style>
 </head>
 <body>
