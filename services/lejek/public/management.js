@@ -54,7 +54,12 @@ async function refresh() {
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
     document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
-    get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],accounts.map(a=>[escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],{active:'Aktywne',inactive:'Nieaktywne',pending:'Bez hasła'}[a.accountStatus],a.includeInReports?'W raportach':'Poza raportami']));
+    const accountLabels={active:'Aktywne',inactive:'Nieaktywne',pending:'Bez hasła'};
+    get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],accounts.map(a=>[
+      escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],
+      statusBadge(accountLabels[a.accountStatus],a.accountStatus==='active'),
+      statusBadge(a.includeInReports?'W raportach':'Poza raportami',a.includeInReports)
+    ]));
     updateFilters(prior);
     syncDetailedSection();
     get('dashboard').hidden=false;
@@ -67,6 +72,7 @@ const sum = rows => rows.reduce((total, row) => total.map((v,i) => v+row[i]),emp
 const nf = new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
 const pct = (a,b) => b ? nf.format(100*a/b)+'%' : '—';
 const table = (head,rows) => '<table><thead><tr>'+head.map(v=>'<th scope="col">'+v+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+const statusBadge = (label,positive) => '<span class="status-badge '+(positive?'status-positive':'status-negative')+'">'+escape(label)+'</span>';
 const options = (el,rows) => {el.replaceChildren(...rows.map(([value,label])=>new Option(label,value)));};
 function available() {
   const role=get('role').value;

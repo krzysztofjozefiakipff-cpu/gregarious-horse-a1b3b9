@@ -966,8 +966,12 @@ function renderManagerDashboard(view) {
     const badges=document.createElement('span');
     badges.className='team-statuses';
     const accountLabels={active:'Konto aktywne',inactive:'Konto nieaktywne',pending:'Konto bez hasła'};
-    for (const label of [accountLabels[seller.accountStatus],seller.includeInReports?'W raportach':'Poza raportami']) {
+    for (const [label,positive] of [
+      [accountLabels[seller.accountStatus],seller.accountStatus==='active'],
+      [seller.includeInReports?'W raportach':'Poza raportami',seller.includeInReports]
+    ]) {
       const badge=document.createElement('span');
+      badge.className='status-badge '+(positive?'status-positive':'status-negative');
       badge.textContent=label;
       badges.append(badge);
     }

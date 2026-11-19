@@ -65,3 +65,13 @@ a { color: var(--ink); }
   font-weight: 750;
 }
 .panel-nav a[aria-current="page"] { background: var(--ink); color: white; }
+
+.status-badge {
+  display: inline-block;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: .85rem;
+  font-weight: 700;
+}
+.status-positive { color: #12633b; background: #e7f5eb; }
+.status-negative { color: #a12528; background: #fcebec; }
