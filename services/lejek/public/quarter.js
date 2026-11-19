@@ -14,9 +14,13 @@ function monthProgress(month, today) {
   return Number(today.slice(8)) / days;
 }
 
-function quarterReport(months, today, plans, sales) {
+function quarterReport(months, today, plans, sales, included = months) {
   let carry = 0;
   return months.map((month, index) => {
+    if (!included.includes(month)) {
+      carry = 0;
+      return null;
+    }
     const base = plans[index];
     const sold = sales[index];
     const previousClosed = index === 0 || months[index - 1] < today.slice(0, 7);

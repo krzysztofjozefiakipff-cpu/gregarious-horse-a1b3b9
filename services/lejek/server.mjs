@@ -12,9 +12,15 @@ const allowedHosts = new Set(['lejek.carvamo.com', 'biegwyzej.pl', 'www.biegwyze
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users','0015_identity','0016_report_exclusions','0017_salon_plans','0018_plan_approvals','0019_source_plans','0020_password_resets','0021_daily_drafts','0022_lesson_packs','0023_work_calendar','0024_seller_source_profiles']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users','0015_identity','0016_report_exclusions','0017_salon_plans','0018_plan_approvals','0019_source_plans','0020_password_resets','0021_daily_drafts','0022_lesson_packs','0023_work_calendar','0024_seller_source_profiles','0025_archive_report_periods']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
+// Legacy archives recorded only the email. Use the rollout month for those accounts.
+const archiveCutoff=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit'}).format(new Date());
+database.prepare(`INSERT INTO archive_report_periods (email,from_month)
+  SELECT email,? FROM archived_users a WHERE NOT EXISTS (
+    SELECT 1 FROM archive_report_periods p WHERE p.email=a.email AND p.until_month IS NULL
+  ) ON CONFLICT(email,from_month) DO UPDATE SET until_month=NULL`).run(archiveCutoff);
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
 const DB = {
   prepare(sql) {
