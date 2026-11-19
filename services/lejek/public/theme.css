@@ -84,3 +84,10 @@ a { color: var(--ink); }
 .panel-header .product-brand, .panel-header a { color: white; }
 .panel-header .product-mark::before { background: white; }
 .panel-header #salon { color: #c9d8ed; }
+
+.header-account { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; min-width:0; }
+.panel-header .signed-in {
+  padding:4px 8px; border:1px solid #ffffff45; border-radius:6px;
+  color:#c9d8ed; font-size:.875rem; min-width:0; overflow-wrap:anywhere;
+}
+.panel-header .signed-in strong { color:white; font-size:inherit; letter-spacing:normal; }

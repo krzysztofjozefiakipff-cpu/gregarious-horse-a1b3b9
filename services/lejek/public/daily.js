@@ -1623,6 +1623,9 @@ $('#account-role').onchange=event=>{
 };
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
+  const signedIn=$('#signed-in');
+  signedIn.querySelector('strong').textContent=data.signedInAs??'';
+  signedIn.hidden=!data.signedInAs;
   if (data.role!=='seller') {
     data.salonPerformance=await api('/api/salon-plans?month='+data.today.slice(0,7))
       .then(({plans})=>plans).catch(()=>null);

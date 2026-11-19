@@ -111,6 +111,7 @@ async function handle(request, env) {
   }
 
   const user={...assigned,role,group:head?.group_name};
+  const signedInAs=assigned?.name?.trim()||email;
 
   const accountRole=(table,role)=>`(EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=${table}.id AND ar.role='${role}')
     OR (${table}.role='${role}' AND NOT EXISTS (SELECT 1 FROM account_roles ar WHERE ar.person=${table}.id)
@@ -330,7 +331,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1 FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+reportScope,...months,...params),
@@ -339,7 +340,7 @@ async function handle(request, env) {
         FROM accounts WHERE ${user.role==='manager'?members:'('+members+' OR '+managers+')'}${filters[user.role]} ORDER BY id`,...params),
     ]);
     const sourcePlans=await list(db,'SELECT person,month,targets FROM seller_source_plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params);
-    return json({roles,role:user.role,sourcePlans,sellers:reportsOnly?sellers.filter(seller=>seller.includeInReports):sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
+    return json({signedInAs,roles,role:user.role,sourcePlans,sellers:reportsOnly?sellers.filter(seller=>seller.includeInReports):sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
