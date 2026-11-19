@@ -1,5 +1,5 @@
 const get = id => document.getElementById(id);
-let people = [], salons = [], accounts = [];
+let people = [], salons = [];
 const sources = ['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi','Odzyskane przez BDC'];
 const fields = ['Leady','Skuteczne kontakty','Kwalifikacja','Oferty','Negocjacje','Sprzedaż','Umówione wizyty','Odbyte umówione wizyty','Jazdy próbne','Klienci z follow-upem','Interakcje follow-up'];
 const extras = [
@@ -52,24 +52,12 @@ async function refresh() {
     people=data.sellers;
     absenceAdjustments=data.absenceAdjustments??{};
     salons=data.salons.map(({salon})=>salon);
-    accounts=data.accounts;
     entries=Object.fromEntries(data.results.map(r=>[[r.month,r.person,r.source].join('/'),JSON.parse(r.counters)]));
     plans=Object.fromEntries(data.plans.map(r=>[r.month+'/'+r.person,r.target]));
     reviewPlans=Object.fromEntries(data.reviewPlans.map(r=>[r.month+'/'+r.person,r.target]));
     sourcePlans=Object.fromEntries((data.sourcePlans??[]).map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
-    const accountLabels={active:'Aktywne',inactive:'Nieaktywne',pending:'Bez hasła'};
-    get('accountTable').innerHTML=[false,true].map(archived=>{
-      const rows=accounts.filter(a=>(a.accountStatus==='inactive')===archived);
-      const heading=archived?'Usunięte konta':'Aktywne konta';
-      return '<section><h3>'+heading+'</h3>'+(rows.length?table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],rows.map(a=>[
-        escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],
-        statusBadge(accountLabels[a.accountStatus],a.accountStatus==='active'),
-        a.archivedFrom?'Poza raportami od '+escape(a.archivedFrom)
-          :statusBadge(a.includeInReports?'W raportach':'Poza raportami',a.includeInReports)
-      ])):'<p>Brak kont w tej grupie.</p>')+'</section>';
-    }).join('');
     updateFilters(prior);
     syncDetailedSection();
     get('dashboard').hidden=false;
@@ -86,7 +74,6 @@ const sum = rows => rows.reduce((total, row) => total.map((v,i) => v+row[i]),emp
 const nf = new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
 const pct = (a,b) => b ? nf.format(100*a/b)+'%' : '—';
 const table = (head,rows) => '<table><thead><tr>'+head.map(v=>'<th scope="col">'+v+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
-const statusBadge = (label,positive) => '<span class="status-badge '+(positive?'status-positive':'status-negative')+'">'+escape(label)+'</span>';
 const options = (el,rows) => {el.replaceChildren(...rows.map(([value,label])=>new Option(label,value)));};
 function available(monthly=true) {
   const role=get('role').value;
@@ -351,12 +338,9 @@ async function saveForm(event,path,payload,dialog,errorId) {
   submit.disabled=true;
   get(errorId).textContent='';
   try {
-    const result=await api(path,payload);
+    await api(path,payload);
     get(dialog).close();
     await refresh();
-    if(result.invitation) get('status').textContent=result.invitation==='sent'
-      ?'Dodano użytkownika i wysłano zaproszenie.'
-      :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. Możesz ją ponowić w „Zarządzaj użytkownikami”.';
   }
   catch(error) {get(errorId).textContent=error.message;}
   finally {submit.disabled=false;}
@@ -370,52 +354,38 @@ get('planForm').onsubmit=event=>saveForm(event,'/api/plans',{
     return input.value===''?null:input.valueAsNumber;
   }))
 },'planEditor','planError');
-get('addAccount').onclick=()=>{
-  const form=get('accountForm');
-  form.reset();
-  get('accountSalons').replaceChildren(...salons.map(salon=>new Option(salon,salon)));
-  const manager=get('role').value==='manager';
-  form.elements.salon.value=get('salon').value||(salons.length===1?salons[0]:'');
-  form.elements.salon.readOnly=manager&&Boolean(form.elements.salon.value);
-  form.elements.role.querySelector('[value="manager"]').disabled=manager;
-  get('accountError').textContent='';
-  get('accountEditor').showModal();
-};
-get('cancelAccount').onclick=()=>get('accountEditor').close();
-get('accountForm').onsubmit=event=>{
-  const fields=Object.fromEntries(new FormData(event.currentTarget));
-  const payload={...fields,includeInReports:event.currentTarget.elements.includeInReports.checked};
-  return saveForm(event,'/api/users',{...payload,roles:[fields.role],createOnly:true},'accountEditor','accountError');
-};
 const benchmarks=sourceAssumptions.map(([close,attempts,meetings,,offers,follow],i)=>
   [sources[i],nf.format(attempts),pct(meetings,1),pct(offers,1),pct(follow,1),pct(close,1)]);
 get('bench').innerHTML=table(['Źródło','Próby kontaktu / lead','Spotkania / lead','Oferty / lead','Follow-up / oferta','Zamówienia / lead'],benchmarks);
 const reportTabs=Array.from(document.querySelectorAll('#report-tabs a'));
 function syncDetailedSection() {
-  const administration=location.hash==='#administracja';
-  const activeReport=reportTabs.find(link=>link.hash===location.hash)??reportTabs[0];
-  get('report-tabs').hidden=administration;
-  get('accountPanel').hidden=!administration;
-  get('detail-performance').setAttribute('aria-current',administration?'false':'page');
-  get('detail-admin').setAttribute('aria-current',administration?'page':'false');
-  for (const link of reportTabs) {
-    const active=link===activeReport;
-    if (active&&!administration) link.setAttribute('aria-current','page');
-    else link.removeAttribute('aria-current');
-    get(link.dataset.tab).hidden=administration||!active;
-  }
   const source=new URLSearchParams(location.search);
-  const returnSection=source.get('powrot')==='administracja'?'administracja':administration?'administracja':'wykonanie';
   const params=new URLSearchParams();
-  if (get('dashboard').dataset.role) params.set('role',get('dashboard').dataset.role);
+  const role=get('dashboard').dataset.role||source.get('role');
+  if (role) params.set('role',role);
   const salon=source.get('salon')||get('salon').value;
   if (salon) params.set('salon',salon);
+  const panelUrl='/daily.html'+(params.size?'?'+params:'');
+  const accountsUrl=panelUrl+'#konta-uzytkownikow';
+  get('detail-accounts').href=accountsUrl;
+  if (location.hash==='#administracja') {
+    location.replace(accountsUrl);
+    return;
+  }
+  const activeReport=reportTabs.find(link=>link.hash===location.hash)??reportTabs[0];
+  for (const link of reportTabs) {
+    const active=link===activeReport;
+    if (active) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+    get(link.dataset.tab).hidden=!active;
+  }
+  const returnSection=source.get('powrot')==='administracja'?'administracja':'wykonanie';
   const back=get('panel-return');
   back.textContent=returnSection==='administracja'?'← Wróć do administracji panelu':'← Wróć do realizacji planów';
-  back.href='/daily.html'+(params.size?'?'+params:'')+'#'+returnSection;
+  back.href=panelUrl+'#'+returnSection;
   const month=get('month').value;
   const period=month?new Date(month+'-01T12:00:00Z').toLocaleDateString('pl-PL',{month:'long',year:'numeric'}):'';
-  get('heading').textContent=administration?'Administracja':['Wykonanie planu',period].filter(Boolean).join(' · ');
+  get('heading').textContent=['Wykonanie planu',period].filter(Boolean).join(' · ');
 }
 const navigation=panelNavigation(syncDetailedSection);
 let restoredNavigation=false;
