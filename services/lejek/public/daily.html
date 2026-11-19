@@ -99,6 +99,10 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 #tasks-intro{margin:0 0 6px;background:var(--tint);color:var(--ink)}
 #tasks-closing{margin-top:12px;padding:12px 14px;border-inline-start:4px solid var(--accent);border-radius:8px;background:var(--ink);color:#fff;font-size:1rem;font-weight:700;line-height:1.45}
 #manager-team-view{margin-bottom:20px}
+#manager-team-view h2{font-size:1.15rem;margin:16px 0 10px}
+#manager-team-view .removed-team-heading{border-top:1px solid var(--line);padding-top:14px}
+#manager-team-removed{margin:0;padding-inline-start:22px;color:var(--muted)}
+#manager-team-removed li+li{margin-top:6px}
 #manager-team-list details{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--ink)}
 #manager-team-list details{margin:0 0 8px}
 #manager-team-list summary{cursor:pointer;overflow-wrap:anywhere}
@@ -514,7 +518,10 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 </section>
 <section id="manager-team-view" hidden>
   <h1>Zespół</h1>
+  <h2>Aktywni handlowcy</h2>
   <div id="manager-team-list"></div>
+  <h2 class="removed-team-heading">Usunięci handlowcy</h2>
+  <ul id="manager-team-removed"></ul>
 </section>
 <section id="administration-view" hidden>
 <h1>Administracja</h1>

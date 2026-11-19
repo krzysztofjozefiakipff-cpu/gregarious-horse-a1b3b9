@@ -1314,7 +1314,7 @@ function renderManagerDashboard(view,detailOnly=false) {
   }
   const forSeller=(items,person)=>items.find(row=>row.month===month&&row.person===person);
   const statuses={leave:'Urlop',training:'Szkolenie',zero:'Dzień rozliczony bez aktywności',pending:'Czeka na zatwierdzenie'};
-  const team=sellers.map(seller=>{
+  const team=sellers.filter(seller=>seller.accountStatus!=='inactive').map(seller=>{
     const entry=teamDay.find(row=>row.person===seller.id);
     const active=Boolean(entry?.started&&entry.started<=today);
     const plannedToday=(view.calendar??[]).some(row=>row.person===seller.id&&row.day===today&&row.status==='approved');
@@ -1332,7 +1332,16 @@ function renderManagerDashboard(view,detailOnly=false) {
   if (detailOnly) return team;
   const list=$('#manager-team-list');
   list.replaceChildren();
-  if (!team.length) list.textContent='Brak przypisanych handlowców.';
+  if (!team.length) list.textContent='Brak aktywnych handlowców.';
+  const removed=$('#manager-team-removed');
+  const inactive=sellers.filter(seller=>seller.accountStatus==='inactive');
+  removed.replaceChildren(...(inactive.length?inactive:[null]).map(seller=>{
+    const item=document.createElement('li');
+    item.textContent=seller?seller.name+(view.salons.length>1?' · '+seller.salon:'')
+      +(seller.archivedFrom?' · poza raportami od '+monthLabel(seller.archivedFrom):'')
+      :'Brak usuniętych handlowców.';
+    return item;
+  }));
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
   for (const {seller,status,metrics,weakest,orders} of team) {
     const detail=document.createElement('details');
@@ -1859,7 +1868,7 @@ async function loadSalonPlans() {
         const badge=document.createElement('span');
         badge.className='planning-badge';
         badge.dataset.state=person.approved?'approved':person.complete?'ready':'empty';
-        badge.textContent=person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Do uzupełnienia';
+        badge.textContent=person.archived?'Konto usunięte':person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Do uzupełnienia';
         summary.append(person.name,badge);
         row.className='planning-seller';
         row.name='planning-seller';
@@ -1871,14 +1880,14 @@ async function loadSalonPlans() {
         });
         row.append(summary);
         const individual={salon:plan.salon,person:person.id};
-        if (data.role==='manager') {
+        if (data.role==='manager'&&!person.archived) {
           row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id),plan.sourceHistoryRates??[]));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
           row.append(values);
         }
-        if (person.complete&&!person.approved) {
+        if (person.complete&&!person.approved&&!person.archived) {
           const approve=document.createElement('button');
           approve.textContent='Zatwierdź plan handlowca';
           approve.onclick=()=>planAction(approve,'/api/salon-plans/approve',individual,month);
@@ -2049,7 +2058,15 @@ function renderUserEditor(view) {
     ...view.salons.map(({salon})=>new Option(salon,salon)));
   const picker=$('#user-picker');
   const prior=picker.value;
-  picker.replaceChildren(new Option(editableUsers.length?'Wybierz użytkownika':'Brak użytkowników w tym zakresie',''),...editableUsers.map(user=>new Option((user.archived?'Usunięty · ':'')+(user.name===user.email?user.email:user.name+' · '+user.email),user.email)));
+  const groups=[false,true].map(archived=>{
+    const group=document.createElement('optgroup');
+    group.label=archived?'Usunięci użytkownicy':'Aktywni użytkownicy';
+    group.append(...editableUsers.filter(user=>Boolean(user.archived)===archived)
+      .map(user=>new Option(user.name===user.email?user.email:user.name+' · '+user.email,user.email)));
+    return group;
+  });
+  picker.replaceChildren(new Option(editableUsers.length?'Wybierz użytkownika':'Brak użytkowników w tym zakresie',''),
+    ...groups.filter(group=>group.children.length));
   if (editableUsers.some(user=>user.email===prior)) picker.value=prior;
   userEditor.elements.dealerGroup.replaceChildren(new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name)));
   loadUserEditor();
@@ -2110,7 +2127,7 @@ $('#user-archive').onclick=async event=>{
   const selected=editableUsers.find(user=>user.email===$('#user-picker').value);
   if (!selected) return;
   const archived=!selected.archived;
-  if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach.')) return;
+  if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Od bieżącego miesiąca osoba ta wypadnie z raportów. Wyniki wcześniejszych miesięcy zostaną w historii.')) return;
   button.disabled=true;
   try {
     await api('/api/users/archive',{email:selected.email,archived});
@@ -2184,7 +2201,7 @@ function renderAdmin() {
   calendarEditor.hidden=view.role!=='manager'||data.role!=='manager'||!view.sellers.length;
   if (!calendarEditor.hidden) renderCalendar(calendarEditor,view.sellers,true);
   $('#lesson-editor').hidden=false;
-  $('#team').textContent=view.sellers.length+' handlowców';
+  $('#team').textContent=view.sellers.filter(seller=>seller.accountStatus!=='inactive').length+' aktywnych handlowców';
   const reviews=$('#reviews');
   reviews.replaceChildren();
   const plannedRequests=(view.calendar??[]).filter(row=>row.status==='pending'&&view.sellers.some(seller=>seller.id===row.person));
@@ -2366,7 +2383,7 @@ async function loadReopenDays(seller) {
 
 $('#reopen-day-form').onsubmit=async event=>{
   event.preventDefault();
-  const seller=data.sellers.find(person=>String(person.id)===detailSeller);
+  const seller=data.sellers.find(person=>String(person.id)===detailSeller&&person.accountStatus!=='inactive');
   const day=$('#reopen-day-date').value;
   const button=event.currentTarget.querySelector('button');
   const status=$('#reopen-day-status');
@@ -2400,7 +2417,7 @@ function renderSellerDetail() {
   const back=$('#seller-detail-return');
   back.textContent=team?'← Wróć do zespołu':data.role==='seller'?'← Wróć do panelu':'← Wróć do realizacji planów';
   back.href='/daily.html?'+params+(team?'#zespol':data.role==='seller'?'#dzisiaj':'#wykonanie');
-  const seller=data.role!=='seller'&&data.sellers.find(person=>String(person.id)===detailSeller);
+  const seller=data.role!=='seller'&&data.sellers.find(person=>String(person.id)===detailSeller&&person.accountStatus!=='inactive');
   if (!seller) {
     $('#seller-detail-heading').textContent='Brak dostępu do szczegółów handlowca';
     return;

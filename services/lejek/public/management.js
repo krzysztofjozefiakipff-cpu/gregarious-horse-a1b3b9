@@ -58,11 +58,16 @@ async function refresh() {
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
     const accountLabels={active:'Aktywne',inactive:'Nieaktywne',pending:'Bez hasła'};
-    get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],accounts.map(a=>[
-      escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],
-      statusBadge(accountLabels[a.accountStatus],a.accountStatus==='active'),
-      statusBadge(a.includeInReports?'W raportach':'Poza raportami',a.includeInReports)
-    ]));
+    get('accountTable').innerHTML=[false,true].map(archived=>{
+      const rows=accounts.filter(a=>(a.accountStatus==='inactive')===archived);
+      const heading=archived?'Usunięte konta':'Aktywne konta';
+      return '<section><h3>'+heading+'</h3>'+(rows.length?table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],rows.map(a=>[
+        escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],
+        statusBadge(accountLabels[a.accountStatus],a.accountStatus==='active'),
+        a.archivedFrom?'Poza raportami od '+escape(a.archivedFrom)
+          :statusBadge(a.includeInReports?'W raportach':'Poza raportami',a.includeInReports)
+      ])):'<p>Brak kont w tej grupie.</p>')+'</section>';
+    }).join('');
     updateFilters(prior);
     syncDetailedSection();
     get('dashboard').hidden=false;
@@ -81,9 +86,10 @@ const pct = (a,b) => b ? nf.format(100*a/b)+'%' : '—';
 const table = (head,rows) => '<table><thead><tr>'+head.map(v=>'<th scope="col">'+v+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
 const statusBadge = (label,positive) => '<span class="status-badge '+(positive?'status-positive':'status-negative')+'">'+escape(label)+'</span>';
 const options = (el,rows) => {el.replaceChildren(...rows.map(([value,label])=>new Option(label,value)));};
-function available() {
+function available(monthly=true) {
   const role=get('role').value;
-  return people.map((_,i)=>i).filter(i => role==='seller' ? i===0 : (!get('salon').value || people[i].salon===get('salon').value));
+  return people.map((_,i)=>i).filter(i => role==='seller' ? i===0 : (!get('salon').value || people[i].salon===get('salon').value)&&
+    (monthly?people[i].reportMonths.includes(get('month').value):people[i].reportMonths.length));
 }
 function updateFilters(priorPerson=undefined) {
   const role=get('role').value;
@@ -103,7 +109,7 @@ function render() {
   const total=sum(bySource);
   get('edit').disabled=!scope.length;
   renderJourney(scope,bySource,total);
-  const report=renderQuarter(scope);
+  const report=renderQuarter(get('seller').value?scope:available(false));
   const current=report.find(row=>row.month===get('month').value);
   const plan=current?.target ?? null;
   renderWorkbookPace(scope,bySource,current);
@@ -145,7 +151,7 @@ function renderWorkbookPace(scope,actual,current) {
   const months=quarterMonths(month);
   const date=today();
   const rows=scope.map(person=>quarterReport(months,date,months.map(m=>planFor(person,m)),
-    months.map(m=>sum(sources.map((_,source)=>record(person,source,m)))[5])).find(r=>r.month===month));
+    months.map(m=>sum(sources.map((_,source)=>record(person,source,m)))[5]),people[person].reportMonths).find(r=>r?.month===month));
   const configured=rows.length>0&&rows.every(r=>r?.target!=null);
   const sourcePlanIndex=[7,4,8,null,5,6,9,0];
   const targets=configured?scope.map((person,i)=>{
@@ -282,10 +288,10 @@ function renderQuarter(scope) {
   const months=quarterMonths(get('month').value);
   const date=today();
   const reports=scope.map(i=>quarterReport(months,date,months.map(m=>planFor(i,m)),
-    months.map(m=>sum(sources.map((_,s)=>record(i,s,m)))[5])));
+    months.map(m=>sum(sources.map((_,s)=>record(i,s,m)))[5]),people[i].reportMonths));
   const report=months.map((month,index)=>{
-    const rows=reports.map(r=>r[index]);
-    const aggregate=field=>sumKnown(rows.map(r=>r[field]));
+    const rows=reports.map(r=>r[index]).filter(Boolean);
+    const aggregate=field=>rows.length||!reports.length?sumKnown(rows.map(r=>r[field])):0;
     return {month,base:aggregate('base'),carry:aggregate('carry'),target:aggregate('target'),
       sold:aggregate('sold'),expected:aggregate('expected'),remaining:aggregate('remaining'),progress:monthProgress(month,date)};
   });
@@ -310,7 +316,7 @@ function renderQuarter(scope) {
     r.expected===null?'—':'<span class="'+(r.sold>=r.expected?'ahead':'behind')+'">'+delta(r.sold,r.expected)+'</span>',display(r.remaining)
   ]));
   get('editPlan').hidden=!['admin','manager'].includes(get('role').value)||!months.length;
-  get('editPlan').disabled=!available().some(i=>people[i].planEligible);
+  get('editPlan').disabled=!available().some(i=>people[i].planEligible&&people[i].accountStatus!=='inactive');
   return report;
 }
 const funnelGoalLabels=['Próby kontaktu','Jazdy próbne','Oferty','Leady','Spotkania','Follow-up','Wystawione faktury','Rejestracje'];
@@ -327,7 +333,7 @@ function loadPlanInputs() {
   get('planError').textContent='';
 }
 get('editPlan').onclick=()=>{
-  const eligible=available().filter(i=>people[i].planEligible);
+  const eligible=available().filter(i=>people[i].planEligible&&people[i].accountStatus!=='inactive');
   if (!eligible.length) return;
   options(get('planPerson'),eligible.map(i=>[i,people[i].name]));
   if(get('seller').value&&eligible.includes(Number(get('seller').value)))
