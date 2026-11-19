@@ -1909,9 +1909,9 @@ async function loadSalonPlans() {
       title.textContent=plan.salon;
       const state=document.createElement('p');
       const approved=plan.team.filter(person=>person.approved).length;
-      state.textContent=plan.team.length
-        ?approved+' / '+plan.team.length+' planów zatwierdzonych · '+(plan.override?'Plan po korekcie':'Plan automatyczny')
-        :plan.override?'Plan salonu ustawiony ręcznie':'Brak indywidualnych planów do zatwierdzenia';
+      state.textContent=plan.direct?'Plan salonu ustawiony ręcznie'
+        :plan.override?'Plan salonu po korekcie':'Plan salonu wyliczony z celów handlowców';
+      if (plan.team.length) state.textContent+=' · Zatwierdzono '+approved+' z '+plan.team.length+' planów handlowców';
       const totals=document.createElement('dl');
       totals.className='planning-totals';
       for (const [index,label] of salonPlanMetrics.entries()) {
@@ -1929,17 +1929,24 @@ async function loadSalonPlans() {
       const overviewTitle=document.createElement('summary');
       overviewTitle.textContent='Wyniki i cele salonu';
       overview.append(overviewTitle,state,totals);
-      card.append(title,overview);
+      const salonGoals=document.createElement('details');
+      salonGoals.className='planning-compact';
+      const salonGoalsTitle=document.createElement('summary');
+      salonGoalsTitle.textContent='Cele miesięczne salonu';
+      const form=document.createElement('form');
+      const {fields,inputs}=planTargets(plan.targets.map((value,index)=>plan.configured[index]?value:null),Number.MAX_SAFE_INTEGER);
+      const save=document.createElement('button');
+      save.textContent='Zapisz plan salonu';
+      form.append(fields,save);
+      form.onsubmit=event=>{
+        event.preventDefault();
+        planAction(save,'/api/salon-plans/direct',{salon:plan.salon,targets:inputs.map(input=>input.valueAsNumber)},month);
+      };
+      salonGoals.append(salonGoalsTitle,form);
+      card.append(title,salonGoals,overview);
       if (plan.contributors.length) {
         const note=document.createElement('p');
         note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zatwierdzone działania liczą się do wyników salonu.';
-        card.append(note);
-      }
-      if (!plan.editable) {
-        const note=document.createElement('p');
-        note.textContent=!plan.team.length?'Brak aktywnych handlowców w salonie.'
-          :approved<plan.team.length?'Korektę planu salonu odblokuje zatwierdzenie wszystkich planów handlowców.'
-          :'Przypisz kierownika do salonu, aby móc zapisać korektę.';
         card.append(note);
       }
       for (const person of plan.team) {
@@ -1974,34 +1981,6 @@ async function loadSalonPlans() {
           row.append(approve);
         }
         card.append(row);
-      }
-      if (plan.editable) {
-        const form=document.createElement('form');
-        const {fields,inputs}=planTargets(plan.targets);
-        const manager=document.createElement('select');
-        if (data.role==='group') {
-          const label=document.createElement('label');
-          label.append('Kierownik salonu',manager);
-          manager.required=true;
-          manager.replaceChildren(new Option('Wybierz kierownika',''),
-            ...plan.managers.map(({name,id})=>new Option(name,id)));
-          manager.value=plan.manager??(plan.managers.length===1?plan.managers[0].id:'');
-          form.append(label);
-        }
-        const save=document.createElement('button');
-        save.textContent='Zapisz korektę planu salonu';
-        form.append(fields,save);
-        form.onsubmit=event=>{
-          event.preventDefault();
-          planAction(save,'/api/salon-plans',{salon:plan.salon,manager:Number(manager.value),
-            targets:inputs.map(input=>input.valueAsNumber)},month);
-        };
-        const correction=document.createElement('details');
-        correction.className='planning-compact';
-        const correctionTitle=document.createElement('summary');
-        correctionTitle.textContent='Korekta planu salonu';
-        correction.append(correctionTitle,form);
-        card.append(correction);
       }
       results.append(card);
     }

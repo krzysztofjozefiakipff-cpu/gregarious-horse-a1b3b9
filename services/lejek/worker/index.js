@@ -291,12 +291,14 @@ async function handle(request, env) {
       for (const person of team) person.targets.forEach((target,index)=>{automatic[index]+=target??0;});
       const saved=await db.prepare(`SELECT p.manager,p.targets,k.approvals FROM salon_plans p
         LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
+      const direct=await db.prepare('SELECT targets FROM direct_salon_plans WHERE salon=? AND month=?').bind(salon,month).first();
       const managers=await assignedManagers(salon);
       const override=Boolean(approvals&&saved?.approvals===approvals);
+      const manual=direct??(override?saved:null);
       const history=historicalRates.get(salon)??[];
       const sourceRates=history.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders));
       const sourceHistoryRates=history.map(({leads,orders})=>sourceHistoryRate(leads,orders));
-      plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured:automatic.map((_,index)=>override||team.some(person=>person.targets[index]!=null)),targets:override?JSON.parse(saved.targets):automatic,override,
+      plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured:automatic.map((_,index)=>Boolean(manual)||team.some(person=>person.targets[index]!=null)),targets:manual?JSON.parse(manual.targets):automatic,override,direct:Boolean(direct),
         contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
         manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
         team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
@@ -476,10 +478,17 @@ async function handle(request, env) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
-  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller','/api/salon-plans/source-profile'].includes(path)) {
+  if (['/api/salon-plans','/api/salon-plans/approve','/api/salon-plans/seller','/api/salon-plans/source-profile','/api/salon-plans/direct'].includes(path)) {
     if (!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const {salon,month,manager,targets,person}=body;
     if (!monthValid(month)||!managedSalons.has(salon)) return json({error:'Wybierz miesiąc i salon w swoim zakresie.'},403);
+    if (path==='/api/salon-plans/direct') {
+      if (!Array.isArray(targets)||targets.length!==4||!targets.every(n=>Number.isSafeInteger(n)&&n>=0))
+        return json({error:'Wpisz cztery cele salonu jako liczby całkowite od 0.'},400);
+      await db.prepare(`INSERT INTO direct_salon_plans (salon,month,targets) VALUES (?,?,?)
+        ON CONFLICT(salon,month) DO UPDATE SET targets=excluded.targets`).bind(salon,month,JSON.stringify(targets)).run();
+      return json({ok:true});
+    }
     const team=await sellerTargets(salon,month);
     if (path.endsWith('/source-profile')) {
       if (user.role!=='manager'||!team.some(row=>row.id===person&&!row.archived))
