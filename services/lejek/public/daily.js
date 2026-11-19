@@ -356,10 +356,15 @@ async function api(path,body) {
   return result;
 }
 
-const calendarKinds={leave:'Urlop',sick:'Chorobowe',training:'Szkolenie',saturday:'Wolna sobota',other:'Inny dzień bez aktywności'};
+const calendarKinds={leave:'Urlop',sick:'Chorobowe',training:'Szkolenie',saturday:'Wolna sobota',other:'Inny dzień bez aktywności',noActivity:'Brak aktywności'};
 const calendarStatuses={pending:'Czeka na zatwierdzenie',approved:'Zatwierdzony',rejected:'Odrzucony',recorded:'Rozliczony',automatic:'Z grafiku'};
 
-function renderCalendar(host,sellers,manager) {
+function renderCalendar(host,sellers,role) {
+  const seller=role==='seller';
+  const manager=role==='manager';
+  const canEdit=seller||manager;
+  const draftDay=host.dataset.calendarDraftDay;
+  delete host.dataset.calendarDraftDay;
   const currentPerson=host.querySelector('[data-calendar-person] select')?.value;
   const currentMonth=host.querySelector('[type="month"]')?.value;
   host.replaceChildren($('#calendar-template').content.cloneNode(true));
@@ -368,6 +373,9 @@ function renderCalendar(host,sellers,manager) {
   const date=host.querySelector('[data-calendar-start]');
   const endDate=host.querySelector('[data-calendar-end]');
   const endLabel=host.querySelector('[data-calendar-end-label]');
+  const reason=host.querySelector('[data-calendar-reason]');
+  const reasonLabel=host.querySelector('[data-calendar-reason-label]');
+  const pending=host.querySelector('[data-calendar-pending]');
   const kind=host.querySelector('[data-calendar-kind]');
   const status=host.querySelector('[data-calendar-status]');
   const grid=host.querySelector('[data-calendar-grid]');
@@ -375,13 +383,24 @@ function renderCalendar(host,sellers,manager) {
   const save=host.querySelector('[data-calendar-save]');
   person.replaceChildren(...sellers.map(seller=>new Option(seller.name,seller.id)));
   if (sellers.some(seller=>String(seller.id)===currentPerson)) person.value=currentPerson;
-  person.parentElement.hidden=!manager;
-  month.value=currentMonth||data.today.slice(0,7);
-  if (!manager) date.min=data.today;
+  person.parentElement.hidden=seller;
+  host.querySelector('[data-calendar-kind-label]').hidden=!canEdit;
+  host.querySelector('[data-calendar-editor-fields]').hidden=!canEdit;
+  kind.querySelector('[value="noActivity"]').disabled=!seller;
+  kind.querySelector('[value="noActivity"]').hidden=!seller;
+  month.value=draftDay?.slice(0,7)||currentMonth||data.today.slice(0,7);
+  if (seller) {
+    date.min=data.personal.missing[0]??data.today;
+    date.value=draftDay??'';
+    if (draftDay) host.dataset.calendarSelection=person.value+'/'+draftDay;
+  }
   save.textContent=manager?'Zapisz nieobecność':'Zgłoś do zatwierdzenia';
   const updateRange=()=>{
-    endLabel.hidden=!['leave','sick'].includes(kind.value);
+    endLabel.hidden=!['leave','sick'].includes(kind.value)||(seller&&date.value&&date.value<data.today);
     endDate.disabled=endLabel.hidden;
+    reasonLabel.hidden=kind.value!=='noActivity';
+    reason.disabled=reasonLabel.hidden;
+    reason.required=!reasonLabel.hidden;
     endDate.min=date.value||date.min;
     save.disabled=!kind.value;
   };
@@ -403,7 +422,30 @@ function renderCalendar(host,sellers,manager) {
     const type=automatic?'Dzień wolny':calendarKinds[entry.kind];
     info.textContent=type+' · '+(automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
     detail.replaceChildren(title,info);
-    if (!automatic&&entry.status!=='recorded'&&(manager||(entry.status!=='approved'&&entry.day>=data.today))) {
+    if (entry.reason) {
+      const explanation=document.createElement('p');
+      explanation.textContent='Powód · '+entry.reason;
+      detail.append(explanation);
+    }
+    if (!seller&&entry.kind==='noActivity'&&['pending','approved'].includes(entry.status)) {
+      const actions=document.createElement('div');
+      actions.className='calendar-entry-actions';
+      const decisions=entry.status==='approved'?[['revoke','Cofnij zgodę']]:[['approve','Zatwierdź'],['reject','Odrzuć']];
+      for (const [action,label] of decisions) {
+        const button=document.createElement('button');
+        button.type='button';
+        button.className=action==='approve'?'':'secondary';
+        button.textContent=label;
+        button.onclick=()=>{
+          if (action==='revoke'&&!confirm('Cofnąć zgodę na rozliczenie dnia '+dateLabel(entry.day)+'?')) return;
+          change(button,{day:entry.day,action,approve:action==='approve'},'/api/review');
+        };
+        actions.append(button);
+      }
+      detail.append(actions);
+    }
+    if (!automatic&&entry.kind!=='noActivity'&&entry.status!=='recorded'&&
+        (manager||(seller&&entry.status!=='approved'&&entry.day>=data.today))) {
       const actions=document.createElement('div');
       actions.className='calendar-entry-actions';
       const edit=document.createElement('button');
@@ -433,7 +475,7 @@ function renderCalendar(host,sellers,manager) {
       detail.scrollIntoView({block:'nearest'});
     }
   };
-  const load=async()=>{
+  const load=async(focusSelection=false)=>{
     const request=++revision;
     detail.hidden=true;
     grid.replaceChildren();
@@ -478,36 +520,68 @@ function renderCalendar(host,sellers,manager) {
         grid.append(cell);
       }
       const selected=[...calendar.values()].find(entry=>person.value+'/'+entry.day===host.dataset.calendarSelection);
-      if (selected) showDetails(selected);
+      if (selected) showDetails(selected,focusSelection);
     } catch (error) {
       if (request===revision) status.textContent=error.message;
     }
   };
-  const change=async(button,values)=>{
+  const change=async(button,values,path='/api/work-calendar')=>{
     button.disabled=true;
     status.textContent='';
     try {
-      const result=await api('/api/work-calendar',{person:Number(person.value),...values});
+      const result=await api(path,{person:Number(person.value),...values});
       month.value=values.day.slice(0,7);
+      host.dataset.calendarSelection=person.value+'/'+values.day;
       await refresh();
       const messages={remove:'Usunięto zgłoszenie.',revoke:'Cofnięto zgodę. Zgłoszenie wróciło do oczekujących.',
         approve:'Zatwierdzono zgłoszenie.',reject:'Odrzucono zgłoszenie.'};
-      host.querySelector('[data-calendar-status]').textContent=messages[values.action]??(
-        manager?'Zapisano dni · '+result.days:'Zgłoszono dni · '+result.days+'. Czekają na decyzję kierownika.');
+      const savedDays=result.days??1;
+      const saved=path==='/api/day-exception'&&values.kind!=='pending'?'Rozliczono dzień.'
+        :manager?'Zapisano dni · '+savedDays:'Zgłoszono dni · '+savedDays+'. Czekają na decyzję kierownika.';
+      host.querySelector('[data-calendar-status]').textContent=messages[values.action]??saved;
     } catch (error) {
       status.textContent=error.message;
     } finally {button.disabled=false;}
   };
   save.onclick=()=>{
-    if (!kind.value||!date.reportValidity()||(!endDate.disabled&&!endDate.reportValidity())) return;
+    if (!kind.value||!date.reportValidity()||(!endDate.disabled&&!endDate.reportValidity())||
+        (!reason.disabled&&!reason.reportValidity())) return;
+    if (kind.value==='noActivity') {
+      change(save,{day:date.value,kind:'pending',reason:reason.value},'/api/day-exception');
+      return;
+    }
+    if (seller&&date.value<data.today&&['leave','training'].includes(kind.value)) {
+      change(save,{day:date.value,kind:kind.value},'/api/day-exception');
+      return;
+    }
     change(save,{day:date.value,endDay:endDate.disabled||!endDate.value?undefined:endDate.value,kind:kind.value,action:'save'});
   };
   person.onchange=month.onchange=()=>{delete host.dataset.calendarSelection;load();};
+  if (!seller) {
+    const requests=[...(data.approvals??[]),...(manager?(data.calendar??[]).filter(row=>row.status==='pending'):[])]
+      .filter(row=>sellers.some(person=>person.id===row.person));
+    if (requests.length) {
+      const title=document.createElement('strong');
+      title.textContent='Oczekujące zgłoszenia';
+      pending.append(title);
+      for (const request of requests) {
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='secondary';
+        button.textContent=sellers.find(seller=>seller.id===request.person).name+' · '+dateLabel(request.day);
+        button.onclick=()=>{
+          person.value=String(request.person);
+          month.value=request.day.slice(0,7);
+          host.dataset.calendarSelection=person.value+'/'+request.day;
+          load(true);
+        };
+        pending.append(button);
+      }
+      pending.hidden=false;
+    }
+  }
   load();
 }
-$('#seller-calendar').addEventListener('toggle',event=>{
-  if (event.currentTarget.open&&data?.role==='seller') renderCalendar($('#seller-calendar-editor'),data.sellers,false);
-});
 
 const periodType=$('#seller-period-type');
 const periodValue=$('#seller-period-value');
@@ -1157,29 +1231,21 @@ function renderSeller() {
   renderTodayTasks(periodMetrics(data,currentMonth,1),data.previousDaily,data.today);
   renderPeriodPicker(periodValue.value||currentMonth);
   loadSellerPeriod();
-  const pending=(data.calendar??[]).filter(row=>row.status==='pending').length;
+  const pending=(data.calendar??[]).filter(row=>row.status==='pending').length+Object.values(personal.exceptions).filter(kind=>kind==='pending').length;
   const reminder=$('#calendar-reminder');
   reminder.hidden=!pending;
   const calendarLink=document.createElement('a');
-  calendarLink.href='#plan';
+  calendarLink.href='#kalendarz-pracy';
   calendarLink.dataset.panelRoute='';
-  calendarLink.textContent='Otwórz kalendarz w zakładce Plan';
-  calendarLink.onclick=()=>{$('#seller-calendar').open=true;};
+  calendarLink.textContent='Otwórz Kalendarz pracy';
   reminder.replaceChildren('Dni wolne czekające na zatwierdzenie: '+pending+'. ',calendarLink);
-  $('#seller-calendar summary').textContent='Kalendarz pracy i dni wolne'+(pending?' · '+pending+' oczekuje':'');
-  if ($('#seller-calendar').open) renderCalendar($('#seller-calendar-editor'),data.sellers,false);
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
   $('#resolve').hidden=!next||day===next||waiting;
-  for (const button of document.querySelectorAll('[data-kind]')) button.hidden=!next||day!==next||waiting;
-  const noActivity=$('#no-activity');
-  if (noActivity.dataset.day!==day||exception==='pending') {
-    noActivity.open=false;
-    $('#reason').value='';
-  }
-  noActivity.dataset.day=day;
-  noActivity.hidden=locked||exception==='pending';
+  $('#backlog-calendar').onclick=()=>{
+    if (next) $('#seller-calendar-editor').dataset.calendarDraftDay=next;
+  };
   $('#save').disabled=$('#approve-day').disabled=busy||Boolean(blocked)||locked;
   const draft=personal.drafts?.[day];
   const matrix=records[day]?.[5]??draft;
@@ -2160,7 +2226,6 @@ const managementFunctions={
   'wykonanie': ['Realizacja planów'],
   'plany-salonow': ['Plany salonów','salon-plans'],
   'zespol': ['Zespół'],
-  'dni-bez-aktywnosci': ['Zgłoszenia dni bez aktywności','admin-absence-block'],
   'kalendarz-pracy': ['Kalendarz pracy','admin-absence-block'],
   'lekcja': ['Lekcja na dziś','admin-lessons-block'],
   'historia-planow': ['Historia planów'],
@@ -2171,15 +2236,15 @@ const managementFunctions={
   'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
-  manager:['wykonanie','plany-salonow','zespol','dni-bez-aktywnosci','kalendarz-pracy','lekcja','historia-planow',
+  manager:['wykonanie','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
     'zarzadzaj-uzytkownikami','dodaj-uzytkownika','historie','dane-dealera'],
-  group:['wykonanie','plany-salonow','historia-planow','zespol','dni-bez-aktywnosci','zarzadzaj-uzytkownikami',
+  group:['wykonanie','plany-salonow','historia-planow','zespol','kalendarz-pracy','zarzadzaj-uzytkownikami',
     'dodaj-uzytkownika','dodaj-salon','lekcja','historie','dane-dealera']
 };
 
 function selectRoleFunction(routes) {
   const requested=location.hash.slice(1);
-  const active=requested==='administracja'?'plany-salonow':routes.includes(requested)?requested:routes[0];
+  const active=requested==='administracja'?'plany-salonow':requested==='dni-bez-aktywnosci'?'kalendarz-pracy':routes.includes(requested)?requested:routes[0];
   const [label,blockId,settingId]=managementFunctions[active];
   const buttons=$('#role-function-buttons');
   const select=$('#role-function-select');
@@ -2476,42 +2541,11 @@ function renderAdmin() {
   $('#absence-panel').hidden=false;
   const calendarEditor=$('#manager-calendar-editor');
   const calendarSellers=view.sellers.filter(seller=>seller.accountStatus!=='inactive');
-  calendarEditor.hidden=data.role!=='manager'||!calendarSellers.length;
+  calendarEditor.hidden=!calendarSellers.length;
   $('#manager-calendar-empty').hidden=!calendarEditor.hidden;
-  if (!calendarEditor.hidden) renderCalendar(calendarEditor,calendarSellers,true);
+  if (!calendarEditor.hidden) renderCalendar(calendarEditor,calendarSellers,data.role);
   $('#lesson-editor').hidden=false;
   $('#team').textContent=view.sellers.filter(seller=>seller.accountStatus!=='inactive').length+' aktywnych handlowców';
-  const reviews=$('#reviews');
-  reviews.replaceChildren();
-  const plannedRequests=(view.calendar??[]).filter(row=>row.status==='pending'&&view.sellers.some(seller=>seller.id===row.person));
-  if (!view.approvals.length&&!(data.role==='manager'&&plannedRequests.length)) reviews.textContent='Brak zgłoszeń do rozpatrzenia.';
-  for (const review of view.approvals) {
-    const card=document.createElement('article');
-    const label=document.createElement('strong');
-    label.textContent=view.sellers.find(seller=>seller.id===review.person)?.name+' · '+dateLabel(review.day);
-    const note=document.createElement('p');
-    note.textContent=review.reason;
-    card.append(label,note);
-    for (const approve of [true,false]) {
-      const button=document.createElement('button');
-      button.textContent=approve?'Zatwierdź dzień bez aktywności':'Odrzuć';
-      button.onclick=()=>run(()=>api('/api/review',{person:review.person,day:review.day,approve}));
-      card.append(button);
-    }
-    reviews.append(card);
-  }
-  if (data.role==='manager') for (const request of plannedRequests) {
-    const card=document.createElement('article');
-    const name=view.sellers.find(seller=>seller.id===request.person).name;
-    card.textContent=name+' · '+calendarKinds[request.kind]+' · '+dateLabel(request.day,{day:'numeric',month:'long',year:'numeric'});
-    for (const [action,label] of [['approve','Zatwierdź'],['reject','Odrzuć']]) {
-      const button=document.createElement('button');
-      button.textContent=label;
-      button.onclick=()=>run(()=>api('/api/work-calendar',{...request,action}));
-      card.append(button);
-    }
-    reviews.append(card);
-  }
   $('#settings').hidden=false;
   $('#global-sidebar-settings').hidden=view.role!=='admin';
   $('#global-charity-settings').hidden=view.role!=='admin';
@@ -2570,6 +2604,7 @@ function selectSellerTab() {
   for (const panel of document.querySelectorAll('[data-seller-panel]')) {
     panel.hidden=panel.dataset.sellerPanel!==active;
   }
+  if (active==='kalendarz-pracy') renderCalendar($('#seller-calendar-editor'),data.sellers,'seller');
 }
 const navigation=panelNavigation(()=>{
   if (!data||detailSeller) return;
@@ -2871,26 +2906,6 @@ $('#entry').onsubmit=event=>{
     return row;
   });
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today,draft);
-};
-for (const button of document.querySelectorAll('[data-kind]')) button.onclick=()=>{
-  run(()=>api('/api/day-exception',{person:data.sellers[0].id,day:editDay,kind:button.dataset.kind}));
-};
-$('#send-no-activity').onclick=async event=>{
-  const button=event.currentTarget;
-  const panel=$('#no-activity');
-  if (busy||panel.hidden) return;
-  const reason=$('#reason');
-  if (!reason.value.trim()) {
-    $('#status').textContent='Podaj powód dnia bez aktywności.';
-    reason.focus();
-    return;
-  }
-  button.disabled=true;
-  try {
-    await run(()=>api('/api/day-exception',{person:data.sellers[0].id,day:panel.dataset.day,kind:'pending',reason:reason.value}),false,true);
-  } finally {
-    button.disabled=false;
-  }
 };
 $('#brand').onsubmit=event=>{
   event.preventDefault();

@@ -356,13 +356,17 @@ async function handle(request, env) {
   if (request.method==='GET' && path==='/api/work-calendar') {
     const person=Number(url.searchParams.get('person'));
     const month=url.searchParams.get('month');
-    if (!['seller','manager'].includes(user.role)||!sellers.some(seller=>seller.id===person))
+    if (!['seller','manager','group','admin'].includes(user.role)||!sellers.some(seller=>seller.id===person))
       return json({error:'Brak dostępu do kalendarza.'},403);
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
-    const entries=await list(db,`SELECT day,kind,status FROM work_calendar WHERE person=? AND substr(day,1,7)=?
-      UNION ALL SELECT day,kind,'recorded' AS status FROM daily_exceptions WHERE person=? AND substr(day,1,7)=? AND kind IN ('leave','training')
-      ORDER BY day`,person,month,person,month);
-    return json({entries,automaticDays:calendarMonthDays(month).filter(day=>!workday(day))});
+    const entries=await list(db,`SELECT c.day,c.kind,c.status,NULL AS reason FROM work_calendar c WHERE c.person=?1 AND substr(c.day,1,7)=?2
+      AND NOT EXISTS (SELECT 1 FROM daily_exceptions e WHERE e.person=c.person AND e.day=c.day AND e.kind='pending')
+      UNION ALL SELECT e.day,CASE WHEN e.kind IN ('leave','training') THEN e.kind ELSE 'noActivity' END,
+        CASE e.kind WHEN 'pending' THEN 'pending' WHEN 'rejected' THEN 'rejected' WHEN 'zero' THEN 'approved' ELSE 'recorded' END,
+        e.reason FROM daily_exceptions e WHERE e.person=?1 AND substr(e.day,1,7)=?2
+          AND (e.kind='pending' OR NOT EXISTS (SELECT 1 FROM work_calendar c WHERE c.person=e.person AND c.day=e.day))
+      ORDER BY day`,person,month);
+    return json({entries:entries.map(({reason,...entry})=>reason?{...entry,reason}:entry),automaticDays:calendarMonthDays(month).filter(day=>!workday(day))});
   }
   if (request.method==='GET' && path==='/api/daily/reopen') {
     const person=Number(url.searchParams.get('person'));
@@ -1026,9 +1030,10 @@ async function handle(request, env) {
     return change.meta.changes?json({ok:true,days:change.meta.changes}):json({error:'Brak dni do zapisania albo w wybranym zakresie są rozliczone dni lub inne zgłoszenia. Sprawdź kalendarz.'},409);
   }
   if (path==='/api/review' && user.role!=='seller') {
-    if (!dayValid(body.day)||typeof body.approve!=='boolean') return json({error:'Sprawdź decyzję.'},400);
-    const changed=await db.prepare("UPDATE daily_exceptions SET kind=? WHERE person=? AND day=? AND kind='pending'")
-      .bind(body.approve?'zero':'rejected',body.person,body.day).run();
+    const revoke=body.action==='revoke';
+    if (!dayValid(body.day)||(!revoke&&typeof body.approve!=='boolean')) return json({error:'Sprawdź decyzję.'},400);
+    const changed=await db.prepare('UPDATE daily_exceptions SET kind=? WHERE person=? AND day=? AND kind=?')
+      .bind(revoke?'pending':body.approve?'zero':'rejected',body.person,body.day,revoke?'zero':'pending').run();
     return changed.meta.changes?json({ok:true}):json({error:'Zgłoszenie jest już rozliczone.'},409);
   }
   if (user.role==='group') return json({error:'Ten poziom dostępu służy do przeglądania wyników i zarządzania zespołem.'},403);
@@ -1044,7 +1049,7 @@ async function handle(request, env) {
     if (path==='/api/day-exception') {
       if (!['leave','training','pending'].includes(body.kind)||body.kind==='pending'&&!textValid(body.reason))
         return json({error:'Wybierz status i podaj powód dnia bez aktywności.'},400);
-      const changed=await db.prepare("INSERT INTO daily_exceptions SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2) AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved') ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,reason=excluded.reason WHERE kind='rejected'")
+      const changed=await db.prepare("INSERT INTO daily_exceptions SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2) AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status IN ('approved','pending')) ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,reason=excluded.reason WHERE kind='rejected'")
         .bind(user.id,day,body.kind,body.kind==='pending'?body.reason.trim():'').run();
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
