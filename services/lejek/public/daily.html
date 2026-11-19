@@ -190,17 +190,16 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   border-radius:14px; padding:clamp(14px,2vw,24px);
 }
 #seller-ranking h2 { margin:0; font-size:1.35rem; }
-#seller-ranking dl { margin:0; display:grid; gap:7px; }
-#seller-ranking dl > div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 12px; }
+#seller-ranking dl { margin:0; display:grid; gap:8px; }
+#seller-ranking dl > div { display:flex; align-items:baseline; flex-wrap:wrap; justify-content:space-between; gap:2px 12px; }
 #seller-ranking dt { color:#c9defb; font-size:.875rem; }
 #seller-ranking dd { margin:0; font-weight:750; }
+.ranking-heading p { margin:4px 0 0; color:#c9defb; font-size:.875rem; }
+.ranking-personal { display:grid; gap:10px; min-width:0; }
+.ranking-personal h3 { margin:0 0 6px; font-size:1rem; }
 @media(min-width:900px) {
-  #seller-ranking { grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap:18px 26px; }
-  #seller-ranking h2 { grid-column:1/-1; }
-  #ranking-podium { grid-column:1; }
-  #seller-ranking dl { grid-column:2; }
-  #seller-ranking .rating { grid-column:3; }
-  #seller-ranking:has(#ranking-podium[hidden]) dl { grid-column:1 / 3; }
+  #seller-ranking { grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); align-items:start; gap:16px 24px; }
+  .ranking-heading { grid-column:1/-1; }
 }
 .order-plan .cards strong { overflow-wrap:anywhere; }
 #daily .plan-top .order-plan { padding:12px; }
@@ -209,12 +208,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 #daily .plan-top .cards section { padding:7px; font-size:.875rem; }
 #daily .plan-top .cards strong { font-size:clamp(1rem,1.5vw,1.35rem); color:var(--ink); }
 #daily .plan-top .cards small { font-size:.8rem; }
-.podium { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; gap:6px; margin:0; }
-.podium span { display:grid; place-items:center; min-height:32px; border-radius:5px 5px 0 0; background:#326298; color:#fff; font-weight:800; font-size:1.1rem; }
-.podium span:first-child { min-height:46px; }
-.podium span:nth-child(2) { min-height:60px; }
-.podium[data-place="2"] span:first-child, .podium[data-place="1"] span:nth-child(2),
-.podium[data-place="3"] span:last-child { background:#f9cb64; color:#332000; }
+.podium { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; gap:8px; margin:0; padding:0; list-style:none; }
+.podium li { display:grid; align-content:center; gap:3px; min-height:76px; padding:8px; border-radius:8px; background:#254d7f; text-align:center; overflow-wrap:anywhere; }
+.podium li[data-place="1"] { grid-column:2; grid-row:1; min-height:100px; background:#ffda84; color:#332000; }
+.podium li[data-place="2"] { grid-column:1; grid-row:1; min-height:88px; }
+.podium li[data-place="3"] { grid-column:3; grid-row:1; }
+.podium-medal { font-size:.82rem; font-weight:750; }
+.podium li span:last-child { font-size:.82rem; }
 .rating { border:1px solid #ffffff40; border-radius:10px; padding:9px 12px; background:#ffffff0c; }
 .rating h3 { margin:0; font-size:1rem; }
 .rating-stars { display:inline-block; white-space:nowrap; font-size:1.55rem; letter-spacing:.08em; color:#ffd371; }
@@ -282,18 +282,29 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></div>
 <div data-seller-panel="plan" hidden>
   <section id="seller-ranking" aria-labelledby="ranking-title">
-    <h2 id="ranking-title">Ranking miesiąca</h2>
-    <div class="podium" id="ranking-podium" aria-hidden="true" hidden><span>2</span><span>1</span><span>3</span></div>
+    <div class="ranking-heading">
+      <h2 id="ranking-title"></h2>
+      <p>Realizacja miesięcznego planu zamówień</p>
+    </div>
+    <div>
+      <ol class="podium" id="ranking-podium" hidden></ol>
+      <p id="ranking-empty" hidden>Brak handlowców z planem zamówień w tym miesiącu.</p>
+    </div>
+    <div class="ranking-personal">
+    <div>
+    <h3>Twoja pozycja</h3>
     <dl>
-      <div><dt>Salon</dt><dd id="ranking-salon"></dd></div>
-      <div id="ranking-group-row" hidden><dt>Grupa</dt><dd id="ranking-group"></dd></div>
-      <div id="ranking-result-row" hidden><dt>Realizacja zamówień</dt><dd id="ranking-result"></dd></div>
+      <div><dt>W salonie</dt><dd id="ranking-salon"></dd></div>
+      <div id="ranking-group-row" hidden><dt>W grupie dealerskiej</dt><dd id="ranking-group"></dd></div>
+      <div><dt>Realizacja planu zamówień</dt><dd id="ranking-result"></dd></div>
     </dl>
+    </div>
     <div class="rating">
       <h3>Ocena handlowca</h3>
       <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
       <p id="seller-rating"></p>
       <p>Średnia realizacji celów miesięcznych narastająco do dziś.</p>
+    </div>
     </div>
   </section>
 <div class="plan-top">
