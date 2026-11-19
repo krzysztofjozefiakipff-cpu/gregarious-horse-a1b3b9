@@ -328,6 +328,24 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   .seller-nav { position:sticky; top:0; z-index:3; }
 }
 .management-nav { position:sticky; top:0; z-index:3; }
+#role-function-buttons { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:6px; }
+#role-function-buttons a { border:1px solid var(--line); font-size:.875rem; line-height:1.25; }
+#role-function-buttons a:not([aria-current]):hover { background:var(--tint); }
+#role-function-picker { display:none; }
+#admin[data-function] .admin-block > summary,
+#admin[data-function] #settings > details > summary,
+#admin[data-function] [data-history="management"] > summary { display:none; }
+#admin[data-function="historia-planow"] #management-plan-period,
+#admin[data-function="historia-planow"] #team,
+#admin[data-function="historia-planow"] #salon-summary,
+#admin:not([data-function="kalendarz-pracy"]) #manager-calendar-empty,
+#admin[data-function="dni-bez-aktywnosci"] #manager-calendar-editor,
+#admin[data-function="kalendarz-pracy"] #reviews { display:none; }
+@media(max-width:850px) {
+  #role-function-buttons { display:none; }
+  #role-function-picker { display:grid; gap:4px; margin-bottom:14px; padding:8px 10px; background:white; border:1px solid var(--line); border-radius:10px; font-size:.8rem; font-weight:750; }
+  #role-function-select { min-height:44px; width:100%; color:var(--ink); font-size:1rem; }
+}
 #manager-team-list details { scroll-margin-top:66px; }
 .panel-header .identity { flex-wrap:wrap; row-gap:3px; }
 @media(max-width:560px) {
@@ -560,6 +578,10 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <a data-panel-route href="#zespol" id="management-team" hidden>Zespół</a>
   <a data-panel-route href="#administracja" id="management-admin">Administracja</a>
 </nav>
+<nav id="role-function-nav" class="management-nav" aria-label="Funkcje panelu" hidden>
+  <div id="role-function-buttons" class="panel-nav"></div>
+  <label id="role-function-picker">Funkcja panelu <select id="role-function-select"></select></label>
+</nav>
 <section id="performance-view">
   <h1 id="performance-title">Wykonanie planu</h1>
   <p id="management-plan-period"></p>
@@ -586,7 +608,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
   <ul id="manager-team-removed"></ul>
 </section>
 <section id="administration-view" hidden>
-<h1>Administracja</h1>
+<h1 id="administration-title">Administracja</h1>
 <details id="salon-plans" class="admin-block" hidden>
   <summary>Plany salonów</summary>
   <div>
@@ -658,7 +680,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 </details>
 <details id="admin-absence-block" class="admin-block" hidden>
 <summary>Zgłoszenia dni bez aktywności</summary>
-<div id="absence-panel"><div id="reviews"></div><div id="manager-calendar-editor" hidden></div></div>
+<div id="absence-panel"><div id="reviews"></div><p id="manager-calendar-empty" hidden>Brak aktywnych handlowców w wybranym salonie.</p><div id="manager-calendar-editor" hidden></div></div>
 </details>
 <details id="admin-lessons-block" class="admin-block" hidden>
 <summary>Lekcja na dziś</summary>
@@ -677,8 +699,8 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 <details id="admin-settings-block" class="admin-block" hidden>
 <summary>Dodatkowe ustawienia</summary>
 <div id="settings" hidden>
-<details><summary>Historie do moderacji</summary><div id="story-queue"></div></details>
-<details><summary>Dane dealera</summary><form id="brand"><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form></details>
+<details id="story-moderation"><summary>Historie do moderacji</summary><div id="story-queue"></div></details>
+<details id="dealer-settings"><summary>Dane dealera</summary><form id="brand"><label>Salon <select name="salon"></select></label><label>Nazwa dealera <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Zapisz dane dealera</button></form></details>
 <details id="global-sidebar-settings"><summary>Co pokazać handlowcom?</summary><form id="sidebar-settings"><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Memy z naszej bazy</option><option id="giphy-option" value="giphy">Nasze memy i GIF-y z GIPHY</option></select></label><button>Zapisz wybór</button></form></details>
 <details id="global-charity-settings"><summary>Cel miesiąca</summary><form id="charity"><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form></details>
 </div>

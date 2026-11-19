@@ -2074,7 +2074,78 @@ salonPlans.addEventListener('toggle',()=>{
   if (salonPlans.open&&!salonPlans.hidden) loadSalonPlans();
 });
 
+const managementFunctions={
+  'wykonanie': ['Realizacja planów'],
+  'plany-salonow': ['Plany salonów','salon-plans'],
+  'zespol': ['Zespół'],
+  'dni-bez-aktywnosci': ['Zgłoszenia dni bez aktywności','admin-absence-block'],
+  'kalendarz-pracy': ['Kalendarz pracy','admin-absence-block'],
+  'lekcja': ['Lekcja na dziś','admin-lessons-block'],
+  'historia-planow': ['Historia planów'],
+  'zarzadzaj-uzytkownikami': ['Zarządzaj użytkownikami','admin-edit-users-block'],
+  'dodaj-uzytkownika': ['Dodaj użytkownika','admin-users-block'],
+  'dodaj-salon': ['Dodaj salon do grupy','group-add-salon-block'],
+  'historie': ['Historie do moderacji','admin-settings-block','story-moderation'],
+  'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
+};
+const managementFunctionOrder={
+  manager:['wykonanie','plany-salonow','zespol','dni-bez-aktywnosci','kalendarz-pracy','lekcja','historia-planow',
+    'zarzadzaj-uzytkownikami','dodaj-uzytkownika','historie','dane-dealera'],
+  group:['wykonanie','plany-salonow','historia-planow','zespol','dni-bez-aktywnosci','zarzadzaj-uzytkownikami',
+    'dodaj-uzytkownika','dodaj-salon','lekcja','historie','dane-dealera']
+};
+
+function selectRoleFunction(routes) {
+  const requested=location.hash.slice(1);
+  const active=requested==='administracja'?'plany-salonow':routes.includes(requested)?requested:routes[0];
+  const [label,blockId,settingId]=managementFunctions[active];
+  const buttons=$('#role-function-buttons');
+  const select=$('#role-function-select');
+  if (buttons.dataset.role!==data.role) {
+    buttons.dataset.role=data.role;
+    buttons.replaceChildren(...routes.map(route=>{
+      const link=document.createElement('a');
+      link.dataset.panelRoute='';
+      link.href='#'+route;
+      link.textContent=managementFunctions[route][0];
+      return link;
+    }));
+    select.replaceChildren(...routes.map(route=>new Option(managementFunctions[route][0],route)));
+  }
+  for (const link of buttons.children) {
+    if (link.hash==='#'+active) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  }
+  select.value=active;
+  $('#admin').dataset.function=active;
+  $('#performance-view').hidden=active!=='wykonanie'&&active!=='historia-planow';
+  $('#performance-title').textContent=active==='historia-planow'?label:'Realizacja planów salonów';
+  $('#manager-team-view').hidden=active!=='zespol';
+  $('#administration-view').hidden=!blockId;
+  $('#administration-title').textContent=label;
+  for (const block of document.querySelectorAll('#administration-view > .admin-block')) {
+    block.hidden=block.id!==blockId;
+    block.open=!block.hidden;
+  }
+  for (const id of ['story-moderation','dealer-settings']) {
+    const setting=$('#'+id);
+    setting.hidden=id!==settingId;
+    setting.open=!setting.hidden;
+  }
+  const historyPanel=$('[data-history="management"]');
+  historyPanel.hidden=active!=='historia-planow';
+  historyPanel.open=!historyPanel.hidden;
+  if (blockId==='salon-plans'&&!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
+}
+
 function selectManagementView() {
+  const routes=managementFunctionOrder[data?.role];
+  $('#role-function-nav').hidden=!routes;
+  $('#management-nav').hidden=Boolean(routes);
+  if (routes) {
+    selectRoleFunction(routes);
+    return;
+  }
   if (location.hash==='#plany-salonow') {
     history.replaceState(history.state,'','#administracja');
     salonPlans.open=true;
@@ -2309,7 +2380,6 @@ function renderAdmin() {
   $('#management-team').hidden=!teamDashboard;
   const team=teamDashboard?renderManagerDashboard(view):[];
   $('#admin').hidden=false;
-  selectManagementView();
   $('#salon-summary').hidden=!teamDashboard;
   if (teamDashboard) renderSalonSummary(view,team);
   historySalons=new Set(view.salons.map(({salon})=>salon));
@@ -2323,8 +2393,10 @@ function renderAdmin() {
   if (view.role==='admin') renderDealerGroups(view.groups);
   $('#absence-panel').hidden=false;
   const calendarEditor=$('#manager-calendar-editor');
-  calendarEditor.hidden=view.role!=='manager'||data.role!=='manager'||!view.sellers.length;
-  if (!calendarEditor.hidden) renderCalendar(calendarEditor,view.sellers,true);
+  const calendarSellers=view.sellers.filter(seller=>seller.accountStatus!=='inactive');
+  calendarEditor.hidden=data.role!=='manager'||!calendarSellers.length;
+  $('#manager-calendar-empty').hidden=!calendarEditor.hidden;
+  if (!calendarEditor.hidden) renderCalendar(calendarEditor,calendarSellers,true);
   $('#lesson-editor').hidden=false;
   $('#team').textContent=view.sellers.filter(seller=>seller.accountStatus!=='inactive').length+' aktywnych handlowców';
   const reviews=$('#reviews');
@@ -2385,6 +2457,7 @@ function renderAdmin() {
     $('#sidebar-settings').elements.mode.value=view.giphy?'giphy':view.sidebarMode;
     $('#charity').elements.month.value ||= view.today.slice(0,7);
   }
+  selectManagementView();
 }
 function renderStoryQueue(stories) {
   const queue=$('#story-queue');
@@ -2427,6 +2500,8 @@ const navigation=panelNavigation(()=>{
   } else if (data.role==='seller') selectSellerTab();
   else selectManagementView();
 });
+
+$('#role-function-select').onchange=event=>navigation.go('#'+event.target.value);
 
 const historyPanels=[...document.querySelectorAll('[data-history]')];
 const monthLabel=month=>dateLabel(month+'-01',{month:'long',year:'numeric'});
@@ -2486,7 +2561,11 @@ for (const panel of historyPanels) {
     }
   };
   input.addEventListener('change',load);
-  panel.addEventListener('toggle',()=>{if(panel.open && !input.value){input.value=input.max;load();}});
+  panel.addEventListener('toggle',()=>{
+    if (!panel.open) return;
+    input.value ||= input.max;
+    load();
+  });
   panel.reloadHistory=()=>{if(panel.open && input.value) load();};
 }
 
