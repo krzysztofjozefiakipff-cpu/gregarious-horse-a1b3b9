@@ -18,4 +18,4 @@ if (memes.length!==1000 || new Set(memes.map(([title,,,key])=>key??title)).size!
 }
 mkdirSync('dist/server', {recursive:true});
 mkdirSync('dist/.openai', {recursive:true});
-writeFileSync('dist/server/index.js','const assets = '+JSON.stringify(assets)+';\nconst memes = '+JSON.stringify(memes)+';\n'+readFileSync('worker/index.js','utf8'));
+writeFileSync('dist/server/index.js','const assets = '+JSON.stringify(assets)+';\nconst memes = '+JSON.stringify(memes)+';\n'+assets['/workbook-plan.js']+'\n'+readFileSync('worker/index.js','utf8'));
