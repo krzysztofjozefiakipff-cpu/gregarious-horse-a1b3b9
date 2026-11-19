@@ -20,7 +20,7 @@ function record(person,source,month=get('month').value) {
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 async function api(path,body) {
   const url=new URL(path,location.origin);
-  const selectedRole=sessionStorage.getItem('lejek-active-role');
+  const selectedRole=get('dashboard').dataset.role||new URLSearchParams(location.search).get('role')||sessionStorage.getItem('lejek-active-role');
   if (selectedRole) url.searchParams.set('role',selectedRole);
   const response=await fetch(url,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await response.json();
@@ -44,7 +44,7 @@ async function refresh() {
     if (data.role==='seller') { location.replace('/daily.html'); return; }
     sessionStorage.setItem('lejek-active-role',data.role);
     const panel=panelNames[data.role];
-    get('panel-return').textContent='← '+panel;
+    get('dashboard').dataset.role=data.role;
     get('roleLabel').textContent=panel;
     document.title=panel+' · Bieg Wyżej';
     const prior=get('seller').value?people[+get('seller').value]?.id:null;
@@ -57,7 +57,6 @@ async function refresh() {
     sourcePlans=Object.fromEntries((data.sourcePlans??[]).map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     funnelPlans=Object.fromEntries(data.funnelPlans.map(r=>[r.month+'/'+r.person,JSON.parse(r.targets)]));
     get('role').value=data.role;
-    document.querySelectorAll('nav button').forEach(button=>{button.hidden=data.role==='seller'&&button.dataset.tab!=='journey';});
     const accountLabels={active:'Aktywne',inactive:'Nieaktywne',pending:'Bez hasła'};
     get('accountTable').innerHTML=table(['Imię i nazwisko','E-mail','Salon','Rola','Status konta','Raporty'],accounts.map(a=>[
       escape(a.name),escape(a.email),escape(a.salon),{admin:'Administrator',manager:'Kierownik',seller:'Handlowiec'}[a.role],
@@ -67,6 +66,10 @@ async function refresh() {
     updateFilters(prior);
     syncDetailedSection();
     get('dashboard').hidden=false;
+    if (!restoredNavigation) {
+      restoredNavigation=true;
+      navigation.restoreInitialPosition();
+    }
     get('status').textContent=people.length?'':'Brak przypisanych handlowców.';
   } catch(error) {
     if(latest===revision) get('status').textContent=error.message;
@@ -387,31 +390,38 @@ get('accountForm').onsubmit=event=>{
   return saveForm(event,invite?'/api/users':'/api/accounts',
     invite?{...payload,roles:[fields.role],createOnly:true}:payload,'accountEditor','accountError');
 };
-const benchmarks=benchmarksFromWorkbook.map(([contact,visit,drive,offer,follow,close],i)=>
-  [sources[i],pct(contact,1),i===0?'—':pct(visit,1),pct(offer,1),pct(follow,1),pct(close,1)]);
-get('bench').innerHTML=table(['Źródło','Kontakt / lead','Odbyte / kontakt','Oferta / kontakt','Follow-up / oferta','Zamówienie / lead'],benchmarks);
-const reportTabs=Array.from(document.querySelectorAll('#report-tabs button'));
-let selectedReport='overview';
+const benchmarks=sourceAssumptions.map(([close,attempts,meetings,,offers,follow],i)=>
+  [sources[i],nf.format(attempts),pct(meetings,1),pct(offers,1),pct(follow,1),pct(close,1)]);
+get('bench').innerHTML=table(['Źródło','Próby kontaktu / lead','Spotkania / lead','Oferty / lead','Follow-up / oferta','Zamówienia / lead'],benchmarks);
+const reportTabs=Array.from(document.querySelectorAll('#report-tabs a'));
 function syncDetailedSection() {
-  const administration=location.hash==='#administracja'&&get('role').value!=='seller';
+  const administration=location.hash==='#administracja';
+  const activeReport=reportTabs.find(link=>link.hash===location.hash)??reportTabs[0];
   get('report-tabs').hidden=administration;
   get('accountPanel').hidden=!administration;
   get('detail-performance').setAttribute('aria-current',administration?'false':'page');
   get('detail-admin').setAttribute('aria-current',administration?'page':'false');
-  for (const button of reportTabs) {
-    const active=button.dataset.tab===selectedReport;
-    button.setAttribute('aria-selected',String(active));
-    get(button.dataset.tab).hidden=administration||!active;
+  for (const link of reportTabs) {
+    const active=link===activeReport;
+    if (active&&!administration) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+    get(link.dataset.tab).hidden=administration||!active;
   }
+  const source=new URLSearchParams(location.search);
+  const returnSection=source.get('powrot')==='administracja'?'administracja':administration?'administracja':'wykonanie';
+  const params=new URLSearchParams();
+  if (get('dashboard').dataset.role) params.set('role',get('dashboard').dataset.role);
+  const salon=source.get('salon')||get('salon').value;
+  if (salon) params.set('salon',salon);
+  const back=get('panel-return');
+  back.textContent=returnSection==='administracja'?'← Wróć do administracji panelu':'← Wróć do realizacji planów';
+  back.href='/daily.html'+(params.size?'?'+params:'')+'#'+returnSection;
   const month=get('month').value;
   const period=month?new Date(month+'-01T12:00:00Z').toLocaleDateString('pl-PL',{month:'long',year:'numeric'}):'';
   get('heading').textContent=administration?'Administracja':['Wykonanie planu',period].filter(Boolean).join(' · ');
 }
-for (const button of reportTabs) button.addEventListener('click',()=>{
-  selectedReport=button.dataset.tab;
-  syncDetailedSection();
-});
-window.addEventListener('hashchange',syncDetailedSection);
+const navigation=panelNavigation(syncDetailedSection);
+let restoredNavigation=false;
 const calc=()=>{
   const target=get('target'), rate=get('rate');
   get('needed').textContent=target.value && rate.value && target.validity.valid && rate.validity.valid ? nf.format(Math.ceil(target.valueAsNumber*100/rate.valueAsNumber)) : '—';
@@ -443,9 +453,10 @@ get('entry').onsubmit=event=>saveForm(event,'/api/results',{
   month:get('month').value,person:people[+get('entrySeller').value].id,
   source:+get('entrySource').value,row:[...fields.map((_,i)=>get('value'+i).valueAsNumber),extras.map((_,i)=>get('extra'+i).value===''?null:get('extra'+i).valueAsNumber)]
 },'editor','error');
-get('salon').onchange=()=>updateFilters();
+get('salon').onchange=()=>{updateFilters();syncDetailedSection();};
 get('seller').onchange=render;
 get('month').onchange=refresh;
 get('month').value=today().slice(0,7);
+syncDetailedSection();
 refresh();
 calc();

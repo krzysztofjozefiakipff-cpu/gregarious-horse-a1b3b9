@@ -7,10 +7,11 @@
 .management-header{padding-block:16px;border-bottom:1px solid var(--line)}
 .return-link,main a{color:var(--ink);font-weight:700}
 .brand{display:inline-flex;align-items:center;gap:8px;letter-spacing:0;font-size:.95rem}
-#report-tabs button[aria-selected=true]{background:var(--blue);color:white;border-color:var(--blue)}
+#report-tabs a[aria-current=page]{background:var(--blue);color:white;border-color:var(--blue)}
 main{padding-block:20px 32px}
+main > .panel-nav { position:sticky; top:0; z-index:2; }
 #report-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 0}
-#report-tabs button{min-height:44px;background:white;border:1px solid var(--line);color:var(--ink);font-weight:700;padding:8px 12px}
+#report-tabs a{min-height:44px;background:white;border:1px solid var(--line);color:var(--ink);font-weight:700;padding:8px 12px;border-radius:8px;text-decoration:none;display:grid;place-items:center;text-align:center}
 .filters{margin:16px 0}
 .panel,.card,.pace-hero,input,select{border-color:var(--line)}
 button.action{background:var(--blue);border-color:var(--blue)}
@@ -22,7 +23,7 @@ p,.card small,.muted{color:var(--muted)}
 
 .filters label { min-width:0; }
 select { max-width:100%; }
-#report-tabs button { white-space:normal; }
+#report-tabs a { white-space:normal; }
 @media(min-width:1051px) {
   #overview, #journey {
     display:grid;
@@ -39,6 +40,7 @@ select { max-width:100%; }
   #journey > .priorities { grid-column:1 / -1; }
 }
 @media(max-width:570px) {
+  .management-header .header-account { flex:1 1 100%; justify-content:space-between; }
   #report-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .filters input, .filters select { width:100%; min-height:44px; }
@@ -47,20 +49,20 @@ select { max-width:100%; }
 }
 </style></head><body>
 <header class="management-header panel-header">
-  <a class="return-link" id="panel-return" href="/daily.html">← Wróć do panelu</a>
   <div class="brand product-brand"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</div>
-  <span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span>
+  <div class="header-account"><span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span><form class="panel-signout" method="post" action="/logout"><button type="submit">Wyloguj się</button></form></div>
 </header>
-<main><nav class="panel-nav" aria-label="Raporty i administracja">
-  <a id="detail-performance" href="/zarzadzanie.html">Wykonanie planu</a>
-  <a id="detail-admin" href="/zarzadzanie.html#administracja">Administracja</a>
+<main><a class="panel-return-link" id="panel-return" href="/daily.html">← Wróć do panelu</a>
+<nav class="panel-nav" aria-label="Raporty i administracja">
+  <a id="detail-performance" data-panel-route href="#podsumowanie">Wykonanie planu</a>
+  <a id="detail-admin" data-panel-route href="#administracja">Administracja</a>
 </nav>
 <header><div><h1 id="heading">Lejek sprzedaży</h1><p>Plan, wyniki i aktywności handlowców</p></div><span class="tag" id="roleLabel"></span></header>
 <nav id="report-tabs" aria-label="Raporty">
-  <button data-tab="overview" aria-selected="true">Podsumowanie</button>
-  <button data-tab="journey" aria-selected="false">Analiza lejka</button>
-  <button data-tab="sources" aria-selected="false">Wyniki według źródeł</button>
-  <button data-tab="plan" aria-selected="false">Plan sprzedaży</button>
+  <a data-panel-route data-tab="overview" href="#podsumowanie">Podsumowanie</a>
+  <a data-panel-route data-tab="journey" href="#analiza-lejka">Analiza lejka</a>
+  <a data-panel-route data-tab="sources" href="#zrodla">Wyniki według źródeł</a>
+  <a data-panel-route data-tab="plan" href="#plan-sprzedazy">Plan sprzedaży</a>
 </nav>
 <div class="filters"><label>Okres<input id="month" type="month" required></label><label hidden>Rola<select id="role"><option value="admin">Administrator</option><option value="group">Szef grupy dealerskiej</option><option value="manager">Kierownik salonu</option><option value="seller">Handlowiec</option></select></label><label>Salon<select id="salon"></select></label><label>Handlowiec<select id="seller"></select></label></div>
 <p id="status" role="status"></p><div id="dashboard" hidden><section id="journey" hidden><div class="panel"><div class="row"><div><h2>Moja realizacja planu</h2><p id="journeyScope"></p></div><button id="journeyEdit" class="action">Wskaźniki dodatkowe</button></div></div><div id="workbookHero" class="pace-hero"></div><article class="panel simple-stage"><h2>Etapy lejka</h2><div id="workbookStages" class="table"></div></article><article class="panel priorities"><h2>Co zrobić teraz</h2><div id="workbookActions"></div></article><article class="panel sheet-panel"><div class="row"><div><h2>Wyniki według źródła</h2><p id="sheetHint">Wpisz liczby. Konwersje uzupełnią się automatycznie.</p></div><button id="sheetSave" class="action" form="sheetForm" type="submit">Zapisz wyniki</button></div><form id="sheetForm"><div id="inlineSheet" class="table"></div><p id="sheetStatus" role="status"></p></form></article><article class="panel sheet-panel"><h2>Cele według źródła</h2><div id="workbookSources" class="table"></div></article><article class="panel sheet-panel"><h2>Wskaźniki dodatkowe</h2><div id="journeyStages" class="columns"></div></article></section><section id="overview"><div class="cards" id="cards"></div><div id="monthlyPace" class="panel"></div><div class="columns"><article class="panel"><h2>Etapy sprzedaży</h2><div id="funnel"></div><p class="muted">Długość paska pokazuje udział etapu w liczbie leadów.</p></article><article class="panel"><h2>Aktywności handlowe</h2><div id="activities"></div></article></div><article class="panel" id="salonPanel"><h2>Wyniki salonów</h2><div class="table" id="salonTable"></div></article><article class="panel" id="teamPanel"><h2>Wyniki zespołu</h2><div class="table" id="team"></div></article></section>
@@ -70,4 +72,4 @@ select { max-width:100%; }
 <dialog id="accountEditor"><form id="accountForm"><h2>Dodaj konto zespołu</h2><div class="fields"><label>Imię i nazwisko<input name="name" required maxlength="120"></label><label>E-mail<input name="email" type="email" required maxlength="120"></label><label id="account-password-field">Hasło do Biegu Wyżej<input name="password" type="password" required autocomplete="new-password" minlength="8" maxlength="128"></label><label>Salon<input name="salon" list="accountSalons" required maxlength="120"></label><label>Rola<select name="role"><option value="seller">Handlowiec</option><option value="manager">Kierownik salonu</option></select></label></div><datalist id="accountSalons"></datalist><label><input type="checkbox" name="invite"> Wyślij zaproszenie e-mailem</label><label><input type="checkbox" name="includeInReports" checked> Uwzględniaj w raportach</label><p class="error" id="accountError" role="alert"></p><div class="row"><button id="cancelAccount" type="button">Anuluj</button><button class="action" type="submit">Zapisz uprawnienia</button></div></form></dialog>
 <dialog id="editor"><form id="entry"><h2>Wyniki handlowca</h2><div class="fields"><label>Handlowiec<select id="entrySeller"></select></label><label>Źródło<select id="entrySource"></select></label></div><div class="fields" id="inputs"></div><details id="journeyDetails"><summary>Dodatkowe wskaźniki ścieżki klienta</summary><p>Wpisuj liczby dla tej samej grupy klientów w obrębie każdej pary wskaźników. Puste dodatkowe pola oznaczają brak pomiaru.</p><div class="fields" id="extraInputs"></div></details><p class="error" id="error" role="alert"></p><div class="row"><button type="button" id="cancel">Anuluj</button><button class="action" type="submit">Zapisz</button></div></form></dialog>
 <dialog id="planEditor"><form id="planForm"><h2>Cele handlowca na kwartał</h2><label>Handlowiec <select id="planPerson"></select></label><div class="fields" id="planInputs"></div><p id="planError" role="alert" class="error"></p><div class="row"><button type="button" id="cancelPlan">Anuluj</button><button class="action" type="submit">Zapisz cele</button></div></form></dialog>
-<p style="padding:16px"><a href="/daily.html">Wróć do panelu</a></p><form method="post" action="/logout" style="padding:16px"><button class="secondary">Wyloguj się</button></form><script src="quarter.js"></script><script src="workbook-plan.js"></script><script src="management.js"></script></body></html>
+<script src="panel-navigation.js"></script><script src="quarter.js"></script><script src="workbook-plan.js"></script><script src="management.js"></script></body></html>
