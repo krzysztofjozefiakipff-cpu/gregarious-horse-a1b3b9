@@ -1534,7 +1534,7 @@ function sourceProfileEditor(person,individual,month,peers) {
   return {panel,getProfile:()=>person.sourceProfile};
 }
 
-function sellerPlanForm(person,individual,month,sourceRates,peers) {
+function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryRates=[]) {
   const form=document.createElement('form');
   const step=title=>{
     const section=document.createElement('section');
@@ -1548,12 +1548,8 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
   const goalsStep=step('2. Cele miesięczne');
   const reviewStep=step('3. Podgląd i korekta');
   const reference=document.createElement('p');
-  const link=document.createElement('a');
-  link.href='https://miesiecznikdealer.pl/rynek/wywiad/10-proc-marzy-na-samochodzie-bardzo-trudne';
-  link.target='_blank';
-  link.rel='noopener noreferrer';
-  link.textContent='Przykład z Miesięcznika Dealer';
-  reference.append('Przy co najmniej 60 leadach z danego źródła kalkulator łączy relację zamówień do leadów z trzech zakończonych miesięcy ze stawką startową. Przy mniejszej próbie stosuje stawkę startową. Są to założenia planistyczne dla danego źródła. ',link);
+  reference.textContent='Plan zakłada lepszą obsługę dostępnych leadów. Kalkulator przewiduje kolejne próby kontaktu oraz follow-up po niemal każdej ofercie. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach widać wynik salonu. Lepszy wynik może podnieść cel konwersji. Przy słabszym wyniku obok celu pokażemy różnicę do nadrobienia.';
+  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
   const summary=document.createElement('dl');
   summary.className='planning-totals';
   const sourceDetails=document.createElement('details');
@@ -1631,10 +1627,14 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
       input.addEventListener('invalid',()=>{sourceDetails.open=true;panel.open=true;});
     }
     const rateNote=document.createElement('p');
-    const rate=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1})
-      .format(sourceConversionRate(index,sourceRates[index]));
-    rateNote.textContent='Konwersja przyjęta do planu · '+rate
-      +(sourceRates[index]!=null?' · skorygowana danymi salonu':' · stawka startowa');
+    const targetRate=sourceConversionRate(index,sourceRates[index]);
+    const historyRate=sourceHistoryRates[index];
+    rateNote.textContent='Cel konwersji leadów na zamówienia · '+percent.format(targetRate);
+    if (historyRate!=null) {
+      const gap=targetRate-historyRate;
+      rateNote.textContent+=' · wynik salonu '+percent.format(historyRate)
+        +(gap>=0.001?' · do poprawy o '+new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(gap*100)+' p.p.':'');
+    }
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
     sourceDetails.append(panel);
     const inputs=[...manual.inputs,...activity.inputs];
@@ -1756,9 +1756,11 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
       activityStatus.textContent='Wyliczone aktywności przekraczają limit.';
       return;
     }
+    const previousLeads=rows.reduce((total,{inputs})=>total+(inputs[7].valueAsNumber||0),0);
+    const nextLeads=proposals.reduce((total,row)=>total+row[3],0);
     rows.forEach((row,index)=>row.apply([...goals[index],...proposals[index]]));
     updateSummary();
-    activityStatus.textContent='Przeliczono aktywności. Cele sprzedażowe w każdym źródle pozostają takie same. Sprawdź podgląd i zapisz.';
+    activityStatus.textContent='Leady w podglądzie · '+previousLeads+' → '+nextLeads+'. Sprawdź podgląd i zapisz.';
   };
   reviewStep.append(recalculateActivities,activityStatus);
   const calculationInfo=document.createElement('details');
@@ -1870,7 +1872,7 @@ async function loadSalonPlans() {
         row.append(summary);
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
-          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id)));
+          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id),plan.sourceHistoryRates??[]));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
