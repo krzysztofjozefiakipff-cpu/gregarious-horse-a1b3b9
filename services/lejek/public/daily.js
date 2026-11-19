@@ -2229,17 +2229,16 @@ const managementFunctions={
   'kalendarz-pracy': ['Kalendarz pracy','admin-absence-block'],
   'lekcja': ['Lekcja na dziś','admin-lessons-block'],
   'historia-planow': ['Historia planów'],
-  'zarzadzaj-uzytkownikami': ['Zarządzaj użytkownikami','admin-edit-users-block'],
-  'dodaj-uzytkownika': ['Dodaj użytkownika','admin-users-block'],
+  'konta-uzytkownikow': ['Konta użytkowników'],
   'dodaj-salon': ['Dodaj salon do grupy','group-add-salon-block'],
   'historie': ['Historie do moderacji','admin-settings-block','story-moderation'],
   'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
   manager:['wykonanie','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
-    'zarzadzaj-uzytkownikami','dodaj-uzytkownika','historie','dane-dealera'],
-  group:['wykonanie','plany-salonow','historia-planow','zespol','kalendarz-pracy','zarzadzaj-uzytkownikami',
-    'dodaj-uzytkownika','dodaj-salon','lekcja','historie','dane-dealera']
+    'konta-uzytkownikow','historie','dane-dealera'],
+  group:['wykonanie','plany-salonow','historia-planow','zespol','kalendarz-pracy','konta-uzytkownikow',
+    'dodaj-salon','lekcja','historie','dane-dealera']
 };
 
 function selectRoleFunction(routes) {
@@ -2268,6 +2267,7 @@ function selectRoleFunction(routes) {
   $('#performance-view').hidden=active!=='wykonanie'&&active!=='historia-planow';
   $('#performance-title').textContent=active==='historia-planow'?label:'Realizacja planów salonów';
   $('#manager-team-view').hidden=active!=='zespol';
+  $('#user-accounts-view').hidden=active!=='konta-uzytkownikow';
   $('#administration-view').hidden=!blockId;
   $('#administration-title').textContent=label;
   for (const block of document.querySelectorAll('#administration-view > .admin-block')) {
@@ -2286,6 +2286,11 @@ function selectRoleFunction(routes) {
 }
 
 function selectManagementView() {
+  if (['#dodaj-uzytkownika','#zarzadzaj-uzytkownikami'].includes(location.hash)) {
+    const block=location.hash==='#dodaj-uzytkownika'?addUserBlock:editUserBlock;
+    history.replaceState(history.state,'','#konta-uzytkownikow');
+    block.open=true;
+  }
   const routes=managementFunctionOrder[data?.role];
   $('#role-function-nav').hidden=!routes;
   $('#management-nav').hidden=Boolean(routes);
@@ -2298,14 +2303,17 @@ function selectManagementView() {
     salonPlans.open=true;
   }
   const administration=location.hash==='#administracja';
+  const accounts=location.hash==='#konta-uzytkownikow';
   const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';
   $('#manager-team-view').hidden=!team;
   $('#management-team').setAttribute('aria-current',team?'page':'false');
   salonPlans.hidden=!['group','manager'].includes(data?.role);
   if (!salonPlans.hidden&&!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
-  $('#performance-view').hidden=administration||team;
+  $('#performance-view').hidden=administration||team||accounts;
+  $('#user-accounts-view').hidden=!accounts;
   $('#administration-view').hidden=!administration;
-  $('#management-performance').setAttribute('aria-current',administration||team?'false':'page');
+  $('#management-performance').setAttribute('aria-current',administration||team||accounts?'false':'page');
+  $('#management-accounts').setAttribute('aria-current',accounts?'page':'false');
   $('#management-admin').setAttribute('aria-current',administration?'page':'false');
 }
 
@@ -2397,7 +2405,6 @@ function loadUserEditor() {
 }
 function renderUserEditor(view) {
   const delegated=view.role!=='admin';
-  editUserBlock.hidden=false;
   const visibleSalons=new Set(view.salons.map(({salon})=>salon));
   editableUsers=delegated?data.users.filter(user=>
     visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
@@ -2549,7 +2556,7 @@ function renderAdmin() {
   $('#global-sidebar-settings').hidden=view.role!=='admin';
   $('#global-charity-settings').hidden=view.role!=='admin';
   for (const [block,content] of [
-    ['admin-users-block','user-editor'],['admin-groups-block','group-editor'],
+    ['admin-groups-block','group-editor'],
     ['admin-salons-block','manager-assignments'],['admin-absence-block','absence-panel'],
     ['admin-lessons-block','lesson-editor'],['admin-settings-block','settings']
   ]) $('#' + block).hidden=$('#' + content).hidden;

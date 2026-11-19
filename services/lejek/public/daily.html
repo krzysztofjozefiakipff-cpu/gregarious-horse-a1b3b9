@@ -138,11 +138,11 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 .manager-preview-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px;margin-bottom:14px;background:white;border:1px solid var(--line);border-radius:10px}
 .manager-preview-bar select{min-width:0;max-width:100%}
 #manager-preview-note{margin:10px 0}
-#administration-view .admin-block{margin:10px 0;border:1px solid var(--line);border-radius:12px;background:white;overflow:hidden}
-#administration-view .admin-block>summary{cursor:pointer;padding:14px 16px;color:var(--ink);font-weight:750;min-height:44px}
-#administration-view .admin-block[open]>summary{background:var(--tint);border-bottom:1px solid var(--line)}
-#administration-view .admin-block>form{border:0;margin:0;padding:14px 16px}
-#administration-view .admin-block>div{padding:12px 16px}
+:is(#administration-view,#user-accounts-view) .admin-block{margin:10px 0;border:1px solid var(--line);border-radius:12px;background:white;overflow:hidden}
+:is(#administration-view,#user-accounts-view) .admin-block>summary{cursor:pointer;padding:14px 16px;color:var(--ink);font-weight:750;min-height:44px}
+:is(#administration-view,#user-accounts-view) .admin-block[open]>summary{background:var(--tint);border-bottom:1px solid var(--line)}
+:is(#administration-view,#user-accounts-view) .admin-block>form{border:0;margin:0;padding:14px 16px}
+:is(#administration-view,#user-accounts-view) .admin-block>div{padding:12px 16px}
 #settings>details{margin:0 0 8px}
 #settings summary{cursor:pointer;font-weight:700;padding:8px 0}
 #user-editor .report-option,#user-editor fieldset label,#assignment-salons label{display:flex;align-items:center;gap:8px}
@@ -355,12 +355,12 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 #role-function-buttons a[aria-current="page"]::before {
   content:""; flex:none; width:8px; height:14px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg) translateY(-2px);
 }
-#admin[data-function] :is(#performance-title,#administration-title,#manager-team-view > h1) {
+#admin[data-function] :is(#performance-title,#administration-title,#user-accounts-title,#manager-team-view > h1) {
   padding-inline-start:10px; border-inline-start:4px solid var(--blue);
   line-height:1.16;
 }
 #role-function-picker { display:none; }
-#admin[data-function] .admin-block > summary,
+#admin[data-function] #administration-view .admin-block > summary,
 #admin[data-function] #settings > details > summary,
 #admin[data-function] [data-history="management"] > summary { display:none; }
 #admin[data-function="historia-planow"] #management-plan-period,
@@ -594,6 +594,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 <nav id="management-nav" class="panel-nav management-nav" aria-label="Panel">
   <a data-panel-route href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a data-panel-route href="#zespol" id="management-team" hidden>Zespół</a>
+  <a data-panel-route href="#konta-uzytkownikow" id="management-accounts">Konta użytkowników</a>
   <a data-panel-route href="#administracja" id="management-admin">Administracja</a>
 </nav>
 <nav id="role-function-nav" class="management-nav" aria-label="Funkcje panelu" hidden>
@@ -625,25 +626,9 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
   <h2 class="removed-team-heading">Usunięci handlowcy</h2>
   <ul id="manager-team-removed"></ul>
 </section>
-<section id="administration-view" hidden>
-<h1 id="administration-title">Administracja</h1>
-<details id="salon-plans" class="admin-block" hidden>
-  <summary>Plany salonów</summary>
-  <div>
-    <div class="planning-toolbar">
-      <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
-      <div class="planning-month-actions">
-        <button type="button" class="secondary" id="salon-plan-prev" aria-label="Poprzedni miesiąc">‹</button>
-        <button type="button" class="secondary" id="salon-plan-current">Bieżący miesiąc</button>
-        <button type="button" class="secondary" id="salon-plan-next" aria-label="Następny miesiąc">›</button>
-      </div>
-    </div>
-    <p id="salon-plan-status" role="status"></p>
-    <div id="salon-plan-results"></div>
-  </div>
-</details>
-<p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
-<details id="admin-users-block" class="admin-block" name="user-tools" hidden>
+<section id="user-accounts-view" aria-labelledby="user-accounts-title" hidden>
+<h1 id="user-accounts-title">Konta użytkowników</h1>
+<details id="admin-users-block" class="admin-block" name="user-tools">
 <summary>Dodaj użytkownika</summary>
 <form id="user-editor" hidden>
 
@@ -674,9 +659,28 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 <p id="user-status" role="status"></p>
 </form>
 </details>
-<details id="admin-edit-users-block" class="admin-block" name="user-tools" hidden>
+<details id="admin-edit-users-block" class="admin-block" name="user-tools">
 <summary>Zarządzaj użytkownikami</summary>
 </details>
+</section>
+<section id="administration-view" hidden>
+<h1 id="administration-title">Administracja</h1>
+<details id="salon-plans" class="admin-block" hidden>
+  <summary>Plany salonów</summary>
+  <div>
+    <div class="planning-toolbar">
+      <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
+      <div class="planning-month-actions">
+        <button type="button" class="secondary" id="salon-plan-prev" aria-label="Poprzedni miesiąc">‹</button>
+        <button type="button" class="secondary" id="salon-plan-current">Bieżący miesiąc</button>
+        <button type="button" class="secondary" id="salon-plan-next" aria-label="Następny miesiąc">›</button>
+      </div>
+    </div>
+    <p id="salon-plan-status" role="status"></p>
+    <div id="salon-plan-results"></div>
+  </div>
+</details>
+<p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
 <details id="group-add-salon-block" class="admin-block" hidden>
 <summary>Dodaj salon do grupy</summary>
 <form id="group-add-salon"><label>Nazwa nowego salonu <input name="salon" required maxlength="120"></label><button>Dodaj salon</button></form>
@@ -684,7 +688,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 <details id="admin-groups-block" class="admin-block" hidden>
 <summary>Grupy dealerskie</summary>
 <form id="group-editor" hidden>
-<p>Dodaj grupę lub dopisz do niej salony. Szefów przypiszesz w sekcji Użytkownicy.</p>
+<p>Dodaj grupę lub dopisz do niej salony. Szefów przypiszesz w sekcji Konta użytkowników.</p>
 <div id="group-list"></div>
 <label>Nazwa grupy <input name="name" required maxlength="120"></label>
 <label>Nazwy salonów (opcjonalnie, po jednej w wierszu) <textarea name="salons" rows="4"></textarea></label>
