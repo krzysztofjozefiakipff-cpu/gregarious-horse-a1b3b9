@@ -1666,7 +1666,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
     appliedTotals=proposalInputs().join(',');
     proposalStatus.textContent='Plan wyliczony. Sprawdź podsumowanie poniżej i zapisz.';
   };
-  const copy=sellerCopyControls('Plan innego handlowca','Kopiuj plan');
+  const copy=sellerCopyControls('Handlowiec z zapisanym planem','Kopiuj plan');
   const picker=document.createElement('details');
   const pickerTitle=document.createElement('summary');
   pickerTitle.textContent='Skopiuj zapisany plan';
@@ -1692,9 +1692,11 @@ function sellerPlanForm(person,individual,month,sourceRates,peers) {
       const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(selectedMonth));
       if (request!==revision||!picker.isConnected) return;
       donors=plans.flatMap(plan=>plan.team.map(seller=>({...seller,salon:plan.salon})))
-        .filter(seller=>seller.id!==person.id&&(seller.sourceTargets||seller.complete));
-      sellerCopyOptions(copy.select,copy.button,donors);
-      copyStatus.textContent='';
+        .filter(seller=>(seller.id!==person.id||selectedMonth!==month)&&(seller.sourceTargets||seller.complete))
+        .sort((a,b)=>Number(b.id===person.id)-Number(a.id===person.id));
+      sellerCopyOptions(copy.select,copy.button,donors.map(seller=>seller.id===person.id
+        ?{...seller,name:seller.name+' (ten sam handlowiec)'}:seller));
+      copyStatus.textContent=donors.length?'':'Brak planów do skopiowania w tym miesiącu.';
     } catch (error) {
       if (request===revision) copyStatus.textContent=error.message;
     }
