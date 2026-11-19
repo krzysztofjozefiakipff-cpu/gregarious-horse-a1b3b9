@@ -882,7 +882,7 @@ function renderSalonSummary(view) {
     ordersBySeller.set(result.person,(ordersBySeller.get(result.person)??0)+(JSON.parse(result.counters)[4]??0));
   }
   for (const {salon} of view.salons) {
-    const team=view.sellers.filter(seller=>seller.salon===salon);
+    const team=view.sellers.filter(seller=>seller.salon===salon&&seller.includeInReports);
     const planned=team.filter(seller=>(targets.get(seller.id)??0)>0);
     const total=planned.reduce((sum,seller)=>sum+targets.get(seller.id),0);
     const orders=planned.reduce((sum,seller)=>sum+(ordersBySeller.get(seller.id)??0),0);
@@ -1047,6 +1047,7 @@ function loadUserEditor() {
   userEditor.elements.name.value=selected?.name??'';
   userEditor.elements.email.value=selected?.email??'';
   userEditor.elements.email.readOnly=Boolean(selected);
+  userEditor.elements.includeInReports.checked=selected?.includeInReports!==0;
   userEditor.elements.password.value='';
   userEditor.elements.password.required=!editing;
   $('#user-password-label').textContent=editing?'Nowe hasło (opcjonalnie)':'Hasło do Biegu Wyżej (co najmniej 12 znaków)';
@@ -1096,7 +1097,7 @@ userEditor.onsubmit=async event=>{
   button.disabled=true;
   try {
     const fields=Object.fromEntries(values);
-    await api('/api/users',{...fields,roles,createOnly:!editing});
+    await api('/api/users',{...fields,roles,includeInReports:values.has('includeInReports'),createOnly:!editing});
     await refresh();
     if (editing) {
       $('#user-picker').value=String(values.get('email')).trim().toLowerCase();

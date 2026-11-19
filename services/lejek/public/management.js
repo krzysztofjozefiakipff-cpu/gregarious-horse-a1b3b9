@@ -344,7 +344,7 @@ get('addAccount').onclick=()=>{
 };
 get('cancelAccount').onclick=()=>get('accountEditor').close();
 get('accountForm').onsubmit=event=>saveForm(event,'/api/accounts',
-  Object.fromEntries(new FormData(event.currentTarget)), 'accountEditor','accountError');
+  {...Object.fromEntries(new FormData(event.currentTarget)),includeInReports:event.currentTarget.elements.includeInReports.checked}, 'accountEditor','accountError');
 const benchmarks=benchmarksFromWorkbook.map(([contact,visit,drive,offer,follow,close],i)=>
   [sources[i],pct(contact,1),i===0?'—':pct(visit,1),pct(offer,1),pct(follow,1),pct(close,1)]);
 get('bench').innerHTML=table(['Źródło','Kontakt / lead','Odbyte / kontakt','Oferta / kontakt','Follow-up / oferta','Zamówienie / lead'],benchmarks);

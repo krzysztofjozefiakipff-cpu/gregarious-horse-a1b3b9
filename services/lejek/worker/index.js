@@ -119,7 +119,7 @@ async function handle(request, env) {
   const groupSalon='salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?)';
   const filters={admin:'',group:' AND '+groupSalon,manager:' AND (salon=? OR salon IN (SELECT salon FROM manager_salons WHERE manager=?))',seller:' AND id=?'};
   const params=user.role==='admin'?[]:user.role==='group'?[user.group]:user.role==='manager'?[user.salon,user.id]:[user.id];
-  const sellerQuery='SELECT id,name,salon FROM accounts WHERE '+members+filters[user.role];
+  const sellerQuery='SELECT id,name,salon,NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=accounts.id) AS includeInReports FROM accounts WHERE '+members+filters[user.role];
   const sellers=await list(db,sellerQuery+' ORDER BY id',...params);
   const scope='person IN (SELECT id FROM accounts WHERE '+members+filters[user.role]+')';
   const salons=user.role==='admin'
@@ -145,17 +145,22 @@ async function handle(request, env) {
   const canEditDelegated=address=>db.prepare(
     'SELECT 1 FROM accounts a WHERE a.email=? AND '+delegatedWhere
   ).bind(address,email,...delegatedParams).first();
+  const reportsOnly=path==='/api/state'&&user.role!=='seller';
+  const reportScope=reportsOnly?scope+' AND person NOT IN (SELECT person FROM report_exclusions)':scope;
+  const reportSetting=(address,include)=>include===undefined?[]:[include
+    ?db.prepare('DELETE FROM report_exclusions WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address)
+    :db.prepare('INSERT INTO report_exclusions SELECT id FROM accounts WHERE email=? ON CONFLICT DO NOTHING').bind(address)];
   const storyScope=user.role==='admin'?'':' AND '+scope;
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
     const first=Math.floor((Number(month.slice(5))-1)/3)*3+1;
     const months=[first,first+1,first+2].map(n=>month.slice(0,5)+String(n).padStart(2,'0'));
-    const reviewPlans=await list(db,'SELECT person,month,target FROM review_plans WHERE month IN (?,?,?) AND '+scope,...months,...params);
-    const funnelPlans=await list(db,'SELECT person,month,targets FROM funnel_plans WHERE month IN (?,?,?) AND '+scope,...months,...params);
+    const reviewPlans=await list(db,'SELECT person,month,target FROM review_plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params);
+    const funnelPlans=await list(db,'SELECT person,month,targets FROM funnel_plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params);
     if (path==='/api/daily') {
       const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN (?,?,?) AND '+scope,...months,...params);
-      const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+scope,...months,...params);
+      const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params);
       const personal=user.role==='seller'?await tracking(db,user.id):null;
       const brand=personal?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
       const approvals=personal?[]:await list(db,"SELECT person,day,reason FROM daily_exceptions WHERE kind='pending' AND "+scope+' ORDER BY day',...params);
@@ -200,6 +205,7 @@ async function handle(request, env) {
           FROM accounts a JOIN plans p ON p.person=a.id AND p.month=? AND p.target>0
           LEFT JOIN daily_results d ON d.person=a.id AND substr(d.day,1,7)=p.month AND d.day<=?
           WHERE ${accountRole('a','seller')}
+          AND NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=a.id)
           AND (a.salon=? OR a.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?))
           GROUP BY a.id,a.salon,p.target`,rankingMonth,today,user.salon,group?.group_name??null);
         const self=ranks.find(row=>row.id===user.id);
@@ -217,21 +223,22 @@ async function handle(request, env) {
         WHERE ${accountRole('a','manager')}
         ORDER BY a.name,a.id,m.salon`):[];
       const users=!canManage?[]:await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
-        COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived
+        COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived,
+        NOT EXISTS (SELECT 1 FROM report_exclusions re WHERE re.person=a.id) AS includeInReports
         FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email WHERE `+
         (owner?`a.role<>'admin'
-          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email) FROM dealer_group_heads h
+          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1 FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
       return json({users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
-      list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
-      list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+scope,...months,...params),
+      list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+reportScope,...months,...params),
+      list(db,'SELECT person,month,target FROM plans WHERE month IN (?,?,?) AND '+reportScope,...months,...params),
       user.role==='seller'?[]:list(db,`SELECT id,email,name,salon,CASE WHEN ${user.role==='manager'?'0':managers} THEN 'manager' ELSE 'seller' END AS role
         FROM accounts WHERE ${user.role==='manager'?members:'('+members+' OR '+managers+')'}${filters[user.role]} ORDER BY id`,...params),
     ]);
-    return json({roles,role:user.role,sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
+    return json({roles,role:user.role,sellers:reportsOnly?sellers.filter(seller=>seller.includeInReports):sellers,results,plans,reviewPlans,funnelPlans,accounts,salons});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
@@ -354,6 +361,8 @@ async function handle(request, env) {
     return json({ok:true});
   }
   if (path==='/api/users' && canManage) {
+    if (body.includeInReports!==undefined&&typeof body.includeInReports!=='boolean')
+      return json({error:'Nieprawidłowe ustawienie raportów.'},400);
     const {name,roles:chosen,salon,dealerGroup}=body;
     const needsSalon=Array.isArray(chosen)&&chosen.some(role=>role!=='group');
     if (!textValid(name)||!Array.isArray(chosen)||!chosen.length||chosen.length>3||new Set(chosen).size!==chosen.length||
@@ -395,11 +404,14 @@ async function handle(request, env) {
       group?db.prepare('INSERT INTO dealer_group_heads VALUES (?,?) ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name').bind(address,group)
         :db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(address),
       ...(!chosen.includes('manager')&&current?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
-      ...credentials
+      ...credentials,
+      ...reportSetting(address,body.includeInReports)
     ]);
     return json({ok:true});
   }
   if (path==='/api/accounts' && user.role!=='seller') {
+    if (body.includeInReports!==undefined&&typeof body.includeInReports!=='boolean')
+      return json({error:'Nieprawidłowe ustawienie raportów.'},400);
     if (!textValid(body.name)||!textValid(body.salon)||!['manager','seller'].includes(body.role)||
         !textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return json({error:'Uzupełnij poprawnie wszystkie pola.'},400);
     const targetEmail=body.email.trim().toLowerCase();
@@ -416,7 +428,8 @@ async function handle(request, env) {
     await db.batch([
       db.prepare('INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)')
         .bind(targetEmail,body.name.trim(),salon,body.role),
-      ...credentials
+      ...credentials,
+      ...reportSetting(targetEmail,body.includeInReports)
     ]);
     return json({ok:true});
   }
