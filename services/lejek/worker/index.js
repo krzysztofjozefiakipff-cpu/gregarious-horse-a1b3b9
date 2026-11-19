@@ -10,7 +10,10 @@ async function list(db,sql,...params) { return (await db.prepare(sql).bind(...pa
 const sourceCount = 13;
 const supportedDailySourceCounts = [12, sourceCount];
 const dailyRowLengths = [9,10,11];
-const workday = day => ![0,6].includes(new Date(day+'T00:00:00Z').getUTCDay());
+const workday = day => {
+  const weekday=new Date(day+'T00:00:00Z').getUTCDay();
+  return weekday!==0&&(weekday!==6||day>='2026-11-19');
+};
 function daysBetween(start,end) {
   const days=[];
   for (let at=Date.parse(start);at<=Date.parse(end);at+=86400000) {
@@ -23,6 +26,8 @@ async function tracking(db,person) {
   const {start_day}=await db.prepare('SELECT start_day FROM daily_tracking WHERE person=?').bind(person).first();
   const saved=new Set((await list(db,'SELECT day FROM daily_results WHERE person=? AND day>=?',person,start_day)).map(row=>row.day));
   const exceptions=Object.fromEntries((await list(db,'SELECT day,kind FROM daily_exceptions WHERE person=? AND day>=?',person,start_day)).map(row=>[row.day,row.kind]));
+  const scheduled=await list(db,"SELECT day FROM work_calendar WHERE person=? AND status='approved' AND day>=?",person,start_day);
+  for (const {day} of scheduled) exceptions[day]='leave';
   const days=daysBetween(start_day,localDay()).filter(workday);
   const closed=day=>saved.has(day)||['leave','training','zero'].includes(exceptions[day]);
   const drafts=await list(db,'SELECT day FROM daily_drafts WHERE person=? AND day<?',person,localDay());
@@ -298,6 +303,15 @@ async function handle(request, env) {
       FROM lesson_packs WHERE salon=? ORDER BY id DESC`,salon);
     return json({packs});
   }
+  if (request.method==='GET' && path==='/api/work-calendar') {
+    const person=Number(url.searchParams.get('person'));
+    const month=url.searchParams.get('month');
+    if (!['seller','manager'].includes(user.role)||!sellers.some(seller=>seller.id===person))
+      return json({error:'Brak dostępu do kalendarza.'},403);
+    if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
+    const entries=await list(db,'SELECT day,kind,status FROM work_calendar WHERE person=? AND substr(day,1,7)=? ORDER BY day',person,month);
+    return json({entries});
+  }
   if (request.method==='GET' && path==='/api/daily/reopen') {
     const person=Number(url.searchParams.get('person'));
     if (user.role!=='manager'||!sellers.some(seller=>seller.id===person&&seller.accountStatus!=='inactive'))
@@ -323,6 +337,8 @@ async function handle(request, env) {
         personal.drafts=Object.fromEntries(drafts.map(({day,rows})=>[day,JSON.parse(rows)]));
       }
       const brand=personal?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
+      const calendar=await list(db,`SELECT person,day,kind,status FROM work_calendar
+        WHERE (substr(day,1,7)=? OR status='pending') AND ${scope} ORDER BY day`,month,...params);
       const approvals=personal?[]:await list(db,"SELECT person,day,reason FROM daily_exceptions WHERE kind='pending' AND "+scope+' ORDER BY day',...params);
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
@@ -403,7 +419,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),1 FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,calendar,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+reportScope,...months,...params),
@@ -792,6 +808,38 @@ async function handle(request, env) {
     ]);
     return removed.meta.changes?json({ok:true}):json({error:'Nie ma zatwierdzonego wpisu z podziałem na źródła dla tego dnia.'},409);
   }
+  if (path==='/api/work-calendar') {
+    if (!['seller','manager'].includes(user.role)) return json({error:'Brak dostępu do kalendarza.'},403);
+    const {person,day,kind,action}=body;
+    if (!dayValid(day)||!workday(day)||!['save','remove','approve','reject'].includes(action))
+      return json({error:'Wybierz dzień od poniedziałku do soboty i poprawną operację.'},400);
+    const seller=user.role==='seller';
+    if (seller&&(day<localDay()||!['save','remove'].includes(action)))
+      return json({error:'Możesz planować dni od dziś. Zatwierdzone dni zmienia kierownik.'},403);
+    let change;
+    if (action==='remove') {
+      change=await db.prepare(`DELETE FROM work_calendar WHERE person=? AND day=? AND (?=0 OR status!='approved')`)
+        .bind(person,day,Number(seller)).run();
+    } else if (action==='reject') {
+      change=await db.prepare("UPDATE work_calendar SET status='rejected' WHERE person=? AND day=? AND status='pending'")
+        .bind(person,day).run();
+    } else if (action==='approve') {
+      change=await db.prepare(`UPDATE work_calendar SET status='approved' WHERE person=?1 AND day=?2 AND status='pending'
+        AND NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2)
+        AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')`)
+        .bind(person,day).run();
+    } else {
+      if (!['leave','saturday','other'].includes(kind)||kind==='saturday'&&new Date(day+'T00:00:00Z').getUTCDay()!==6)
+        return json({error:'Wybierz rodzaj dnia wolnego. Wolną sobotę można zaznaczyć tylko w sobotę.'},400);
+      change=await db.prepare(`INSERT INTO work_calendar(person,day,kind,status)
+        SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2)
+          AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')
+        ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,status=excluded.status
+          WHERE ?4='approved' OR work_calendar.status!='approved'`)
+        .bind(person,day,kind,seller?'pending':'approved').run();
+    }
+    return change.meta.changes?json({ok:true}):json({error:'Dzień jest już rozliczony albo zgłoszenie zostało zmienione. Odśwież kalendarz.'},409);
+  }
   if (path==='/api/review' && user.role!=='seller') {
     if (!dayValid(body.day)||typeof body.approve!=='boolean') return json({error:'Sprawdź decyzję.'},400);
     const changed=await db.prepare("UPDATE daily_exceptions SET kind=? WHERE person=? AND day=? AND kind='pending'")
@@ -811,8 +859,8 @@ async function handle(request, env) {
     if (path==='/api/day-exception') {
       if (!['leave','training','pending'].includes(body.kind)||body.kind==='pending'&&!textValid(body.reason))
         return json({error:'Wybierz status i podaj powód dnia bez aktywności.'},400);
-      const changed=await db.prepare("INSERT INTO daily_exceptions SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=? AND day=?) ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,reason=excluded.reason WHERE kind='rejected'")
-        .bind(user.id,day,body.kind,body.kind==='pending'?body.reason.trim():'',user.id,day).run();
+      const changed=await db.prepare("INSERT INTO daily_exceptions SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2) AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved') ON CONFLICT(person,day) DO UPDATE SET kind=excluded.kind,reason=excluded.reason WHERE kind='rejected'")
+        .bind(user.id,day,body.kind,body.kind==='pending'?body.reason.trim():'').run();
       return changed.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     const {rows,draft=false}=body;
@@ -822,17 +870,18 @@ async function handle(request, env) {
     rows[0][2]=rows[0][0];
     if (draft) {
       const written=await db.prepare(`INSERT INTO daily_drafts (person,day,rows)
-        SELECT ?,?,?
-        WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=? AND day=?)
-          AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected')
+        SELECT ?1,?2,?3
+        WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2)
+          AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')
+          AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved')
         ON CONFLICT(person,day) DO UPDATE SET rows=excluded.rows`)
-        .bind(user.id,day,JSON.stringify(rows),user.id,day,user.id,day).run();
+        .bind(user.id,day,JSON.stringify(rows)).run();
       return written.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     const totals=[1,3,4,5,7].map(i=>rows.reduce((sum,row)=>sum+row[i],0));
-    const written=await db.prepare("INSERT INTO daily_results SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=? AND day=? AND kind!='rejected') ON CONFLICT(person,day) DO NOTHING")
-      .bind(user.id,day,JSON.stringify([...totals,rows]),user.id,day).run();
+    const written=await db.prepare("INSERT INTO daily_results SELECT ?1,?2,?3 WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected') AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved') ON CONFLICT(person,day) DO NOTHING")
+      .bind(user.id,day,JSON.stringify([...totals,rows])).run();
     return written.meta.changes?json({ok:true}):json({error:'Ten dzień jest już zapisany.'},409);
   }
   if (path==='/api/plans' && user.role!=='seller') {

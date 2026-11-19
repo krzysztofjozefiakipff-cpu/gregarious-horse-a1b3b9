@@ -17,6 +17,11 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 12px}.cards strong{display:block;font-size:clamp(1.3rem,3vw,2rem);line-height:1.15;font-variant-numeric:tabular-nums}
 .behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
 #meme{background:var(--yellow);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--blue);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--yellow)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
+.calendar-fields{display:flex;align-items:end;flex-wrap:wrap;gap:10px;margin-top:12px}
+.calendar-fields label{display:grid;gap:4px}
+[data-calendar-list] li{margin-block:8px}
+[data-calendar-list] button{margin-inline-start:8px}
+#calendar-reminder{padding:10px;border-left:4px solid var(--blue);background:var(--tint)}
 #backlog{padding:13px;background:var(--yellow);border-radius:10px;margin:10px 0}#options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}#reason{width:100%;margin-top:8px}
 .scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:5px 3px;border-bottom:1px solid var(--line)}th{font-size:.78rem}td:first-child{min-width:115px;font-size:.86rem}input,select{font:inherit;border:1px solid #a1b0c4;border-radius:6px;padding:5px 7px;background:white;color:var(--ink)}input[type=number]{width:100%;min-width:56px;min-height:32px;text-align:center}button{background:var(--blue);color:white;border:0;border-radius:8px;padding:8px 13px;font:inherit;font-weight:700;cursor:pointer}button:disabled{background:#dedad1;color:#53545a;cursor:default}button.secondary{background:transparent;color:var(--blue);border:1px solid currentColor}
 .save{margin-top:14px;gap:10px}
@@ -288,6 +293,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 
 <div class="daily-inspiration">
 <div class="quote"><div class="eyebrow">Hasło dnia</div><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
+<p id="calendar-reminder" role="status" hidden></p>
 <section id="daily-lesson" aria-labelledby="lesson-title">
   <div class="eyebrow">Lekcja na dziś</div>
   <h2 id="lesson-title"></h2>
@@ -341,6 +347,11 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 
 <details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details></div>
 <div data-seller-panel="plan" hidden>
+<details id="seller-calendar" class="order-plan">
+  <summary>Kalendarz pracy i dni wolne</summary>
+  <p id="seller-calendar-days"></p>
+  <div id="seller-calendar-editor"></div>
+</details>
 <div class="plan-period"><p id="seller-plan-period"></p></div>
 <details class="month-history" data-history="seller">
   <summary>Historia zakończonych miesięcy</summary>
@@ -500,7 +511,7 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 </details>
 <details id="admin-absence-block" class="admin-block" hidden>
 <summary>Zgłoszenia dni bez aktywności</summary>
-<div id="absence-panel"><div id="reviews"></div></div>
+<div id="absence-panel"><div id="reviews"></div><div id="manager-calendar-editor" hidden></div></div>
 </details>
 <details id="admin-lessons-block" class="admin-block" hidden>
 <summary>Lekcja na dziś</summary>
@@ -526,6 +537,19 @@ a{color:var(--blue)}#admin form,#reviews article{display:grid;gap:9px;border:1px
 </div>
 </details>
 </section></section>
+<template id="calendar-template">
+  <div class="calendar-fields">
+    <label data-calendar-person hidden>Handlowiec <select aria-label="Handlowiec"></select></label>
+    <label>Miesiąc <input type="month"></label>
+    <label>Data dnia wolnego <input type="date"></label>
+    <label>Rodzaj <select data-calendar-kind>
+      <option value="leave">Urlop</option><option value="saturday">Wolna sobota</option><option value="other">Inny dzień bez aktywności</option>
+    </select></label>
+    <button type="button" data-calendar-save></button>
+  </div>
+  <p data-calendar-status role="status"></p>
+  <ul data-calendar-list></ul>
+</template>
 </main>
 <footer><strong class="product-brand"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</strong><form method="post" action="/logout"><button class="secondary">Wyloguj się</button></form></footer>
 <script src="workbook-plan.js"></script><script src="daily.js"></script>
