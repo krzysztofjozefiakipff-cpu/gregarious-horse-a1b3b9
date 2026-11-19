@@ -29,7 +29,11 @@ const DB = {
   },
   async batch(statements) {
     database.exec('BEGIN IMMEDIATE');
-    try {for(const statement of statements) statement.run(); database.exec('COMMIT');}
+    try {
+      const results=statements.map(statement=>statement.run());
+      database.exec('COMMIT');
+      return results;
+    }
     catch(error) {database.exec('ROLLBACK'); throw error;}
   }
 };

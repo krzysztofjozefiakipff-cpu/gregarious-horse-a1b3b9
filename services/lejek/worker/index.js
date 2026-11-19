@@ -25,7 +25,9 @@ async function tracking(db,person) {
   const exceptions=Object.fromEntries((await list(db,'SELECT day,kind FROM daily_exceptions WHERE person=? AND day>=?',person,start_day)).map(row=>[row.day,row.kind]));
   const days=daysBetween(start_day,localDay()).filter(workday);
   const closed=day=>saved.has(day)||['leave','training','zero'].includes(exceptions[day]);
-  const missing=days.filter(day=>day<localDay()&&!closed(day));
+  const drafts=await list(db,'SELECT day FROM daily_drafts WHERE person=? AND day<?',person,localDay());
+  const missing=[...new Set([...days.filter(day=>day<localDay()),...drafts.map(row=>row.day)])]
+    .filter(day=>!closed(day)).sort();
   const month=days.filter(day=>day.startsWith(localDay().slice(0,7))&&!['leave','training'].includes(exceptions[day]));
   return {missing,exceptions,progress:[month.filter(closed).length,month.length]};
 }
@@ -282,6 +284,14 @@ async function handle(request, env) {
         team:team.map(({version,...person})=>({...person,approved:Boolean(version)}))});
     }
     return json({plans});
+  }
+  if (request.method==='GET' && path==='/api/daily/reopen') {
+    const person=Number(url.searchParams.get('person'));
+    if (user.role!=='manager'||!sellers.some(seller=>seller.id===person&&seller.accountStatus!=='inactive'))
+      return json({error:'Brak uprawnień do odblokowania dni tego handlowca.'},403);
+    const days=await list(db,`SELECT day FROM daily_results
+      WHERE person=? AND day<=? AND json_type(counters,'$[5]')='array' ORDER BY day DESC`,person,localDay());
+    return json({days:days.map(row=>row.day)});
   }
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
@@ -735,6 +745,21 @@ async function handle(request, env) {
     return json({ok:true});
   }
   if (!sellers.some(p=>p.id===body.person)) return json({error:'Brak uprawnień do tego handlowca.'},403);
+  if (path==='/api/daily/reopen') {
+    if (user.role!=='manager'||!sellers.some(seller=>seller.id===body.person&&seller.accountStatus!=='inactive'))
+      return json({error:'Brak uprawnień do odblokowania dni tego handlowca.'},403);
+    const {person,day}=body;
+    if (!dayValid(day)||day>localDay()) return json({error:'Sprawdź datę wpisu.'},400);
+    const [,removed]=await db.batch([
+      db.prepare(`INSERT INTO daily_drafts (person,day,rows)
+        SELECT person,day,json_extract(counters,'$[5]') FROM daily_results
+        WHERE person=? AND day=? AND json_type(counters,'$[5]')='array'
+        ON CONFLICT(person,day) DO UPDATE SET rows=excluded.rows`).bind(person,day),
+      db.prepare(`DELETE FROM daily_results
+        WHERE person=? AND day=? AND json_type(counters,'$[5]')='array'`).bind(person,day)
+    ]);
+    return removed.meta.changes?json({ok:true}):json({error:'Nie ma zatwierdzonego wpisu z podziałem na źródła dla tego dnia.'},409);
+  }
   if (path==='/api/review' && user.role!=='seller') {
     if (!dayValid(body.day)||typeof body.approve!=='boolean') return json({error:'Sprawdź decyzję.'},400);
     const changed=await db.prepare("UPDATE daily_exceptions SET kind=? WHERE person=? AND day=? AND kind='pending'")

@@ -1130,6 +1130,12 @@ function renderManagerDashboard(view,detailOnly=false) {
       figures.append(row);
     }
     detail.append(summary,figures);
+    if (view.role==='manager'&&data.role==='manager'&&seller.accountStatus!=='inactive') {
+      const link=document.createElement('a');
+      link.href='/daily.html?'+new URLSearchParams({handlowiec:seller.id,role:'manager'})+'#reopen-day-form';
+      link.textContent='Zarządzaj zatwierdzonymi dniami';
+      detail.append(link);
+    }
     list.append(detail);
   }
   return team;
@@ -1753,6 +1759,41 @@ for (const panel of historyPanels) {
   panel.reloadHistory=()=>{if(panel.open && input.value) load();};
 }
 
+async function loadReopenDays(seller) {
+  const select=$('#reopen-day-date');
+  const button=$('#reopen-day-form button');
+  const status=$('#reopen-day-status');
+  button.disabled=true;
+  select.replaceChildren();
+  try {
+    const {days}=await api('/api/daily/reopen?person='+seller.id);
+    select.replaceChildren(...days.map(day=>new Option(dateLabel(day),day)));
+    if (!days.length && !status.textContent) status.textContent='Brak zatwierdzonych dni do odblokowania.';
+    button.disabled=!days.length;
+  } catch (error) {
+    status.textContent=error.message;
+  }
+}
+
+$('#reopen-day-form').onsubmit=async event=>{
+  event.preventDefault();
+  const seller=data.sellers.find(person=>String(person.id)===detailSeller);
+  const day=$('#reopen-day-date').value;
+  const button=event.currentTarget.querySelector('button');
+  const status=$('#reopen-day-status');
+  if (!seller||!day||button.disabled||
+      !confirm('Odblokować dzień '+dateLabel(day)+'? Wyniki z tego dnia wrócą do raportów po ponownym zatwierdzeniu.')) return;
+  button.disabled=true;
+  try {
+    await api('/api/daily/reopen',{person:seller.id,day});
+    status.textContent='Dzień odblokowany. Handlowiec może poprawić wpis i ponownie go zatwierdzić.';
+    await refresh();
+  } catch (error) {
+    status.textContent=error.message;
+    await loadReopenDays(seller);
+  }
+};
+
 function renderSellerDetail() {
   const section=$('#seller-detail');
   section.hidden=false;
@@ -1782,6 +1823,9 @@ function renderSellerDetail() {
     return row;
   }));
   $('#seller-detail-table').hidden=false;
+  const reopenForm=$('#reopen-day-form');
+  reopenForm.hidden=data.role!=='manager'||seller.accountStatus==='inactive';
+  if (!reopenForm.hidden) loadReopenDays(seller);
 }
 
 function showView() {
