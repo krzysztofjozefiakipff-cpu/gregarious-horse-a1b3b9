@@ -950,7 +950,7 @@ function renderManagerDashboard(view) {
     const detail=document.createElement('details');
     const summary=document.createElement('summary');
     const name=document.createElement('strong');
-    name.textContent=seller.name;
+    name.textContent=seller.name+(view.salons.length>1?' · '+seller.salon:'');
     const progress=orders.target>0?percent.format(orders.actual/orders.target)+' planu miesiąca':'Brak planu zamówień';
     summary.append(name,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
     const figures=document.createElement('ul');
@@ -976,12 +976,54 @@ function selectManagementView() {
 }
 window.addEventListener('hashchange',selectManagementView);
 
+function renderManagerAssignments() {
+  const picker=$('#assignment-manager');
+  const previous=picker.value;
+  const managers=new Map(data.managerAssignments.map(row=>[row.id,row]));
+  picker.replaceChildren(...[...managers.values()].map(({id,name})=>new Option(name,id)));
+  if (managers.has(Number(previous))) picker.value=previous;
+  const manager=managers.get(Number(picker.value));
+  $('#assignment-primary').textContent=manager?'Salon główny: '+manager.salon:'Najpierw dodaj konto kierownika w sekcji Konta zespołu.';
+  $('#assignment-save').disabled=!manager;
+  const choices=$('#assignment-salons');
+  choices.replaceChildren();
+  if (!manager) return;
+  const assigned=new Set(data.managerAssignments.filter(row=>row.id===manager.id).map(row=>row.additional));
+  for (const {salon} of data.salons) {
+    if (salon===manager.salon) continue;
+    const label=document.createElement('label');
+    const checkbox=document.createElement('input');
+    checkbox.type='checkbox';
+    checkbox.value=salon;
+    checkbox.checked=assigned.has(salon);
+    label.append(checkbox,salon);
+    choices.append(label);
+  }
+}
+
+$('#assignment-manager').onchange=renderManagerAssignments;
+$('#manager-assignments').onsubmit=event=>{
+  event.preventDefault();
+  const salons=[...$('#assignment-salons').querySelectorAll('input:checked')].map(input=>input.value);
+  run(()=>api('/api/manager-salons',{manager:Number($('#assignment-manager').value),salons}));
+};
+$('#manager-scope').onchange=()=>renderAdmin();
+
 function renderAdmin() {
   const managerPreview=data.role==='admin'&&Boolean(managerPreviewSalon);
-  const people=managerPreview?data.sellers.filter(seller=>seller.salon===managerPreviewSalon):data.sellers;
-  const demo=managerPreview&&managerPreviewSalon===demoManagerOption;
-  let view=managerPreview?{...data,role:'manager',salon:managerPreviewSalon,sellers:people,
-    salons:[{salon:managerPreviewSalon}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
+  const managerScope=$('#manager-scope');
+  const picked=managerScope.value;
+  const multiple=data.role==='manager'&&data.salons.length>1;
+  $('#manager-scope-bar').hidden=!multiple;
+  if (multiple) {
+    managerScope.replaceChildren(new Option('Wszystkie moje salony',''),...data.salons.map(({salon})=>new Option(salon,salon)));
+    if (data.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
+  }
+  const selected=managerPreview?managerPreviewSalon:multiple?managerScope.value:'';
+  const demo=managerPreview&&selected===demoManagerOption;
+  const people=selected?data.sellers.filter(seller=>seller.salon===selected):data.sellers;
+  let view=selected?{...data,role:'manager',salon:selected,sellers:people,
+    salons:[{salon:selected}],approvals:data.approvals.filter(row=>people.some(seller=>seller.id===row.person))}
     :data;
   if (demo) {
     const month=data.today.slice(0,7);
@@ -998,7 +1040,7 @@ function renderAdmin() {
   $('#management-team-link').hidden=managerPreview;
   $('#absence-panel').inert=managerPreview;
   $('#lesson-editor').inert=managerPreview;
-  $('#dealer').textContent=manager?view.salon:'Panel salonu';
+  $('#dealer').textContent=manager?(multiple&&!selected?'Wszystkie moje salony':view.salon):'Panel salonu';
   $('#performance-title').textContent=manager?'Dziś w salonie':'Wykonanie planu';
   $('#management-performance').textContent=manager?'Dziś w salonie':'Wykonanie planu';
   $('#management-admin').textContent=manager?'Zarządzanie':'Panel administracyjny';
@@ -1007,8 +1049,13 @@ function renderAdmin() {
   if (manager) renderManagerDashboard(view);
   $('#admin').hidden=false;
   selectManagementView();
+  const query=multiple&&selected?'?salon='+encodeURIComponent(selected):'';
+  $('#management-team-link').href='/zarzadzanie.html'+query+'#administracja';
+  $('#management-report-link a').href='/zarzadzanie.html'+query;
   $('#management-team-link').textContent=view.role==='group'?'Konta zespołu':'Konta zespołu i ustawienia planów';
   renderSalonSummary(view);
+  $('#manager-assignments').hidden=view.role!=='admin';
+  if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
   $('#group-list').textContent=view.groups.map(group=>group.name+' · '+(group.salons??'').replaceAll('\n',', ')+' · '+(group.heads??'').replaceAll('\n',', ')).join(' / ');
   $('#absence-panel').hidden=view.role==='group';
@@ -1035,10 +1082,10 @@ function renderAdmin() {
   $('#settings').hidden=view.role!=='admin';
   const lessonSalon=$('#lesson-salon');
   const selectedSalon=lessonSalon.value;
-  const lessonSalons=view.role==='admin'?view.salons.map(({salon})=>salon):[view.salon];
-  lessonSalon.replaceChildren(...lessonSalons.map(salon=>new Option(salon,salon)));
+  const lessonSalons=view.salons.map(({salon})=>salon);
+  lessonSalon.replaceChildren(...(lessonSalons.length>1?[new Option('Wybierz salon','')]:[]),...lessonSalons.map(salon=>new Option(salon,salon)));
   if (lessonSalons.includes(selectedSalon)) lessonSalon.value=selectedSalon;
-  $('#lesson-salon-label').hidden=view.role!=='admin';
+  $('#lesson-salon-label').hidden=view.role!=='admin'&&lessonSalons.length<=1;
   if (view.role==='admin') {
     const form=$('#brand');
     const selected=form.elements.salon.value;

@@ -68,10 +68,10 @@ function available() {
 }
 function updateFilters(priorPerson=undefined) {
   const role=get('role').value;
-  const prior=get('salon').value;
-  options(get('salon'),['admin','group'].includes(role) ? [['','Wszystkie salony'],...salons.map(s=>[s,s])] : [[salons[0] ?? '',salons[0] ?? '—']]);
-  if(['admin','group'].includes(role) && salons.includes(prior)) get('salon').value=prior;
-  get('salon').disabled=!['admin','group'].includes(role);
+  const prior=get('salon').options.length?get('salon').value:new URLSearchParams(location.search).get('salon');
+  options(get('salon'),(role!=='seller'&&salons.length>1) ? [['','Wszystkie salony'],...salons.map(s=>[s,s])] : [[salons[0] ?? '',salons[0] ?? '—']]);
+  if(role!=='seller'&&salons.includes(prior)) get('salon').value=prior;
+  get('salon').disabled=role==='seller'||salons.length<2;
   const selected=priorPerson===undefined?get('seller').value:String(people.findIndex(p=>p.id===priorPerson));
   options(get('seller'),[...(role==='seller'?[]:[['','Wszyscy handlowcy']]),...available().map(i=>[i,people[i].name])]);
   if(available().some(i=>String(i)===selected)) get('seller').value=selected;
@@ -331,7 +331,7 @@ get('addAccount').onclick=()=>{
   get('accountSalons').replaceChildren(...salons.map(salon=>new Option(salon,salon)));
   const manager=get('role').value==='manager';
   form.elements.salon.value=get('salon').value||(salons.length===1?salons[0]:'');
-  form.elements.salon.readOnly=manager;
+  form.elements.salon.readOnly=manager&&Boolean(form.elements.salon.value);
   form.elements.role.options[1].disabled=manager;
   get('accountError').textContent='';
   get('accountEditor').showModal();

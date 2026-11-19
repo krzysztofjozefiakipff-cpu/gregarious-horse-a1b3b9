@@ -176,6 +176,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
   <select id="manager-preview-salon"></select>
   <button type="button" id="manager-preview-toggle" class="secondary">Podgląd kierownika</button>
 </div>
+<div id="manager-scope-bar" class="manager-preview-bar" hidden><label for="manager-scope">Salon</label> <select id="manager-scope"></select></div>
 <nav class="management-nav" aria-label="Zarządzanie salonem">
   <a href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a href="#zespol" id="management-team" hidden>Zespół</a>
@@ -201,6 +202,13 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 <p><a id="management-team-link" href="/zarzadzanie.html#administracja">Konta zespołu i ustawienia planów</a></p>
 <p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
 <div id="absence-panel"><h2>Zgłoszenia dni bez aktywności</h2><div id="reviews"></div></div>
+<form id="manager-assignments" hidden>
+<h2>Salony kierowników</h2>
+<label>Kierownik <select id="assignment-manager" required></select></label>
+<p id="assignment-primary"></p>
+<fieldset><legend>Dodatkowe salony</legend><div id="assignment-salons"></div></fieldset>
+<button id="assignment-save">Zapisz przypisania</button>
+</form>
 <form id="group-editor" hidden><h2>Grupy dealerskie</h2>
 <p>Dodaj grupę lub przypisz do istniejącej grupy kolejne salony i szefa.</p>
 <div id="group-list"></div>

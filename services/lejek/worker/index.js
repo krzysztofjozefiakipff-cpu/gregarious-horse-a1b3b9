@@ -91,14 +91,15 @@ async function handle(request, env) {
 
   const members="role='seller' AND NOT EXISTS (SELECT 1 FROM dealer_group_heads WHERE email=accounts.email)";
   const groupSalon='salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?)';
-  const filters={admin:'',group:' AND '+groupSalon,manager:' AND salon=?',seller:' AND id=?'};
-  const params=user.role==='admin'?[]:user.role==='group'?[user.group]:user.role==='manager'?[user.salon]:[user.id];
+  const filters={admin:'',group:' AND '+groupSalon,manager:' AND (salon=? OR salon IN (SELECT salon FROM manager_salons WHERE manager=?))',seller:' AND id=?'};
+  const params=user.role==='admin'?[]:user.role==='group'?[user.group]:user.role==='manager'?[user.salon,user.id]:[user.id];
   const sellerQuery='SELECT id,name,salon FROM accounts WHERE '+members+filters[user.role];
   const sellers=await list(db,sellerQuery+' ORDER BY id',...params);
   const scope='person IN (SELECT id FROM accounts WHERE '+members+filters[user.role]+')';
   const salons=user.role==='admin'
     ?await list(db,'SELECT salon FROM accounts UNION SELECT salon FROM dealer_group_salons ORDER BY salon')
     :user.role==='group'?await list(db,'SELECT salon FROM dealer_group_salons WHERE group_name=? ORDER BY salon',user.group)
+    :user.role==='manager'?await list(db,'SELECT ? AS salon UNION SELECT salon FROM manager_salons WHERE manager=? ORDER BY salon',...params)
     :[{salon:user.salon}];
   const managedSalons=new Set(salons.map(({salon})=>salon));
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
@@ -117,14 +118,12 @@ async function handle(request, env) {
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
-      const teamDay=['manager','admin'].includes(user.role)?await list(db,`SELECT a.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind
-        FROM accounts a
-        LEFT JOIN daily_tracking t ON t.person=a.id
-        LEFT JOIN daily_results d ON d.person=a.id AND d.day=?
-        LEFT JOIN daily_exceptions e ON e.person=a.id AND e.day=?
-        WHERE a.role='seller' AND NOT EXISTS (SELECT 1 FROM dealer_group_heads h WHERE h.email=a.email)
-        ${user.role==='manager'?'AND a.salon=?':''}`,
-        today,today,...params):null;
+      const teamDay=['manager','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind
+        FROM accounts
+        LEFT JOIN daily_tracking t ON t.person=accounts.id
+        LEFT JOIN daily_results d ON d.person=accounts.id AND d.day=?
+        LEFT JOIN daily_exceptions e ON e.person=accounts.id AND e.day=?
+        WHERE ${members}${filters[user.role]}`,today,today,...params):null;
       const previousDaily=personal?await db.prepare('SELECT day,counters FROM daily_results WHERE person=? AND day<? ORDER BY day DESC LIMIT 1').bind(user.id,today).first():null;
       const sidebarMode=sidebar?.mode??'cause';
       const pref=await db.prepare('SELECT enabled FROM giphy_preference WHERE id=1').bind().first();
@@ -169,7 +168,11 @@ async function handle(request, env) {
         (SELECT group_concat(salon, char(10)) FROM dealer_group_salons WHERE group_name=g.name) AS salons,
         (SELECT group_concat(email, char(10)) FROM dealer_group_heads WHERE group_name=g.name) AS heads
         FROM dealer_groups g ORDER BY g.name`):[];
-      return json({role:user.role,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      const managerAssignments=user.role==='admin'?await list(db,`SELECT a.id,a.name,a.salon,m.salon AS additional
+        FROM accounts a LEFT JOIN manager_salons m ON m.manager=a.id
+        WHERE a.role='manager' AND NOT EXISTS (SELECT 1 FROM dealer_group_heads h WHERE h.email=a.email)
+        ORDER BY a.name,a.id,m.salon`):[];
+      return json({managerAssignments,role:user.role,sellers,plans,reviewPlans,funnelPlans,daily,teamDay,previousDaily,personal,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN (?,?,?) AND '+scope,...months,...params),
@@ -184,8 +187,8 @@ async function handle(request, env) {
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
   if (['/api/lesson-import','/api/lessons'].includes(path) && ['admin','manager'].includes(user.role)) {
-    const salon=user.role==='manager'?user.salon:body.salon;
-    if (!textValid(salon) || (user.role==='admin' && !await db.prepare('SELECT 1 FROM accounts WHERE salon=?').bind(salon).first()))
+    const salon=body.salon||(user.role==='manager'&&salons.length===1?salons[0].salon:null);
+    if (!textValid(salon) || !managedSalons.has(salon))
       return json({error:'Wybierz salon.'},400);
     if (path==='/api/lesson-import') {
       if (typeof body.filename!=='string'||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
@@ -226,6 +229,19 @@ async function handle(request, env) {
     ]);
     return json({ok:true});
   }
+  if (path==='/api/manager-salons' && user.role==='admin') {
+    if (!Number.isSafeInteger(body.manager)||!Array.isArray(body.salons)||body.salons.length>100||!body.salons.every(textValid))
+      return json({error:'Sprawdź kierownika i listę salonów.'},400);
+    const manager=await db.prepare("SELECT id,salon FROM accounts WHERE id=? AND role='manager' AND NOT EXISTS (SELECT 1 FROM dealer_group_heads WHERE email=accounts.email)").bind(body.manager).first();
+    if (!manager) return json({error:'Wybierz konto kierownika.'},400);
+    const additional=[...new Set(body.salons.map(salon=>salon.trim()))].filter(salon=>salon!==manager.salon);
+    if (!additional.every(salon=>managedSalons.has(salon))) return json({error:'Wybierz salony z listy.'},400);
+    await db.batch([
+      db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(manager.id),
+      ...additional.map(salon=>db.prepare('INSERT INTO manager_salons(manager,salon) VALUES (?,?)').bind(manager.id,salon))
+    ]);
+    return json({ok:true});
+  }
   if (path==='/api/accounts' && user.role!=='seller') {
     if (!textValid(body.name)||!textValid(body.salon)||!['manager','seller'].includes(body.role)||
         !textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return json({error:'Uzupełnij poprawnie wszystkie pola.'},400);
@@ -233,13 +249,18 @@ async function handle(request, env) {
     const salon=body.salon.trim();
     if (user.role!=='admin'&&!managedSalons.has(salon) || user.role==='manager'&&body.role!=='seller')
       return json({error:'Nie możesz nadać tej roli w wybranym salonie.'},403);
-    const current=await db.prepare('SELECT role,salon FROM accounts WHERE email=?').bind(targetEmail).first();
+    const current=await db.prepare('SELECT id,role,salon FROM accounts WHERE email=?').bind(targetEmail).first();
     const currentHead=await db.prepare('SELECT 1 FROM dealer_group_heads WHERE email=?').bind(targetEmail).first();
     if (current?.role==='admin'||targetEmail===email||user.role!=='admin'&&(currentHead||current&&(!managedSalons.has(current.salon)||user.role==='manager'&&current.role!=='seller')))
       return json({error:'Nie możesz zmienić uprawnień tego konta.'},403);
+    if (user.role==='group'&&current?.role==='manager') {
+      const extra=await list(db,'SELECT salon FROM manager_salons WHERE manager=?',current.id);
+      if (extra.some(row=>!managedSalons.has(row.salon))) return json({error:'Ten kierownik zarządza także salonem spoza Twojej grupy.'},403);
+    }
     await db.batch([
       db.prepare('INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role')
         .bind(targetEmail,body.name.trim(),salon,body.role),
+      ...(current?.role==='manager'&&body.role!=='manager'?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
       ...(currentHead?[db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(targetEmail)]:[])
     ]);
     return json({ok:true});
