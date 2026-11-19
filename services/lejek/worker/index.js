@@ -173,7 +173,7 @@ async function handle(request, env) {
       const funnel=JSON.parse(row.targets??'[]');
       const targets=[row.orders,funnel[7]??null,funnel[6]??null,row.reviews];
       const complete=targets.every(countValid);
-      return {id:row.id,name:row.name,targets,complete,version:complete?row.version:null};
+      return {id:row.id,name:row.name,targets,funnelTargets:Array.from({length:6},(_,index)=>funnel[index]??null),complete,version:complete?row.version:null};
     });
   };
   const approvalSet=team=>team.length&&team.every(person=>person.version)
@@ -323,9 +323,13 @@ async function handle(request, env) {
         return json({error:'Cele handlowca zmienia kierownik przypisanego salonu.'},403);
       if (!Array.isArray(targets)||targets.length!==4||!targets.every(countValid))
         return json({error:'Wpisz cztery poprawne cele handlowca.'},400);
+      const {funnelTargets}=body;
+      if (funnelTargets!==undefined&&(!Array.isArray(funnelTargets)||funnelTargets.length!==6||!funnelTargets.every(countValid)))
+        return json({error:'Sprawdź sześć celów działań handlowca.'},400);
       const existing=await db.prepare('SELECT targets FROM funnel_plans WHERE person=? AND month=?').bind(person,month).first();
       const previous=JSON.parse(existing?.targets??'[]');
       const funnel=Array.from({length:8},(_,i)=>previous[i]??null);
+      if (funnelTargets) funnel.splice(0,6,...funnelTargets);
       funnel[6]=targets[2];
       funnel[7]=targets[1];
       await db.batch([

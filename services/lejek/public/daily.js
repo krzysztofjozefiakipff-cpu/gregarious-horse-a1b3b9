@@ -1002,10 +1002,10 @@ const salonPlanMonth=$('#salon-plan-month');
 const salonPlanMetrics=['Zamówienia','Rejestracje','Wystawione faktury','Opinie Google'];
 let salonPlanRevision=0;
 
-function planTargets(values,max) {
+function planTargets(values,max,metrics=salonPlanMetrics) {
   const fields=document.createElement('div');
   fields.className='salon-plan-fields';
-  const inputs=salonPlanMetrics.map((name,index)=>{
+  const inputs=metrics.map((name,index)=>{
     const label=document.createElement('label');
     const input=document.createElement('input');
     input.type='number';
@@ -1019,6 +1019,82 @@ function planTargets(values,max) {
     return input;
   });
   return {fields,inputs};
+}
+
+const sellerActivityPlan=[
+  ['Próby kontaktu',1],['Jazdy próbne',4],['Oferty',5],['Leady',0],['Spotkania',2],['Follow-up',6]
+];
+
+function sellerPlanForm(person,individual,month) {
+  const form=document.createElement('form');
+  const manual=planTargets(person.targets,1000000);
+  const activity=planTargets(person.funnelTargets,1000000,sellerActivityPlan.map(([label])=>label));
+  const label=document.createElement('strong');
+  label.textContent='Proponowane działania · możesz zmienić liczby';
+  const reset=document.createElement('button');
+  reset.type='button';
+  reset.className='secondary';
+  reset.textContent='Przywróć wyliczone wartości';
+  const breakdown=document.createElement('details');
+  const heading=document.createElement('summary');
+  heading.textContent='Założenia według źródeł';
+  const note=document.createElement('p');
+  note.textContent='Propozycja korzysta z miksu i konwersji arkusza Bieg Wyżej. Źródła bez udziału w domyślnym miksie mają kreskę.';
+  const scroll=document.createElement('div');
+  scroll.className='scroll';
+  const reference=document.createElement('p');
+  const study=document.createElement('a');
+  study.href='https://www.foureyes.io/blog/dealership-data-study-appointment-rates';
+  study.target='_blank';
+  study.rel='noopener noreferrer';
+  study.textContent='Badanie Foureyes';
+  reference.append('Punkt odniesienia dla nowych aut w USA: 42% odbytych spotkań z leadów internetowych i 40% z telefonicznych kończyło się sprzedażą. ',study);
+  breakdown.append(heading,note,scroll,reference);
+
+  const suggestedRows=orders=>Number.isInteger(orders)&&orders>=0?sourceTargets(orders):null;
+  const totals=rows=>sellerActivityPlan.map(([,index])=>rows?.reduce((total,row)=>total+row[index],0));
+  const initial=totals(suggestedRows(person.targets[0]));
+  const edited=person.funnelTargets.map((n,index)=>n!=null&&n!==initial[index]);
+
+  function recalculate() {
+    const rows=suggestedRows(manual.inputs[0].valueAsNumber);
+    const proposed=totals(rows);
+    activity.inputs.forEach((input,index)=>{
+      if (!edited[index]) input.value=proposed[index]??'';
+    });
+    scroll.replaceChildren();
+    if (!rows) return;
+    const table=document.createElement('table');
+    const header=table.createTHead().insertRow();
+    for (const label of ['Źródło','Zamówienia','Leady','Spotkania','Jazdy próbne']) {
+      const cell=document.createElement('th');
+      cell.scope='col';
+      cell.textContent=label;
+      header.append(cell);
+    }
+    const body=table.createTBody();
+    sources.forEach((source,index)=>{
+      const row=body.insertRow();
+      row.insertCell().textContent=source;
+      const model=rows[index];
+      for (const metric of [7,0,2,4]) row.insertCell().textContent=defaultMix[index]>0?model[metric]:'—';
+    });
+    scroll.append(table);
+  }
+
+  activity.inputs.forEach((input,index)=>input.addEventListener('input',()=>{edited[index]=true;}));
+  manual.inputs[0].addEventListener('input',recalculate);
+  reset.onclick=()=>{edited.fill(false);recalculate();};
+  recalculate();
+  const save=document.createElement('button');
+  save.textContent='Zapisz cele handlowca';
+  form.append(manual.fields,label,activity.fields,reset,breakdown,save);
+  form.onsubmit=event=>{
+    event.preventDefault();
+    planAction(save,'/api/salon-plans/seller',{...individual,targets:manual.inputs.map(input=>input.valueAsNumber),
+      funnelTargets:activity.inputs.map(input=>input.valueAsNumber)},month);
+  };
+  return form;
 }
 
 function planAction(button,path,body,month) {
@@ -1074,16 +1150,7 @@ async function loadSalonPlans() {
         row.append(summary);
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
-          const form=document.createElement('form');
-          const {fields,inputs}=planTargets(person.targets,1000000);
-          const save=document.createElement('button');
-          save.textContent='Zapisz cele handlowca';
-          form.append(fields,save);
-          form.onsubmit=event=>{
-            event.preventDefault();
-            planAction(save,'/api/salon-plans/seller',{...individual,targets:inputs.map(input=>input.valueAsNumber)},month);
-          };
-          row.append(form);
+          row.append(sellerPlanForm(person,individual,month));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
