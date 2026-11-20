@@ -688,7 +688,8 @@ function periodMetrics(snapshot,start,count) {
     const goal=sum(values,'goal');
     const daily=values[currentIndex];
     return {...metric,actual,goal,target:sum(values,'target'),delta:goal==null?null:actual-goal,
-      doneToday:daily?.doneToday??0,todayTarget:daily?.todayTarget??null};
+      doneToday:daily?.doneToday??0,todayTarget:daily&&isScheduled(snapshot.today)
+        ?snapshot.dailyGoalCorrection?.[index]??daily.todayTarget:daily?.todayTarget??null};
   });
 }
 
@@ -2385,6 +2386,7 @@ salonPlans.addEventListener('toggle',()=>{
 
 const managementFunctions={
   'wykonanie': ['Realizacja planów'],
+  'odprawa-dzienna': ['Odprawa dzienna'],
   'raporty': ['Raporty zarządcze'],
   'plany-salonow': ['Plany salonów','salon-plans'],
   'zespol': ['Zespół'],
@@ -2397,7 +2399,7 @@ const managementFunctions={
   'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
-  manager:['wykonanie','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
+  manager:['wykonanie','odprawa-dzienna','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
     'konta-uzytkownikow','historie','dane-dealera'],
   group:['wykonanie','raporty','plany-salonow','historia-planow','zespol','kalendarz-pracy','konta-uzytkownikow',
     'dodaj-salon','lekcja','historie','dane-dealera']
@@ -2428,6 +2430,8 @@ function selectRoleFunction(routes) {
   $('#admin').dataset.function=active;
   $('#management-reports').hidden=active!=='raporty';
   if (active==='raporty') renderReportPicker(data);
+  $('#daily-briefing').hidden=active!=='odprawa-dzienna';
+  if (active==='odprawa-dzienna') loadBriefingPanel();
   $('#performance-view').hidden=active!=='wykonanie'&&active!=='historia-planow';
   $('#performance-title').textContent=active==='historia-planow'?label:'Realizacja planów salonów';
   $('#manager-team-view').hidden=active!=='zespol';
@@ -2467,6 +2471,7 @@ function selectManagementView() {
     salonPlans.open=true;
   }
   $('#management-reports').hidden=true;
+  $('#daily-briefing').hidden=true;
   const administration=location.hash==='#administracja';
   const accounts=location.hash==='#konta-uzytkownikow';
   const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';

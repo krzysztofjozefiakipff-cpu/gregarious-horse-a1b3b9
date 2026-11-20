@@ -28,7 +28,8 @@ GREEN = colors.HexColor('#14745b')
 RED = colors.HexColor('#9a3025')
 WIDTH = A4[0] - 76
 
-TITLES = {'monthly': 'Podsumowanie miesiąca', 'daily': 'Raport dzienny', 'marketing': 'Raport dla marketingu'}
+TITLES = {'monthly': 'Podsumowanie miesiąca', 'daily': 'Raport dzienny', 'marketing': 'Raport dla marketingu',
+          'briefing': 'Realizacja i prognoza sprzedaży'}
 METRICS = ['Leady', 'Próby kontaktu', 'Spotkania', 'Jazdy próbne', 'Oferty', 'Follow-up', 'Zamówienia',
            'Wystawione faktury', 'Rejestracje', 'Opinie Google']
 SOURCES = ['Walk-in', 'Facebook', 'Strona WWW', 'Kontakt z salonem', 'OTOMOTO', 'Polecenia',
@@ -275,6 +276,34 @@ def marketing_report(salon):
     return story
 
 
+def briefing_report(salon):
+    labels = ['Zamówienia', 'Faktury', 'Rejestracje', 'Opinie Google']
+    widths = [.30, .15, .15, .19, .21]
+    headers = ['Wskaźnik', 'Wykonano', 'Plan', 'Jeszcze w miesiącu', 'Razem na koniec']
+    summary = []
+    for i, label in enumerate(labels):
+        actual, forecast, partial = salon['actual'][i], salon['forecast'][i], salon['missing'][i]
+        summary.append([label, number(actual), number(salon['plan'][i]),
+                        number(forecast) + ('*' if partial and forecast is not None else ''),
+                        number(actual + forecast if not partial and forecast is not None else None)])
+    story = [p('Podsumowanie salonu', 'section'), table(headers, summary, widths)]
+    if any(salon['missing']):
+        story.append(p('Prognoza salonu jest częściowa dla wskaźników z gwiazdką. Kreska oznacza brak pełnej prognozy.', 'hint'))
+    if not salon['people']:
+        return story + [p('Brak handlowców do ujęcia w raporcie.', 'hint')]
+    story.append(p('Realizacja i prognoza handlowców', 'section'))
+    for person in salon['people']:
+        name = person['name'] + (' · archiwum' if person['archived'] else '')
+        rows = []
+        for i, label in enumerate(labels):
+            actual, forecast = person['actual'][i], person['forecast'][i]
+            rows.append([label, number(actual), number(person['plan'][i]),
+                         number(forecast) + (' · ręczna' if person['manual'][i] is not None else ''),
+                         number(actual + forecast if forecast is not None else None)])
+        story.append(KeepTogether([p(name, 'action'), table(headers, rows, widths), Spacer(1, 10)]))
+    return story
+
+
 def header_footer(canvas, doc):
     width, height = A4
     canvas.setFillColor(INK)
@@ -297,7 +326,8 @@ def render(report, output):
     doc = SimpleDocTemplate(output, pagesize=A4, leftMargin=32, rightMargin=32,
                             topMargin=67, bottomMargin=54, title=TITLES[kind], author='Bieg Wyżej')
     year, month = report['month'].split('-')
-    date_line = f'Okres {month}.{year}   ·   Wyniki do {date_text(report["through"])}'
+    through = report['today'] if kind == 'briefing' else report['through']
+    date_line = f'Okres {month}.{year}   ·   Wyniki do {date_text(through)}'
     if report.get('generatedAt'):
         generated = datetime.fromisoformat(report['generatedAt']).astimezone(ZoneInfo('Europe/Warsaw'))
         date_line += f'   ·   Wygenerowano {generated:%d.%m.%Y o %H:%M}'
@@ -308,6 +338,9 @@ def render(report, output):
     elif kind == 'daily':
         story.append(p('Wyniki obejmują zatwierdzone aktywności do końca poprzedniego dnia. '
                        'Cele dzienne uwzględniają pozostały plan i dni pracy handlowca.', 'hint'))
+    elif kind == 'briefing':
+        story.append(p('Wyniki pochodzą z zatwierdzonych wpisów do dnia raportu. Prognoza automatyczna opiera się na '
+                       'dotychczasowym tempie, pozostałych dniach pracy i wykonaniu. Oznaczona korekta pochodzi od kierownika.', 'hint'))
     for index, salon in enumerate(report['salons']):
         if index:
             story.append(PageBreak())
@@ -316,6 +349,8 @@ def render(report, output):
             story.extend(daily_report(salon, report['reportDay'][:7] > report['month'], report.get('dailyGoalsDate')))
         elif kind == 'marketing':
             story.extend(marketing_report(salon))
+        elif kind == 'briefing':
+            story.extend(briefing_report(salon))
         else:
             story.extend(operational_report(salon))
     doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
