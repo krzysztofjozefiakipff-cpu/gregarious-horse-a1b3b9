@@ -1,5 +1,6 @@
 const reportCounterIndexes=[0,1,2,4,5,6,7,10,8,9];
 const reportSalesIndexes=[6,8,7,9];
+const dailyReportTime='08:00:00';
 const dailyActionMetrics=[
   ['Dopływ leadów','Porównaj liczbę zapytań w CRM z planem, sprawdź działanie formularzy i przydziel nowe leady osobom, które mają czas na kontakt.'],
   ['Próby kontaktu','Przejrzyj z zespołem leady bez odpowiedzi. Przydziel oddzwonienia i ustal termin kolejnej próby dla każdego klienta.'],
@@ -53,8 +54,8 @@ function reportSellerTargets(plan,adjustment) {
   if (!plan) return reportCounterIndexes.map(()=>null);
   const [orders,registrations,invoices,reviews]=plan.targets;
   const fallback=orders==null?[]:sourceTargets(orders);
-  return [...[3,0,4,1,2,5].map(index=>plan.funnelTargets[index]??(fallback.length
-    ?fallback.reduce((sum,row)=>sum+row[[1,4,5,0,2,6][index]],0):null)),
+  return [...[3,0,4,1,2,5].map((index,metric)=>plan.funnelTargets[index]??(fallback.length
+    ?fallback.reduce((sum,row)=>sum+(row[reportCounterIndexes[metric]]??0),0):null)),
   orders,invoices,registrations,reviews].map(target=>effectiveCalendarTarget(target,adjustment));
 }
 
@@ -160,18 +161,19 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
   const nextDate=new Date(first+'T00:00:00Z');
   nextDate.setUTCMonth(nextDate.getUTCMonth()+1);
   const nextMonth=nextDate.toISOString().slice(0,7);
+  const goalsMonth=type==='daily'?reportDay.slice(0,7):month;
+  const sameMonth=goalsMonth===month;
   const range='day BETWEEN ? AND ? AND '+scope;
-  const [daily,drafts,calendar,exceptions,trackingRows,adjustments,planData,nextPlanData,events,archives]=await Promise.all([
+  const [daily,drafts,calendar,exceptions,trackingRows,adjustments,planData,nextPlanData,goalPlanData,archives]=await Promise.all([
     list(db,'SELECT person,day,counters FROM daily_results WHERE '+range+' AND '+includedDailyResult,first,through,...params),
     type==='daily'?list(db,'SELECT person,day FROM daily_drafts WHERE '+range,first,through,...params):[],
-    list(db,"SELECT person,day,kind,status FROM work_calendar WHERE (substr(day,1,7)=? OR day=?) AND "+scope,
-      month,type==='daily'?reportDay:null,...params),
-    list(db,'SELECT person,day,kind FROM daily_exceptions WHERE '+range,first,through,...params),
+    list(db,"SELECT person,day,kind,status FROM work_calendar WHERE substr(day,1,7) IN (?,?) AND "+scope,month,goalsMonth,...params),
+    list(db,'SELECT person,day,kind FROM daily_exceptions WHERE substr(day,1,7) IN (?,?) AND '+scope,month,goalsMonth,...params),
     list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params),
-    calendarAdjustments(db,[month],scope,...params),
+    calendarAdjustments(db,sameMonth?[month]:[month,goalsMonth],scope,...params),
     loadPlans(month),
     type==='marketing'?loadPlans(nextMonth):null,
-    type==='daily'?list(db,"SELECT email,kind FROM management_report_events WHERE day=? AND local_time<=?",reportDay,'11:00:00'):[],
+    sameMonth?null:loadPlans(goalsMonth),
     type==='daily'?list(db,`SELECT a.id AS person,p.first_excluded_day,p.restored_day FROM archive_report_days p
       JOIN accounts a USING(email) WHERE ${scope.replace(/^person /,'a.id ')}`,...params):[]
   ]);
@@ -179,11 +181,9 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
   const records=byPerson(daily), draftsByPerson=byPerson(drafts), absences=byPerson(calendar),
     exceptionsByPerson=byPerson(exceptions), archivesByPerson=byPerson(archives);
   const started=new Map(trackingRows.map(row=>[row.person,row.start_day]));
-  const eventKeys=new Set(events.map(row=>row.email+'/'+row.kind));
   const plansBySalon=new Map(planData.plans.map(plan=>[plan.salon,plan]));
   const nextBySalon=new Map(nextPlanData?.plans.map(plan=>[plan.salon,plan])??[]);
-  const sellerEmails=type==='daily'?new Map((await list(db,'SELECT id,email FROM accounts WHERE '+scope.replace(/^person /,'id '),...params))
-    .map(row=>[row.id,row.email])):new Map();
+  const goalPlansBySalon=new Map(goalPlanData?.plans.map(plan=>[plan.salon,plan])??[]);
   const salonsWithSellers=Map.groupBy(sellers,seller=>seller.salon);
   const archiveDaysBySeller=new Map(sellers.map(seller=>[seller.id,archivesByPerson.get(seller.id)??[]]));
 
@@ -191,6 +191,8 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
     const plan=plansBySalon.get(salon);
     const sellerPlans=plan?.team??[];
     const byId=new Map(sellerPlans.map(person=>[person.id,person]));
+    const goalPlans=sameMonth?byId:new Map((goalPlansBySalon.get(salon)?.team??[]).map(person=>[person.id,person]));
+    const dailyGoals=[];
     const sourceGoals=Array.from({length:sourceCount},()=>({expected:0,leads:0,orders:0,actualLeads:0,actualOrders:0}));
     const people=(salonsWithSellers.get(salon)??[]).flatMap(seller=>{
       const rows=records.get(seller.id)??[];
@@ -227,6 +229,11 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       const item={id:seller.id,name:seller.name,archived,actuals,sources,targets,expected,
         weakest:weakest?{index:weakest.index,gap:Math.ceil(weakest.goal-actuals[weakest.index])}:null};
       if (type==='daily'&&!archived) {
+        const goalTargets=sameMonth?targets:reportSellerTargets(goalPlans.get(seller.id),adjustments[seller.id+'/'+goalsMonth]);
+        const workday=isSalonWorkday(reportDay)&&!leave.has(reportDay);
+        const remaining=reportWorkdays(goalsMonth).filter(day=>day>=reportDay&&!leave.has(day)).length;
+        dailyGoals.push({name:seller.name,workday,targets:goalTargets.map((target,index)=>
+          dailyTarget(target,sameMonth?actuals[index]:0,remaining,workday))});
         const start=started.get(seller.id);
         const archivedPeriods=archiveDaysBySeller.get(seller.id);
         const required=start?scheduled.filter(day=>day>=start&&day<=through&&
@@ -234,10 +241,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
         const approved=new Set(rows.map(row=>row.day));
         const draftDays=new Set((draftsByPerson.get(seller.id)??[]).map(row=>row.day));
         const open=required.filter(day=>!approved.has(day)&&!zero.has(day));
-        const email=sellerEmails.get(seller.id);
-        item.check={login:eventKeys.has(email+'/login'),read:eventKeys.has(email+'/read'),
-          readExpected:isSalonWorkday(reportDay)&&!leave.has(reportDay),
-          started:Boolean(start),required:required.length,approved:required.filter(day=>approved.has(day)).length,
+        item.check={started:Boolean(start),required:required.length,approved:required.filter(day=>approved.has(day)).length,
           zero:required.filter(day=>!approved.has(day)&&zero.has(day)).length,
           pending:open.filter(day=>pending.has(day)),drafts:open.filter(day=>!pending.has(day)&&draftDays.has(day)),
           missing:open.filter(day=>!pending.has(day)&&!draftDays.has(day))};
@@ -261,7 +265,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
     });
     const summary={salon,totals,targets:salonTargets,people,sources,
       recommendations:type==='marketing'?recommendLeadSources(people,sellerPlans,nextBySalon.get(salon)?.team??[]):[]};
-    return type==='daily'?completeDailySalon(summary,month,through,sourceGoals.map((source,index)=>({
+    return type==='daily'?completeDailySalon({...summary,dailyGoals},month,through,sourceGoals.map((source,index)=>({
       ...source,rate:Math.max(sourceAssumptions[index][0],source.leads?source.orders/source.leads:0)
     }))):summary;
   })};
@@ -269,7 +273,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
 
 async function generateDailyReports(db) {
   const {day,time}=reportClock();
-  if (time<'11:00:00') return null;
+  if (time<dailyReportTime) return null;
   const recipients=await list(db,`SELECT a.email,'manager' AS role FROM accounts a
     WHERE NOT EXISTS (SELECT 1 FROM archived_users x WHERE x.email=a.email)
       AND (EXISTS (SELECT 1 FROM account_roles r WHERE r.person=a.id AND r.role='manager')
@@ -281,7 +285,8 @@ async function generateDailyReports(db) {
         OR EXISTS (SELECT 1 FROM accounts a JOIN account_roles r ON r.person=a.id AND r.role='group' WHERE a.email=h.email))`);
   let failures=0;
   for (const {email,role} of recipients) {
-    if (await db.prepare('SELECT 1 FROM management_daily_reports WHERE email=? AND role=? AND day=?').bind(email,role,day).first()) continue;
+    if (await db.prepare("SELECT 1 FROM management_daily_reports WHERE email=? AND role=? AND day=? AND json_extract(payload,'$.dailyGoalsDate')=day")
+      .bind(email,role,day).first()) continue;
     const url=new URL('/api/management-reports','https://biegwyzej.pl');
     url.search=new URLSearchParams({type:'daily',role,day});
     try {

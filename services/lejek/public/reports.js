@@ -109,11 +109,8 @@ function reportMetrics(actuals,targets,expected) {
 
 function reportDailyChecks(check) {
   if (!check) return [];
-  const yesNo=value=>value?'Tak':'Nie';
   const dates=values=>values.map(day=>dateLabel(day)).join(', ')||'—';
   return [
-    ['Logowanie do 11:00',yesNo(check.login)],
-    ['Wyświetlenie zadań do 11:00',check.readExpected?yesNo(check.read):'Dzień wolny'],
     ['Rozliczenie dni pracy',check.started
       ?(check.approved+check.zero)+' z '+check.required+' · zatwierdzono '+check.approved+' · bez aktywności '+check.zero
       :'Ewidencja jeszcze nierozpoczęta'],

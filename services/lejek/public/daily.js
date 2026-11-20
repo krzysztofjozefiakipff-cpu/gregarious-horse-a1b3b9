@@ -798,11 +798,6 @@ const taskLabels={
   10:'Wystaw faktury'
 };
 
-function dailyTarget(monthTarget,doneBeforeToday,daysLeft,isWorkday) {
-  if (monthTarget==null) return null;
-  return isWorkday?Math.ceil(Math.max(0,monthTarget-doneBeforeToday)/Math.max(1,daysLeft)):0;
-}
-
 const dailyMotivators={
   mixed:[
     'Jeden odcinek masz z górki. Drugi jeszcze pod górę, więc przyda się bieg niżej.',

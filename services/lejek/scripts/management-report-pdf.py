@@ -123,10 +123,7 @@ def activities(actuals, targets, expected=None, indexes=range(len(METRICS))):
 
 def daily_details(person):
     check = person['check']
-    yes_no = lambda value: 'Tak' if value else 'Nie'
     rows = [
-        ('Logowanie do 11:00', yes_no(check['login'])),
-        ('Wyświetlenie zadań do 11:00', yes_no(check['read']) if check['readExpected'] else 'Dzień wolny'),
         ('Rozliczenie dni pracy', f"{check['approved'] + check['zero']} z {check['required']} dni"
          if check['started'] else 'Ewidencja jeszcze nierozpoczęta'),
         ('Zatwierdzone / bez aktywności', f"{check['approved']} / {check['zero']}"),
@@ -159,7 +156,28 @@ def daily_sales_cell(actual, target, expected):
     return Paragraph(value, STYLES['cell'])
 
 
-def daily_report(salon, closed):
+def daily_goals(salon, day):
+    if not day:
+        return [p('Cele dzienne', 'section'), p('Cele na ten dzień nie zostały zapisane w archiwum.', 'hint')]
+    story = [p(f'Cele handlowców na {date_text(day)}', 'section')]
+    goals = salon['dailyGoals']
+    if not goals:
+        return story + [p('Brak aktywnych handlowców w salonie.', 'hint')]
+    story.append(p('„–” oznacza brak ustalonego celu. Dzień wolny uwzględnia kalendarz handlowca.', 'hint'))
+    for title, indexes, widths in [
+        ('Cele sprzedażowe', SALES, [.30, .17, .17, .17, .19]),
+        ('Aktywności w lejku', range(6), [.25, .10, .14, .13, .13, .11, .14]),
+    ]:
+        headers = ['Handlowiec'] + [METRICS[i] for i in indexes]
+        rows = []
+        for person in goals:
+            name = person['name'] + ('' if person['workday'] else ' · dzień wolny')
+            rows.append([name] + [number(person['targets'][i]) for i in indexes])
+        story.extend([p(title, 'action'), table(headers, rows, widths), Spacer(1, 8)])
+    return story
+
+
+def daily_report(salon, closed, goals_day):
     people = [('Razem salon', salon['totals'], salon['targets'], salon['expected'])] + [
         (person['name'] + (' · archiwum' if person['archived'] else ''),
          person['actuals'], person['targets'], person['expected']) for person in salon['people']
@@ -169,7 +187,7 @@ def daily_report(salon, closed):
         for row, (name, actual, target, expected) in enumerate(people)
     ], [.28, .18, .18, .18, .18])
     summary.setStyle(TableStyle([('BACKGROUND', (0, 1), (-1, 1), LIGHT)]))
-    story = [p('Realizacja planów', 'section'), summary,
+    story = [p('Realizacja planów', 'section'), summary, *daily_goals(salon, goals_day),
              p('Co poprawić w kolejnym miesiącu' if closed else 'Co zrobić, żeby dowieźć plan', 'section')]
     if salon['actions']:
         for i, action in enumerate(salon['actions'], 1):
@@ -261,13 +279,13 @@ def render(report, output):
                        'Rekomendacja uwzględnia plan źródłowy, co najmniej 20 leadów i konwersję na poziomie założenia dla źródła.', 'hint'))
     elif kind == 'daily':
         story.append(p('Wyniki obejmują zatwierdzone aktywności do końca poprzedniego dnia. '
-                       'Logowanie i wyświetlenie zadań sprawdzono do godz. 11:00 czasu polskiego.', 'hint'))
+                       'Cele dzienne uwzględniają pozostały plan i dni pracy handlowca.', 'hint'))
     for index, salon in enumerate(report['salons']):
         if index:
             story.append(PageBreak())
         story.append(p(salon['salon'], 'salon'))
         if kind == 'daily':
-            story.extend(daily_report(salon, report['reportDay'][:7] > report['month']))
+            story.extend(daily_report(salon, report['reportDay'][:7] > report['month'], report.get('dailyGoalsDate')))
         elif kind == 'marketing':
             story.extend(marketing_report(salon))
         else:
