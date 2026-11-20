@@ -2,11 +2,13 @@ const reportGet=selector=>document.querySelector(selector);
 const reportForm=reportGet('#management-report-form');
 const reportResults=reportGet('#management-report-results');
 const reportStatus=reportGet('#management-report-status');
+const reportPdfExport=reportGet('#export-management-report-pdf');
 const reportExport=reportGet('#export-management-report');
 const reportNumber=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
 const reportPercent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
 let reportRevision=0;
 let reportCsv;
+let reportPdfUrl;
 
 function reportElement(tag,label) {
   const node=document.createElement(tag);
@@ -95,7 +97,7 @@ function reportDailyChecks(check) {
   const dates=values=>values.map(day=>dateLabel(day)).join(', ')||'—';
   return [
     ['Logowanie do 11:00',yesNo(check.login)],
-    ['Potwierdzony odczyt zadań do 11:00',check.readExpected?yesNo(check.read):'Dzień wolny'],
+    ['Wyświetlenie zadań do 11:00',check.readExpected?yesNo(check.read):'Dzień wolny'],
     ['Rozliczenie dni pracy',check.started
       ?(check.approved+check.zero)+' z '+check.required+' · zatwierdzono '+check.approved+' · bez aktywności '+check.zero
       :'Ewidencja jeszcze nierozpoczęta'],
@@ -163,7 +165,8 @@ reportForm.onsubmit=async event=>{
   const {type,month,day}=reportForm.elements;
   const selected=new Set(new FormData(reportForm).getAll('salons'));
   const revision=++reportRevision;
-  reportExport.disabled=true;
+  reportExport.disabled=reportPdfExport.disabled=true;
+  reportPdfUrl=null;
   reportResults.replaceChildren();
   if (type.value!=='daily'&&!selected.size) {
     reportStatus.textContent='Wybierz przynajmniej jeden salon.';
@@ -178,6 +181,12 @@ reportForm.onsubmit=async event=>{
     const generated=report.generatedAt?new Intl.DateTimeFormat('pl-PL',{timeZone:'Europe/Warsaw',hour:'2-digit',minute:'2-digit'}).format(new Date(report.generatedAt)):null;
     reportStatus.textContent=monthLabel(report.month)+' · wyniki do '+date+(generated?' · wygenerowano o '+generated:'');
     renderManagementReport(report,selected);
+    query.set('format','pdf');
+    if (report.type!=='daily') for (const salon of selected) query.append('salon',salon);
+    if (data.role) query.set('role',data.role);
+    if (previewTarget) query.set('podglad',previewTarget);
+    reportPdfUrl='/api/management-reports?'+query;
+    reportPdfExport.disabled=reportExport.disabled;
   } catch (error) {
     if (revision===reportRevision) reportStatus.textContent=error.message;
   }
@@ -197,4 +206,26 @@ reportExport.onclick=()=>{
   link.download=reportCsv.filename;
   link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+
+
+reportPdfExport.onclick=async ()=>{
+  if (!reportPdfUrl) return;
+  const source=reportPdfUrl;
+  const filename=reportCsv.filename.replace(/\.csv$/,'.pdf');
+  reportPdfExport.disabled=true;
+  try {
+    const response=await fetch(source);
+    if (!response.ok) throw new Error((await response.json()).error);
+    const url=URL.createObjectURL(await response.blob());
+    const link=document.createElement('a');
+    link.href=url;
+    link.download=filename;
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  } catch (error) {
+    if (source===reportPdfUrl) reportStatus.textContent=error.message||'Nie udało się przygotować PDF.';
+  } finally {
+    if (source===reportPdfUrl) reportPdfExport.disabled=false;
+  }
 };

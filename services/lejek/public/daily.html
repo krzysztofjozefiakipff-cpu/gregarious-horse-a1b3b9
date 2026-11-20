@@ -143,7 +143,6 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 #management-report-results thead{background:var(--tint)}
 #management-report-results details{margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:8px}
 #management-report-results summary{cursor:pointer;font-weight:700}
-#confirm-tasks-read{margin-top:12px}
 #admin-backfill{display:block}
 #admin-backfill summary{cursor:pointer}
 #admin-backfill-form{margin:12px 0 0;border:0;padding:0;width:100%}
@@ -459,7 +458,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 </div>
 <div class="daily-work">
 
-<section class="actions"><h2>Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><p id="followup-reminder" class="task-note" hidden></p><div id="tasks"></div><p id="tasks-closing" hidden></p><button type="button" id="confirm-tasks-read" class="secondary" hidden>Potwierdź odczyt zadań</button><p id="tasks-read-status" role="status"></p></section>
+<section class="actions"><h2 id="today-tasks-heading">Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><p id="followup-reminder" class="task-note" hidden></p><div id="tasks"></div><p id="tasks-closing" hidden></p></section>
 <a class="entry-link" data-panel-route href="#wyniki">Wpisz działania</a>
 </div>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
@@ -741,6 +740,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
     <fieldset id="report-showrooms"><legend>Salony w raporcie</legend><div></div></fieldset>
     <div class="user-actions">
       <button type="submit">Pokaż raport</button>
+      <button type="button" id="export-management-report-pdf" class="secondary" disabled>Pobierz PDF</button>
       <button type="button" id="export-management-report" class="secondary" disabled>Pobierz CSV</button>
     </div>
   </form>

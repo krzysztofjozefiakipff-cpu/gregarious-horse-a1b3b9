@@ -189,6 +189,34 @@ async function adminAccount(token) {
   const {account}=await response.json();
   return account?.email===sharedAdmin&&account?.role==='admin'?account:null;
 }
+let activeReportPdfs=0;
+async function downloadReportPdf(response,url) {
+  const report=await response.json();
+  const selected=new Set(url.searchParams.getAll('salon'));
+  if (report.type!=='daily'&&selected.size) report.salons=report.salons.filter(row=>selected.has(row.salon));
+  if (!report.salons.length) return Response.json({error:'Brak salonów do eksportu.'},{status:400,headers});
+  if (activeReportPdfs>=4) return Response.json({error:'Eksport jest zajęty. Spróbuj ponownie za chwilę.'},{status:503,headers});
+  activeReportPdfs++;
+  try {
+    const pdf=await new Promise((resolve,reject)=>{
+      const child=spawn('python3',['scripts/management-report-pdf.py'],{stdio:['pipe','pipe','inherit'],timeout:20000});
+      const chunks=[];
+      child.stdout.on('data',chunk=>chunks.push(chunk));
+      child.stdin.on('error',reject);
+      child.on('error',reject);
+      child.on('close',code=>code===0?resolve(Buffer.concat(chunks)):reject(new Error('Błąd generatora PDF')));
+      child.stdin.end(JSON.stringify(report));
+    });
+    return reply(pdf,200,{'Content-Type':'application/pdf',
+      'Content-Disposition':'attachment; filename="bieg-wyzej-'+report.type+'-'+(report.reportDay??report.month)+'.pdf"'});
+  } catch (error) {
+    console.error('Eksport PDF:',error.message);
+    return Response.json({error:'Nie udało się przygotować PDF.'},{status:500,headers});
+  } finally {
+    activeReportPdfs--;
+  }
+}
+
 async function handle(request) {
   const {pathname:path,origin}=new URL(request.url);
   if (path==='/healthz' && request.method==='GET') {
@@ -303,7 +331,12 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  return worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
+  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
+  const url=new URL(request.url);
+  if (response.ok&&request.method==='GET'&&path==='/api/management-reports'&&url.searchParams.get('format')==='pdf') {
+    return downloadReportPdf(response,url);
+  }
+  return response;
 }
 let generatingReports=false;
 let generatedReportDay;
