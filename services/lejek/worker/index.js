@@ -22,6 +22,17 @@ async function list(db,sql,...params) { return (await db.prepare(sql).bind(...pa
 const sourceCount = 13;
 const supportedDailySourceCounts = [12, sourceCount];
 const dailyRowLengths = [9,10,11];
+const validDailyRows=rows=>Array.isArray(rows)&&supportedDailySourceCounts.includes(rows.length)&&
+  rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid));
+function dailyCounters(rows) {
+  const totals=[1,3,4,5,7].map(index=>rows.reduce((sum,row)=>sum+row[index],0));
+  return JSON.stringify([...totals,rows]);
+}
+const normalizeWalkIn=rows=>{rows[0][1]=rows[0][2]=rows[0][0];};
+const insertDailyResult=`INSERT INTO daily_results (person,day,counters)
+  SELECT ?1,?2,?3
+  WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')
+    AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved')`;
 const workday = day => {
   const weekday=new Date(day+'T00:00:00Z').getUTCDay();
   return weekday!==0&&(weekday!==6||day>='2026-11-19');
@@ -1019,6 +1030,24 @@ async function handle(request, env) {
       .bind(body.month,body.title.trim(),body.organization.trim(),body.description.trim()).run();
     return json({ok:true});
   }
+  if (path==='/api/daily/backfill') {
+    if (!owner) return json({error:'Zaległe wpisy dla handlowców zapisuje administrator.'},403);
+    const {person,day,rows}=body;
+    if (!sellers.some(seller=>seller.id===person&&seller.accountStatus!=='inactive'))
+      return json({error:'Wybierz aktywne konto handlowca.'},400);
+    if (!dayValid(day)||day>localDay()) return json({error:'Wybierz dzisiejszą lub wcześniejszą datę.'},400);
+    if (!validDailyRows(rows)) return json({error:'Sprawdź wartości aktywności w poszczególnych źródłach.'},400);
+    normalizeWalkIn(rows);
+    if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
+    const written=await db.prepare(insertDailyResult+`
+      AND EXISTS (SELECT 1 FROM accounts a WHERE a.id=?1 AND ${accountRole('a','seller')}
+        AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AND ${inReportDay('a.email','?2')})
+      AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='pending')
+      AND NOT EXISTS (SELECT 1 FROM daily_drafts WHERE person=?1 AND day=?2)
+      ON CONFLICT(person,day) DO NOTHING`).bind(person,day,dailyCounters(rows)).run();
+    return written.meta.changes?json({ok:true})
+      :json({error:'Tego dnia nie można zatwierdzić. Sprawdź, czy ma już wpis, zapis roboczy lub zgłoszenie w kalendarzu oraz czy konto było wtedy aktywne.'},409);
+  }
   if (!sellers.some(p=>p.id===body.person&&p.accountStatus!=='inactive')) return json({error:'Brak uprawnień do tego handlowca.'},403);
   if (path==='/api/daily/reopen') {
     if (user.role!=='manager'||!sellers.some(seller=>seller.id===body.person&&seller.accountStatus!=='inactive'))
@@ -1112,9 +1141,8 @@ async function handle(request, env) {
     }
     const {rows,draft=false}=body;
     if (typeof draft!=='boolean') return json({error:'Sprawdź tryb zapisu.'},400);
-    if (!Array.isArray(rows)||!supportedDailySourceCounts.includes(rows.length)||!rows.every(row=>Array.isArray(row)&&dailyRowLengths.includes(row.length)&&row.every(countValid))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
-    rows[0][1]=rows[0][0];
-    rows[0][2]=rows[0][0];
+    if (!validDailyRows(rows)) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
+    normalizeWalkIn(rows);
     if (draft) {
       const written=await db.prepare(`INSERT INTO daily_drafts (person,day,rows)
         SELECT ?1,?2,?3
@@ -1126,9 +1154,8 @@ async function handle(request, env) {
       return written.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
-    const totals=[1,3,4,5,7].map(i=>rows.reduce((sum,row)=>sum+row[i],0));
-    const written=await db.prepare("INSERT INTO daily_results SELECT ?1,?2,?3 WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected') AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved') ON CONFLICT(person,day) DO NOTHING")
-      .bind(user.id,day,JSON.stringify([...totals,rows])).run();
+    const written=await db.prepare(insertDailyResult+' ON CONFLICT(person,day) DO NOTHING')
+      .bind(user.id,day,dailyCounters(rows)).run();
     return written.meta.changes?json({ok:true}):json({error:'Ten dzień jest już zapisany.'},409);
   }
   if (path==='/api/plans' && user.role!=='seller') {

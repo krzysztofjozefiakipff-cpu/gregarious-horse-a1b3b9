@@ -2908,6 +2908,83 @@ $('#seller-preview-open').onclick=()=>{
   if (email&&!$('#seller-preview-bar').hidden) location.assign(userPreviewUrl(email,'seller'));
 };
 
+const adminBackfill=$('#admin-backfill');
+const backfillForm=$('#admin-backfill-form');
+const backfillSources=$('#admin-backfill-sources');
+
+function renderAdminBackfill() {
+  adminBackfill.hidden=data.role!=='admin'||Boolean(managerPreviewSalon||groupPreviewName);
+  if (adminBackfill.hidden) return;
+  const {person,day}=backfillForm.elements;
+  const previous=person.value;
+  const sellers=data.sellers.filter(seller=>seller.accountStatus!=='inactive');
+  person.replaceChildren(new Option(sellers.length?'Wybierz handlowca':'Brak aktywnych handlowców',''),
+    ...sellers.map(seller=>new Option(seller.name+' · '+seller.salon,seller.id)));
+  if (sellers.some(seller=>String(seller.id)===previous)) person.value=previous;
+  day.max=data.today;
+  backfillForm.querySelector('button').disabled=!sellers.length;
+}
+
+adminBackfill.addEventListener('toggle',()=>{
+  if (!adminBackfill.open||backfillSources.children.length) return;
+  backfillSources.replaceChildren(...sources.map((source,row)=>{
+    const details=document.createElement('details');
+    const summary=document.createElement('summary');
+    summary.textContent=source;
+    details.open=row===0;
+    const fields=document.createElement('div');
+    fields.className='user-search-fields';
+    for (const [index,label] of columns) {
+      if (row===0&&[1,2].includes(index)) continue;
+      const field=document.createElement('label');
+      const input=document.createElement('input');
+      input.type='number';
+      input.inputMode='numeric';
+      input.min='0';
+      input.max='1000000';
+      input.step='1';
+      input.name='backfill-'+row+'-'+index;
+      field.append(label,input);
+      fields.append(field);
+    }
+    details.append(summary,fields);
+    return details;
+  }));
+});
+backfillSources.addEventListener('invalid',event=>{event.target.closest('details').open=true;},true);
+
+backfillForm.onsubmit=async event=>{
+  event.preventDefault();
+  const {person,day}=backfillForm.elements;
+  const date=day.value;
+  const seller=person.selectedOptions[0].textContent;
+  const entries=new FormData(backfillForm);
+  const rows=sources.map((_,row)=>{
+    const values=Array(11).fill(0);
+    for (const [index] of columns) values[index]=Number(entries.get('backfill-'+row+'-'+index));
+    return values;
+  });
+  const status=$('#admin-backfill-status');
+  if (!rows.some(row=>row.some(v=>v>0))) {
+    status.textContent='Wpisz co najmniej jedno wykonane działanie.';
+    return;
+  }
+  if (!confirm('Zatwierdzić aktywności handlowca '+seller+' za '+date+'?')) return;
+  const button=backfillForm.querySelector('button');
+  button.disabled=true;
+  try {
+    await api('/api/daily/backfill',{person:Number(person.value),day:date,rows});
+    for (const field of backfillSources.querySelectorAll('input')) field.value='';
+    day.value='';
+    status.textContent='Zatwierdzono aktywności za '+date+' · '+seller+'.';
+    await refresh().catch(()=>{status.textContent+=' Odśwież stronę, aby zobaczyć aktualne wyniki.';});
+  } catch (error) {
+    status.textContent=error.message;
+  } finally {
+    button.disabled=false;
+  }
+};
+
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
@@ -2944,6 +3021,7 @@ function showView() {
   $('#group-preview-bar').hidden=data.role!=='admin'||Boolean(managerPreviewSalon)||!data.groups.length;
   if (groupPreviewName) $('#manager-preview-bar').hidden=true;
   renderSellerPreviewPicker();
+  renderAdminBackfill();
   renderAdmin();
 }
 $('#group-preview-toggle').onclick=()=>{
