@@ -1309,11 +1309,10 @@ function renderSeller() {
   $('#daily').hidden=false;
 }
 
-function salonPace(actual,target,elapsed,total) {
-  const expected=target*elapsed/total;
-  const forecast=elapsed>0?actual*total/elapsed:null;
-  const tone=actual>=target?'ahead':forecast===null?'':forecast>=target?'ahead':'behind';
-  const status=actual>=target?'Plan wykonany':forecast===null?'Za wcześnie na prognozę'
+function salonPace(actual,target,elapsed,total,expected=target*elapsed/total,completed=false) {
+  const forecast=!completed&&expected>0?actual*target/expected:null;
+  const tone=actual>=target?'ahead':expected===0?'':actual>=expected?'ahead':'behind';
+  const status=actual>=target?'Plan wykonany':completed?'Plan niewykonany':expected===0?'Za wcześnie na prognozę'
     :tone==='ahead'?'Zgodnie z tempem':'Plan zagrożony';
   return {expected,forecast,tone,status};
 }
@@ -1341,7 +1340,7 @@ function coachingSellerLink(seller) {
   return link;
 }
 
-function salonQuickTotals(plan,elapsed,total,number) {
+function salonQuickTotals(plan,elapsed,total,number,completed=false) {
   const quickTotals=document.createElement('span');
   quickTotals.className='salon-quick-totals';
   for (const [index,label] of salonPlanMetrics.entries()) {
@@ -1349,11 +1348,11 @@ function salonQuickTotals(plan,elapsed,total,number) {
     const target=plan.targets[index];
     const configured=plan.configured[index];
     const partial=plan.partial?.[index];
-    const pace=configured&&target>0&&!partial?salonPace(actual,target,elapsed,total):null;
+    const pace=configured&&target>0&&!partial?salonPace(actual,target,elapsed,total,plan.expected?.[index],completed):null;
     const quickTotal=document.createElement('span');
     const tone=pace?.tone||'neutral';
     quickTotal.dataset.pace=tone;
-    const paceLabel=pace?.status??(partial?'Plan obejmuje część salonów':configured?'Cel zerowy':'Brak planu');
+    const paceLabel=pace?.status??(partial?'Plan obejmuje część danych':configured?'Cel zerowy':'Brak planu');
     quickTotal.title=label+' · '+paceLabel;
     const icon=document.createElement('span');
     icon.setAttribute('aria-hidden','true');
@@ -1370,27 +1369,148 @@ function salonQuickTotals(plan,elapsed,total,number) {
   return quickTotals;
 }
 
-function renderSalonSummary(view,team=[]) {
+function aggregateSalonPerformance(months,now) {
+  const plansBySalon=new Map();
+  let elapsed=0;
+  let total=0;
+  for (const {month,plans} of months) {
+    const [year,number]=month.split('-').map(Number);
+    const first=month+'-01';
+    const end=monthStart(year,number);
+    const days=remainingDays(first,end);
+    const completed=now>=end?days:now<first?0:remainingDays(first,now)+Number(isSalonWorkday(now));
+    elapsed+=completed;
+    total+=days;
+    for (const plan of plans) {
+      if (!plansBySalon.has(plan.salon)) plansBySalon.set(plan.salon,{salon:plan.salon,
+        actuals:[0,0,0,0],targets:[0,0,0,0],expected:[0,0,0,0],monthsWithPlan:[0,0,0,0]});
+      const result=plansBySalon.get(plan.salon);
+      for (const [index,actual] of plan.actuals.entries()) {
+        result.actuals[index]+=actual;
+        if (!plan.configured[index]) continue;
+        result.targets[index]+=plan.targets[index];
+        result.expected[index]+=plan.targets[index]*completed/days;
+        result.monthsWithPlan[index]++;
+      }
+    }
+  }
+  const plans=[...plansBySalon.values()].map(plan=>({...plan,
+    configured:plan.monthsWithPlan.map(count=>count>0),
+    partial:plan.monthsWithPlan.map(count=>count>0&&count<months.length)}));
+  return {plans,elapsed,total};
+}
+
+const managementPeriodType=$('#management-period-type');
+const managementMonth=$('#management-month-value');
+const managementQuarter=$('#management-quarter-value');
+const managementYear=$('#management-year-value');
+let performanceView;
+let performanceCache;
+let performanceRevision=0;
+
+function setManagementPeriod(anchor) {
+  managementMonth.value=anchor;
+  managementYear.value=anchor.slice(0,4);
+  managementQuarter.value=periodStart(anchor,'quarter').slice(5);
+}
+
+function selectedManagementMonth() {
+  if (managementPeriodType.value==='month') return managementMonth.value;
+  return managementYear.value+'-'+(managementPeriodType.value==='year'?'01':managementQuarter.value);
+}
+
+async function renderManagementPerformance() {
+  const {view,team}=performanceView;
+  const type=managementPeriodType.value;
+  const current=data.today.slice(0,7);
+  if (!managementMonth.value&&type==='month') setManagementPeriod(current);
+  const month=selectedManagementMonth();
+  $('#management-month-field').hidden=type!=='month';
+  $('#management-quarter-field').hidden=type!=='quarter';
+  $('#management-year-field').hidden=type==='month';
+  const isCurrent=type==='month'&&month===current;
+  $('#management-period-reset').hidden=isCurrent;
+  const revision=++performanceRevision;
+  const status=$('#management-period-status');
+  status.textContent='';
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||!Number.isInteger(Number(month.slice(0,4)))||
+      Number(month.slice(0,4))<1000||Number(month.slice(0,4))>9998) {
+    status.textContent='Wybierz prawidłowy okres.';
+    $('#salon-period').textContent='';
+    $('#salon-pace-key').hidden=true;
+    $('#salon-results').replaceChildren();
+    return;
+  }
+  if (isCurrent) {
+    renderSalonSummary(view,team);
+    return;
+  }
+  const label=periodName(month,type);
+  $('#salon-period').textContent=label;
+  status.textContent='Wczytywanie okresu…';
+  $('#salon-pace-key').hidden=true;
+  $('#salon-results').replaceChildren();
+  try {
+    const key=type+'/'+month;
+    if (performanceCache?.data!==data||performanceCache.key!==key) {
+      performanceCache={data,key,request:api('/api/salon-plans?'+new URLSearchParams({month,period:type}))};
+    }
+    const request=performanceCache.request;
+    const {months}=await request.catch(error=>{
+      if (performanceCache?.request===request) performanceCache=null;
+      throw error;
+    });
+    if (revision!==performanceRevision) return;
+    status.textContent='';
+    const completed=months.at(-1).month<current;
+    renderSalonSummary(view,[],{...aggregateSalonPerformance(months,data.today),label,completed});
+  } catch (error) {
+    if (revision===performanceRevision) status.textContent=error.message;
+  }
+}
+
+managementPeriodType.onchange=()=>{
+  // Keep the selected year and quarter when changing the display granularity.
+  if (!managementMonth.value) setManagementPeriod(data.today.slice(0,7));
+  renderManagementPerformance();
+};
+managementMonth.onchange=()=>{
+  if (managementMonth.value) setManagementPeriod(managementMonth.value);
+  renderManagementPerformance();
+};
+managementQuarter.onchange=managementYear.onchange=()=>{
+  const month=selectedManagementMonth();
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) managementMonth.value=month;
+  renderManagementPerformance();
+};
+$('#management-period-reset').onclick=()=>{
+  managementPeriodType.value='month';
+  setManagementPeriod(data.today.slice(0,7));
+  renderManagementPerformance();
+};
+
+function renderSalonSummary(view,team=[],period=null) {
   const results=$('#salon-results');
   const paceKey=$('#salon-pace-key');
   paceKey.hidden=true;
   const expanded=new Map([...results.querySelectorAll('details')].map(card=>[card.dataset.salon,card.open]));
   results.replaceChildren();
   if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
-  if (!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
-  $('#salon-period').textContent=dateLabel(view.today,{month:'long',year:'numeric'});
+  if (!period&&!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
+  $('#salon-period').textContent=period?.label??dateLabel(view.today,{month:'long',year:'numeric'});
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
   const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
   const [year,month]=view.today.split('-').map(Number);
   const first=monthStart(year,month-1);
   const end=monthStart(year,month);
-  const total=remainingDays(first,end);
-  const elapsed=remainingDays(first,view.today)+Number(isSalonWorkday(view.today));
+  const total=period?.total??remainingDays(first,end);
+  const elapsed=period?.elapsed??(remainingDays(first,view.today)+Number(isSalonWorkday(view.today)));
+  const completed=Boolean(period?.completed);
   const salons=new Set(view.salons.map(({salon})=>salon));
-  const plans=data.salonPerformance.filter(plan=>salons.has(plan.salon));
+  const plans=(period?.plans??data.salonPerformance).filter(plan=>salons.has(plan.salon));
   const sellerSalons=new Map(view.sellers.map(seller=>[seller.id,seller.salon]));
   const activityBySalon=new Map(plans.map(plan=>[plan.salon,columns.map(()=>0)]));
-  for (const {person,day,counters} of view.daily) {
+  for (const {person,day,counters} of period?[]:view.daily) {
     const totals=activityBySalon.get(sellerSalons.get(person));
     if (!totals||!day.startsWith(view.today.slice(0,7))||day>view.today) continue;
     const values=JSON.parse(counters);
@@ -1403,16 +1523,17 @@ function renderSalonSummary(view,team=[]) {
       actuals:salonPlanMetrics.map((_,index)=>plans.reduce((sum,plan)=>sum+plan.actuals[index],0)),
       targets:planned.map((entries,index)=>entries.reduce((sum,plan)=>sum+plan.targets[index],0)),
       configured:planned.map(entries=>entries.length>0),
-      partial:planned.map(entries=>entries.length>0&&entries.length<plans.length)
+      expected:period?planned.map((entries,index)=>entries.reduce((sum,plan)=>sum+plan.expected[index],0)):null,
+      partial:planned.map((entries,index)=>entries.length>0&&(entries.length<plans.length||entries.some(plan=>plan.partial?.[index])))
     };
     const card=document.createElement('div');
     card.className='salon-overall-totals';
     const heading=document.createElement('strong');
     heading.textContent='Wszystkie salony · razem';
-    card.append(heading,salonQuickTotals(overall,elapsed,total,number));
+    card.append(heading,salonQuickTotals(overall,elapsed,total,number,completed));
     if (overall.partial.some(Boolean)) {
       const note=document.createElement('p');
-      note.textContent='* Plan obejmuje część salonów';
+      note.textContent=period?'* Cele są dostępne dla części salonów lub miesięcy.':'* Plan obejmuje część salonów';
       card.append(note);
     }
     results.append(card);
@@ -1434,9 +1555,9 @@ function renderSalonSummary(view,team=[]) {
       const target=plan.targets[index];
       const configured=plan.configured[index];
       const ratio=configured&&target>0?actual/target:null;
-      const pace=ratio===null?null:salonPace(actual,target,elapsed,total);
+      const pace=ratio===null||plan.partial?.[index]?null:salonPace(actual,target,elapsed,total,plan.expected?.[index],completed);
       values.textContent=actual+' / '+(configured?target:'—')+
-        (ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
+        (plan.partial?.[index]?' · cel dostępny dla części miesięcy':ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
       if (pace) values.className=pace.tone;
       indicator.append(name,values);
       if (ratio!==null) {
@@ -1450,25 +1571,31 @@ function renderSalonSummary(view,team=[]) {
         status.className=pace.tone;
         status.textContent=pace.status;
         const note=document.createElement('small');
-        note.textContent='Tempo na dziś: '+number.format(pace.expected)
+        note.textContent=completed?'Okres zakończony':'Tempo na dziś: '+number.format(pace.expected)
           +' · Prognoza na koniec: '+(pace.forecast===null?'—':number.format(pace.forecast));
         indicator.append(progress,status,note);
       }
       grid.append(indicator);
     }
-    const assessed=plan.targets.map((target,index)=>plan.configured[index]&&target>0
-      ?salonPace(plan.actuals[index],target,elapsed,total):null).filter(Boolean);
+    const assessed=plan.targets.map((target,index)=>plan.configured[index]&&target>0&&!plan.partial?.[index]
+      ?salonPace(plan.actuals[index],target,elapsed,total,plan.expected?.[index],completed):null).filter(Boolean);
     const risky=assessed.some(metric=>metric.tone==='behind');
     const status=document.createElement('span');
     status.className='salon-pace-status '+(risky?'behind':assessed.some(metric=>metric.tone==='ahead')?'ahead':'');
-    status.textContent=risky?'Plan zagrożony':!assessed.length?'Brak celów do oceny'
+    status.textContent=risky?(completed?'Plan niewykonany':'Plan zagrożony'):!assessed.length?(plan.partial?.some(Boolean)?'Niepełne cele okresu':'Brak celów do oceny')
       :assessed.every(metric=>metric.status==='Plan wykonany')?'Plan wykonany'
       :assessed.some(metric=>metric.forecast===null)?'Za wcześnie na prognozę':'Zgodnie z tempem';
     const time=document.createElement('p');
     time.className='salon-pace-time';
-    time.textContent=elapsed+' z '+total+' dni pracy w miesiącu · '+percent.format(elapsed/total)
-      +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
-    summary.append(title,status,salonQuickTotals(plan,elapsed,total,number));
+    time.textContent=elapsed+' z '+total+' dni pracy '+(period?'w okresie':'w miesiącu')+' · '+percent.format(elapsed/total)
+      +(completed?' · Okres zakończony.':' · Prognoza zakłada utrzymanie dotychczasowego tempa.');
+    summary.append(title,status,salonQuickTotals(plan,elapsed,total,number,completed));
+    if (period) {
+      card.append(summary,time,grid);
+      card.open=expanded.get(plan.salon)??false;
+      results.append(card);
+      continue;
+    }
     const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
@@ -2625,7 +2752,11 @@ function renderAdmin() {
   const team=teamDashboard?renderManagerDashboard(view):[];
   $('#admin').hidden=false;
   $('#salon-summary').hidden=!teamDashboard;
-  if (teamDashboard) renderSalonSummary(view,team);
+  $('#management-plan-period').hidden=teamDashboard;
+  if (teamDashboard) {
+    performanceView={view,team};
+    renderManagementPerformance();
+  }
   historySalons=new Set(view.salons.map(({salon})=>salon));
   $('[data-history="management"]').reloadHistory();
   renderUserEditor(view);

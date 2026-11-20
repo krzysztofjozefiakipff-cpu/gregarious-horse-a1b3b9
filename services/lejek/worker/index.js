@@ -297,87 +297,112 @@ async function handle(request, env) {
     if (!owner&&!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const month=url.searchParams.get('month');
     if (!monthValid(month)) return json({error:'Wybierz poprawny miesiąc.'},400);
-    const historyView=url.searchParams.get('history')==='1';
-    const historicalMonth=month<localDay().slice(0,7);
-    const sellerById=new Map(sellers.map(seller=>[seller.id,seller]));
-    const archivedActivity=new Map();
-    const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
-    const totals=new Map(salons.map(({salon})=>[salon,[0,0,0,0]]));
-    const daily=await list(db,'SELECT person,counters FROM daily_results WHERE substr(day,1,7)=? AND day<=? AND '+scope+' AND '+includedDailyResult,month,localDay(),...params);
-    const metricIndexes=[7,8,10,9];
-    for (const row of daily) {
-      const total=totals.get(sellerSalons.get(row.person));
-      if (!total) continue;
-      const counters=JSON.parse(row.counters);
-      const counts=[counters[4]??0,0,0,0];
-      for (const source of Array.isArray(counters[5])?counters[5]:[]) {
-        for (let i=1;i<metricIndexes.length;i++) counts[i]+=source[metricIndexes[i]]??0;
-      }
-      counts.forEach((value,i)=>{total[i]+=value;});
-      const seller=sellerById.get(row.person);
-      if (historyView&&seller.accountStatus==='inactive') {
-        if (!archivedActivity.has(row.person)) {
-          archivedActivity.set(row.person,{name:seller.name,salon:seller.salon,
-            through:seller.reportThroughDay,actuals:[0,0,0,0]});
+    const period=url.searchParams.get('period');
+    const historyView=!period&&url.searchParams.get('history')==='1';
+    if (period!==null&&!['month','quarter','year'].includes(period))
+      return json({error:'Wybierz miesiąc, kwartał albo rok.'},400);
+    const loadMonth=async month=>{
+      const historicalMonth=month<localDay().slice(0,7);
+      const sellerById=new Map(sellers.map(seller=>[seller.id,seller]));
+      const archivedActivity=new Map();
+      const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
+      const totals=new Map(salons.map(({salon})=>[salon,[0,0,0,0]]));
+      const daily=await list(db,'SELECT person,counters FROM daily_results WHERE substr(day,1,7)=? AND day<=? AND '+scope+' AND '+includedDailyResult,month,localDay(),...params);
+      const metricIndexes=[7,8,10,9];
+      for (const row of daily) {
+        const total=totals.get(sellerSalons.get(row.person));
+        if (!total) continue;
+        const counters=JSON.parse(row.counters);
+        const counts=[counters[4]??0,0,0,0];
+        for (const source of Array.isArray(counters[5])?counters[5]:[]) {
+          for (let i=1;i<metricIndexes.length;i++) counts[i]+=source[metricIndexes[i]]??0;
         }
-        counts.forEach((value,i)=>{archivedActivity.get(row.person).actuals[i]+=value;});
+        counts.forEach((value,i)=>{total[i]+=value;});
+        const seller=sellerById.get(row.person);
+        if (historyView&&seller.accountStatus==='inactive') {
+          if (!archivedActivity.has(row.person)) {
+            archivedActivity.set(row.person,{name:seller.name,salon:seller.salon,
+              through:seller.reportThroughDay,actuals:[0,0,0,0]});
+          }
+          counts.forEach((value,i)=>{archivedActivity.get(row.person).actuals[i]+=value;});
+        }
       }
-    }
-    const historicalRates=new Map();
-    if (user.role==='manager') {
-      const cutoff=[month,localDay().slice(0,7)].sort()[0];
-      const history=await list(db,`SELECT person,counters FROM daily_results
-        WHERE day>=date(?||'-01','-3 months') AND day<?||'-01' AND `+scope+' AND '+includedDailyResult,cutoff,cutoff,...params);
-      for (const row of history) {
-        const salon=sellerSalons.get(row.person);
-        const matrix=JSON.parse(row.counters)[5];
-        if (!salon||!Array.isArray(matrix)) continue;
-        if (!historicalRates.has(salon)) historicalRates.set(salon,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
-        const totals=historicalRates.get(salon);
-        matrix.slice(0,sourceCount).forEach((source,index)=>{
-          totals[index].leads+=source[0]??0;
-          totals[index].orders+=source[7]??0;
+      const historicalRates=new Map();
+      if (!period&&user.role==='manager') {
+        const cutoff=[month,localDay().slice(0,7)].sort()[0];
+        const history=await list(db,`SELECT person,counters FROM daily_results
+          WHERE day>=date(?||'-01','-3 months') AND day<?||'-01' AND `+scope+' AND '+includedDailyResult,cutoff,cutoff,...params);
+        for (const row of history) {
+          const salon=sellerSalons.get(row.person);
+          const matrix=JSON.parse(row.counters)[5];
+          if (!salon||!Array.isArray(matrix)) continue;
+          if (!historicalRates.has(salon)) historicalRates.set(salon,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
+          const totals=historicalRates.get(salon);
+          matrix.slice(0,sourceCount).forEach((source,index)=>{
+            totals[index].leads+=source[0]??0;
+            totals[index].orders+=source[7]??0;
+          });
+        }
+      }
+      const adjustments=await calendarAdjustments(db,[month],scope,...params);
+      const plans=[];
+      for (const {salon} of salons) {
+        const storedTeam=await sellerTargets(salon,month);
+        const team=storedTeam.filter(person=>!person.archived);
+        const planTeam=historicalMonth?storedTeam.filter(person=>
+          !person.archived||sellerById.get(person.id)?.reportThroughDay?.slice(0,7)>month):team;
+        const contributors=await salonContributors(salon,month);
+        const planContributors=historicalMonth?await salonContributors(salon,month,true):contributors;
+        const approvals=approvalSet(team,contributors.length);
+        const historicalApprovals=historicalMonth?approvalSet(planTeam,planContributors.length):null;
+        const automatic=[0,0,0,0];
+        for (const person of planTeam) person.targets.forEach((target,index)=>{
+          automatic[index]+=effectiveCalendarTarget(target,adjustments[person.id+'/'+month])??0;
         });
+        const saved=await db.prepare(`SELECT p.manager,p.targets,k.approvals FROM salon_plans p
+          LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
+        const direct=await db.prepare(`SELECT p.targets,locked.salon IS NOT NULL AS protected
+          FROM direct_salon_plans p LEFT JOIN protected_direct_salon_plans locked USING (salon,month)
+          WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
+        const change=!period&&direct&&await db.prepare(`SELECT r.id,r.status,r.proposed_targets,r.reason,a.name AS requester
+          FROM salon_plan_change_requests r JOIN accounts a ON a.id=r.requester
+          WHERE r.salon=? AND r.month=? ORDER BY r.id DESC LIMIT 1`).bind(salon,month).first();
+        const managers=period?[]:await assignedManagers(salon);
+        const override=Boolean(saved?.approvals&&(saved.approvals===approvals||saved.approvals===historicalApprovals));
+        const manual=direct??(override?saved:null);
+        const history=historicalRates.get(salon)??[];
+        const sourceRates=history.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders));
+        const sourceHistoryRates=history.map(({leads,orders})=>sourceHistoryRate(leads,orders));
+        const configured=automatic.map((_,index)=>Boolean(manual)||planTeam.some(person=>person.targets[index]!=null));
+        const targets=manual?JSON.parse(manual.targets):automatic;
+        if (period) {
+          plans.push({salon,configured,targets,actuals:totals.get(salon)});
+          continue;
+        }
+        plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured,targets,override,direct:Boolean(direct),protected:Boolean(direct?.protected),
+          change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
+          contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
+          manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
+          team:team.map(({version,...person})=>({...person,approved:Boolean(version),absenceAdjustment:adjustments[person.id+'/'+month]??null}))});
       }
+      return {plans,archivedActivity:[...archivedActivity.values()]};
+    };
+    if (period) {
+      const number=Number(month.slice(5));
+      const first=period==='year'?1:period==='quarter'?Math.floor((number-1)/3)*3+1:number;
+      const count=period==='year'?12:period==='quarter'?3:1;
+      const months=[];
+      for (let offset=0;offset<count;offset++) {
+        const key=month.slice(0,5)+String(first+offset).padStart(2,'0');
+        const {plans}=await loadMonth(key);
+        months.push({month:key,plans});
+      }
+      return json({months});
     }
-    const adjustments=await calendarAdjustments(db,[month],scope,...params);
-    const plans=[];
-    for (const {salon} of salons) {
-      const storedTeam=await sellerTargets(salon,month);
-      const team=storedTeam.filter(person=>!person.archived);
-      const planTeam=historicalMonth?storedTeam.filter(person=>
-        !person.archived||sellerById.get(person.id)?.reportThroughDay?.slice(0,7)>month):team;
-      const contributors=await salonContributors(salon,month);
-      const planContributors=historicalMonth?await salonContributors(salon,month,true):contributors;
-      const approvals=approvalSet(team,contributors.length);
-      const historicalApprovals=historicalMonth?approvalSet(planTeam,planContributors.length):null;
-      const automatic=[0,0,0,0];
-      for (const person of planTeam) person.targets.forEach((target,index)=>{
-        automatic[index]+=effectiveCalendarTarget(target,adjustments[person.id+'/'+month])??0;
-      });
-      const saved=await db.prepare(`SELECT p.manager,p.targets,k.approvals FROM salon_plans p
-        LEFT JOIN salon_plan_approval_sets k USING (salon,month) WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
-      const direct=await db.prepare(`SELECT p.targets,locked.salon IS NOT NULL AS protected
-        FROM direct_salon_plans p LEFT JOIN protected_direct_salon_plans locked USING (salon,month)
-        WHERE p.salon=? AND p.month=?`).bind(salon,month).first();
-      const change=direct&&await db.prepare(`SELECT r.id,r.status,r.proposed_targets,r.reason,a.name AS requester
-        FROM salon_plan_change_requests r JOIN accounts a ON a.id=r.requester
-        WHERE r.salon=? AND r.month=? ORDER BY r.id DESC LIMIT 1`).bind(salon,month).first();
-      const managers=await assignedManagers(salon);
-      const override=Boolean(saved?.approvals&&(saved.approvals===approvals||saved.approvals===historicalApprovals));
-      const manual=direct??(override?saved:null);
-      const history=historicalRates.get(salon)??[];
-      const sourceRates=history.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders));
-      const sourceHistoryRates=history.map(({leads,orders})=>sourceHistoryRate(leads,orders));
-      plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured:automatic.map((_,index)=>Boolean(manual)||planTeam.some(person=>person.targets[index]!=null)),targets:manual?JSON.parse(manual.targets):automatic,override,direct:Boolean(direct),protected:Boolean(direct?.protected),
-        change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
-        contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
-        manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
-        team:team.map(({version,...person})=>({...person,approved:Boolean(version),absenceAdjustment:adjustments[person.id+'/'+month]??null}))});
-    }
+    const {plans,archivedActivity}=await loadMonth(month);
     const pendingChanges=user.role==='group'?await list(db,`SELECT salon,month FROM salon_plan_change_requests
       WHERE status='pending' AND ${groupSalon} ORDER BY month,salon`,user.group):[];
-    return json({plans,pendingChanges,...(historyView?{archivedActivity:[...archivedActivity.values()]}:{})});
+    return json({plans,pendingChanges,...(historyView?{archivedActivity}:{})});
   }
   if (request.method==='GET' && path==='/api/lesson-packs') {
     const salon=url.searchParams.get('salon');
