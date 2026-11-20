@@ -1,0 +1,183 @@
+const briefingHost=document.querySelector('#daily-briefing');
+const briefingResults=briefingHost.querySelector('#briefing-results');
+const briefingStatus=briefingHost.querySelector('#briefing-status');
+const briefingPdf=briefingHost.querySelector('#briefing-pdf');
+const briefingSalesLabels=['Zamówienia','Faktury','Rejestracje','Opinie Google'];
+let briefingLoadVersion=0;
+let briefingReady=false;
+let briefingDownloading=false;
+
+const briefingDisplay=value=>value??'—';
+const briefingEnd=(actual,forecast)=>forecast==null?null:actual+forecast;
+
+function briefingTable(headers,rows) {
+  const region=reportElement('div');
+  region.className='briefing-scroll';
+  const table=reportElement('table');
+  table.className='briefing-table';
+  const header=table.createTHead().insertRow();
+  for (const label of headers) {
+    const cell=reportElement('th',label);
+    cell.scope='col';
+    header.append(cell);
+  }
+  const body=table.createTBody();
+  for (const row of rows) {
+    const tr=body.insertRow();
+    for (const value of row) {
+      const td=tr.insertCell();
+      if (value instanceof HTMLElement) td.append(value);
+      else td.textContent=briefingDisplay(value);
+    }
+  }
+  region.append(table);
+  return region;
+}
+
+function briefingNumberField(label,value,placeholder) {
+  const input=reportElement('input');
+  input.type='number';
+  input.min='0';
+  input.max='1000000';
+  input.step='1';
+  input.inputMode='numeric';
+  input.setAttribute('aria-label',label);
+  input.value=value??'';
+  input.placeholder=briefingDisplay(placeholder);
+  return input;
+}
+
+function renderBriefingSeller(person,report,open) {
+  const details=reportElement('details');
+  details.dataset.seller=person.id;
+  details.setAttribute('name','briefing-seller');
+  details.open=open;
+  const review=person.review;
+  details.append(reportElement('summary',person.name+(person.archived?' · archiwum':'')));
+  if (person.editable) {
+    const section=reportElement('h3','Wczoraj · '+dateLabel(report.yesterday));
+    const message=reportElement('p',review.confirmed?'Omówiono z handlowcem · '+review.confirmed.by
+      :review.stale?'Wynik zmienił się od potwierdzenia. Omów go ponownie.'
+      :review.status==='off'?'Dzień wolny.'
+      :review.status==='missing'?'Handlowiec nie zatwierdził jeszcze wyniku.'
+      :'Porównaj wykonanie z planem i potwierdź po rozmowie.');
+    message.setAttribute('role','status');
+    details.append(section,message);
+    if (review.actual) {
+      details.append(briefingTable(['Cel','Plan na dzień','Wykonanie','Status'],
+        columns.map(([,label],i)=>[label,review.goals[i],review.actual[i],
+          review.goals[i]==null?'—':review.actual[i]>=review.goals[i]?'Wykonany':'Poniżej celu'])));
+      if (!review.confirmed&&!data.previewUser) {
+        const confirm=reportElement('button','Potwierdź wykonanie po rozmowie');
+        confirm.type='button';
+        confirm.onclick=async()=>{
+          confirm.disabled=true;
+          try {
+            await api('/api/daily-briefing',{person:person.id,day:report.today,action:'confirm',actual:review.actual});
+            message.textContent='Zapisano potwierdzenie rozmowy i wyniku.';
+          } catch(error) {
+            message.textContent=error.message;
+            confirm.disabled=false;
+          }
+        };
+        details.append(confirm);
+      }
+    }
+  }
+
+  const form=reportElement('form');
+  const editable=person.editable&&!data.previewUser;
+  const goals=columns.map(([,label],i)=>briefingNumberField('Dzisiejsza korekta · '+label,person.correction[i],person.todayGoals[i]));
+  const forecast=briefingSalesLabels.map((label,i)=>briefingNumberField('Prognoza dodatkowego wyniku · '+label,person.manual[i],person.forecast[i]));
+  if (person.editable) {
+    form.append(reportElement('h3','Dzisiaj · '+dateLabel(report.today)));
+    if (person.workday) {
+      form.append(briefingTable(['Cel','Na dziś',...(editable?['Korekta']:[])],
+        columns.map(([,label],i)=>[label,person.todayGoals[i],...(editable?[goals[i]]:[])])));
+    } else form.append(reportElement('p','Dzień wolny.'));
+  }
+  form.append(reportElement('h3','Realizacja i prognoza do końca miesiąca'));
+  form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec',...(editable?['Korekta prognozy']:[])],
+    briefingSalesLabels.map((label,i)=>[label,person.actual[i],person.plan[i],person.forecast[i],
+      briefingEnd(person.actual[i],person.forecast[i]),...(editable?[forecast[i]]:[])])));
+  if (editable) {
+    const submit=reportElement('button','Zapisz korekty');
+    submit.type='submit';
+    const status=reportElement('p');
+    status.setAttribute('role','status');
+    form.append(reportElement('p','Puste pola przywracają wyliczenie automatyczne. Korekta prognozy oznacza dodatkowy wynik do końca miesiąca.'),
+      submit,status);
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      const read=input=>input.value===''?null:Number(input.value);
+      submit.disabled=true;
+      try {
+        await api('/api/daily-briefing',{person:person.id,day:report.today,action:'save',
+          goals:person.workday?goals.map(read):goals.map(()=>null),forecast:forecast.map(read)});
+        await loadBriefingPanel('Zapisano korekty dla '+person.name+'.');
+      } catch(error) {
+        status.textContent=error.message;
+      } finally {
+        submit.disabled=false;
+      }
+    };
+  }
+  details.append(form);
+  return details;
+}
+
+async function loadBriefingPanel(message='') {
+  const version=++briefingLoadVersion;
+  briefingReady=false;
+  briefingPdf.disabled=true;
+  briefingStatus.textContent='Wczytywanie odprawy…';
+  const open=briefingResults.querySelector('details[open]')?.dataset.seller;
+  try {
+    const report=await api('/api/daily-briefing');
+    if (version!==briefingLoadVersion||briefingHost.hidden) return;
+    briefingHost.querySelector('#briefing-dates').textContent='Odprawa '+dateLabel(report.today)+' · Wykonanie do '+dateLabel(report.today);
+    briefingResults.replaceChildren();
+    for (const salon of report.salons) {
+      const card=reportElement('article');
+      card.append(reportElement('h2',salon.salon),
+        briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
+          briefingSalesLabels.map((label,i)=>[label,salon.actual[i],salon.plan[i],
+            salon.forecast[i]==null?null:salon.forecast[i]+(salon.missing[i]?' (częściowa)':''),
+            salon.missing[i]?null:briefingEnd(salon.actual[i],salon.forecast[i])])));
+      if (!salon.people.length) card.append(reportElement('p','Brak handlowców do odprawy.'));
+      for (const person of salon.people) card.append(renderBriefingSeller(person,report,open===String(person.id)));
+      briefingResults.append(card);
+    }
+    briefingReady=Boolean(report.salons.length);
+    briefingPdf.disabled=!briefingReady||briefingDownloading;
+    briefingStatus.textContent=message||'Prognoza automatyczna korzysta z tempa z zakończonych dni pracy i aktualnego wykonania.';
+  } catch(error) {
+    if (version===briefingLoadVersion) briefingStatus.textContent=error.message;
+  }
+}
+
+briefingHost.querySelector('#briefing-refresh').onclick=()=>loadBriefingPanel();
+briefingPdf.onclick=async()=>{
+  if (!briefingReady||briefingDownloading) return;
+  briefingDownloading=briefingPdf.disabled=true;
+  try {
+    const query=new URLSearchParams({format:'pdf',role:data.role});
+    if (previewTarget) query.set('podglad',previewTarget);
+    const response=await fetch('/api/daily-briefing?'+query,{cache:'no-store'});
+    if (!response.ok) throw Error((await response.json().catch(()=>null))?.error||'Nie udało się pobrać raportu.');
+    const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+\.pdf)"/)?.[1];
+    if (!filename||!response.headers.get('Content-Type')?.startsWith('application/pdf'))
+      throw Error('Serwer nie zwrócił pliku PDF.');
+    const address=URL.createObjectURL(await response.blob());
+    const link=reportElement('a');
+    link.href=address;
+    link.download=filename;
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(address),1000);
+  } catch(error) {
+    briefingStatus.textContent=error.message;
+  } finally {
+    briefingDownloading=false;
+    briefingPdf.disabled=!briefingReady;
+  }
+};

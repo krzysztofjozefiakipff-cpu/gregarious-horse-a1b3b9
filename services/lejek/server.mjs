@@ -12,7 +12,7 @@ const allowedHosts = new Set(['lejek.carvamo.com', 'biegwyzej.pl', 'www.biegwyze
 const accounts = 'http://carvamo-accounts-staging:8000';
 const database = new DatabaseSync(process.env.LEJEK_DB ?? '/data/lejek.sqlite');
 database.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users','0015_identity','0016_report_exclusions','0017_salon_plans','0018_plan_approvals','0019_source_plans','0020_password_resets','0021_daily_drafts','0022_lesson_packs','0023_work_calendar','0024_seller_source_profiles','0025_archive_report_periods','0026_direct_salon_plans','0027_salon_plan_change_requests','0029_user_contact_details','0031_dealer_group_brand','0032_management_reports']) {
+for (const file of ['0000_lejek','0001_daily','0002_bieg','0003_sidebar','0004_enable_meme','0005_meme_assignments','0006_meme_feedback','0007_giphy','0008_review_plans','0009_daily_lessons','0010_dealer_groups','0011_meme_votes','0012_manager_salons','0013_account_roles','0014_archived_users','0015_identity','0016_report_exclusions','0017_salon_plans','0018_plan_approvals','0019_source_plans','0020_password_resets','0021_daily_drafts','0022_lesson_packs','0023_work_calendar','0024_seller_source_profiles','0025_archive_report_periods','0026_direct_salon_plans','0027_salon_plan_change_requests','0029_user_contact_details','0031_dealer_group_brand','0032_management_reports','0033_daily_briefings']) {
   database.exec(readFileSync('drizzle/'+file+'.sql','utf8').replaceAll('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
 }
 if (!database.prepare("SELECT sql FROM sqlite_schema WHERE name='work_calendar'").get().sql.includes("'sick'")) {
@@ -214,7 +214,7 @@ async function downloadReportPdf(response,url) {
     const slug=daily?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
       .replace(/[^\p{ASCII}]/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100):'';
     const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'salon')+'-'+report.reportDay
-      :'bieg-wyzej-'+report.type+'-'+report.month;
+      :report.type==='briefing'?'bieg-wyzej-realizacja-i-prognoza-'+report.today:'bieg-wyzej-'+report.type+'-'+report.month;
     return reply(pdf,200,{'Content-Type':'application/pdf',
       'Content-Disposition':'attachment; filename="'+filename+'.pdf"',
       ...(daily?{'X-Lejek-Report-Layout':'daily-plans'}:{})});
@@ -341,7 +341,7 @@ async function handle(request) {
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
   const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
   const url=new URL(request.url);
-  if (response.ok&&request.method==='GET'&&path==='/api/management-reports'&&url.searchParams.get('format')==='pdf') {
+  if (response.ok&&request.method==='GET'&&['/api/management-reports','/api/daily-briefing'].includes(path)&&url.searchParams.get('format')==='pdf') {
     return downloadReportPdf(response,url);
   }
   return response;
