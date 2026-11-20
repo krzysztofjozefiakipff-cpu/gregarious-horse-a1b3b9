@@ -671,7 +671,7 @@ async function handle(request, env, buildDailyReport=false) {
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
   if (path==='/api/daily-briefing') {
-    const {person,day,action,actual,goals,forecast}=body;
+    const {person,day,action,actual,goals,forecast,rows,previousRows}=body;
     const today=localDay();
     const seller=sellers.find(row=>row.id===person&&row.planEligible&&row.accountStatus!=='inactive');
     if (role!=='manager'||!seller) return json({error:'Brak uprawnień do odprawy tego handlowca.'},403);
@@ -687,6 +687,27 @@ async function handle(request, env, buildDailyReport=false) {
         ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,actuals=excluded.actuals,
           goals=excluded.goals,reviewed_at=excluded.reviewed_at`)
         .bind(person,briefing.yesterday,user.id,saved,JSON.stringify(current.review.goals),timestamp).run();
+    } else if (action==='correct') {
+      if (!current.review.rows) return json({error:'Możesz skorygować zatwierdzony wpis, który ma podział na źródła.'},409);
+      if (JSON.stringify(current.review.rows)!==JSON.stringify(previousRows))
+        return json({error:'Wpis zmienił się od otwarcia formularza. Odśwież dane odprawy.'},409);
+      if (!validDailyRows(rows)||rows.length!==sourceCount||rows.some(row=>row.length!==11))
+        return json({error:'Wpisz poprawne liczby w tabeli wykonania.'},400);
+      normalizeWalkIn(rows);
+      const next=dailyCounters(rows);
+      const dayBefore=briefing.yesterday;
+      const existing=await db.prepare('SELECT counters FROM daily_results WHERE person=? AND day=?').bind(person,dayBefore).first();
+      if (!existing||JSON.stringify(JSON.parse(existing.counters)[5])!==JSON.stringify(previousRows))
+        return json({error:'Wpis zmienił się albo został odblokowany. Odśwież dane odprawy.'},409);
+      if (next===existing.counters) return json({ok:true});
+      const [updated]=await db.batch([
+        db.prepare('UPDATE daily_results SET counters=? WHERE person=? AND day=? AND counters=?')
+          .bind(next,person,dayBefore,existing.counters),
+        db.prepare(`INSERT INTO daily_briefing_result_corrections
+          (person,day,manager,previous_counters,corrected_counters,corrected_at)
+          SELECT ?,?,?,?,?,? WHERE changes()=1`).bind(person,dayBefore,user.id,existing.counters,next,timestamp)
+      ]);
+      if (!updated.meta.changes) return json({error:'Wpis zmienił się albo został odblokowany. Odśwież dane odprawy.'},409);
     } else if (action==='save') {
       const valid=(values,length)=>Array.isArray(values)&&values.length===length&&values.every(value=>value===null||countValid(value));
       if (!valid(goals,10)||!valid(forecast,4)) return json({error:'Wpisz liczby całkowite od 0 albo pozostaw pole puste.'},400);
