@@ -166,7 +166,7 @@ function serveAsset(path,method) {
       'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; object-src 'none'; base-uri 'none'; form-action 'self'"}});
 }
 
-async function handle(request, env) {
+async function handle(request, env, buildDailyReport=false) {
   const url = new URL(request.url);
   const path = url.pathname;
   const managementPage=path==='/zarzadzanie.html';
@@ -293,6 +293,45 @@ async function handle(request, env) {
       AND (a.salon=? OR EXISTS (SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND ms.salon=?))
     ORDER BY a.name,a.id
   `,salon,salon);
+  if (path==='/api/management-reports'&&request.method==='GET') {
+    if (!managesSalonPlans) return json({error:'Raporty są dostępne dla kierowników i szefów grup.'},403);
+    const type=url.searchParams.get('type');
+    const {day:today}=reportClock();
+    if (!['monthly','daily','marketing'].includes(type)) return json({error:'Wybierz rodzaj raportu.'},400);
+    const reportDay=url.searchParams.get('day')??today;
+    if (type==='daily'&&(!dayValid(reportDay)||reportDay>today)) return json({error:'Wybierz prawidłową datę raportu.'},400);
+    const month=type==='daily'
+      ?new Date(Date.parse(reportDay)-86400000).toISOString().slice(0,7)
+      :url.searchParams.get('month');
+    if (!monthValid(month)||month>today.slice(0,7)) return json({error:'Wybierz bieżący lub zakończony miesiąc.'},400);
+    if (type==='daily'&&!buildDailyReport) {
+      const snapshot=await db.prepare('SELECT payload FROM management_daily_reports WHERE email=? AND role=? AND day=?')
+        .bind(email,role,reportDay).first();
+      if (!snapshot) return json({error:reportDay===today&&reportClock().time<'11:00:00'
+        ?'Dzisiejszy raport będzie dostępny po 11:00.':'Brak zapisanego raportu dla tej daty.'},404);
+      const report=JSON.parse(snapshot.payload);
+      report.salons=report.salons.filter(row=>managedSalons.has(row.salon));
+      return json(report);
+    }
+    const through=type==='daily'?new Date(Date.parse(reportDay)-86400000).toISOString().slice(0,10)
+      :[today,calendarMonthDays(month).at(-1)].sort()[0];
+    const loadPlans=async month=>{
+      const target=new URL('/api/salon-plans',url.origin);
+      target.search=new URLSearchParams({month,role});
+      if (preview) target.searchParams.set('podglad',email);
+      const response=await handle(new Request(target,{headers:request.headers}),env);
+      if (!response.ok) throw new Error('Nie udało się odczytać planów salonów.');
+      return response.json();
+    };
+    const report=await buildManagementReport(db,{type,month,through,reportDay,sellers,salons,scope,params,loadPlans});
+    if (type==='daily') {
+      report.generatedAt=new Date().toISOString();
+      report.reportDay=reportDay;
+      await db.prepare('INSERT INTO management_daily_reports VALUES (?,?,?,?) ON CONFLICT DO NOTHING')
+        .bind(email,role,reportDay,JSON.stringify(report)).run();
+    }
+    return json(report);
+  }
   if (path==='/api/salon-plans'&&request.method==='GET') {
     if (!owner&&!managesSalonPlans) return json({error:'Brak dostępu do planów salonu.'},403);
     const month=url.searchParams.get('month');
@@ -488,6 +527,7 @@ async function handle(request, env) {
       const cause=await db.prepare('SELECT title,organization,description FROM charity_causes WHERE month=?').bind(localDay().slice(0,7)).first();
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
+      const tasksRead=Boolean(personal&&await db.prepare("SELECT 1 FROM management_report_events WHERE email=? AND day=? AND kind='read'").bind(email,today).first());
       const teamDay=['manager','group','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind, EXISTS (SELECT 1 FROM archived_users WHERE email=accounts.email) AS archived
         FROM accounts
         LEFT JOIN daily_tracking t ON t.person=accounts.id
@@ -577,7 +617,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,previewUser,users,roles,managerAssignments,groupBrand,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,previewUser,users,roles,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -1051,6 +1091,12 @@ async function handle(request, env) {
       .bind(body.month,body.title.trim(),body.organization.trim(),body.description.trim()).run();
     return json({ok:true});
   }
+  if (path==='/api/daily/tasks-read') {
+    if (role!=='seller') return json({error:'Odczyt zadań potwierdza handlowiec.'},403);
+    if (body.day!==localDay()||!isSalonWorkday(body.day)) return json({error:'Potwierdzić można zadania bieżącego dnia pracy.'},400);
+    await recordReportEvent(db,email,'read');
+    return json({ok:true});
+  }
   if (path==='/api/daily/backfill') {
     if (!owner) return json({error:'Zaległe wpisy dla handlowców zapisuje administrator.'},403);
     const {person,day,rows}=body;
@@ -1236,7 +1282,7 @@ async function handle(request, env) {
   return json({error:'Brak uprawnień do tej operacji.'},403);
 }
 
-export default {async fetch(request, env) {
+export default {reportClock,recordReportEvent,generateDailyReports,async fetch(request, env) {
   try {return await handle(request,env);}
   catch (error) {console.error(error.message);return json({error:'Nie udało się obsłużyć żądania. Spróbuj ponownie.'},500);}
 }};
