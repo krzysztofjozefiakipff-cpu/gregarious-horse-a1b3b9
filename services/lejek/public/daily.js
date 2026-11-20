@@ -2476,7 +2476,7 @@ function loadUserEditor() {
   const roles=canPreview?['group','manager','seller'].filter(role=>selected.roles.split(',').includes(role)):[];
   previewLinks.replaceChildren(...roles.map(role=>{
     const link=document.createElement('a');
-    link.href='/daily.html?'+new URLSearchParams({podglad:selected.email,role});
+    link.href=userPreviewUrl(selected.email,role);
     link.textContent='Podgląd: '+panelNames[role].replace(/^Panel /,'');
     return link;
   }));
@@ -2882,6 +2882,32 @@ function renderSellerDetail() {
   if (!reopenForm.hidden) loadReopenDays(seller);
 }
 
+function userPreviewUrl(email,role) {
+  return '/daily.html?'+new URLSearchParams({podglad:email,role});
+}
+
+function renderSellerPreviewPicker() {
+  const bar=$('#seller-preview-bar');
+  bar.hidden=data.role!=='admin'||Boolean(managerPreviewSalon||groupPreviewName);
+  if (bar.hidden) return;
+  const picker=$('#seller-preview-select');
+  const previous=picker.value;
+  const sellers=data.users.filter(user=>!user.archived&&user.roles.split(',').includes('seller'));
+  picker.replaceChildren(new Option(sellers.length?'Wybierz handlowca':'Brak aktywnych handlowców',''),
+    ...sellers.map(user=>new Option([user.name,user.salon,user.email].filter(Boolean).join(' · '),user.email)));
+  if (sellers.some(user=>user.email===previous)) picker.value=previous;
+  picker.disabled=!sellers.length;
+  $('#seller-preview-open').disabled=!picker.value;
+}
+
+$('#seller-preview-select').onchange=event=>{
+  $('#seller-preview-open').disabled=!event.target.value;
+};
+$('#seller-preview-open').onclick=()=>{
+  const email=$('#seller-preview-select').value;
+  if (email&&!$('#seller-preview-bar').hidden) location.assign(userPreviewUrl(email,'seller'));
+};
+
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
@@ -2917,6 +2943,7 @@ function showView() {
   }
   $('#group-preview-bar').hidden=data.role!=='admin'||Boolean(managerPreviewSalon)||!data.groups.length;
   if (groupPreviewName) $('#manager-preview-bar').hidden=true;
+  renderSellerPreviewPicker();
   renderAdmin();
 }
 $('#group-preview-toggle').onclick=()=>{
