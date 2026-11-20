@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-const assets = Object.fromEntries(['zarzadzanie.html','quarter.js','panel-navigation.js','workbook-plan.js','work-calendar.js','management.js','daily.html','daily.js'].map(name =>
+const assets = Object.fromEntries(['zarzadzanie.html','quarter.js','panel-navigation.js','workbook-plan.js','work-calendar.js','reports.js','management.js','daily.html','daily.js'].map(name =>
   ['/'+name, readFileSync('public/'+name,'utf8')]));
-for (const script of ['daily.js','management.js','panel-navigation.js','workbook-plan.js','work-calendar.js']) {
+for (const script of ['daily.js','management.js','panel-navigation.js','workbook-plan.js','work-calendar.js','reports.js']) {
   const version=createHash('sha256').update(assets['/'+script]).digest('hex').slice(0,12);
   for (const page of ['/daily.html','/zarzadzanie.html']) {
     assets[page]=assets[page].replace('src="'+script+'"','src="'+script+'?v='+version+'"');
@@ -20,4 +20,4 @@ if (memes.length!==1000 || new Set(memes.map(([title,,,key])=>key??title)).size!
 }
 mkdirSync('dist/server', {recursive:true});
 mkdirSync('dist/.openai', {recursive:true});
-writeFileSync('dist/server/index.js','const assets = '+JSON.stringify(assets)+';\nconst memes = '+JSON.stringify(memes)+';\n'+assets['/workbook-plan.js']+'\n'+assets['/work-calendar.js']+'\n'+readFileSync('worker/index.js','utf8'));
+writeFileSync('dist/server/index.js','const assets = '+JSON.stringify(assets)+';\nconst memes = '+JSON.stringify(memes)+';\n'+assets['/workbook-plan.js']+'\n'+assets['/work-calendar.js']+'\n'+readFileSync('worker/management-reports.js','utf8')+'\n'+readFileSync('worker/index.js','utf8'));

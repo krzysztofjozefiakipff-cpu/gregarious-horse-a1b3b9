@@ -1217,6 +1217,19 @@ function renderRanking(ranking) {
     :new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%';
 }
 
+$('#confirm-tasks-read').onclick=async event=>{
+  const button=event.currentTarget;
+  button.disabled=true;
+  try {
+    await api('/api/daily/tasks-read',{day:data.today});
+    data.tasksRead=true;
+    $('#tasks-read-status').textContent='Odczyt zadań potwierdzony.';
+  } catch (error) {
+    $('#tasks-read-status').textContent=error.message;
+    button.disabled=false;
+  }
+};
+
 function renderSeller() {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
@@ -1246,6 +1259,10 @@ function renderSeller() {
   const [year,monthNumber]=currentMonth.split('-').map(Number);
   $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
   renderTodayTasks(periodMetrics(data,currentMonth,1),data.previousDaily,data.today);
+  const confirmRead=$('#confirm-tasks-read');
+  confirmRead.hidden=Boolean(data.previewUser)||!isScheduled(data.today);
+  confirmRead.disabled=Boolean(data.tasksRead);
+  $('#tasks-read-status').textContent=!confirmRead.hidden&&data.tasksRead?'Odczyt zadań potwierdzony.':'';
   renderPeriodPicker(periodValue.value||currentMonth);
   loadSellerPeriod();
   const pending=(data.calendar??[]).filter(row=>row.status==='pending').length+Object.values(personal.exceptions).filter(kind=>kind==='pending').length;
@@ -2362,6 +2379,7 @@ salonPlans.addEventListener('toggle',()=>{
 
 const managementFunctions={
   'wykonanie': ['Realizacja planów'],
+  'raporty': ['Raporty zarządcze'],
   'plany-salonow': ['Plany salonów','salon-plans'],
   'zespol': ['Zespół'],
   'kalendarz-pracy': ['Kalendarz pracy','admin-absence-block'],
@@ -2373,9 +2391,9 @@ const managementFunctions={
   'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
-  manager:['wykonanie','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
+  manager:['wykonanie','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
     'konta-uzytkownikow','historie','dane-dealera'],
-  group:['wykonanie','plany-salonow','historia-planow','zespol','kalendarz-pracy','konta-uzytkownikow',
+  group:['wykonanie','raporty','plany-salonow','historia-planow','zespol','kalendarz-pracy','konta-uzytkownikow',
     'dodaj-salon','lekcja','historie','dane-dealera']
 };
 
@@ -2402,6 +2420,8 @@ function selectRoleFunction(routes) {
   }
   select.value=active;
   $('#admin').dataset.function=active;
+  $('#management-reports').hidden=active!=='raporty';
+  if (active==='raporty') renderReportPicker(data);
   $('#performance-view').hidden=active!=='wykonanie'&&active!=='historia-planow';
   $('#performance-title').textContent=active==='historia-planow'?label:'Realizacja planów salonów';
   $('#manager-team-view').hidden=active!=='zespol';
@@ -2440,6 +2460,7 @@ function selectManagementView() {
     history.replaceState(history.state,'','#administracja');
     salonPlans.open=true;
   }
+  $('#management-reports').hidden=true;
   const administration=location.hash==='#administracja';
   const accounts=location.hash==='#konta-uzytkownikow';
   const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';
