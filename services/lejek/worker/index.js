@@ -15,6 +15,8 @@ const inReportMonth=(address,month)=>outsideArchive(address,
 const resultAddress=table=>`(SELECT email FROM accounts WHERE id=${table}.person)`;
 const includedResult=(table,month)=>inReportMonth(resultAddress(table),month);
 const includedDailyResult=inReportDay(resultAddress('daily_results'),'daily_results.day');
+const validBrandLogo=logo=>typeof logo==='string'&&logo.length<=56000&&
+  (logo===''||/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(logo));
 async function list(db,sql,...params) { return (await db.prepare(sql).bind(...params).all()).results; }
 
 const sourceCount = 13;
@@ -390,6 +392,15 @@ async function handle(request, env) {
     const reviewPlans=await list(db,'SELECT person,month,target FROM review_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('review_plans','review_plans.month'),...months,...params);
     const funnelPlans=await list(db,'SELECT person,month,targets FROM funnel_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('funnel_plans','funnel_plans.month'),...months,...params);
     const absenceAdjustments=await calendarAdjustments(db,months,scope,...params);
+    const groupName=user.role==='group'?user.group:user.role==='manager'
+      ?(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first())?.group_name:null;
+    let groupBrand=null;
+    if (groupName) {
+      const saved=await db.prepare('SELECT logo FROM dealer_group_brand WHERE group_name=?').bind(groupName).first();
+      const logos=saved?[]:await list(db,`SELECT DISTINCT b.logo FROM dealer_brand b JOIN dealer_group_salons gs USING(salon)
+        WHERE gs.group_name=? AND b.logo<>'' LIMIT 2`,groupName);
+      groupBrand={name:groupName,logo:saved?.logo??(logos.length===1?logos[0].logo:'')};
+    }
     if (path==='/api/daily') {
       const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN ('+placeholders+') AND '+scope+' AND '+includedDailyResult,...months,...params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('plans','plans.month'),...months,...params);
@@ -504,7 +515,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,users,roles,managerAssignments,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,users,roles,managerAssignments,groupBrand,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -522,7 +533,7 @@ async function handle(request, env) {
       reportMonths.get(id).push(month);
     }
     const reportSellers=sellers.map(seller=>({...seller,reportMonths:reportMonths.get(seller.id)??[]}));
-    return json({signedInAs,roles,role:user.role,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
+    return json({signedInAs,roles,role:user.role,groupBrand,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
@@ -902,13 +913,19 @@ async function handle(request, env) {
     ]);
     return invitedNewAccount(targetEmail,[body.role]);
   }
+  if (path==='/api/group-brand') {
+    if (user.role!=='group') return json({error:'Logo grupy może zmienić szef grupy dealerskiej.'},403);
+    const {logo}=body;
+    if (!validBrandLogo(logo)) return json({error:'Sprawdź format logo grupy.'},400);
+    await db.prepare(`INSERT INTO dealer_group_brand (group_name,logo) VALUES (?,?)
+      ON CONFLICT(group_name) DO UPDATE SET logo=excluded.logo`).bind(user.group,logo).run();
+    return json({ok:true});
+  }
   if (path==='/api/brand' && canManage) {
     const {salon,name,logo}=body;
     const omitName=user.role==='group'&&(name===undefined||typeof name==='string'&&!name.trim());
     if (!textValid(salon)||(!omitName&&!textValid(name))||
-        (logo!==undefined&&(typeof logo!=='string'||logo.length>56000||
-          (logo&&!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(logo)))))
-      return json({error:'Sprawdź dane dealera i format logo.'},400);
+        (logo!==undefined&&!validBrandLogo(logo))) return json({error:'Sprawdź dane dealera i format logo.'},400);
     if (user.role!=='admin'&&!managedSalons.has(salon.trim())) return json({error:'Nie masz dostępu do salonu.'},403);
     await db.prepare(`INSERT INTO dealer_brand (salon,name,logo) VALUES (?1,COALESCE(?2,?1),COALESCE(?3,''))
       ON CONFLICT(salon) DO UPDATE SET name=COALESCE(?2,dealer_brand.name),logo=COALESCE(?3,dealer_brand.logo)`)

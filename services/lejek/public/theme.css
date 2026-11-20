@@ -113,3 +113,15 @@ a { color: var(--ink); }
   font-weight:700;
   color:var(--accent-ink);
 }
+
+.dealer-logo {
+  box-sizing: content-box;
+  max-height: 36px;
+  max-width: 110px;
+  object-fit: contain;
+  padding: 6px 8px;
+  background: white;
+  border: 1px solid #dce2eb;
+  border-radius: 8px;
+}
+.dealer-logo[hidden] { display: none; }
