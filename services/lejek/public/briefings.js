@@ -92,7 +92,12 @@ function renderBriefingSeller(person,report,open) {
   details.setAttribute('name','briefing-seller');
   details.open=open;
   const review=person.review;
-  details.append(reportElement('summary',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':'')));
+  const summary=reportElement('summary',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':''));
+  const completed=reportElement('span','Odprawa wykonana');
+  completed.className='briefing-completed-badge';
+  completed.hidden=!review.confirmed;
+  summary.append(completed);
+  details.append(summary);
   if (person.editable) {
     const section=reportElement('h3','Wczoraj · '+dateLabel(report.yesterday));
     const message=reportElement('p',review.confirmed?'Omówiono z handlowcem · '+review.confirmed.by
@@ -113,6 +118,7 @@ function renderBriefingSeller(person,report,open) {
           confirm.disabled=true;
           try {
             await api('/api/daily-briefing',{person:person.id,day:report.today,action:'confirm',actual:review.actual});
+            completed.hidden=false;
             message.textContent='Zapisano potwierdzenie rozmowy i wyniku.';
           } catch(error) {
             message.textContent=error.message;
