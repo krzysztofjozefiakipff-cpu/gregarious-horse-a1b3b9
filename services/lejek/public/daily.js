@@ -1572,15 +1572,6 @@ function renderManagerDashboard(view,detailOnly=false) {
   const list=$('#manager-team-list');
   list.replaceChildren();
   if (!team.length) list.textContent='Brak aktywnych handlowców.';
-  const removed=$('#manager-team-removed');
-  const inactive=sellers.filter(seller=>seller.accountStatus==='inactive');
-  removed.replaceChildren(...(inactive.length?inactive:[null]).map(seller=>{
-    const item=document.createElement('li');
-    item.textContent=seller?seller.name+(view.salons.length>1?' · '+seller.salon:'')
-      +(seller.reportThroughDay?' · wyniki do '+dateLabel(seller.reportThroughDay,{day:'numeric',month:'long',year:'numeric'})+' włącznie':'')
-      :'Brak usuniętych handlowców.';
-    return item;
-  }));
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
   for (const {seller,status,metrics,weakest,orders} of team) {
     const detail=document.createElement('details');
@@ -2183,7 +2174,7 @@ async function loadSalonPlans() {
         const badge=document.createElement('span');
         badge.className='planning-badge';
         badge.dataset.state=person.approved?'approved':person.complete?'ready':'empty';
-        badge.textContent=person.archived?'Konto usunięte':person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Do uzupełnienia';
+        badge.textContent=person.approved?'Zatwierdzony':person.complete?'Do zatwierdzenia':'Do uzupełnienia';
         summary.append(person.name,badge);
         row.className='planning-seller';
         row.name='planning-seller';
@@ -2201,14 +2192,14 @@ async function loadSalonPlans() {
           row.append(adjusted);
         }
         const individual={salon:plan.salon,person:person.id};
-        if (data.role==='manager'&&!person.archived) {
+        if (data.role==='manager') {
           row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id),plan.sourceHistoryRates??[]));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
           row.append(values);
         }
-        if (person.complete&&!person.approved&&!person.archived) {
+        if (person.complete&&!person.approved) {
           const approve=document.createElement('button');
           approve.textContent='Zatwierdź plan handlowca';
           approve.onclick=()=>planAction(approve,'/api/salon-plans/approve',individual,month);
@@ -2242,7 +2233,7 @@ const managementFunctions={
   'zespol': ['Zespół'],
   'kalendarz-pracy': ['Kalendarz pracy','admin-absence-block'],
   'lekcja': ['Lekcja na dziś','admin-lessons-block'],
-  'historia-planow': ['Historia planów'],
+  'historia-planow': ['Historia planów i aktywności'],
   'konta-uzytkownikow': ['Konta użytkowników'],
   'dodaj-salon': ['Dodaj salon do grupy','group-add-salon-block'],
   'historie': ['Historie do moderacji','admin-settings-block','story-moderation'],
@@ -2409,14 +2400,12 @@ function renderUserSearch() {
   $('#user-search-status').textContent=matches.length?'Wyniki: '+matches.length
     :editableUsers.length?'Nie znaleziono użytkowników pasujących do filtrów.':'Brak użytkowników w tym zakresie.';
   userSearchResults.replaceChildren();
-  for (const archived of [false,true]) {
-    const users=matches.filter(user=>Boolean(user.archived)===archived);
-    if (!users.length) continue;
+  if (matches.length) {
     const section=document.createElement('section');
     const heading=document.createElement('h3');
-    heading.textContent=archived?'Usunięci użytkownicy':'Aktywni użytkownicy';
+    heading.textContent='Aktywni użytkownicy';
     const list=document.createElement('ul');
-    for (const user of users) {
+    for (const user of matches) {
       const item=document.createElement('li');
       const button=document.createElement('button');
       button.type='button';
@@ -2483,7 +2472,7 @@ function loadUserEditor() {
   $('#user-edit-navigation').hidden=!selected;
   $('#user-edit-heading').textContent=selected?.name??'';
   const previewLinks=$('#admin-user-preview-links');
-  const canPreview=data?.role==='admin'&&!managerPreviewSalon&&!groupPreviewName&&selected&&!selected.archived;
+  const canPreview=data?.role==='admin'&&!managerPreviewSalon&&!groupPreviewName&&selected;
   const roles=canPreview?['group','manager','seller'].filter(role=>selected.roles.split(',').includes(role)):[];
   previewLinks.replaceChildren(...roles.map(role=>{
     const link=document.createElement('a');
@@ -2510,20 +2499,16 @@ function loadUserEditor() {
   $('#user-send-invite').hidden=!selected||Boolean(selected.archived||managerPreviewSalon||groupPreviewName);
   const archiveButton=$('#user-archive');
   archiveButton.hidden=!selected;
-  archiveButton.dataset.archived=String(Boolean(selected?.archived));
-  archiveButton.textContent=selected?.archived?'Przywróć użytkownika':'Usuń użytkownika';
-  $('#user-save').hidden=Boolean(selected?.archived);
-  $('#user-status').textContent=selected?.archived?'Użytkownik usunięty z aktywnych kont Lejka.':'';
+  $('#user-status').textContent='';
   updateUserRoleFields();
 }
 function renderUserEditor(view) {
   userEditorRole=view.role;
   const delegated=view.role!=='admin';
   const visibleSalons=new Set(view.salons.map(({salon})=>salon));
-  editableUsers=delegated?data.users.filter(user=>
+  editableUsers=data.users.filter(user=>!user.archived&&(!delegated||
     visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
-    (view.role!=='manager'||user.roles==='seller')
-  ):data.users;
+    (view.role!=='manager'||user.roles==='seller')));
   fixedUserGroup=view.role==='group'?view.dealerGroup:'';
   const managerRole=$('#user-manager-role');
   managerRole.hidden=view.role==='manager';
@@ -2586,13 +2571,12 @@ $('#user-archive').onclick=async event=>{
   const button=event.currentTarget;
   const selected=selectedEditableUser();
   if (!selected) return;
-  const archived=!selected.archived;
-  if (archived&&!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach do dzisiejszego dnia włącznie.')) return;
+  if (!confirm('Usunąć dostęp użytkownika „'+selected.name+'” do Lejka? Zapisane wyniki pozostaną w raportach do dzisiejszego dnia włącznie.')) return;
   button.disabled=true;
   try {
-    await api('/api/users/archive',{email:selected.email,archived});
+    await api('/api/users/archive',{email:selected.email,archived:true});
     await refresh();
-    $('#user-status').textContent=archived?'Użytkownik usunięty z aktywnych kont Lejka.':'Przywrócono dostęp użytkownika.';
+    $('#user-search-status').textContent='Usunięto konto. Zapisane wyniki są dostępne w historii.';
   } catch(error) {
     $('#user-status').textContent=error.message;
   } finally {
@@ -2762,13 +2746,13 @@ for (const panel of historyPanels) {
     results.replaceChildren();
     status.textContent='';
     if (!month) return;
-    if (!input.validity.valid || month>=data.today.slice(0,7)) {
-      status.textContent='Wybierz zakończony miesiąc.';
+    if (!input.validity.valid || month>data.today.slice(0,7)) {
+      status.textContent='Wybierz bieżący lub wcześniejszy miesiąc.';
       return;
     }
     status.textContent='Wczytywanie…';
     try {
-      const response=await api('/api/salon-plans?month='+encodeURIComponent(month));
+      const response=await api('/api/salon-plans?month='+encodeURIComponent(month)+'&history=1');
       if(request!==revision) return;
       status.textContent=monthLabel(month)+' · wykonanie / cel miesięczny';
       const plans=response.plans.filter(plan=>historySalons.has(plan.salon));
@@ -2782,6 +2766,23 @@ for (const panel of historyPanels) {
         }))));
         results.append(card);
       }
+      const archived=response.archivedActivity.filter(person=>historySalons.has(person.salon));
+      if (archived.length) {
+        const activity=document.createElement('section');
+        activity.className='history-salon';
+        const heading=document.createElement('h3');
+        heading.textContent='Zapisane wyniki byłych handlowców';
+        const list=document.createElement('ul');
+        for (const person of archived) {
+          const row=document.createElement('li');
+          const through=person.through?.startsWith(month)?' · wyniki do '+dateLabel(person.through)+' włącznie':'';
+          row.textContent=person.name+' · '+person.salon+through+' · '+salonPlanMetrics.map((label,index)=>
+            label.toLowerCase()+': '+person.actuals[index]).join(' · ');
+          list.append(row);
+        }
+        activity.append(heading,list);
+        results.append(activity);
+      }
       if (!plans.length) results.textContent='Brak wyników dla wybranych salonów.';
     } catch (error) {
       if (request===revision) status.textContent=error.message;
@@ -2790,7 +2791,7 @@ for (const panel of historyPanels) {
   input.addEventListener('change',load);
   panel.addEventListener('toggle',()=>{
     if (!panel.open) return;
-    input.value ||= input.max;
+    input.value ||= input.dataset.previousMonth;
     load();
   });
   panel.reloadHistory=()=>{if(panel.open && input.value) load();};
@@ -2964,7 +2965,11 @@ async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
   const month=data.today.slice(0,7);
   const [year,number]=month.split('-').map(Number);
-  for (const panel of historyPanels) panel.querySelector('input').max=monthStart(year,number-2).slice(0,7);
+  for (const panel of historyPanels) {
+    const input=panel.querySelector('input');
+    input.max=month;
+    input.dataset.previousMonth=monthStart(year,number-2).slice(0,7);
+  }
   $('#management-plan-period').textContent='Okres · '+monthLabel(month);
 
   const signedIn=$('#signed-in');

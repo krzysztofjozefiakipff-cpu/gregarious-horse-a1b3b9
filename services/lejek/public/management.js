@@ -93,8 +93,9 @@ function updateFilters(priorPerson=undefined) {
   if(role!=='seller'&&salons.includes(prior)) get('salon').value=prior;
   get('salon').disabled=role==='seller'||salons.length<2;
   const selected=priorPerson===undefined?get('seller').value:String(people.findIndex(p=>p.id===priorPerson));
-  options(get('seller'),[...(role==='seller'?[]:[['','Wszyscy handlowcy']]),...available().map(i=>[i,people[i].name])]);
-  if(available().some(i=>String(i)===selected)) get('seller').value=selected;
+  const reportPeople=available().filter(i=>get('month').value<today().slice(0,7)||people[i].accountStatus!=='inactive');
+  options(get('seller'),[...(role==='seller'?[]:[['','Wszyscy handlowcy']]),...reportPeople.map(i=>[i,people[i].name])]);
+  if(reportPeople.some(i=>String(i)===selected)) get('seller').value=selected;
   get('seller').disabled=role==='seller';
   render();
 }
@@ -102,7 +103,7 @@ function render() {
   const scope = available().filter(i=>!get('seller').value || String(i)===get('seller').value);
   const bySource=sources.map((_,s)=>sum(scope.map(i=>record(i,s))));
   const total=sum(bySource);
-  get('edit').disabled=!scope.length;
+  get('edit').disabled=!scope.some(i=>people[i].accountStatus!=='inactive');
   renderJourney(scope,bySource,total);
   const report=renderQuarter(get('seller').value?scope:available(false));
   const current=report.find(row=>row.month===get('month').value);
@@ -207,7 +208,7 @@ function drawSheetRates() {
   sheetRates.forEach(([a,b],j)=>table.querySelector('#sheet-total-rate-'+j).textContent=pct(totals[a],totals[b]));
 }
 function renderInlineSheet(scope,bySource) {
-  const editable=scope.length===1;
+  const editable=scope.length===1&&people[scope[0]].accountStatus!=='inactive';
   get('sheetSave').hidden=!editable;
   get('sheetStatus').textContent='';
   get('sheetHint').textContent=editable?'Wpisz wyniki w tabeli. Konwersje przeliczą się od razu.':'Wybierz jednego handlowca, aby wpisać wyniki.';
@@ -410,8 +411,11 @@ function loadEntry() {
 }
 function openEntry(showExtras) {
   if(!get('month').value){get('month').reportValidity();return;}
-  options(get('entrySeller'),available().map(i=>[i,people[i].name]));
-  if(get('seller').value) get('entrySeller').value=get('seller').value;
+  const selected=get('seller').value;
+  const entryPeople=available().filter(i=>people[i].accountStatus!=='inactive');
+  if (!entryPeople.length) return;
+  options(get('entrySeller'),entryPeople.map(i=>[i,people[i].name]));
+  if(entryPeople.some(i=>String(i)===selected)) get('entrySeller').value=selected;
   options(get('entrySource'),sources.map((s,i)=>[i,s]));
   loadEntry();
   get('journeyDetails').open=showExtras;
