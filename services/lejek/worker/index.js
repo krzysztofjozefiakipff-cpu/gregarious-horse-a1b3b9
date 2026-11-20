@@ -903,11 +903,16 @@ async function handle(request, env) {
     return invitedNewAccount(targetEmail,[body.role]);
   }
   if (path==='/api/brand' && canManage) {
-    if (!textValid(body.salon)||!textValid(body.name)||typeof body.logo!=='string'||body.logo.length>56000||
-        (body.logo&&!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(body.logo))) return json({error:'Sprawdź nazwę i logo dealera.'},400);
-    if (user.role!=='admin'&&!managedSalons.has(body.salon.trim())) return json({error:'Nie masz dostępu do salonu.'},403);
-    await db.prepare('INSERT INTO dealer_brand VALUES (?,?,?) ON CONFLICT(salon) DO UPDATE SET name=excluded.name,logo=excluded.logo')
-      .bind(body.salon.trim(),body.name.trim(),body.logo).run();
+    const {salon,name,logo}=body;
+    const omitName=user.role==='group'&&(name===undefined||typeof name==='string'&&!name.trim());
+    if (!textValid(salon)||(!omitName&&!textValid(name))||
+        (logo!==undefined&&(typeof logo!=='string'||logo.length>56000||
+          (logo&&!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(logo)))))
+      return json({error:'Sprawdź dane dealera i format logo.'},400);
+    if (user.role!=='admin'&&!managedSalons.has(salon.trim())) return json({error:'Nie masz dostępu do salonu.'},403);
+    await db.prepare(`INSERT INTO dealer_brand (salon,name,logo) VALUES (?1,COALESCE(?2,?1),COALESCE(?3,''))
+      ON CONFLICT(salon) DO UPDATE SET name=COALESCE(?2,dealer_brand.name),logo=COALESCE(?3,dealer_brand.logo)`)
+      .bind(salon.trim(),omitName?null:name.trim(),logo??null).run();
     return json({ok:true});
   }
   if (path==='/api/meme-vote' && user.role==='seller') {
