@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""CARVELO resident photo worker.
+"""CARVAMO resident photo worker.
 
 Runs on a private Docker worker host. No GitHub OIDC is required: the worker
-holds a privileged DATABASE_URL and Supabase service key in HOST SECRETS ONLY.
+holds its database and storage credentials in HOST SECRETS ONLY.
 GitHub Actions remains the fallback until the host is explicitly provisioned.
 """
 from __future__ import annotations
@@ -21,16 +21,27 @@ from PIL import Image, ImageOps
 from rembg import remove, new_session
 from studio_compose import render_scene, compose_grounded_vehicle, add_official_logo
 
+def setting(name, default=""):
+    """CARVAMO names take precedence; old names remain migration aliases."""
+    return os.getenv("CARVAMO_" + name, os.getenv("CARVELO_" + name, default))
+
 ROOT = Path(__file__).resolve().parents[2]
 SCENE = ROOT/"assets/brand/carvelo-showroom-empty-v5.webp"
 LOGO = ROOT/"assets/brand/carvelo-wordmark-on-dark.svg"
-SHOWROOM_3D_DIR = Path(os.getenv("CARVELO_SHOWROOM_3D_DIR", str(ROOT/"assets/brand/carvelo-showroom-3d")))
-SHOWROOM_3D_ENABLED = os.getenv("CARVELO_SHOWROOM_3D_ENABLED", "false").lower() == "true"
-DATABASE_URL = os.environ.get("CARVELO_DATABASE_URL","")
-SUPABASE_URL = os.environ.get("CARVELO_SUPABASE_URL","").rstrip("/")
-SERVICE_KEY = os.environ.get("CARVELO_SUPABASE_SERVICE_ROLE_KEY","")
-POLL_SECONDS = max(1,min(int(os.getenv("CARVELO_POLL_SECONDS","2")),60))
+SHOWROOM_3D_DIR = Path(setting("SHOWROOM_3D_DIR", str(ROOT/"assets/brand/carvelo-showroom-3d")))
+SHOWROOM_3D_ENABLED = setting("SHOWROOM_3D_ENABLED", "false").lower() == "true"
+DATABASE_URL = setting("DATABASE_URL")
+SUPABASE_URL = setting("SUPABASE_URL").rstrip("/")
+SERVICE_KEY = setting("SUPABASE_SERVICE_ROLE_KEY")
+POLL_SECONDS = max(1,min(int(setting("POLL_SECONDS", "2")),60))
 HEADERS = {"apikey":SERVICE_KEY,"Authorization":"Bearer "+SERVICE_KEY}
+STORAGE_BACKEND = os.getenv("CARVAMO_STORAGE_BACKEND", "supabase")
+
+@lru_cache(maxsize=1)
+def ovh_storage():
+    from ovh_storage import OVHStorage
+    return OVHStorage()
+
 MAX_BYTES = 6_000_000
 MAX_PIXELS = 12_000_000
 
@@ -39,14 +50,22 @@ def session():
     return new_session("u2net")
 
 def get_photo(path):
+    if STORAGE_BACKEND == "ovh_s3":
+        return decode_photo(ovh_storage().download(path))
+    return get_supabase_photo(path)
+
+def get_supabase_photo(path):
     url=SUPABASE_URL+"/storage/v1/object/authenticated/carvelo-photo-originals/"+quote(path,safe="/")
     resp=requests.get(url,headers=HEADERS,timeout=45)
     if not resp.ok:
-        print("CARVELO storage download failed status="+str(resp.status_code)+" code="+str(resp.json().get("error",resp.json().get("code","unknown")))[:70] if resp.headers.get("content-type","").startswith("application/json") else "CARVELO storage download failed status="+str(resp.status_code),flush=True)
+        print("CARVAMO storage download failed status="+str(resp.status_code)+" code="+str(resp.json().get("error",resp.json().get("code","unknown")))[:70] if resp.headers.get("content-type","").startswith("application/json") else "CARVAMO storage download failed status="+str(resp.status_code),flush=True)
     resp.raise_for_status()
-    if len(resp.content)>MAX_BYTES:
+    return decode_photo(resp.content)
+
+def decode_photo(data):
+    if len(data)>MAX_BYTES:
         raise ValueError("source_size_limit")
-    with Image.open(io.BytesIO(resp.content)) as raw:
+    with Image.open(io.BytesIO(data)) as raw:
         if raw.width*raw.height>MAX_PIXELS:
             raise ValueError("source_pixel_limit")
         photo=ImageOps.exif_transpose(raw).convert("RGBA")
@@ -54,19 +73,19 @@ def get_photo(path):
         return photo
 
 def make_candidate(job, progress=None):
-    print("CARVELO processing stage=download",job["job_id"],flush=True)
+    print("CARVAMO processing stage=download",job["job_id"],flush=True)
     photo=get_photo(job["original_path"])
-    print("CARVELO processing stage=downloaded",job["job_id"],flush=True)
+    print("CARVAMO processing stage=downloaded",job["job_id"],flush=True)
     if progress: progress("downloaded",30)
     changed=None
     reason=None
     if job["target_mode"]=="showroom_exterior":
         buf=io.BytesIO()
         photo.convert("RGB").save(buf,"PNG")
-        print("CARVELO processing stage=segmentation",job["job_id"],flush=True)
+        print("CARVAMO processing stage=segmentation",job["job_id"],flush=True)
         if progress: progress("segmentation",40)
         cut=remove(buf.getvalue(),session=session())
-        print("CARVELO processing stage=segmented",job["job_id"],flush=True)
+        print("CARVAMO processing stage=segmented",job["job_id"],flush=True)
         if progress: progress("compositing",70)
         with Image.open(io.BytesIO(cut)) as fg:
             foreground=fg.convert("RGBA")
@@ -117,12 +136,20 @@ def make_candidate(job, progress=None):
     return out,changed,reason
 
 def upload(path,data):
+    if STORAGE_BACKEND == "ovh_s3":
+        return ovh_storage().upload(path, data)
     response=requests.post(SUPABASE_URL+"/storage/v1/object/carvelo-photo-branded/"+quote(path,safe="/"),
                            headers={**HEADERS,"Content-Type":"image/png","x-upsert":"false"},
                            data=data,timeout=90)
     response.raise_for_status()
 
 def remove_uploaded(path):
+    if STORAGE_BACKEND == "ovh_s3":
+        try:
+            ovh_storage().remove(path)
+        except Exception:
+            pass
+        return
     try:
         requests.delete(SUPABASE_URL+"/storage/v1/object/carvelo-photo-branded/"+quote(path,safe="/"),
                         headers=HEADERS,timeout=20)
@@ -147,38 +174,44 @@ def run_once(conn):
     if not job:
         return False
     job_id=job["job_id"]
-    print("CARVELO job claimed",job_id,flush=True)
+    print("CARVAMO job claimed",job_id,flush=True)
     path=None
+    uploaded=False
     try:
         update_progress(conn,job_id,run_id,"downloading",15)
         data,changed,reason=make_candidate(job,lambda stage,pct: update_progress(conn,job_id,run_id,stage,pct))
         path=(str(job["offer_id"])+"/"+str(job["photo_id"])+"/ai/"+str(uuid.uuid4())+".png")
         update_progress(conn,job_id,run_id,"uploading",90)
-        print("CARVELO processing stage=upload",job_id,flush=True)
+        print("CARVAMO processing stage=upload",job_id,flush=True)
         upload(path,data)
+        uploaded=True
         update_progress(conn,job_id,run_id,"finalizing",95)
         rpc(conn,"select public.cv_ai_complete_v3(%s,%s,%s,%s,%s,%s,%s)",
             (job_id,run_id,path,changed,None,reason,"studio-v6"))
         conn.commit()
-        print("CARVELO ready for review",job_id,job["target_mode"],flush=True)
+        print("CARVAMO ready for review",job_id,job["target_mode"],flush=True)
     except Exception as exc:
         conn.rollback()
-        if path:
+        if path and uploaded:
             remove_uploaded(path)
         # Never print exception text: requests errors can contain API tokens in URLs.
         safe_value_errors={"mask_quality_unreliable","wheel_grounding_unsafe","output_too_large","source_size_limit","source_pixel_limit","unsupported_job_mode","vehicle_mask_empty","vehicle_mask_invalid","vehicle_placement_overflows","wheel_contact_uncertain","wheel_detection_low_confidence","wheel_contact_misaligned","wheel_contact_unreliable","wheel_ground_plane_unreliable","wheel_contact_not_on_floor","silhouette_below_floor","showroom_reference_unexpected_size","missing_official_carvelo_logo","source_camera_pose_missing","showroom_view_angle_mismatch","showroom_views_not_configured","showroom_view_missing","showroom_view_contains_vehicle","showroom_view_path_unsafe"}
         code=str(exc) if isinstance(exc,ValueError) and str(exc) in safe_value_errors else type(exc).__name__
-        print("CARVELO worker job failed",job_id,code,flush=True)
+        print("CARVAMO worker job failed",job_id,code,flush=True)
         rpc(conn,"select public.cv_ai_fail(%s,%s,%s)",(job_id,run_id,code))
         conn.commit()
     return True
 
 def main():
-    if not all((DATABASE_URL,SUPABASE_URL,SERVICE_KEY)):
-        raise RuntimeError("Missing CARVELO worker host secrets")
+    if STORAGE_BACKEND not in ("supabase", "ovh_s3"):
+        raise RuntimeError("Unsupported storage backend")
+    if STORAGE_BACKEND == "ovh_s3":
+        ovh_storage()
+    if not DATABASE_URL or (STORAGE_BACKEND == "supabase" and not all((SUPABASE_URL,SERVICE_KEY))):
+        raise RuntimeError("Missing CARVAMO worker host secrets")
     if not SCENE.is_file() or not LOGO.is_file():
         raise RuntimeError("Approved showroom/logo missing")
-    print("CARVELO persistent worker listening",flush=True)
+    print("CARVAMO persistent worker listening",flush=True)
     while True:
         try:
             with psycopg.connect(DATABASE_URL,connect_timeout=20) as conn:
@@ -205,7 +238,7 @@ def main():
                 category = "pool_exhausted"
             else:
                 category = "unclassified"
-            print("CARVELO worker DB reconnect",type(exc).__name__,
+            print("CARVAMO worker DB reconnect",type(exc).__name__,
                   "category="+category,"sqlstate="+str(getattr(exc,"sqlstate",None)),
                   flush=True)
             time.sleep(min(POLL_SECONDS*4,30))
