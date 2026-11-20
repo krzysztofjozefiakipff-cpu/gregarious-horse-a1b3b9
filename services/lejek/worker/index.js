@@ -303,7 +303,7 @@ async function handle(request, env, buildDailyReport=false) {
       if (!response.ok) throw new Error('Nie udało się odczytać planów salonu.');
       salonPlans=(await response.json()).months[0].plans;
     }
-    return buildDailyBriefing(db,{today,sellerTargets,salonPlans,sellers:seller?[seller]:sellers,
+    return buildDailyBriefing(db,{today,sellerTargets,salonPlans,managerId:user.id,sellers:seller?[seller]:sellers,
       salons:seller?[{salon:seller.salon}]:salons,scope:seller?'person=?':scope,params:seller?[seller.id]:params});
   };
   if (path==='/api/daily-briefing'&&request.method==='GET') {
@@ -673,8 +673,10 @@ async function handle(request, env, buildDailyReport=false) {
   if (path==='/api/daily-briefing') {
     const {person,day,action,actual,goals,forecast,rows,previousRows}=body;
     const today=localDay();
-    const seller=sellers.find(row=>row.id===person&&row.planEligible&&row.accountStatus!=='inactive');
-    if (role!=='manager'||!seller) return json({error:'Brak uprawnień do odprawy tego handlowca.'},403);
+    const seller=sellers.find(row=>row.id===person&&row.accountStatus!=='inactive');
+    const ownForecast=person===user.id&&action==='save';
+    if (role!=='manager'||!seller||(!seller.planEligible&&!ownForecast))
+      return json({error:'Brak uprawnień do odprawy tego handlowca.'},403);
     if (day!==today) return json({error:'Data odprawy się zmieniła. Odśwież panel.'},409);
     const briefing=await loadBriefing(today,seller);
     const current=briefing.salons[0].people[0];
@@ -711,12 +713,14 @@ async function handle(request, env, buildDailyReport=false) {
     } else if (action==='save') {
       const valid=(values,length)=>Array.isArray(values)&&values.length===length&&values.every(value=>value===null||countValid(value));
       if (!valid(goals,10)||!valid(forecast,4)) return json({error:'Wpisz liczby całkowite od 0 albo pozostaw pole puste.'},400);
+      if (ownForecast&&goals.some(value=>value!==null))
+        return json({error:'W swoim wierszu możesz zmienić prognozę wykonania.'},403);
       if (!current.workday&&goals.some(value=>value!==null))
         return json({error:'Handlowiec ma dziś dzień wolny. Możesz zapisać prognozę.'},409);
       await db.prepare(`INSERT INTO daily_briefing_settings VALUES (?,?,?,?,?,?,?)
         ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,goals=excluded.goals,
           forecast=excluded.forecast,baseline=excluded.baseline,updated_at=excluded.updated_at`)
-        .bind(person,today,user.id,JSON.stringify(goals),JSON.stringify(forecast),JSON.stringify(current.actual),timestamp).run();
+        .bind(person,today,user.id,JSON.stringify(ownForecast?current.correction:goals),JSON.stringify(forecast),JSON.stringify(current.actual),timestamp).run();
     } else return json({error:'Wybierz działanie odprawy.'},400);
     return json({ok:true});
   }

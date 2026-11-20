@@ -19,7 +19,7 @@ function briefingRemainingPlan(targets,past,days,today,todayGoals) {
   });
 }
 
-async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTargets,salonPlans}) {
+async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTargets,salonPlans,managerId}) {
   const yesterday=new Date(Date.parse(today)-86400000).toISOString().slice(0,10);
   const month=today.slice(0,7), reviewMonth=yesterday.slice(0,7);
   const months=month===reviewMonth?[month]:[reviewMonth,month];
@@ -93,7 +93,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       });
       const forecast=briefingSalesIndexes.map((i,slot)=>remaining&&!archived&&manual[slot]!=null
         ?Math.max(0,manual[slot]-Math.max(0,actuals[i]-baseline[slot])):automaticForecast[slot]);
-      return [{id,name,archived,editable,workday:days.includes(today),todayGoals,correction,
+      return [{id,name,archived,editable,ownForecast:!archived&&id===managerId,workday:days.includes(today),todayGoals,correction,
         remainingPlan:editable?briefingRemainingPlan(sales,past,days,today,todayGoals):[],
         review:{status:previousStatus,actual:previousStatus==='recorded'?previousActual:null,goals:previousGoals,
           rows:editable&&reviewDays.includes(yesterday)&&validDailyRows(yesterdayMatrix)?yesterdayMatrix:null,
