@@ -7,6 +7,18 @@ function briefingGoalValues(targets,actuals,days,day,correction=[]) {
   return targets.map((target,i)=>correction?.[i]??dailyTarget(target,actuals[i],remaining,true));
 }
 
+function briefingRemainingPlan(targets,past,days,today,todayGoals) {
+  const remaining=targets.map((target,i)=>target==null?null:Math.max(0,target-past[i]));
+  const dates=days.filter(day=>day>=today);
+  return dates.map((day,index)=>{
+    const goals=remaining.map((left,i)=>day===today?todayGoals[i]:dailyTarget(left,0,dates.length-index,true));
+    goals.forEach((goal,i)=>{
+      if (remaining[i]!=null) remaining[i]=Math.max(0,remaining[i]-(goal??0));
+    });
+    return {day,goals};
+  });
+}
+
 async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTargets,salonPlans}) {
   const yesterday=new Date(Date.parse(today)-86400000).toISOString().slice(0,10);
   const month=today.slice(0,7), reviewMonth=yesterday.slice(0,7);
@@ -58,6 +70,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const yesterdaySettings=personSettings.find(row=>row.day===yesterday);
       const forecastSettings=personSettings.find(row=>row.day.startsWith(month));
       const yesterdayRow=rows.find(row=>row.day===yesterday);
+      const yesterdayMatrix=yesterdayRow&&JSON.parse(yesterdayRow.counters)[5];
       const previousActual=summarizeReportRows(yesterdayRow?[yesterdayRow]:[]).actuals;
       const previousStatus=yesterdayRow||dates.some(row=>row.day===yesterday&&row.kind==='zero')?'recorded'
         :reviewDays.includes(yesterday)?'missing':'off';
@@ -80,7 +93,9 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
         return Math.max(0,Math.round(past[i]*remaining/elapsed)-(actuals[i]-past[i]));
       });
       return [{id,name,archived,editable,workday:days.includes(today),todayGoals,correction,
+        remainingPlan:editable?briefingRemainingPlan(sales,past,days,today,todayGoals):[],
         review:{status:previousStatus,actual:previousStatus==='recorded'?previousActual:null,goals:previousGoals,
+          rows:editable&&reviewDays.includes(yesterday)&&validDailyRows(yesterdayMatrix)?yesterdayMatrix:null,
           confirmed:matched?{by:review.manager_name,at:review.reviewed_at}:null,stale:Boolean(review&&!matched)},
         actual:briefingSalesIndexes.map(i=>actuals[i]),plan:briefingSalesIndexes.map(i=>sales[i]),
         forecast,manual:forecast.map((value,i)=>!archived&&remaining&&manual[i]!=null?value:null)}];
