@@ -2,6 +2,7 @@ const briefingHost=document.querySelector('#daily-briefing');
 const briefingResults=briefingHost.querySelector('#briefing-results');
 const briefingStatus=briefingHost.querySelector('#briefing-status');
 const briefingPdf=briefingHost.querySelector('#briefing-pdf');
+const briefingSalon=briefingHost.querySelector('#briefing-salon');
 const briefingSalesLabels=['Zamówienia','Faktury','Rejestracje','Opinie Google'];
 let briefingLoadVersion=0;
 let briefingReady=false;
@@ -86,10 +87,10 @@ function briefingResultCorrection(person,report) {
   return editor;
 }
 
-function renderBriefingSeller(person,report,open) {
+function renderBriefingSeller(person,report,open,salon) {
   const details=reportElement('details');
   details.dataset.seller=person.id;
-  details.setAttribute('name','briefing-seller');
+  details.setAttribute('name','briefing-seller-'+salon);
   details.open=open;
   const review=person.review;
   const summary=reportElement('summary',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':''));
@@ -195,23 +196,31 @@ async function loadBriefingPanel(message='') {
   briefingReady=false;
   briefingPdf.disabled=true;
   briefingStatus.textContent='Wczytywanie odprawy…';
-  const open=briefingResults.querySelector('details[open]')?.dataset.seller;
+  const open=new Set([...briefingResults.querySelectorAll('details[data-seller][open]')].map(row=>row.dataset.seller));
   try {
     const report=await api('/api/daily-briefing');
     if (version!==briefingLoadVersion||briefingHost.hidden) return;
     briefingHost.querySelector('#briefing-dates').textContent='Odprawa '+dateLabel(report.today)+' · Wykonanie do '+dateLabel(report.today);
+    const previous=briefingSalon.selectedIndex<0?null:briefingSalon.value;
+    const salons=report.salons.map(row=>row.salon);
+    briefingSalon.replaceChildren(...salons.map(salon=>new Option(salon,salon)));
+    if (salons.length>1) briefingSalon.add(new Option('Wszystkie salony',''));
+    briefingSalon.value=previous===''&&salons.length>1||salons.includes(previous)?previous:salons[0]??'';
+    briefingHost.querySelector('#briefing-salon-filter').hidden=salons.length<2;
     briefingResults.replaceChildren();
     for (const salon of report.salons) {
       const card=reportElement('article');
+      card.dataset.salon=salon.salon;
       card.append(reportElement('h2',salon.salon),
         briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
           briefingSalesLabels.map((label,i)=>[label,salon.actual[i],salon.plan[i],
             salon.forecast[i]==null?null:salon.forecast[i]+(salon.missing[i]?' (częściowa)':''),
             salon.missing[i]?null:briefingEnd(salon.actual[i],salon.forecast[i])])));
       if (!salon.people.length) card.append(reportElement('p','Brak handlowców do odprawy.'));
-      for (const person of salon.people) card.append(renderBriefingSeller(person,report,open===String(person.id)));
+      for (const person of salon.people) card.append(renderBriefingSeller(person,report,open.has(String(person.id)),salon.salon));
       briefingResults.append(card);
     }
+    filterBriefingSalons();
     briefingReady=Boolean(report.salons.length);
     briefingPdf.disabled=!briefingReady||briefingDownloading;
     briefingStatus.textContent=message||'Prognoza automatyczna korzysta z tempa z zakończonych dni pracy i aktualnego wykonania.';
@@ -220,12 +229,19 @@ async function loadBriefingPanel(message='') {
   }
 }
 
+function filterBriefingSalons() {
+  const selected=briefingSalon.value;
+  for (const card of briefingResults.children) card.hidden=Boolean(selected&&card.dataset.salon!==selected);
+}
+
+briefingSalon.onchange=filterBriefingSalons;
 briefingHost.querySelector('#briefing-refresh').onclick=()=>loadBriefingPanel();
 briefingPdf.onclick=async()=>{
   if (!briefingReady||briefingDownloading) return;
   briefingDownloading=briefingPdf.disabled=true;
   try {
     const query=new URLSearchParams({format:'pdf',role:data.role});
+    if (briefingSalon.value) query.set('salon',briefingSalon.value);
     if (previewTarget) query.set('podglad',previewTarget);
     const response=await fetch('/api/daily-briefing?'+query,{cache:'no-store'});
     if (!response.ok) throw Error((await response.json().catch(()=>null))?.error||'Nie udało się pobrać raportu.');

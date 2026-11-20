@@ -211,10 +211,10 @@ async function downloadReportPdf(response,url) {
       child.on('close',code=>code===0?resolve(Buffer.concat(chunks)):reject(new Error('Błąd generatora PDF')));
       child.stdin.end(JSON.stringify(report));
     });
-    const slug=daily?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
+    const slug=daily||report.type==='briefing'&&selected.size===1?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
       .replace(/[^\p{ASCII}]/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100):'';
     const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'salon')+'-'+report.reportDay
-      :report.type==='briefing'?'bieg-wyzej-realizacja-i-prognoza-'+report.today:'bieg-wyzej-'+report.type+'-'+report.month;
+      :report.type==='briefing'?'bieg-wyzej-realizacja-i-prognoza-'+(slug?slug+'-':'')+report.today:'bieg-wyzej-'+report.type+'-'+report.month;
     return reply(pdf,200,{'Content-Type':'application/pdf',
       'Content-Disposition':'attachment; filename="'+filename+'.pdf"',
       ...(daily?{'X-Lejek-Report-Layout':'daily-plans'}:{})});
