@@ -303,7 +303,6 @@ async function handle(request) {
       }
       const session=await identity.authenticate(email,password);
       if (!session) return render('Sprawdź e-mail i hasło.',401);
-      await worker.recordReportEvent(DB,email,'login');
       return redirect('/daily.html',{'Set-Cookie':cookie+'='+session+cookieOptions+'; Max-Age=28800'});
     }
     const result=await accountsPost('/api/auth/login',{email,password});

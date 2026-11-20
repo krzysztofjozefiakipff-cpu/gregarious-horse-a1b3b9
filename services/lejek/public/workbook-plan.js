@@ -83,6 +83,11 @@ function effectiveCalendarTarget(target,adjustment) {
   return Math.round(target*Math.max(0,adjustment.workdays-adjustment.absentDays)/adjustment.workdays);
 }
 
+function dailyTarget(monthTarget,doneBeforeToday,daysLeft,isWorkday) {
+  if (monthTarget==null) return null;
+  return isWorkday?Math.ceil(Math.max(0,monthTarget-doneBeforeToday)/Math.max(1,daysLeft)):0;
+}
+
 function effectiveSourcePlan(rows,adjustment) {
   if (!adjustment) return rows;
   const columns=rows[0].map((_,index)=>{

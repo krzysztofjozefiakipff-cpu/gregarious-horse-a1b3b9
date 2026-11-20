@@ -307,11 +307,17 @@ async function handle(request, env, buildDailyReport=false) {
     if (type==='daily'&&!buildDailyReport) {
       const snapshot=await db.prepare('SELECT payload FROM management_daily_reports WHERE email=? AND role=? AND day=?')
         .bind(email,role,reportDay).first();
-      if (!snapshot) return json({error:reportDay===today&&reportClock().time<'11:00:00'
-        ?'Dzisiejszy raport będzie dostępny po 11:00.':'Brak zapisanego raportu dla tej daty.'},404);
+      if (!snapshot) return json({error:reportDay===today&&reportClock().time<dailyReportTime
+        ?'Dzisiejszy raport będzie dostępny od 8:00.':'Brak zapisanego raportu dla tej daty.'},404);
       const report=JSON.parse(snapshot.payload);
       report.salons=report.salons.filter(row=>managedSalons.has(row.salon))
         .map(row=>row.actions?row:completeDailySalon(row,report.month,report.through));
+      for (const salon of report.salons) for (const {check} of salon.people) {
+        if (!check) continue;
+        delete check.login;
+        delete check.read;
+        delete check.readExpected;
+      }
       return json(report);
     }
     const through=type==='daily'?new Date(Date.parse(reportDay)-86400000).toISOString().slice(0,10)
@@ -328,7 +334,10 @@ async function handle(request, env, buildDailyReport=false) {
     if (type==='daily') {
       report.generatedAt=new Date().toISOString();
       report.reportDay=reportDay;
-      await db.prepare('INSERT INTO management_daily_reports VALUES (?,?,?,?) ON CONFLICT DO NOTHING')
+      report.dailyGoalsDate=reportDay;
+      await db.prepare(`INSERT INTO management_daily_reports VALUES (?,?,?,?)
+        ON CONFLICT(email,role,day) DO UPDATE SET payload=excluded.payload
+        WHERE json_extract(management_daily_reports.payload,'$.dailyGoalsDate') IS NULL`)
         .bind(email,role,reportDay,JSON.stringify(report)).run();
     }
     return json(report);
@@ -1283,7 +1292,7 @@ async function handle(request, env, buildDailyReport=false) {
   return json({error:'Brak uprawnień do tej operacji.'},403);
 }
 
-export default {reportClock,recordReportEvent,generateDailyReports,async fetch(request, env) {
+export default {reportClock,generateDailyReports,async fetch(request, env) {
   try {return await handle(request,env);}
   catch (error) {console.error(error.message);return json({error:'Nie udało się obsłużyć żądania. Spróbuj ponownie.'},500);}
 }};
