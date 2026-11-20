@@ -25,6 +25,7 @@ BLUE = colors.HexColor('#214fd6')
 RULE = colors.HexColor('#dbe4f1')
 LIGHT = colors.HexColor('#edf3ff')
 GREEN = colors.HexColor('#14745b')
+RED = colors.HexColor('#9a3025')
 WIDTH = A4[0] - 76
 
 TITLES = {'monthly': 'Podsumowanie miesiąca', 'daily': 'Raport dzienny', 'marketing': 'Raport dla marketingu'}
@@ -43,7 +44,9 @@ STYLES = {
     'body': ParagraphStyle('body', fontName='DejaVu', fontSize=9, leading=14, textColor=INK, spaceAfter=7),
     'hint': ParagraphStyle('hint', fontName='DejaVu', fontSize=8, leading=12, textColor=MUTED, spaceAfter=8),
     'cell': ParagraphStyle('cell', fontName='DejaVu', fontSize=8, leading=11, textColor=INK, splitLongWords=True),
+    'total': ParagraphStyle('total', fontName='DejaVuBold', fontSize=8, leading=11, textColor=INK),
     'header': ParagraphStyle('header', fontName='DejaVuBold', fontSize=8, leading=11, textColor=colors.white),
+    'action': ParagraphStyle('action', fontName='DejaVuBold', fontSize=9, leading=13, textColor=BLUE, spaceAfter=2),
 }
 
 
@@ -67,7 +70,9 @@ def date_text(value):
 
 def table(headers, rows, fractions=None):
     widths = [WIDTH * fraction for fraction in fractions] if fractions else [WIDTH / len(headers)] * len(headers)
-    cells = [[p(label, 'header') for label in headers]] + [[p(value, 'cell') for value in row] for row in rows]
+    cells = [[p(label, 'header') for label in headers]] + [
+        [value if isinstance(value, Paragraph) else p(value, 'cell') for value in row] for row in rows
+    ]
     grid = LongTable(cells, colWidths=widths, repeatRows=1, hAlign='LEFT')
     grid.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), INK),
@@ -103,14 +108,14 @@ def bars(rows, scale, paint=BLUE, goal_marker=False):
     return chart
 
 
-def activities(actuals, targets, expected=None):
+def activities(actuals, targets, expected=None, indexes=range(len(METRICS))):
     headers = ['Aktywność', 'Wynik', 'Plan', 'Realizacja']
     if expected is not None:
         headers.append('Plan do daty')
-    rows = [[label, number(actuals[i]), number(targets[i]), percent(actuals[i], targets[i])]
-            for i, label in enumerate(METRICS)]
+    rows = [[METRICS[i], number(actuals[i]), number(targets[i]), percent(actuals[i], targets[i])]
+            for i in indexes]
     if expected is not None:
-        for i, row in enumerate(rows):
+        for i, row in zip(indexes, rows):
             row.append(number(expected[i]))
     widths = [.38, .15, .15, .16, .16] if expected is not None else [.46, .18, .18, .18]
     return table(headers, rows, widths)
@@ -118,13 +123,8 @@ def activities(actuals, targets, expected=None):
 
 def daily_details(person):
     check = person['check']
-    weakest = person.get('weakest')
-    issue = (f"{METRICS[weakest['index']]}: brakuje {number(weakest['gap'])} do tempa"
-             if weakest else 'Aktywności w tempie lub powyżej' if any((v or 0) > 0 for v in person['expected'])
-             else 'Brak celu do oceny')
     yes_no = lambda value: 'Tak' if value else 'Nie'
     rows = [
-        ('Największa trudność', issue),
         ('Logowanie do 11:00', yes_no(check['login'])),
         ('Wyświetlenie zadań do 11:00', yes_no(check['read']) if check['readExpected'] else 'Dzień wolny'),
         ('Rozliczenie dni pracy', f"{check['approved'] + check['zero']} z {check['required']} dni"
@@ -136,30 +136,72 @@ def daily_details(person):
     return table(['Sprawdzenie', 'Wynik'], rows, [.41, .59])
 
 
-def operational_report(salon, daily):
+def sales_progress(salon):
     actuals, targets = salon['totals'], salon['targets']
     progress = [(METRICS[i], actuals[i] / targets[i] if targets[i] else 0,
                  f'{number(actuals[i])} / {number(targets[i])}') for i in SALES]
-    story = [
-        KeepTogether([p('Wynik i plan salonu', 'section'), bars(progress, max(1, *(row[1] for row in progress)), goal_marker=True)]),
-        Spacer(1, 10), activities(actuals, targets),
+    return KeepTogether([p('Wynik i plan salonu', 'section'),
+                         bars(progress, max(1, *(row[1] for row in progress)), goal_marker=True)])
+
+
+def daily_sales_cell(actual, target, expected):
+    value = f'{number(actual)} / {number(target)}'
+    status = None
+    if target and actual >= target:
+        status = ('Wykonany', GREEN)
+    elif target and expected and actual + 1e-9 < expected:
+        status = ('Poniżej tempa', RED)
+    elif target and expected:
+        status = ('W tempie', GREEN)
+    if status:
+        label, tone = status
+        value += f'<br/><font color="{tone.hexval()}" size="7">{label}</font>'
+    return Paragraph(value, STYLES['cell'])
+
+
+def daily_report(salon, closed):
+    people = [('Razem salon', salon['totals'], salon['targets'], salon['expected'])] + [
+        (person['name'] + (' · archiwum' if person['archived'] else ''),
+         person['actuals'], person['targets'], person['expected']) for person in salon['people']
     ]
-    if daily:
-        checks = [person['check'] for person in salon['people'] if person.get('check')]
-        days = [(label, sum(len(check[key]) if isinstance(check[key], list) else check[key]
-                            for check in checks))
-                for label, key in [('Zatwierdzone', 'approved'), ('Bez aktywności', 'zero'),
-                                   ('Robocze', 'drafts'), ('Oczekujące', 'pending'), ('Brakujące', 'missing')]]
-        story.append(KeepTogether([p('Status dni pracy zespołu', 'section'),
-                                  bars([(label, count, number(count)) for label, count in days],
-                                       max(1, *(count for _, count in days)), GREEN)]))
+    summary = table(['Wynik / plan', 'Zamówienia', 'Faktury', 'Rejestracje', 'Opinie Google'], [
+        [p(name, 'total' if row == 0 else 'cell')] + [daily_sales_cell(actual[i], target[i], expected[i]) for i in SALES]
+        for row, (name, actual, target, expected) in enumerate(people)
+    ], [.28, .18, .18, .18, .18])
+    summary.setStyle(TableStyle([('BACKGROUND', (0, 1), (-1, 1), LIGHT)]))
+    story = [p('Realizacja planów', 'section'), summary,
+             p('Co poprawić w kolejnym miesiącu' if closed else 'Co zrobić, żeby dowieźć plan', 'section')]
+    if salon['actions']:
+        for i, action in enumerate(salon['actions'], 1):
+            story.append(KeepTogether([
+                p(f"{i}. {action['title']}", 'action'),
+                p(action['evidence'], 'hint'),
+                p(action['instruction']),
+            ]))
+    else:
+        story.append(p('Zapisane wyniki są zgodne z tempem dla ustawionych celów. Utrzymaj obecny rytm pracy.'
+                       if any((goal or 0) > 0 for goal in salon['expected'])
+                       else 'Ustaw cele salonu i zespołu, aby wyznaczyć tempo i wskazać luki.'))
+    story.extend([sales_progress(salon), p('Aktywności i rozliczenie dni pracy', 'section'),
+                  activities(salon['totals'], salon['targets'], salon['expected'], range(6))])
     for person in salon['people']:
         caption = person['name'] + (' · archiwum' if person['archived'] else '')
-        expected = person['expected'] if daily else None
-        story.append(p(caption, 'section'))
-        if daily and person.get('check'):
-            story.extend([daily_details(person), Spacer(1, 6)])
-        story.append(activities(person['actuals'], person['targets'], expected))
+        story.extend([p(caption, 'section'),
+                      activities(person['actuals'], person['targets'], person['expected'], range(6))])
+        if person.get('check'):
+            story.extend([Spacer(1, 6), daily_details(person)])
+    return story
+
+
+def operational_report(salon):
+    actuals, targets = salon['totals'], salon['targets']
+    story = [
+        sales_progress(salon),
+        Spacer(1, 10), activities(actuals, targets),
+    ]
+    for person in salon['people']:
+        caption = person['name'] + (' · archiwum' if person['archived'] else '')
+        story.extend([p(caption, 'section'), activities(person['actuals'], person['targets'])])
     return story
 
 
@@ -224,7 +266,12 @@ def render(report, output):
         if index:
             story.append(PageBreak())
         story.append(p(salon['salon'], 'salon'))
-        story.extend(marketing_report(salon) if kind == 'marketing' else operational_report(salon, kind == 'daily'))
+        if kind == 'daily':
+            story.extend(daily_report(salon, report['reportDay'][:7] > report['month']))
+        elif kind == 'marketing':
+            story.extend(marketing_report(salon))
+        else:
+            story.extend(operational_report(salon))
     doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
 
 

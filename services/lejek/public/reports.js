@@ -107,6 +107,78 @@ function reportDailyChecks(check) {
   ];
 }
 
+const dailyReportSales=[6,7,8,9];
+
+function dailySalesTable(salon) {
+  const people=[{name:'Razem salon',actuals:salon.totals,targets:salon.targets,expected:salon.expected},...salon.people];
+  const summary=reportTable(['Wynik / plan','Zamówienia','Faktury','Rejestracje','Opinie Google'],
+    people.map(person=>[person.name+(person.archived?' · archiwum':''),...dailyReportSales.map(index=>{
+      const target=person.targets[index];
+      return reportNumber.format(person.actuals[index])+' / '+(target==null?'—':reportNumber.format(target));
+    })]));
+  summary.classList.add('daily-sales-report');
+  for (const [row,person] of people.entries()) {
+    for (const [column,index] of dailyReportSales.entries()) {
+      const target=person.targets[index];
+      const actual=person.actuals[index];
+      const expected=person.expected[index];
+      if (target==null||target<=0) continue;
+      const behind=expected>actual+1e-9;
+      const status=actual>=target?'Wykonany':behind?'Poniżej tempa':expected>0?'W tempie':'';
+      if (!status) continue;
+      const marker=reportElement('span',status);
+      marker.className=behind?'daily-report-behind':'daily-report-ahead';
+      summary.querySelector('tbody').rows[row].cells[column+1].append(marker);
+    }
+  }
+  return summary;
+}
+
+function renderDailyManagementSalon(card,salon,csv,closed) {
+  card.append(reportElement('h3','Realizacja planów'),dailySalesTable(salon));
+  const teamMetrics=reportMetrics(salon.totals,salon.targets,salon.expected);
+  const peopleMetrics=salon.people.map(person=>reportMetrics(person.actuals,person.targets,person.expected));
+  for (const index of dailyReportSales) {
+    csv.push([salon.salon,'Razem',...teamMetrics[index]],...salon.people.map((person,row)=>
+      [salon.salon,person.name,...peopleMetrics[row][index]]));
+  }
+
+  card.append(reportElement('h3',closed?'Co poprawić w kolejnym miesiącu':'Co zrobić, żeby dowieźć plan'));
+  const actions=reportElement('ol');
+  actions.className='daily-report-actions';
+  for (const {title,evidence,instruction} of salon.actions) {
+    const item=reportElement('li');
+    item.append(reportElement('strong',title),reportElement('span',evidence),reportElement('p',instruction));
+    actions.append(item);
+    csv.push([salon.salon,'Razem',title,evidence,instruction]);
+  }
+  if (!salon.actions.length) {
+    card.append(reportElement('p',salon.expected.some(goal=>goal>0)
+      ?'Zapisane wyniki są zgodne z tempem dla ustawionych celów. Utrzymaj obecny rytm pracy.'
+      :'Ustaw cele salonu i zespołu, aby wyznaczyć tempo i wskazać luki.'));
+  } else card.append(actions);
+
+  const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'];
+  const activities=reportElement('details');
+  activities.append(reportElement('summary','Aktywności i rozliczenie dni pracy'),
+    reportTable(headers,teamMetrics.slice(0,6)));
+  csv.push(...teamMetrics.slice(0,6).map(row=>[salon.salon,'Razem',...row]));
+  for (const [index,person] of salon.people.entries()) {
+    const details=reportElement('details');
+    const name=person.name+(person.archived?' · archiwum':'');
+    const metrics=peopleMetrics[index].slice(0,6);
+    details.append(reportElement('summary',name),reportTable(headers,metrics));
+    csv.push(...metrics.map(row=>[salon.salon,name,...row]));
+    if (person.check) {
+      const checks=reportDailyChecks(person.check);
+      details.append(reportTable(['Sprawdzenie','Wynik'],checks));
+      csv.push(...checks.map(row=>[salon.salon,name,...row]));
+    }
+    activities.append(details);
+  }
+  card.append(activities);
+}
+
 function renderManagementReport(report,selected) {
   const daily=report.type==='daily';
   const marketing=report.type==='marketing';
@@ -129,8 +201,10 @@ function renderManagementReport(report,selected) {
         csv.push(...salon.recommendations.map(row=>[salon.salon,'Rekomendacja',row.seller,sources[row.source],
           row.leads,row.orders,reportPercent.format(row.orders/row.leads),row.extra,row.basis==='next'?'Plan kolejnego miesiąca':'Plan raportowanego miesiąca']));
       } else card.append(reportElement('p','Brak źródeł spełniających warunki rekomendacji dla handlowców w tym salonie.'));
+    } else if (daily) {
+      renderDailyManagementSalon(card,salon,csv,report.reportDay?.slice(0,7)>report.month);
     } else {
-      const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja',...(daily?['Plan do daty']:[])];
+      const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja'];
       const metrics=reportMetrics(salon.totals,salon.targets);
       card.append(reportTable(headers,metrics.map(row=>row.slice(0,headers.length))));
       csv.push(...metrics.map(row=>[salon.salon,'Razem',...row]));
@@ -140,14 +214,6 @@ function renderManagementReport(report,selected) {
         const personnelMetrics=reportMetrics(person.actuals,person.targets,person.expected);
         details.append(reportElement('summary',name),reportTable(headers,personnelMetrics.map(row=>row.slice(0,headers.length))));
         csv.push(...personnelMetrics.map(row=>[salon.salon,name,...row]));
-        if (daily&&!person.archived) {
-          const check=reportDailyChecks(person.check);
-          const weakest=person.weakest?columns[person.weakest.index][1]+' · brakuje '+person.weakest.gap+' do tempa'
-            :person.expected.some(goal=>goal>0)?'Aktywności w tempie lub powyżej.':'Brak celu do oceny.';
-          details.append(reportElement('p','Największa trudność · '+weakest),reportTable(['Sprawdzenie','Wynik'],check));
-          csv.push([salon.salon,name,'Największa trudność',weakest],...check.map(row=>[salon.salon,name,...row]));
-          details.open=true;
-        }
         card.append(details);
       }
     }

@@ -1,5 +1,18 @@
 const reportCounterIndexes=[0,1,2,4,5,6,7,10,8,9];
 const reportSalesIndexes=[6,8,7,9];
+const dailyActionMetrics=[
+  ['Dopływ leadów','Porównaj liczbę zapytań w CRM z planem, sprawdź działanie formularzy i przydziel nowe leady osobom, które mają czas na kontakt.'],
+  ['Próby kontaktu','Przejrzyj z zespołem leady bez odpowiedzi. Przydziel oddzwonienia i ustal termin kolejnej próby dla każdego klienta.'],
+  ['Spotkania','Wybierz klientów po pierwszej rozmowie i przydziel handlowcom konkretne terminy spotkań do zaproponowania.'],
+  ['Jazdy próbne','Zarezerwuj auta demonstracyjne i poproś handlowców o umówienie jazd z aktywnymi klientami.'],
+  ['Oferty','Przejrzyj otwarte szanse po spotkaniach i ustal, kto i do kiedy wyśle ofertę każdemu klientowi.'],
+  ['Follow-up','Przejrzyj oferty bez odpowiedzi. Przypisz właściciela i termin kolejnego kontaktu, zacznij od klientów bliskich decyzji.'],
+  ['Zamówienia','Przejrzyj z handlowcami transakcje bliskie podpisu. Przy każdej ustal przeszkodę, osobę odpowiedzialną i termin domknięcia.'],
+  ['Faktury','Zestaw podpisane zamówienia z planem wydań. Usuń blokady w finansowaniu, płatnościach i dokumentach do faktury.'],
+  ['Rejestracje','Sprawdź terminy wydań i komplet dokumentów. Przypisz uzupełnienie każdego braku i zarezerwuj terminy rejestracji.'],
+  ['Opinie Google','Przejrzyj ostatnie wydania i poproś handlowców o wysłanie klientom linku do opinii po odbiorze auta.']
+];
+const dailyDigitalSources=[[1,'Facebook'],[2,'Strona WWW'],[4,'OTOMOTO']];
 const reportClockFormatter=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',dateStyle:'short',timeStyle:'medium'});
 
 function reportClock(now=new Date()) {
@@ -49,6 +62,73 @@ const reportWorkMonths=new Map();
 function reportWorkdays(month) {
   if (!reportWorkMonths.has(month)) reportWorkMonths.set(month,calendarMonthDays(month).filter(isSalonWorkday));
   return reportWorkMonths.get(month);
+}
+
+function reportPaceGap(expected,actual) {
+  return Math.max(0,Math.ceil((expected??0)-actual-1e-9));
+}
+
+function dailyLeadAction(sourceGoals) {
+  const candidates=dailyDigitalSources.flatMap(([source,label])=>{
+    const plan=sourceGoals?.[source];
+    if (!plan?.expected) return [];
+    const {actualLeads:leads,actualOrders:orders}=plan;
+    const gap=reportPaceGap(plan.expected,leads);
+    if (!gap) return [];
+    const adequate=leads>=20&&orders<=leads&&orders/leads>=plan.rate;
+    return [{label,gap,leads,orders,adequate}];
+  }).sort((a,b)=>Number(b.adequate)-Number(a.adequate)||b.gap-a.gap);
+  const source=candidates[0];
+  if (!source) return null;
+  const {label,gap,leads,orders,adequate}=source;
+  return {
+    evidence:label+' · wśród handlowców z planem dla tego źródła brakuje '+gap+' leadów do tempa. Wynik '+orders+' zam. / '+leads+' leadów od początku miesiąca.',
+    instruction:adequate
+      ?'Uzgodnij z marketingiem uzupełnienie luki w źródle „'+label+'” i przydziel nowe zapytania handlowcom, którzy mogą je obsłużyć.'
+      :'Sprawdź z marketingiem jakość zapytań i z handlowcami ich obsługę w źródle „'+label+'”. Zwiększenie dopływu zaplanuj po weryfikacji konwersji.'
+  };
+}
+
+function completeDailySalon(salon,month,through,sourceGoals) {
+  const days=reportWorkdays(month);
+  const elapsed=days.filter(day=>day<=through).length;
+  const remaining=days.length-elapsed;
+  const expected=salon.targets.map((target,index)=>{
+    if (target==null) return null;
+    if (reportSalesIndexes.includes(index)) return days.length?target*elapsed/days.length:0;
+    return salon.people.reduce((sum,person)=>sum+(person.expected[index]??0),0);
+  });
+  const open=salon.people.flatMap(({name,check})=>{
+    const count=check?check.missing.length+check.drafts.length+check.pending.length:0;
+    return count?[{name,count}]:[];
+  }).sort((a,b)=>b.count-a.count);
+  const actions=[];
+  if (open.length) actions.push({title:'Uzupełnij brakujące dane',
+    evidence:open.reduce((sum,row)=>sum+row.count,0)+' nierozliczonych dni pracy w zespole. '+open.slice(0,3).map(row=>row.name+' ('+row.count+')').join(', ')+'.',
+    instruction:'Poproś o zapisanie i zatwierdzenie zaległych aktywności. Rozpatrz oczekujące zgłoszenia w kalendarzu przed oceną wyników.'});
+  const gaps=expected.map((goal,index)=>({index,gap:reportPaceGap(goal,salon.totals[index]),
+    ratio:goal>0?salon.totals[index]/goal:1})).filter(row=>row.gap>0);
+  const funnel=gaps.filter(row=>!reportSalesIndexes.includes(row.index)).sort((a,b)=>a.ratio-b.ratio||b.gap-a.gap);
+  const priorities=[...funnel.slice(0,2),...gaps.filter(row=>reportSalesIndexes.includes(row.index))];
+  for (const {index,gap} of priorities) {
+    const [title,instruction]=dailyActionMetrics[index];
+    const sourceAction=index===0?dailyLeadAction(sourceGoals):null;
+    const owners=salon.people.filter(person=>!person.archived).map(person=>({
+      name:person.name,gap:reportPaceGap(person.expected[index],person.actuals[index])
+    })).filter(person=>person.gap).sort((a,b)=>b.gap-a.gap).slice(0,3);
+    const toClose=remaining&&reportSalesIndexes.includes(index)?salon.targets[index]-salon.totals[index]:0;
+    const evidence='Brakuje '+gap+' do tempa salonu.'
+      +(toClose>0?' Do celu miesięcznego pozostało '+toClose+' w '+remaining+' dni pracy.':'')
+      +(owners.length?' Największe luki: '+owners.map(row=>row.name+' ('+row.gap+')').join(', ')+'.':'');
+    actions.push({title,evidence:evidence+(sourceAction?' '+sourceAction.evidence:''),instruction:sourceAction?.instruction??instruction});
+  }
+  const individuallyBehind=salon.people.filter(person=>!person.archived&&person.weakest&&
+    !priorities.some(row=>row.index===person.weakest.index));
+  if (individuallyBehind.length) actions.push({title:'Wsparcie handlowców poniżej własnego tempa',
+    evidence:individuallyBehind.slice(0,3).map(({name,weakest})=>
+      name+' · '+dailyActionMetrics[weakest.index][0]+', brakuje '+weakest.gap).join(' | '),
+    instruction:'Omów z każdym handlowcem wskazany obszar i ustal działania na następny dzień pracy.'});
+  return {...salon,expected,actions};
 }
 
 function recommendLeadSources(sellers,plans,nextPlans) {
@@ -111,13 +191,15 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
     const plan=plansBySalon.get(salon);
     const sellerPlans=plan?.team??[];
     const byId=new Map(sellerPlans.map(person=>[person.id,person]));
+    const sourceGoals=Array.from({length:sourceCount},()=>({expected:0,leads:0,orders:0,actualLeads:0,actualOrders:0}));
     const people=(salonsWithSellers.get(salon)??[]).flatMap(seller=>{
       const rows=records.get(seller.id)??[];
       const archived=seller.accountStatus==='inactive';
       if (archived&&!rows.length) return [];
       const {actuals,sources}=summarizeReportRows(rows);
       const adjustment=adjustments[seller.id+'/'+month];
-      const targets=reportSellerTargets(byId.get(seller.id),adjustment);
+      const sellerPlan=byId.get(seller.id);
+      const targets=reportSellerTargets(sellerPlan,adjustment);
       const leave=new Set((absences.get(seller.id)??[]).filter(row=>row.status==='approved').map(row=>row.day));
       const zero=new Set();
       const pending=new Set((absences.get(seller.id)??[]).filter(row=>row.status==='pending').map(row=>row.day));
@@ -129,6 +211,17 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       const scheduled=days.filter(day=>!leave.has(day));
       const elapsed=scheduled.filter(day=>day<=through).length;
       const expected=targets.map(target=>target==null?null:scheduled.length?target*elapsed/scheduled.length:0);
+      if (type==='daily'&&!archived&&scheduled.length&&sellerPlan?.sourceTargets?.length) {
+        for (const [index,row] of effectiveSourcePlan(sellerPlan.sourceTargets,adjustment).entries()) {
+          if (!row[7]) continue;
+          const goal=sourceGoals[index];
+          goal.leads+=row[7];
+          goal.orders+=row[0];
+          goal.expected+=row[7]*elapsed/scheduled.length;
+          goal.actualLeads+=sources[index].leads;
+          goal.actualOrders+=sources[index].orders;
+        }
+      }
       const weakest=expected.map((goal,index)=>({goal,index,ratio:goal>0?actuals[index]/goal:1}))
         .filter(metric=>metric.goal>0&&metric.ratio<1).sort((a,b)=>a.ratio-b.ratio||b.goal-a.goal)[0];
       const item={id:seller.id,name:seller.name,archived,actuals,sources,targets,expected,
@@ -166,8 +259,11 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       const goals=people.map(person=>person.targets[index]).filter(value=>value!=null);
       return goals.length?goals.reduce((sum,value)=>sum+value,0):null;
     });
-    return {salon,totals,targets:salonTargets,people,sources,
+    const summary={salon,totals,targets:salonTargets,people,sources,
       recommendations:type==='marketing'?recommendLeadSources(people,sellerPlans,nextBySalon.get(salon)?.team??[]):[]};
+    return type==='daily'?completeDailySalon(summary,month,through,sourceGoals.map((source,index)=>({
+      ...source,rate:Math.max(sourceAssumptions[index][0],source.leads?source.orders/source.leads:0)
+    }))):summary;
   })};
 }
 

@@ -310,7 +310,8 @@ async function handle(request, env, buildDailyReport=false) {
       if (!snapshot) return json({error:reportDay===today&&reportClock().time<'11:00:00'
         ?'Dzisiejszy raport będzie dostępny po 11:00.':'Brak zapisanego raportu dla tej daty.'},404);
       const report=JSON.parse(snapshot.payload);
-      report.salons=report.salons.filter(row=>managedSalons.has(row.salon));
+      report.salons=report.salons.filter(row=>managedSalons.has(row.salon))
+        .map(row=>row.actions?row:completeDailySalon(row,report.month,report.through));
       return json(report);
     }
     const through=type==='daily'?new Date(Date.parse(reportDay)-86400000).toISOString().slice(0,10)
