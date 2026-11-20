@@ -39,15 +39,17 @@ function reportTable(headers,rows) {
 }
 
 function showReportFields() {
-  const {type,month,day}=reportForm.elements;
+  const {type,month,day,pdfSalon}=reportForm.elements;
   const daily=type.value==='daily';
   reportGet('#report-day-field').hidden=day.disabled=!daily;
   reportGet('#report-month-field').hidden=month.disabled=daily;
   reportGet('#report-showrooms').hidden=daily;
+  reportGet('#report-pdf-salon-field').hidden=pdfSalon.disabled=!daily;
+  reportPdfExport.textContent=daily?'Pobierz PDF salonu':'Pobierz PDF';
 }
 
 function renderReportPicker(snapshot) {
-  const {type,month,day}=reportForm.elements;
+  const {type,month,day,pdfSalon}=reportForm.elements;
   month.max=snapshot.today.slice(0,7);
   day.max=snapshot.today;
   const firstOpen=!month.value;
@@ -56,6 +58,9 @@ function renderReportPicker(snapshot) {
   const choices=reportGet('#report-showrooms > div');
   const salonNames=snapshot.salons.map(row=>row.salon);
   if (choices.dataset.salons!==JSON.stringify(salonNames)) {
+    const previous=pdfSalon.value;
+    pdfSalon.replaceChildren(new Option('Wybierz salon',''),...salonNames.map(salon=>new Option(salon,salon)));
+    pdfSalon.value=salonNames.length===1?salonNames[0]:salonNames.includes(previous)?previous:'';
     choices.dataset.salons=JSON.stringify(salonNames);
     choices.replaceChildren(...salonNames.map(salon=>{
       const label=document.createElement('label');
@@ -76,7 +81,11 @@ function renderReportPicker(snapshot) {
 }
 
 reportForm.onchange=event=>{
-  const {type,month}=reportForm.elements;
+  const {type,month,pdfSalon}=reportForm.elements;
+  if (event.target===pdfSalon) {
+    reportFilterRevision++;
+    return;
+  }
   if (event.target===type&&type.value==='marketing'&&month.value===data.today.slice(0,7)) {
     const [year,number]=month.value.split('-').map(Number);
     month.value=monthStart(year,number-2).slice(0,7);
@@ -283,12 +292,15 @@ reportPdfExport.onclick=async ()=>{
   if (reportPdfExport.disabled||!reportForm.reportValidity()) return;
   const {query,selected}=reportSelection();
   const daily=query.get('type')==='daily';
-  if (!daily&&!selected.size) {
-    reportStatus.textContent='Wybierz przynajmniej jeden salon.';
+  const salon=reportForm.elements.pdfSalon.value;
+  if (daily?!salon:!selected.size) {
+    reportStatus.textContent=daily?'Wybierz salon do pobrania PDF.':'Wybierz przynajmniej jeden salon.';
+    if (daily) reportForm.elements.pdfSalon.focus();
     return;
   }
   query.set('format','pdf');
-  if (!daily) for (const salon of selected) query.append('salon',salon);
+  if (daily) query.set('salon',salon);
+  else for (const name of selected) query.append('salon',name);
   if (data.role) query.set('role',data.role);
   if (previewTarget) query.set('podglad',previewTarget);
   reportPdfExport.disabled=true;

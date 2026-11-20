@@ -12,7 +12,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
-    KeepTogether, LongTable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, TableStyle,
+    KeepTogether, LongTable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
 FONT_DIR = '/usr/share/fonts/truetype/dejavu'
@@ -47,6 +47,11 @@ STYLES = {
     'total': ParagraphStyle('total', fontName='DejaVuBold', fontSize=8, leading=11, textColor=INK),
     'header': ParagraphStyle('header', fontName='DejaVuBold', fontSize=8, leading=11, textColor=colors.white),
     'action': ParagraphStyle('action', fontName='DejaVuBold', fontSize=9, leading=13, textColor=BLUE, spaceAfter=2),
+    'priority': ParagraphStyle('priority', fontName='DejaVuBold', fontSize=11, leading=15, textColor=BLUE, spaceAfter=3),
+    'instruction': ParagraphStyle('instruction', fontName='DejaVu', fontSize=10, leading=14, textColor=INK, spaceAfter=4),
+    'evidence': ParagraphStyle('evidence', fontName='DejaVu', fontSize=8, leading=11, textColor=MUTED),
+    'task_number': ParagraphStyle('task_number', fontName='DejaVuBold', fontSize=12, leading=15,
+                                  textColor=colors.white, alignment=1),
 }
 
 
@@ -177,7 +182,44 @@ def daily_goals(salon, day):
     return story
 
 
+def action_card(index, action):
+    card = Table([[p(index, 'task_number'), [
+        p(action['title'], 'priority'), p(action['instruction'], 'instruction'), p(action['evidence'], 'evidence')
+    ]]], colWidths=[30, WIDTH - 30], hAlign='LEFT')
+    card.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), BLUE),
+        ('BACKGROUND', (1, 0), (1, 0), LIGHT),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (1, 0), (1, 0), 10),
+        ('RIGHTPADDING', (1, 0), (1, 0), 10),
+    ]))
+    return KeepTogether([card, Spacer(1, 6)])
+
+
 def daily_report(salon, closed, goals_day):
+    title = 'Co poprawić w kolejnym miesiącu' if closed else 'Co zrobić, żeby dowieźć plan'
+    actions = salon['actions']
+    front_limit = 2
+    story = [
+        sales_progress(salon),
+        KeepTogether([p('Aktywności i rozliczenie dni pracy', 'section'),
+                      activities(salon['totals'], salon['targets'], salon['expected'], range(6))]),
+        p(title, 'section'),
+    ]
+    if actions:
+        story.extend(action_card(i, action) for i, action in enumerate(actions[:front_limit], 1))
+        if len(actions) > front_limit:
+            story.append(p('Kolejne zadania kierownika znajdziesz od strony 2.', 'hint'))
+    else:
+        story.append(p('Zapisane wyniki są zgodne z tempem dla ustawionych celów. Utrzymaj obecny rytm pracy.'
+                       if any((goal or 0) > 0 for goal in salon['expected'])
+                       else 'Ustaw cele salonu i zespołu, aby wyznaczyć tempo i wskazać luki.'))
+    story.append(PageBreak())
+    if len(actions) > front_limit:
+        story.append(p(title + ' · dalsze zadania', 'section'))
+        story.extend(action_card(i, action) for i, action in enumerate(actions[front_limit:], front_limit + 1))
     people = [('Razem salon', salon['totals'], salon['targets'], salon['expected'])] + [
         (person['name'] + (' · archiwum' if person['archived'] else ''),
          person['actuals'], person['targets'], person['expected']) for person in salon['people']
@@ -187,21 +229,7 @@ def daily_report(salon, closed, goals_day):
         for row, (name, actual, target, expected) in enumerate(people)
     ], [.28, .18, .18, .18, .18])
     summary.setStyle(TableStyle([('BACKGROUND', (0, 1), (-1, 1), LIGHT)]))
-    story = [p('Realizacja planów', 'section'), summary, *daily_goals(salon, goals_day),
-             p('Co poprawić w kolejnym miesiącu' if closed else 'Co zrobić, żeby dowieźć plan', 'section')]
-    if salon['actions']:
-        for i, action in enumerate(salon['actions'], 1):
-            story.append(KeepTogether([
-                p(f"{i}. {action['title']}", 'action'),
-                p(action['evidence'], 'hint'),
-                p(action['instruction']),
-            ]))
-    else:
-        story.append(p('Zapisane wyniki są zgodne z tempem dla ustawionych celów. Utrzymaj obecny rytm pracy.'
-                       if any((goal or 0) > 0 for goal in salon['expected'])
-                       else 'Ustaw cele salonu i zespołu, aby wyznaczyć tempo i wskazać luki.'))
-    story.extend([sales_progress(salon), p('Aktywności i rozliczenie dni pracy', 'section'),
-                  activities(salon['totals'], salon['targets'], salon['expected'], range(6))])
+    story.extend([p('Realizacja planów handlowców', 'section'), summary, *daily_goals(salon, goals_day)])
     for person in salon['people']:
         caption = person['name'] + (' · archiwum' if person['archived'] else '')
         story.extend([p(caption, 'section'),

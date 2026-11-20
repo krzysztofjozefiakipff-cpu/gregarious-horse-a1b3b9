@@ -193,7 +193,11 @@ let activeReportPdfs=0;
 async function downloadReportPdf(response,url) {
   const report=await response.json();
   const selected=new Set(url.searchParams.getAll('salon'));
-  if (report.type!=='daily'&&selected.size) report.salons=report.salons.filter(row=>selected.has(row.salon));
+  const daily=report.type==='daily';
+  if (daily&&(selected.size>1||(!selected.size&&report.salons.length>1))) {
+    return Response.json({error:'Wybierz jeden salon do pobrania PDF.'},{status:400,headers});
+  }
+  if (selected.size) report.salons=report.salons.filter(row=>selected.has(row.salon));
   if (!report.salons.length) return Response.json({error:'Brak salonów do eksportu.'},{status:400,headers});
   if (activeReportPdfs>=4) return Response.json({error:'Eksport jest zajęty. Spróbuj ponownie za chwilę.'},{status:503,headers});
   activeReportPdfs++;
@@ -207,8 +211,9 @@ async function downloadReportPdf(response,url) {
       child.on('close',code=>code===0?resolve(Buffer.concat(chunks)):reject(new Error('Błąd generatora PDF')));
       child.stdin.end(JSON.stringify(report));
     });
-    const daily=report.type==='daily';
-    const filename=daily?'bieg-wyzej-raport-dzienny-plany-'+report.reportDay
+    const slug=daily?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
+      .replace(/[^\p{ASCII}]/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100):'';
+    const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'salon')+'-'+report.reportDay
       :'bieg-wyzej-'+report.type+'-'+report.month;
     return reply(pdf,200,{'Content-Type':'application/pdf',
       'Content-Disposition':'attachment; filename="'+filename+'.pdf"',
