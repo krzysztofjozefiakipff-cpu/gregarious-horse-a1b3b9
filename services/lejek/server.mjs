@@ -66,6 +66,8 @@ const publicPages = new Map([
   ['/', ['text/html', readFileSync('public/home.html', 'utf8')]],
   ['/home.css', ['text/css', readFileSync('public/home.css', 'utf8')]],
   ['/showroom-jaecoo-8.webp', ['image/webp', readFileSync('public/showroom-jaecoo-8.webp')]],
+  ['/favicon.ico', ['image/x-icon', readFileSync('public/favicon.ico')]],
+  ['/favicon.svg', ['image/svg+xml', readFileSync('public/favicon.svg')]],
   ['/theme.css', ['text/css', readFileSync('public/theme.css', 'utf8')]]
 ]);
 const loginPage = `<!doctype html>
@@ -75,6 +77,7 @@ const loginPage = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1522">
   <title>AUTH_TITLE</title>
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="stylesheet" href="/theme.css">
   <style>
     body { min-height: 100dvh; display: flow-root; background: linear-gradient(160deg, #0b1522 0%, #142f54 70%, #1a4376 100%); }
