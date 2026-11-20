@@ -207,8 +207,12 @@ async function downloadReportPdf(response,url) {
       child.on('close',code=>code===0?resolve(Buffer.concat(chunks)):reject(new Error('Błąd generatora PDF')));
       child.stdin.end(JSON.stringify(report));
     });
+    const daily=report.type==='daily';
+    const filename=daily?'bieg-wyzej-raport-dzienny-plany-'+report.reportDay
+      :'bieg-wyzej-'+report.type+'-'+report.month;
     return reply(pdf,200,{'Content-Type':'application/pdf',
-      'Content-Disposition':'attachment; filename="bieg-wyzej-'+report.type+'-'+(report.reportDay??report.month)+'.pdf"'});
+      'Content-Disposition':'attachment; filename="'+filename+'.pdf"',
+      ...(daily?{'X-Lejek-Report-Layout':'daily-plans'}:{})});
   } catch (error) {
     console.error('Eksport PDF:',error.message);
     return Response.json({error:'Nie udało się przygotować PDF.'},{status:500,headers});

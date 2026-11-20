@@ -58,7 +58,10 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in {1..24}; do
-            if [ "$(curl -fsS --max-time 8 https://lejek.carvamo.com/healthz || true)" = lejek-ok ]; then
+            production_release="$(curl -fsS --max-time 8 -D - -o /dev/null https://biegwyzej.pl/healthz |
+              tr -d '\r' | awk 'tolower($1)=="x-lejek-release:" {print $2}')" || production_release=''
+            if [ "$production_release" = "$GITHUB_SHA" ] &&
+              [ "$(curl -fsS --max-time 8 https://lejek.carvamo.com/healthz || true)" = lejek-ok ]; then
               curl -fsS https://lejek.carvamo.com/login | grep -q 'Zaloguj się do Bieg Wyżej'
               curl -fsS https://lejek.carvamo.com/login | grep -q 'href="/forgot-password"'
               curl -fsS https://lejek.carvamo.com/change-password | grep -q 'minlength="8"'
@@ -67,4 +70,5 @@ jobs:
             fi
             sleep 10
           done
+          echo 'Nie potwierdzono nowej wersji aplikacji na biegwyzej.pl.'
           exit 1

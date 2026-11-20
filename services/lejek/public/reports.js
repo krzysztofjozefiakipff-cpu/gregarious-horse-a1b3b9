@@ -7,8 +7,8 @@ const reportExport=reportGet('#export-management-report');
 const reportNumber=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
 const reportPercent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
 let reportRevision=0;
+let reportFilterRevision=0;
 let reportCsv;
-let reportPdfUrl;
 
 function reportElement(tag,label) {
   const node=document.createElement(tag);
@@ -69,17 +69,33 @@ function renderReportPicker(snapshot) {
     }));
   }
   showReportFields();
-  if (firstOpen&&type.value==='monthly') reportForm.requestSubmit();
+  if (firstOpen) {
+    reportPdfExport.disabled=false;
+    if (type.value==='monthly') reportForm.requestSubmit();
+  }
 }
 
-reportForm.elements.type.onchange=()=>{
+reportForm.onchange=event=>{
   const {type,month}=reportForm.elements;
-  if (type.value==='marketing'&&month.value===data.today.slice(0,7)) {
+  if (event.target===type&&type.value==='marketing'&&month.value===data.today.slice(0,7)) {
     const [year,number]=month.value.split('-').map(Number);
     month.value=monthStart(year,number-2).slice(0,7);
   }
   showReportFields();
+  reportRevision++;
+  reportFilterRevision++;
+  reportCsv=null;
+  reportExport.disabled=true;
+  reportResults.replaceChildren();
+  reportStatus.textContent='Wybierz „Pokaż raport”, aby zobaczyć wyniki dla nowych ustawień.';
 };
+
+function reportSelection() {
+  const {type,month,day}=reportForm.elements;
+  const query=new URLSearchParams({type:type.value,...(type.value==='daily'?{day:day.value}:{month:month.value})});
+  const selected=new Set(new FormData(reportForm).getAll('salons'));
+  return {query,selected};
+}
 
 function reportMetrics(actuals,targets,expected) {
   return columns.map(([,label],index)=>{
@@ -228,31 +244,22 @@ function renderManagementReport(report,selected) {
 
 reportForm.onsubmit=async event=>{
   event.preventDefault();
-  const {type,month,day}=reportForm.elements;
-  const selected=new Set(new FormData(reportForm).getAll('salons'));
+  const {query,selected}=reportSelection();
   const revision=++reportRevision;
-  reportExport.disabled=reportPdfExport.disabled=true;
-  reportPdfUrl=null;
+  reportExport.disabled=true;
   reportResults.replaceChildren();
-  if (type.value!=='daily'&&!selected.size) {
+  if (query.get('type')!=='daily'&&!selected.size) {
     reportStatus.textContent='Wybierz przynajmniej jeden salon.';
     return;
   }
   reportStatus.textContent='Wczytywanie raportu…';
   try {
-    const query=new URLSearchParams({type:type.value,...(type.value==='daily'?{day:day.value}:{month:month.value})});
     const report=await api('/api/management-reports?'+query);
     if (revision!==reportRevision) return;
     const date=dateLabel(report.through,{day:'numeric',month:'long',year:'numeric'});
     const generated=report.generatedAt?new Intl.DateTimeFormat('pl-PL',{timeZone:'Europe/Warsaw',hour:'2-digit',minute:'2-digit'}).format(new Date(report.generatedAt)):null;
     reportStatus.textContent=monthLabel(report.month)+' · wyniki do '+date+(generated?' · wygenerowano o '+generated:'');
     renderManagementReport(report,selected);
-    query.set('format','pdf');
-    if (report.type!=='daily') for (const salon of selected) query.append('salon',salon);
-    if (data.role) query.set('role',data.role);
-    if (previewTarget) query.set('podglad',previewTarget);
-    reportPdfUrl='/api/management-reports?'+query;
-    reportPdfExport.disabled=reportExport.disabled;
   } catch (error) {
     if (revision===reportRevision) reportStatus.textContent=error.message;
   }
@@ -276,22 +283,40 @@ reportExport.onclick=()=>{
 
 
 reportPdfExport.onclick=async ()=>{
-  if (!reportPdfUrl) return;
-  const source=reportPdfUrl;
-  const filename=reportCsv.filename.replace(/\.csv$/,'.pdf');
+  if (reportPdfExport.disabled||!reportForm.reportValidity()) return;
+  const {query,selected}=reportSelection();
+  const daily=query.get('type')==='daily';
+  if (!daily&&!selected.size) {
+    reportStatus.textContent='Wybierz przynajmniej jeden salon.';
+    return;
+  }
+  query.set('format','pdf');
+  if (!daily) for (const salon of selected) query.append('salon',salon);
+  if (data.role) query.set('role',data.role);
+  if (previewTarget) query.set('podglad',previewTarget);
   reportPdfExport.disabled=true;
+  const revision=reportFilterRevision;
   try {
-    const response=await fetch(source);
-    if (!response.ok) throw new Error((await response.json()).error);
-    const url=URL.createObjectURL(await response.blob());
+    const response=await fetch('/api/management-reports?'+query,{cache:'no-store'});
+    if (!response.ok) throw new Error((await response.json().catch(()=>null))?.error);
+    const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+\.pdf)"/)?.[1];
+    if (!response.headers.get('Content-Type')?.startsWith('application/pdf')||!filename) {
+      throw new Error('Serwer nie zwrócił pliku PDF.');
+    }
+    if (daily&&response.headers.get('X-Lejek-Report-Layout')!=='daily-plans') {
+      throw new Error('Serwer zwrócił starszy układ raportu dziennego. Odśwież stronę i pobierz raport ponownie.');
+    }
+    const file=await response.blob();
+    if (revision!==reportFilterRevision) return;
+    const url=URL.createObjectURL(file);
     const link=document.createElement('a');
     link.href=url;
     link.download=filename;
     link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   } catch (error) {
-    if (source===reportPdfUrl) reportStatus.textContent=error.message||'Nie udało się przygotować PDF.';
+    if (revision===reportFilterRevision) reportStatus.textContent=error.message||'Nie udało się przygotować PDF.';
   } finally {
-    if (source===reportPdfUrl) reportPdfExport.disabled=false;
+    reportPdfExport.disabled=false;
   }
 };
