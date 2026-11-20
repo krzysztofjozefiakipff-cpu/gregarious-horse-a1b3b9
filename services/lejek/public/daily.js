@@ -1217,18 +1217,32 @@ function renderRanking(ranking) {
     :new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%';
 }
 
-$('#confirm-tasks-read').onclick=async event=>{
-  const button=event.currentTarget;
-  button.disabled=true;
+const tasksHeading=$('#today-tasks-heading');
+let tasksVisible=false;
+let recordingTaskView=false;
+
+async function recordVisibleTasks() {
+  if (!tasksVisible||document.visibilityState!=='visible'||data?.role!=='seller'||data.previewUser||
+      data.tasksRead||recordingTaskView||!tasksHeading.getClientRects().length||
+      !isSalonWorkday(data.today)||['leave','training'].includes(data.personal.exceptions[data.today])) return;
+  const snapshot=data;
+  recordingTaskView=true;
   try {
-    await api('/api/daily/tasks-read',{day:data.today});
-    data.tasksRead=true;
-    $('#tasks-read-status').textContent='Odczyt zadań potwierdzony.';
-  } catch (error) {
-    $('#tasks-read-status').textContent=error.message;
-    button.disabled=false;
+    await api('/api/daily/tasks-read',{day:snapshot.today});
+    if (data?.today===snapshot.today) data.tasksRead=true;
+  } catch {
+    // A failed request can be retried when the task section becomes visible again.
+  } finally {
+    recordingTaskView=false;
   }
-};
+}
+
+const taskVisibility=new IntersectionObserver(([entry])=>{
+  tasksVisible=entry.isIntersecting&&entry.intersectionRatio>=0.5;
+  void recordVisibleTasks();
+},{threshold:0.5});
+taskVisibility.observe(tasksHeading);
+document.addEventListener('visibilitychange',recordVisibleTasks);
 
 function renderSeller() {
   const {brand,personal,cause}=data;
@@ -1259,10 +1273,7 @@ function renderSeller() {
   const [year,monthNumber]=currentMonth.split('-').map(Number);
   $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
   renderTodayTasks(periodMetrics(data,currentMonth,1),data.previousDaily,data.today);
-  const confirmRead=$('#confirm-tasks-read');
-  confirmRead.hidden=Boolean(data.previewUser)||!isScheduled(data.today);
-  confirmRead.disabled=Boolean(data.tasksRead);
-  $('#tasks-read-status').textContent=!confirmRead.hidden&&data.tasksRead?'Odczyt zadań potwierdzony.':'';
+  void recordVisibleTasks();
   renderPeriodPicker(periodValue.value||currentMonth);
   loadSellerPeriod();
   const pending=(data.calendar??[]).filter(row=>row.status==='pending').length+Object.values(personal.exceptions).filter(kind=>kind==='pending').length;
