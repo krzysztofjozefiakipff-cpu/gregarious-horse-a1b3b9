@@ -1173,6 +1173,15 @@ function labelPanel(role,scope='',preview=false) {
   document.title=title+' · Bieg Wyżej';
 }
 
+function showPanelLogo(src,alt='') {
+  const logo=$('#logo');
+  logo.hidden=!src;
+  if (src) {
+    logo.src=src;
+    logo.alt=alt;
+  } else logo.removeAttribute('src');
+}
+
 function renderRanking(ranking) {
   const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
   $('#ranking-title').textContent=ranking?.groupName?'Ranking grupy dealerskiej · '+ranking.groupName:'Ranking salonu';
@@ -1204,8 +1213,7 @@ function renderSeller() {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
   labelPanel('seller',brand?.name??salon);
-  $('#logo').hidden=!brand?.logo;
-  if (brand?.logo) $('#logo').src=brand.logo;
+  showPanelLogo(brand?.logo);
   const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
   const next=personal.missing[0];
   const day=next&&editDay===next?editDay:data.today;
@@ -2649,6 +2657,7 @@ function renderAdmin() {
   {
     const form=$('#brand');
     const optionalName=view.role==='group';
+    $('#group-brand').hidden=!optionalName;
     form.elements.name.required=!optionalName;
     $('#dealer-name-optional').hidden=!optionalName;
     const selected=form.elements.salon.value;
@@ -2860,7 +2869,7 @@ function renderSellerDetail() {
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
-  $('#logo').hidden=true;
+  showPanelLogo(data.groupBrand?.logo,data.groupBrand?.name);
   if (detailSeller) {
     renderSellerDetail();
     return;
@@ -2995,6 +3004,39 @@ $('#entry').onsubmit=event=>{
   });
   run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today,draft);
 };
+function readBrandLogo(file) {
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result);
+    reader.onerror=()=>reject(new Error('Nie udało się odczytać logo.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+$('#group-brand').onsubmit=async event=>{
+  event.preventDefault();
+  const form=event.currentTarget;
+  const {logo,removeLogo}=form.elements;
+  const file=logo.files[0];
+  const status=$('#group-brand-status');
+  if (file?.size>40960||!file&&!removeLogo.checked||file&&removeLogo.checked) {
+    status.textContent=file?.size>40960?'Logo może mieć maksymalnie 40 KB.':'Wybierz plik albo zaznacz usunięcie logo.';
+    return;
+  }
+  const button=form.querySelector('button');
+  button.disabled=true;
+  try {
+    await api('/api/group-brand',{logo:file?await readBrandLogo(file):''});
+    form.reset();
+    await refresh();
+    status.textContent=file?'Zapisano logo grupy.':'Usunięto logo grupy.';
+  } catch (error) {
+    status.textContent=error.message;
+  } finally {
+    button.disabled=false;
+  }
+};
+
 $('#brand').onsubmit=event=>{
   event.preventDefault();
   const form=event.currentTarget;
@@ -3002,12 +3044,7 @@ $('#brand').onsubmit=event=>{
   const file=logo.files[0];
   if(file?.size>40960){$('#load').textContent='Logo może mieć maksymalnie 40 KB.';return;}
   run(async ()=>{
-    const encoded=file?await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>reject(new Error('Nie udało się odczytać logo.'));
-      reader.readAsDataURL(file);
-    }):removeLogo.checked?'':undefined;
+    const encoded=file?await readBrandLogo(file):removeLogo.checked?'':undefined;
     await api('/api/brand',{salon:salon.value,name:name.value,logo:encoded});
     name.value=logo.value='';
     removeLogo.checked=false;
