@@ -128,7 +128,7 @@ function renderBriefingSeller(person,report,open) {
   const form=reportElement('form');
   const editable=person.editable&&!data.previewUser;
   const goals=columns.map(([,label],i)=>briefingNumberField('Dzisiejsza korekta · '+label,person.correction[i],person.todayGoals[i]));
-  const forecast=briefingSalesLabels.map((label,i)=>briefingNumberField('Prognoza dodatkowego wyniku · '+label,person.manual[i],person.forecast[i]));
+  const forecast=briefingSalesLabels.map((label,i)=>briefingNumberField('Jeszcze w tym miesiącu · '+label,person.manual[i],person.automaticForecast[i]));
   if (person.editable) {
     form.append(reportElement('h3','Dzisiaj · '+dateLabel(report.today)));
     if (person.workday) {
@@ -137,15 +137,24 @@ function renderBriefingSeller(person,report,open) {
     } else form.append(reportElement('p','Dzień wolny.'));
   }
   form.append(reportElement('h3','Realizacja i prognoza do końca miesiąca'));
-  form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec',...(editable?['Korekta prognozy']:[])],
-    briefingSalesLabels.map((label,i)=>[label,person.actual[i],person.plan[i],person.forecast[i],
-      briefingEnd(person.actual[i],person.forecast[i]),...(editable?[forecast[i]]:[])])));
+  form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
+    briefingSalesLabels.map((label,i)=>{
+      const total=reportElement('span',briefingDisplay(briefingEnd(person.actual[i],person.forecast[i])));
+      if (editable) {
+        const field=forecast[i];
+        field.oninput=()=>{
+          const remaining=!field.validity.valid?null:field.value===''?person.automaticForecast[i]:field.valueAsNumber;
+          total.textContent=briefingDisplay(briefingEnd(person.actual[i],remaining));
+        };
+      }
+      return [label,person.actual[i],person.plan[i],editable?forecast[i]:person.forecast[i],total];
+    })));
   if (editable) {
     const submit=reportElement('button','Zapisz korekty');
     submit.type='submit';
     const status=reportElement('p');
     status.setAttribute('role','status');
-    form.append(reportElement('p','Puste pola przywracają wyliczenie automatyczne. Korekta prognozy oznacza dodatkowy wynik do końca miesiąca.'),
+    form.append(reportElement('p','Wpisz przewidywany dodatkowy wynik w kolumnie „Jeszcze w tym miesiącu”. Puste pole używa prognozy automatycznej.'),
       submit,status);
     form.onsubmit=async event=>{
       event.preventDefault();

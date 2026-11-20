@@ -86,19 +86,20 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const manual=forecastSettings?JSON.parse(forecastSettings.forecast):[];
       const baseline=forecastSettings?JSON.parse(forecastSettings.baseline):[];
       const hasHistory=current.some(row=>row.day<today);
-      const forecast=briefingSalesIndexes.map((i,slot)=>{
+      const automaticForecast=briefingSalesIndexes.map(i=>{
         if (!remaining||archived) return 0;
-        if (manual[slot]!=null) return Math.max(0,manual[slot]-Math.max(0,actuals[i]-baseline[slot]));
         if (!elapsed||!hasHistory) return null;
         return Math.max(0,Math.round(past[i]*remaining/elapsed)-(actuals[i]-past[i]));
       });
+      const forecast=briefingSalesIndexes.map((i,slot)=>remaining&&!archived&&manual[slot]!=null
+        ?Math.max(0,manual[slot]-Math.max(0,actuals[i]-baseline[slot])):automaticForecast[slot]);
       return [{id,name,archived,editable,workday:days.includes(today),todayGoals,correction,
         remainingPlan:editable?briefingRemainingPlan(sales,past,days,today,todayGoals):[],
         review:{status:previousStatus,actual:previousStatus==='recorded'?previousActual:null,goals:previousGoals,
           rows:editable&&reviewDays.includes(yesterday)&&validDailyRows(yesterdayMatrix)?yesterdayMatrix:null,
           confirmed:matched?{by:review.manager_name,at:review.reviewed_at}:null,stale:Boolean(review&&!matched)},
         actual:briefingSalesIndexes.map(i=>actuals[i]),plan:briefingSalesIndexes.map(i=>sales[i]),
-        forecast,manual:forecast.map((value,i)=>!archived&&remaining&&manual[i]!=null?value:null)}];
+        forecast,automaticForecast,manual:forecast.map((value,i)=>!archived&&remaining&&manual[i]!=null?value:null)}];
     });
     const target=salonPlanByName.get(salon);
     const plan=[0,2,1,3].map(i=>target?.configured[i]?target.targets[i]:null);
