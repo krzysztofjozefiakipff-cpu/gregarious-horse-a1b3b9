@@ -92,7 +92,7 @@ function renderBriefingSeller(person,report,open) {
   details.setAttribute('name','briefing-seller');
   details.open=open;
   const review=person.review;
-  details.append(reportElement('summary',person.name+(person.archived?' · archiwum':'')));
+  details.append(reportElement('summary',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':'')));
   if (person.editable) {
     const section=reportElement('h3','Wczoraj · '+dateLabel(report.yesterday));
     const message=reportElement('p',review.confirmed?'Omówiono z handlowcem · '+review.confirmed.by
@@ -127,6 +127,7 @@ function renderBriefingSeller(person,report,open) {
 
   const form=reportElement('form');
   const editable=person.editable&&!data.previewUser;
+  const forecastEditable=(person.editable||person.ownForecast)&&!data.previewUser;
   const goals=columns.map(([,label],i)=>briefingNumberField('Dzisiejsza korekta · '+label,person.correction[i],person.todayGoals[i]));
   const forecast=briefingSalesLabels.map((label,i)=>briefingNumberField('Jeszcze w tym miesiącu · '+label,person.manual[i],person.automaticForecast[i]));
   if (person.editable) {
@@ -140,17 +141,17 @@ function renderBriefingSeller(person,report,open) {
   form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
     briefingSalesLabels.map((label,i)=>{
       const total=reportElement('span',briefingDisplay(briefingEnd(person.actual[i],person.forecast[i])));
-      if (editable) {
+      if (forecastEditable) {
         const field=forecast[i];
         field.oninput=()=>{
           const remaining=!field.validity.valid?null:field.value===''?person.automaticForecast[i]:field.valueAsNumber;
           total.textContent=briefingDisplay(briefingEnd(person.actual[i],remaining));
         };
       }
-      return [label,person.actual[i],person.plan[i],editable?forecast[i]:person.forecast[i],total];
+      return [label,person.actual[i],person.plan[i],forecastEditable?forecast[i]:person.forecast[i],total];
     })));
-  if (editable) {
-    const submit=reportElement('button','Zapisz korekty');
+  if (forecastEditable) {
+    const submit=reportElement('button',editable?'Zapisz korekty':'Zapisz prognozę');
     submit.type='submit';
     const status=reportElement('p');
     status.setAttribute('role','status');
@@ -162,7 +163,7 @@ function renderBriefingSeller(person,report,open) {
       submit.disabled=true;
       try {
         await api('/api/daily-briefing',{person:person.id,day:report.today,action:'save',
-          goals:person.workday?goals.map(read):goals.map(()=>null),forecast:forecast.map(read)});
+          goals:editable&&person.workday?goals.map(read):goals.map(()=>null),forecast:forecast.map(read)});
         await loadBriefingPanel('Zapisano korekty dla '+person.name+'.');
       } catch(error) {
         status.textContent=error.message;
