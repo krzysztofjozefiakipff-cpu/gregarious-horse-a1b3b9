@@ -322,11 +322,7 @@ const fortunes = [
 ];
 const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
 const dateLabel = (day,options={day:'numeric',month:'long'}) => new Date(day+'T12:00:00Z').toLocaleDateString('pl-PL',options);
-const weekday = day => {
-  const index=new Date(day+'T12:00:00Z').getUTCDay();
-  return index!==0&&(index!==6||day>='2026-11-19');
-};
-const remainingDays = (start,end,isScheduled=weekday) => {
+const remainingDays = (start,end,isScheduled=isSalonWorkday) => {
   let count=0;
   for (let at=Date.parse(start); at<Date.parse(end); at+=86400000) {
     if (isScheduled(new Date(at).toISOString().slice(0,10))) count++;
@@ -422,8 +418,8 @@ function renderCalendar(host,sellers,role) {
     title.textContent=dateLabel(entry.day,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const info=document.createElement('p');
     const automatic=entry.status==='automatic';
-    const type=automatic?'Dzień wolny':calendarKinds[entry.kind];
-    info.textContent=type+' · '+(automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
+    const type=automatic?(entry.holiday??'Dzień wolny'):calendarKinds[entry.kind];
+    info.textContent=type+' · '+(entry.holiday?'Bez aktywności · ':automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
     detail.replaceChildren(title,info);
     if (entry.reason) {
       const explanation=document.createElement('p');
@@ -486,7 +482,7 @@ function renderCalendar(host,sellers,role) {
     try {
       const {entries,automaticDays=[]}=await api('/api/work-calendar?person='+person.value+'&month='+month.value);
       if (request!==revision||!grid.isConnected) return;
-      const calendar=new Map(automaticDays.map(day=>[day,{day,status:'automatic'}]));
+      const calendar=new Map(automaticDays.map(day=>[day,{day,status:'automatic',holiday:polishHoliday(day)}]));
       for (const entry of entries) calendar.set(entry.day,entry);
       const [year,monthNumber]=month.value.split('-').map(Number);
       const first=month.value+'-01';
@@ -516,7 +512,7 @@ function renderCalendar(host,sellers,role) {
           marker.dataset.day=day;
           marker.dataset.status=entry.status;
           marker.setAttribute('aria-pressed','false');
-          marker.setAttribute('aria-label',dateLabel(day)+' · '+(calendarKinds[entry.kind]??'Dzień wolny')+' · '+calendarStatuses[entry.status]);
+          marker.setAttribute('aria-label',dateLabel(day)+' · '+(entry.holiday??calendarKinds[entry.kind]??'Dzień wolny')+' · '+calendarStatuses[entry.status]);
           marker.onclick=()=>showDetails(entry,true);
         }
         cell.append(marker);
@@ -667,7 +663,7 @@ function periodMetrics(snapshot,start,count) {
   const [year,month]=start.split('-').map(Number);
   const records=snapshot.daily.filter(row=>row.day<=snapshot.today).map(row=>[row.day,JSON.parse(row.counters)]);
   const approved=new Set((snapshot.calendar??[]).filter(row=>row.status==='approved').map(row=>row.day));
-  const isScheduled=day=>weekday(day)&&!approved.has(day)&&!['leave','training'].includes(snapshot.personal.exceptions[day]);
+  const isScheduled=day=>isSalonWorkday(day)&&!approved.has(day)&&!['leave','training'].includes(snapshot.personal.exceptions[day]);
   const metricsByMonth=Array.from({length:count},(_,index)=>{
     const first=monthStart(year,month-1+index);
     const end=monthStart(year,month+index);
@@ -762,7 +758,7 @@ function renderPlans(snapshot,month,type) {
   renderMotivator(metrics,snapshot.today);
 }
 
-function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLeft,isWorkday,isScheduled=weekday,adjustment) {
+function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLeft,isWorkday,isScheduled=isSalonWorkday,adjustment) {
   const [year,month]=day.split('-').map(Number);
   const monthEnd=monthStart(year,month);
   const daysMonth=remainingDays(day.slice(0,7)+'-01',monthEnd,isScheduled);
@@ -918,6 +914,15 @@ const taskPriorities=[
 ];
 
 function renderTodayTasks(metrics,previous,day) {
+  const holiday=polishHoliday(day);
+  if (holiday) {
+    const message=document.createElement('p');
+    message.className='task-message';
+    message.textContent=holiday+' · dzień bez aktywności.';
+    $('#tasks').replaceChildren(message);
+    for (const id of ['tasks-intro','followup-reminder','tasks-closing']) $('#'+id).hidden=true;
+    return;
+  }
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
   const strongest=metrics.filter(metric=>metric.delta>0).sort((a,b)=>b.delta-a.delta)[0];
   const weakest=metrics.filter(metric=>metric.goal>0&&metric.delta<0)
@@ -1223,7 +1228,8 @@ function renderSeller() {
   const exception=personal.exceptions[day];
   const waiting=personal.exceptions[next]==='pending';
   const blocked=(next&&day!==next)||exception==='pending';
-  const locked=Boolean(records[day]||exception==='zero'||exception==='leave'||exception==='training');
+  const holiday=polishHoliday(day);
+  const locked=Boolean(holiday||records[day]||exception==='zero'||exception==='leave'||exception==='training');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
   renderQuote(quotes[dayIndex%quotes.length]);
   const lesson=data.lesson;
@@ -1236,7 +1242,7 @@ function renderSeller() {
   $('#lesson-remember').hidden=!lesson||Boolean(lesson.question);
   $('#lesson-remember span').textContent=lesson?.remember??'';
   const currentMonth=data.today.slice(0,7);
-  const isScheduled=date=>weekday(date)&&!['leave','training'].includes(personal.exceptions[date]);
+  const isScheduled=date=>isSalonWorkday(date)&&!['leave','training'].includes(personal.exceptions[date]);
   const [year,monthNumber]=currentMonth.split('-').map(Number);
   $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
   renderTodayTasks(periodMetrics(data,currentMonth,1),data.previousDaily,data.today);
@@ -1275,7 +1281,7 @@ function renderSeller() {
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
-  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':locked?'Dzień rozliczony.'
+  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':holiday?holiday+' · dzień bez aktywności.':locked?'Dzień rozliczony.'
     :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
     :draft?'Zapisano roboczo. Możesz dalej edytować wartości.':'Możesz zapisywać zmiany w ciągu dnia.';
   const showMeme=data.sidebarMode==='meme';
@@ -1379,7 +1385,7 @@ function renderSalonSummary(view,team=[]) {
   const first=monthStart(year,month-1);
   const end=monthStart(year,month);
   const total=remainingDays(first,end);
-  const elapsed=remainingDays(first,view.today)+Number(weekday(view.today));
+  const elapsed=remainingDays(first,view.today)+Number(isSalonWorkday(view.today));
   const salons=new Set(view.salons.map(({salon})=>salon));
   const plans=data.salonPerformance.filter(plan=>salons.has(plan.salon));
   const sellerSalons=new Map(view.sellers.map(seller=>[seller.id,seller.salon]));
@@ -1460,7 +1466,7 @@ function renderSalonSummary(view,team=[]) {
       :assessed.some(metric=>metric.forecast===null)?'Za wcześnie na prognozę':'Zgodnie z tempem';
     const time=document.createElement('p');
     time.className='salon-pace-time';
-    time.textContent=elapsed+' z '+total+' dni roboczych miesiąca (pon.–sob.) · '+percent.format(elapsed/total)
+    time.textContent=elapsed+' z '+total+' dni pracy w miesiącu · '+percent.format(elapsed/total)
       +' · Prognoza zakłada utrzymanie dotychczasowego tempa.';
     summary.append(title,status,salonQuickTotals(plan,elapsed,total,number));
     const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
@@ -1556,11 +1562,11 @@ function renderManagerDashboard(view,detailOnly=false) {
     const entry=teamDay.find(row=>row.person===seller.id);
     const active=Boolean(entry?.started&&entry.started<=today);
     const plannedToday=(view.calendar??[]).find(row=>row.person===seller.id&&row.day===today&&row.status==='approved');
-    const status=entry?.saved?'Wpisano działania':calendarKinds[plannedToday?.kind]??statuses[entry?.kind]??(!weekday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
+    const status=entry?.saved?'Wpisano działania':calendarKinds[plannedToday?.kind]??polishHoliday(today)??statuses[entry?.kind]??(!isSalonWorkday(today)?'Dzień wolny':active?'Brak wpisu':'Ewidencja jeszcze nierozpoczęta');
     const records=entries.get(seller.id)??[];
     const current=records.find(([day])=>day===today)?.[1];
     const free=new Set((view.calendar??[]).filter(row=>row.person===seller.id&&row.status==='approved').map(row=>row.day));
-    const isScheduled=day=>weekday(day)&&!free.has(day);
+    const isScheduled=day=>isSalonWorkday(day)&&!free.has(day);
     const metrics=monthlyMetrics(records,current,forSeller(plans,seller.id)?.target,forSeller(funnelPlans,seller.id),
       forSeller(reviewPlans,seller.id)?.target,today,remainingDays(today,monthStart(year,monthNumber),isScheduled),isScheduled(today),isScheduled,
       view.absenceAdjustments?.[seller.id+'/'+month]);
@@ -2958,6 +2964,10 @@ backfillForm.onsubmit=async event=>{
   const {person,day}=backfillForm.elements;
   const date=day.value;
   const seller=person.selectedOptions[0].textContent;
+  if (polishHoliday(date)) {
+    $('#admin-backfill-status').textContent=polishHoliday(date)+' · dzień bez aktywności.';
+    return;
+  }
   const entries=new FormData(backfillForm);
   const rows=sources.map((_,row)=>{
     const values=Array(11).fill(0);

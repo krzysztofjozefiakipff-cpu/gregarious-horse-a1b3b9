@@ -33,10 +33,6 @@ const insertDailyResult=`INSERT INTO daily_results (person,day,counters)
   SELECT ?1,?2,?3
   WHERE NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')
     AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved')`;
-const workday = day => {
-  const weekday=new Date(day+'T00:00:00Z').getUTCDay();
-  return weekday!==0&&(weekday!==6||day>='2026-11-19');
-};
 function daysBetween(start,end) {
   const days=[];
   for (let at=Date.parse(start);at<=Date.parse(end);at+=86400000) {
@@ -58,10 +54,10 @@ async function calendarAdjustments(db,months,scope,...params) {
       WHERE kind='leave' AND substr(day,1,7) IN (${keys}) AND ${scope}`,...months,...params,...months,...params);
   const totals=new Map();
   for (const {person,day,kind} of rows) {
-    if (!workday(day)) continue;
+    if (!isSalonWorkday(day)) continue;
     const month=day.slice(0,7);
     const key=person+'/'+month;
-    if (!totals.has(key)) totals.set(key,{workdays:calendarMonthDays(month).filter(workday).length,absentDays:0});
+    if (!totals.has(key)) totals.set(key,{workdays:calendarMonthDays(month).filter(isSalonWorkday).length,absentDays:0});
     const offset=totals.get(key);
     if (kind==='leave'||kind==='sick') offset.absentDays++;
     else if (kind==='saturday'||kind==='other') offset.workdays--;
@@ -73,14 +69,14 @@ async function tracking(db,person,readOnly=false) {
   if (!readOnly) await db.prepare('INSERT INTO daily_tracking VALUES (?,?) ON CONFLICT DO NOTHING').bind(person,localDay()).run();
   const start_day=(await db.prepare('SELECT start_day FROM daily_tracking WHERE person=?').bind(person).first())?.start_day??localDay();
   const saved=new Set((await list(db,'SELECT day FROM daily_results WHERE person=? AND day>=?',person,start_day)).map(row=>row.day));
-  const exceptions=Object.fromEntries((await list(db,'SELECT day,kind FROM daily_exceptions WHERE person=? AND day>=?',person,start_day)).map(row=>[row.day,row.kind]));
+  const exceptions=Object.fromEntries((await list(db,'SELECT day,kind FROM daily_exceptions WHERE person=? AND day>=?',person,start_day)).filter(row=>!polishHoliday(row.day)).map(row=>[row.day,row.kind]));
   const scheduled=await list(db,"SELECT day FROM work_calendar WHERE person=? AND status='approved' AND day>=?",person,start_day);
-  for (const {day} of scheduled) exceptions[day]='leave';
-  const days=daysBetween(start_day,localDay()).filter(workday);
+  for (const {day} of scheduled) if (!polishHoliday(day)) exceptions[day]='leave';
+  const days=daysBetween(start_day,localDay()).filter(isSalonWorkday);
   const closed=day=>saved.has(day)||['leave','training','zero'].includes(exceptions[day]);
   const drafts=await list(db,'SELECT day FROM daily_drafts WHERE person=? AND day<?',person,localDay());
   const missing=[...new Set([...days.filter(day=>day<localDay()),...drafts.map(row=>row.day)])]
-    .filter(day=>!closed(day)).sort();
+    .filter(day=>!polishHoliday(day)&&!closed(day)).sort();
   const month=days.filter(day=>day.startsWith(localDay().slice(0,7))&&!['leave','training'].includes(exceptions[day]));
   return {missing,exceptions,progress:[month.filter(closed).length,month.length]};
 }
@@ -408,7 +404,7 @@ async function handle(request, env) {
         e.reason FROM daily_exceptions e WHERE e.person=?1 AND substr(e.day,1,7)=?2
           AND (e.kind='pending' OR NOT EXISTS (SELECT 1 FROM work_calendar c WHERE c.person=e.person AND c.day=e.day))
       ORDER BY day`,person,month);
-    return json({entries:entries.map(({reason,...entry})=>reason?{...entry,reason}:entry),automaticDays:calendarMonthDays(month).filter(day=>!workday(day))});
+    return json({entries:entries.filter(entry=>!polishHoliday(entry.day)).map(({reason,...entry})=>reason?{...entry,reason}:entry),automaticDays:calendarMonthDays(month).filter(day=>!isSalonWorkday(day))});
   }
   if (request.method==='GET' && path==='/api/daily/reopen') {
     const person=Number(url.searchParams.get('person'));
@@ -416,7 +412,7 @@ async function handle(request, env) {
       return json({error:'Brak uprawnień do odblokowania dni tego handlowca.'},403);
     const days=await list(db,`SELECT day FROM daily_results
       WHERE person=? AND day<=? AND json_type(counters,'$[5]')='array' ORDER BY day DESC`,person,localDay());
-    return json({days:days.map(row=>row.day)});
+    return json({days:days.map(row=>row.day).filter(day=>!polishHoliday(day))});
   }
   if (request.method==='GET' && ['/api/state','/api/daily'].includes(path)) {
     const month=url.searchParams.get('month');
@@ -556,7 +552,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,previewUser,users,roles,managerAssignments,groupBrand,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,previewUser,users,roles,managerAssignments,groupBrand,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -1036,6 +1032,7 @@ async function handle(request, env) {
     if (!sellers.some(seller=>seller.id===person&&seller.accountStatus!=='inactive'))
       return json({error:'Wybierz aktywne konto handlowca.'},400);
     if (!dayValid(day)||day>localDay()) return json({error:'Wybierz dzisiejszą lub wcześniejszą datę.'},400);
+    if (polishHoliday(day)) return json({error:'Święto jest automatycznie rozliczane jako dzień bez aktywności.'},409);
     if (!validDailyRows(rows)) return json({error:'Sprawdź wartości aktywności w poszczególnych źródłach.'},400);
     normalizeWalkIn(rows);
     if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
@@ -1054,6 +1051,7 @@ async function handle(request, env) {
       return json({error:'Brak uprawnień do odblokowania dni tego handlowca.'},403);
     const {person,day}=body;
     if (!dayValid(day)||day>localDay()) return json({error:'Sprawdź datę wpisu.'},400);
+    if (polishHoliday(day)) return json({error:'Zapisane wyniki świąteczne pozostają w historii.'},409);
     const [,removed]=await db.batch([
       db.prepare(`INSERT INTO daily_drafts (person,day,rows)
         SELECT person,day,json_extract(counters,'$[5]') FROM daily_results
@@ -1067,8 +1065,8 @@ async function handle(request, env) {
   if (path==='/api/work-calendar') {
     if (!['seller','manager'].includes(user.role)) return json({error:'Brak dostępu do kalendarza.'},403);
     const {person,day,kind,action}=body;
-    if (!dayValid(day)||(!workday(day)&&!(action==='save'&&body.endDay&&body.endDay!==day))||!['save','remove','approve','reject','revoke'].includes(action))
-      return json({error:'Wybierz dzień od poniedziałku do soboty i poprawną operację.'},400);
+    if (!dayValid(day)||(!isSalonWorkday(day)&&!(action==='save'&&body.endDay&&body.endDay!==day))||!['save','remove','approve','reject','revoke'].includes(action))
+      return json({error:'Wybierz dzień pracy i poprawną operację. Święta są oznaczane automatycznie.'},400);
     const seller=user.role==='seller';
     if (seller&&(day<localDay()||!['save','remove'].includes(action)))
       return json({error:'Możesz planować dni od dziś. Zatwierdzone dni zmienia kierownik.'},403);
@@ -1094,7 +1092,7 @@ async function handle(request, env) {
       if (!dayValid(endDay)||endDay<day||(Date.parse(endDay)-Date.parse(day))/86400000>=366||
           (endDay!==day&&!['leave','sick'].includes(kind)))
         return json({error:'Sprawdź zakres dat. Urlop i chorobowe można wpisać za maksymalnie 366 dni.'},400);
-      const days=daysBetween(day,endDay).filter(workday);
+      const days=daysBetween(day,endDay).filter(isSalonWorkday);
       change=await db.prepare(`WITH selected AS (SELECT value AS day FROM json_each(?2)),
         eligible AS (
           SELECT day FROM selected WHERE ?5=0 OR NOT EXISTS (
@@ -1127,6 +1125,7 @@ async function handle(request, env) {
     if (user.role!=='seller') return json({error:'Dzienny wpis zapisuje handlowiec.'},403);
     const {day}=body;
     if (!dayValid(day)||day>localDay()) return json({error:'Sprawdź datę wpisu.'},400);
+    if (polishHoliday(day)) return json({error:'Święto jest automatycznie rozliczane jako dzień bez aktywności.'},409);
     const {missing,exceptions}=await tracking(db,user.id);
     const reportingToday=path==='/api/day-exception'&&body.kind==='pending'&&day===localDay();
     if (day !== (missing[0] ?? localDay())&&!reportingToday)
