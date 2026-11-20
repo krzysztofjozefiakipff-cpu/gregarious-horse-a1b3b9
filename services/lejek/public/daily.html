@@ -418,6 +418,11 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
   </form>
 </section>
 <p id="load" role="status">Wczytywanie danych…</p>
+<div id="user-preview-banner" class="manager-preview-bar" hidden>
+  <strong>Podgląd użytkownika</strong> <span id="user-preview-name"></span>
+  <span>Tylko do odczytu</span>
+  <a class="panel-return-link" href="/daily.html?role=admin#zarzadzaj-uzytkownikami">← Wróć do panelu administratora</a>
+</div>
 <div id="account-role-bar" class="manager-preview-bar" hidden><label for="account-role">Aktywna rola</label> <select id="account-role"></select></div>
 <div id="daily" hidden>
 <nav class="panel-nav seller-nav" aria-label="Panel handlowca">
@@ -683,6 +688,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 <div id="user-edit-navigation" hidden>
   <button type="button" class="secondary" id="user-back-to-search">Wróć do listy</button>
   <h2 id="user-edit-heading" tabindex="-1"></h2>
+  <nav id="admin-user-preview-links" class="panel-nav" aria-label="Podgląd paneli użytkownika" hidden></nav>
 </div>
 </details>
 </section>

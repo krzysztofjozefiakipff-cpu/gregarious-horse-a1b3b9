@@ -58,9 +58,9 @@ async function calendarAdjustments(db,months,scope,...params) {
   return Object.fromEntries([...totals].filter(([,value])=>value.absentDays>0));
 }
 
-async function tracking(db,person) {
-  await db.prepare('INSERT INTO daily_tracking VALUES (?,?) ON CONFLICT DO NOTHING').bind(person,localDay()).run();
-  const {start_day}=await db.prepare('SELECT start_day FROM daily_tracking WHERE person=?').bind(person).first();
+async function tracking(db,person,readOnly=false) {
+  if (!readOnly) await db.prepare('INSERT INTO daily_tracking VALUES (?,?) ON CONFLICT DO NOTHING').bind(person,localDay()).run();
+  const start_day=(await db.prepare('SELECT start_day FROM daily_tracking WHERE person=?').bind(person).first())?.start_day??localDay();
   const saved=new Set((await list(db,'SELECT day FROM daily_results WHERE person=? AND day>=?',person,start_day)).map(row=>row.day));
   const exceptions=Object.fromEntries((await list(db,'SELECT day,kind FROM daily_exceptions WHERE person=? AND day>=?',person,start_day)).map(row=>[row.day,row.kind]));
   const scheduled=await list(db,"SELECT day FROM work_calendar WHERE person=? AND status='approved' AND day>=?",person,start_day);
@@ -75,12 +75,12 @@ async function tracking(db,person) {
 }
 
 const memeKey=([title,,,key])=>key??title;
-async function memeFor(db,user,day) {
+async function memeFor(db,user,day,readOnly=false) {
   const published=await list(db,"SELECT id,title,caption FROM meme_stories WHERE status='approved'");
   const pool=memes.concat(published.map(({id,title,caption})=>[title,'💬',caption,'story:'+id]));
   if (user.role!=='seller') return pool[Math.floor(Math.random()*pool.length)].slice(0,3);
   const memeTitles=JSON.stringify(pool.map(memeKey));
-  await db.prepare(`
+  if (!readOnly) await db.prepare(`
     INSERT INTO meme_assignments(person,salon,day,title)
     SELECT ?,?,?,candidate.value
     FROM json_each(?) AS candidate
@@ -167,9 +167,16 @@ async function handle(request, env) {
     return new Response(null,{status:303,headers:{...headers,Location:'/daily.html'}});
   }
   if (!path.startsWith('/api/')&&!managementPage) return serveAsset(path,request.method);
-  const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
-  if (!email || !request.headers.get('oai-authenticated-user-id')) return json({error:'Zaloguj się do konta CARVAMO.'},401);
-  const owner = request.headers.get('x-lejek-verified-admin')==='1';
+  const viewer = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
+  if (!viewer || !request.headers.get('oai-authenticated-user-id')) return json({error:'Zaloguj się do konta CARVAMO.'},401);
+  const verifiedAdmin=request.headers.get('x-lejek-verified-admin')==='1';
+  const preview=url.searchParams.has('podglad');
+  const target=url.searchParams.get('podglad')?.trim().toLowerCase();
+  if (preview&&(!verifiedAdmin||request.method!=='GET'))
+    return json({error:'Podgląd konta jest dostępny tylko dla administratora i służy do odczytu.'},403);
+  if (preview&&!textValid(target)) return json({error:'Wybierz konto do podglądu.'},400);
+  const owner=verifiedAdmin&&!preview;
+  const email=preview?target:viewer;
   const db = env.DB;
   if (!owner&&await db.prepare('SELECT 1 FROM archived_users WHERE email=?').bind(email).first())
     return json({error:'To konto nie ma obecnie dostępu do Lejka.'},403);
@@ -181,7 +188,7 @@ async function handle(request, env) {
     :head?['group']:['manager','seller'].includes(assigned?.role)?[assigned.role]:[];
   if (!roles.length) return json({error:'Administrator musi przypisać Ci rolę w lejku.'},403);
   const requested=url.searchParams.get('role');
-  if (requested&&!roles.includes(requested)&&request.method!=='GET') return json({error:'Nie masz już wybranej roli. Odśwież widok.'},403);
+  if (requested&&!roles.includes(requested)&&(preview||request.method!=='GET')) return json({error:'Nie masz już wybranej roli. Odśwież widok.'},403);
   const role=roles.includes(requested)?requested:roles[0];
   if (managementPage) {
     return role==='seller'
@@ -191,6 +198,7 @@ async function handle(request, env) {
 
   const user={...assigned,role,group:head?.group_name};
   const signedInAs=assigned?.name?.trim()||email;
+  const previewUser=preview?{name:signedInAs,viewer}:null;
   const invitedNewAccount=async(address,roles)=>{
     const sent=env.inviteReady&&await env.sendInvitation(address,signedInAs,roles).catch(()=>false);
     return json({ok:true,invitation:sent?'sent':'failed'});
@@ -413,7 +421,7 @@ async function handle(request, env) {
         UNION SELECT substr(day,1,7) AS month FROM daily_results WHERE person=?1
         ORDER BY month`,user.id):[];
       const sourcePlans=user.role==='seller'?await list(db,'SELECT month,targets FROM seller_source_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('seller_source_plans','seller_source_plans.month'),...months,...params):[];
-      const personal=user.role==='seller'?await tracking(db,user.id):null;
+      const personal=user.role==='seller'?await tracking(db,user.id,preview):null;
       if (personal) {
         const drafts=await list(db,'SELECT day,rows FROM daily_drafts WHERE person=? AND day IN (?,?)',
           user.id,localDay(),personal.missing[0]??null);
@@ -444,7 +452,7 @@ async function handle(request, env) {
         ?new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(today+':'+user.id)))
         :null;
       const trending=mixed&&(!sourceSeed||sourceSeed[0]<128);
-      const meme=sidebarMode==='meme'?await memeFor(db,user,today):null;
+      const meme=sidebarMode==='meme'?await memeFor(db,user,today,preview):null;
       const assignedGif=trending&&personal?await db.prepare('SELECT gif_id FROM giphy_daily WHERE person=? AND day=?').bind(user.id,today).first():null;
       const giphy=trending?{key:env.GIPHY_API_KEY,id:assignedGif?.gif_id??null}:null;
       const memeVotes=personal&&sidebarMode==='meme'
@@ -515,7 +523,7 @@ async function handle(request, env) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,users,roles,managerAssignments,groupBrand,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,previewUser,users,roles,managerAssignments,groupBrand,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,availableMonths:availableMonths.map(row=>row.month),calendar,absenceAdjustments,brand,salons,groups,ranking,approvals,cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -533,7 +541,7 @@ async function handle(request, env) {
       reportMonths.get(id).push(month);
     }
     const reportSellers=sellers.map(seller=>({...seller,reportMonths:reportMonths.get(seller.id)??[]}));
-    return json({signedInAs,roles,role:user.role,groupBrand,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
+    return json({signedInAs,previewUser,roles,role:user.role,groupBrand,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);

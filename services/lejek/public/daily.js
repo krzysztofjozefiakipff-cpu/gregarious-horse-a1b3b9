@@ -337,6 +337,7 @@ const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString(
 const panelNames={admin:'Panel administratora',group:'Panel szefa grupy dealerskiej',manager:'Panel kierownika salonu',seller:'Panel handlowca'};
 const detailParams=new URLSearchParams(location.search);
 const detailSeller=detailParams.get('handlowiec');
+const previewTarget=detailParams.get('podglad');
 let data;
 let editDay;
 let busy=false;
@@ -345,10 +346,12 @@ let managerPreviewSalon=history.state?.managerPreviewSalon??'';
 let groupPreviewName=history.state?.groupPreviewName??'';
 
 async function api(path,body) {
+  if (body!==undefined&&previewTarget) throw new Error('Podgląd konta jest tylko do odczytu.');
   if (body!==undefined&&(managerPreviewSalon||groupPreviewName))
     throw new Error('To podgląd. Zmiany możesz zapisać z konta kierownika lub szefa grupy.');
   const url=new URL(path,location.origin);
-  const selectedRole=data?.role||detailParams.get('role')||sessionStorage.getItem('lejek-active-role');
+  if (previewTarget) url.searchParams.set('podglad',previewTarget);
+  const selectedRole=data?.role||detailParams.get('role')||!previewTarget&&sessionStorage.getItem('lejek-active-role');
   if (selectedRole) url.searchParams.set('role',selectedRole);
   const response=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
   const result=await response.json();
@@ -2479,6 +2482,16 @@ function loadUserEditor() {
   $('#user-search').hidden=Boolean(selected);
   $('#user-edit-navigation').hidden=!selected;
   $('#user-edit-heading').textContent=selected?.name??'';
+  const previewLinks=$('#admin-user-preview-links');
+  const canPreview=data?.role==='admin'&&!managerPreviewSalon&&!groupPreviewName&&selected&&!selected.archived;
+  const roles=canPreview?['group','manager','seller'].filter(role=>selected.roles.split(',').includes(role)):[];
+  previewLinks.replaceChildren(...roles.map(role=>{
+    const link=document.createElement('a');
+    link.href='/daily.html?'+new URLSearchParams({podglad:selected.email,role});
+    link.textContent='Podgląd: '+panelNames[role].replace(/^Panel /,'');
+    return link;
+  }));
+  previewLinks.hidden=!roles.length;
   if (userEditor.hidden) return;
   $('#user-save').textContent=editing?'Zapisz zmiany':'Dodaj użytkownika';
   const legacyFirst=(selected?.name??'').trim().split(/\s+/,1)[0];
@@ -2820,6 +2833,7 @@ $('#reopen-day-form').onsubmit=async event=>{
 
 function sellerDetailUrl(person,from) {
   const params=new URLSearchParams({handlowiec:person,role:data.role,powrot:from});
+  if (previewTarget) params.set('podglad',previewTarget);
   const scope=$('#manager-scope');
   if (!$('#manager-scope-bar').hidden&&scope.value) params.set('salon',scope.value);
   return '/daily.html?'+params;
@@ -2830,6 +2844,7 @@ function renderSellerDetail() {
   section.hidden=false;
   const team=detailParams.get('powrot')==='zespol'&&['manager','group'].includes(data.role);
   const params=new URLSearchParams({role:data.role});
+  if (previewTarget) params.set('podglad',previewTarget);
   if (detailParams.get('salon')) params.set('salon',detailParams.get('salon'));
   if (team) params.set('osoba',detailSeller);
   const back=$('#seller-detail-return');
@@ -2934,6 +2949,10 @@ $('#manager-preview-salon').onchange=event=>{
   showView();
 };
 $('#account-role').onchange=event=>{
+  if (previewTarget) {
+    location.assign('/daily.html?'+new URLSearchParams({podglad:previewTarget,role:event.target.value}));
+    return;
+  }
   const previous=new URL(location.href);
   previous.searchParams.set('role',data.role);
   history.replaceState(history.state,'',previous);
@@ -2949,8 +2968,10 @@ async function refresh() {
   $('#management-plan-period').textContent='Okres · '+monthLabel(month);
 
   const signedIn=$('#signed-in');
-  signedIn.querySelector('strong').textContent=data.signedInAs??'';
+  signedIn.querySelector('strong').textContent=data.previewUser?.viewer??data.signedInAs??'';
   signedIn.hidden=!data.signedInAs;
+  $('#user-preview-banner').hidden=!data.previewUser;
+  $('#user-preview-name').textContent=data.previewUser?.name??'';
   if (!detailSeller&&data.role!=='seller') {
     data.salonPerformance=await api('/api/salon-plans?month='+data.today.slice(0,7))
       .then(({plans})=>plans).catch(()=>null);
@@ -2959,7 +2980,7 @@ async function refresh() {
   $('#account-role-bar').hidden=Boolean(detailSeller)||data.roles.length<2;
   roleSelect.replaceChildren(...data.roles.map(role=>new Option(panelNames[role],role)));
   roleSelect.value=data.role;
-  sessionStorage.setItem('lejek-active-role',data.role);
+  if (!previewTarget) sessionStorage.setItem('lejek-active-role',data.role);
   $('#load').textContent='';
   $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
   showView();
@@ -3267,4 +3288,8 @@ $('#charity').onsubmit=event=>{
   const form=event.target;
   run(()=>api('/api/cause',Object.fromEntries(new FormData(form))));
 };
+if (previewTarget) {
+  $('#user-preview-banner').hidden=false;
+  $('.panel-signout').hidden=true;
+}
 refresh().catch(error=>{$('#load').textContent=error.message;});
