@@ -2648,6 +2648,9 @@ function renderAdmin() {
   if ($('#admin-lessons-block').open&&!$('#admin-lessons-block').hidden) loadLessonPacks();
   {
     const form=$('#brand');
+    const optionalName=view.role==='group';
+    form.elements.name.required=!optionalName;
+    $('#dealer-name-optional').hidden=!optionalName;
     const selected=form.elements.salon.value;
     form.elements.salon.replaceChildren(...view.salons.map(({salon})=>new Option(salon,salon)));
     if (view.salons.some(({salon})=>salon===selected)) form.elements.salon.value=selected;
@@ -2994,7 +2997,8 @@ $('#entry').onsubmit=event=>{
 };
 $('#brand').onsubmit=event=>{
   event.preventDefault();
-  const {salon,name,logo}=event.target.elements;
+  const form=event.currentTarget;
+  const {salon,name,logo,removeLogo}=form.elements;
   const file=logo.files[0];
   if(file?.size>40960){$('#load').textContent='Logo może mieć maksymalnie 40 KB.';return;}
   run(async ()=>{
@@ -3003,8 +3007,10 @@ $('#brand').onsubmit=event=>{
       reader.onload=()=>resolve(reader.result);
       reader.onerror=()=>reject(new Error('Nie udało się odczytać logo.'));
       reader.readAsDataURL(file);
-    }):'';
+    }):removeLogo.checked?'':undefined;
     await api('/api/brand',{salon:salon.value,name:name.value,logo:encoded});
+    name.value=logo.value='';
+    removeLogo.checked=false;
   });
 };
 for (const button of voteButtons) button.onclick=async()=>{
