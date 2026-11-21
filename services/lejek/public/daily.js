@@ -910,13 +910,16 @@ const taskPriorities=[
 ];
 
 function renderTodayTasks(metrics,previous,day) {
+  const dayIndex=Math.floor(Date.parse(day)/86400000);
+  const fallback=quotes[dayIndex%quotes.length];
   const holiday=polishHoliday(day);
   if (holiday) {
     const message=document.createElement('p');
     message.className='task-message';
     message.textContent=holiday+' · dzień bez aktywności.';
     $('#tasks').replaceChildren(message);
-    for (const id of ['tasks-intro','followup-reminder','tasks-closing']) $('#'+id).hidden=true;
+    for (const id of ['tasks-intro','followup-reminder']) $('#'+id).hidden=true;
+    renderQuote(fallback);
     return;
   }
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
@@ -950,11 +953,9 @@ function renderTodayTasks(metrics,previous,day) {
   reminder.textContent=remaining
     ?'Wróć do ofert z '+dateLabel(previous.day)+' ('+remaining+' do sprawdzenia). ' + (followups?.target!=null?'Rozmowy liczą się do planu.':'')
     :'';
-  const closing=$('#tasks-closing');
-  closing.hidden=!tasks.length&&!remaining&&!metrics.some(metric=>metric.todayTarget>0);
-  const endings=dailyClosings[tasks.length?'tasks':remaining?'followups':'done'];
-  const dayIndex=Math.floor(Date.parse(day)/86400000);
-  closing.textContent=endings[dayIndex%endings.length];
+  const hasDailyActivity=tasks.length||remaining||metrics.some(metric=>metric.todayTarget>0);
+  const slogans=dailyClosings[tasks.length?'tasks':remaining?'followups':'done'];
+  renderQuote(hasDailyActivity?slogans[dayIndex%slogans.length]:fallback);
 }
 
 const actionsByMetric={
@@ -1029,6 +1030,7 @@ function renderQuote(text) {
   card.classList.add('is-typing');
   animated.textContent='';
   function frame(now) {
+    if (full.textContent!==text) return;
     started ??= now;
     const count=Math.floor((now-started)/interval);
     if (count>=letters.length||motion.matches) {
@@ -1315,7 +1317,6 @@ function renderSeller() {
   const holiday=polishHoliday(day);
   const locked=Boolean(holiday||records[day]||exception==='zero'||exception==='leave'||exception==='training');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
-  renderQuote(quotes[dayIndex%quotes.length]);
   const lesson=data.lesson;
   $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
   $('#lesson-topic').textContent=lesson?.question??lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
