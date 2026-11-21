@@ -33,18 +33,19 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
   const schedules=new Map(sellers.map(({id})=>{
     const calendar=personalCalendar.get(id)??[];
     const off=new Set(calendar.filter(row=>row.status==='approved'&&row.kind!=='zero').map(row=>row.day));
-    const trackingStart=trackingDays.get(id);
     let day=yesterday;
-    while ((!trackingStart||day>=trackingStart)&&(!isSalonWorkday(day)||off.has(day))) {
+    while (!isSalonWorkday(day)||off.has(day)) {
       day=new Date(Date.parse(day)-86400000).toISOString().slice(0,10);
     }
-    return [id,{off,previousDay:trackingStart&&day<trackingStart?null:day}];
+    return [id,{off,candidate:day}];
   }));
-  const months=[...new Set([month,...[...schedules.values()].map(({previousDay})=>previousDay?.slice(0,7)).filter(Boolean)])].sort();
+  const months=[...new Set([month,...[...schedules.values()].map(({candidate})=>candidate.slice(0,7))])].sort();
   const first=months[0]+'-01';
-  const activeDays=[...new Set([today,...[...schedules.values()].map(({previousDay})=>previousDay).filter(Boolean)])];
-  const [results,settings,reviews,signoffs,adjustments,plans]=await Promise.all([
+  const activeDays=[...new Set([...schedules.values()].map(({candidate})=>candidate))];
+  const [results,drafts,settings,reviews,signoffs,adjustments,plans]=await Promise.all([
     list(db,'SELECT person,day,counters FROM daily_results WHERE day BETWEEN ? AND ? AND '+scope+' AND '+includedDailyResult,first,today,...params),
+    list(db,`SELECT person,day,rows FROM daily_drafts WHERE day IN (SELECT value FROM json_each(?))
+      AND ${scope} AND ${inReportDay(resultAddress('daily_drafts'),'daily_drafts.day')}`,JSON.stringify(activeDays),...params),
     list(db,'SELECT * FROM daily_briefing_settings WHERE day BETWEEN ? AND ? AND '+scope+' ORDER BY day DESC',first,today,...params),
     list(db,`SELECT r.*,a.name AS manager_name FROM daily_briefing_reviews r JOIN accounts a ON a.id=r.manager
       WHERE r.day IN (SELECT value FROM json_each(?)) AND `+scope,JSON.stringify(activeDays),...params),
@@ -53,6 +54,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
     Promise.all(salons.flatMap(({salon})=>months.map(async m=>[salon+'/'+m,new Map((await sellerTargets(salon,m)).map(plan=>[plan.id,plan]))])))
   ]);
   const personalResults=Map.groupBy(results,row=>row.person);
+  const draftByDay=new Map(drafts.map(row=>[row.person+'/'+row.day,row.rows]));
   const personalSettings=Map.groupBy(settings,row=>row.person);
   const participants=Map.groupBy(sellers,row=>row.salon);
   const reviewed=new Map(reviews.map(row=>[row.person+'/'+row.day,row]));
@@ -69,7 +71,13 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       if (archived&&!current.length) return [];
       const editable=!archived&&Boolean(seller.planEligible);
       const dates=personalCalendar.get(id)??[];
-      const {off,previousDay}=schedules.get(id);
+      const {off,candidate}=schedules.get(id);
+      const previousRow=rows.find(row=>row.day===candidate);
+      const draft=draftByDay.get(id+'/'+candidate);
+      const approvedZero=dates.some(row=>row.day===candidate&&row.kind==='zero');
+      const pendingPrevious=dates.some(row=>row.day===candidate&&row.status==='pending');
+      const trackingStart=trackingDays.get(id);
+      const previousDay=previousRow||draft||approvedZero||pendingPrevious||!trackingStart||candidate>=trackingStart?candidate:null;
       const reviewMonth=previousDay?.slice(0,7)??month;
       const scheduled=m=>reportWorkdays(m).filter(date=>!off.has(date));
       const days=scheduled(month);
@@ -83,10 +91,11 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const todaySettings=personSettings.find(row=>row.day===today);
       const previousSettings=personSettings.find(row=>row.day===previousDay);
       const forecastSettings=personSettings.find(row=>row.day.startsWith(month));
-      const previousRow=rows.find(row=>row.day===previousDay);
-      const previousMatrix=previousRow&&JSON.parse(previousRow.counters)[5];
-      const previousActual=summarizeReportRows(previousRow?[previousRow]:[]).actuals;
-      const previousStatus=!previousDay?'none':previousRow||dates.some(row=>row.day===previousDay&&row.kind==='zero')?'recorded':'missing';
+      const previousMatrix=previousRow?JSON.parse(previousRow.counters)[5]:draft?JSON.parse(draft):null;
+      const previousStatus=!previousDay?'none':previousRow||approvedZero?'recorded'
+        :draft?'draft':pendingPrevious?'pending':'missing';
+      const previousActual=summarizeReportRows(previousRow?[previousRow]
+        :previousStatus==='draft'&&validDailyRows(previousMatrix)?[{counters:dailyCounters(previousMatrix)}]:[]).actuals;
       const reviewVersion=JSON.stringify([previousDay,previousActual,previousRow?.counters??null]);
       const review=reviewed.get(id+'/'+previousDay);
       const matched=review&&previousStatus==='recorded'&&[reviewVersion,JSON.stringify(previousActual)].includes(review.actuals);
@@ -121,8 +130,8 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       return [{id,name,archived,editable,ownForecast:!archived&&id===managerId,workday,todayGoals,defaultTodayGoals,correction,dayOff,pendingToday,
         signoff:{previousReady,planVersion,accepted,completionVersion,completed},
         remainingPlan:editable?briefingRemainingPlan(sales,past,days,today,todayGoals):[],
-        review:{day:previousDay,version:reviewVersion,status:previousStatus,actual:previousStatus==='recorded'?previousActual:null,goals:previousGoals,
-          rows:editable&&validDailyRows(previousMatrix)?previousMatrix:null,
+        review:{day:previousDay,version:reviewVersion,status:previousStatus,actual:['recorded','draft'].includes(previousStatus)?previousActual:null,goals:previousGoals,
+          rows:validDailyRows(previousMatrix)?previousMatrix:null,
           confirmed:matched?{by:review.manager_name,at:review.reviewed_at}:null,stale:Boolean(review&&!matched)},
         actual:briefingSalesIndexes.map(i=>actuals[i]),plan:briefingSalesIndexes.map(i=>sales[i]),
         forecast,automaticForecast,manual:forecast.map((value,i)=>!archived&&remaining&&manual[i]!=null?value:null)}];
