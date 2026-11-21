@@ -3,7 +3,8 @@ import {promisify} from 'node:util';
 
 export const sharedAdmin = 'admin@carvamo.com';
 const derive = promisify(scrypt);
-const lifetime = 8 * 60 * 60 * 1000;
+const sessionSeconds = 8 * 60 * 60;
+const rememberedSessionSeconds = 30 * 24 * 60 * 60;
 const tokenHash = token => createHash('sha256').update(token).digest('hex');
 const random = () => randomBytes(32).toString('hex');
 
@@ -91,19 +92,20 @@ export function localIdentity(database, db) {
       const reset=database.prepare('SELECT email,credential_hash FROM lejek_password_resets WHERE token_hash=? AND expires_at>?').get(key,Date.now());
       return reset?replacePassword(reset.email,reset.credential_hash,password,key):false;
     },
-    async authenticate(email, password) {
+    async authenticate(email, password, remember = false) {
       const credential=await verify(email,password);
       if (!credential) return null;
       const token = random();
       const now = Date.now();
+      const maxAge = remember ? rememberedSessionSeconds : sessionSeconds;
       database.prepare('DELETE FROM lejek_sessions WHERE expires_at <= ?').run(now);
       const result = database.prepare(`
         INSERT INTO lejek_sessions (token_hash, email, expires_at)
         SELECT ?, email, ? FROM lejek_credentials
         WHERE email = ? AND password_hash = ?
           AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email = ?)
-      `).run(tokenHash(token), now + lifetime, email, credential.password_hash, email);
-      return result.changes ? 'bw-' + token : null;
+      `).run(tokenHash(token), now + maxAge * 1000, email, credential.password_hash, email);
+      return result.changes ? {token:'bw-' + token,maxAge} : null;
     },
     account(token) {
       return database.prepare(`
