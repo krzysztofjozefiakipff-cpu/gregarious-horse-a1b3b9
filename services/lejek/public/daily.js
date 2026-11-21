@@ -1189,39 +1189,42 @@ function showPanelLogo(src,alt='') {
 }
 
 function renderRanking(ranking) {
-  const rankText=rank=>rank?rank.place+'. miejsce z '+rank.total:'Brak pozycji';
   const group=ranking?.groupName;
+  const rank=group?ranking.group:ranking?.salon;
   $('#ranking-title').textContent=group?'Ranking grupy':'Ranking salonu';
-  $('#ranking-position').textContent=rankText(group?ranking.group:ranking?.salon);
-  const groupName=$('#ranking-group-name');
-  groupName.hidden=!group;
-  groupName.textContent=group??'';
-  const salonPosition=$('#ranking-salon');
-  salonPosition.hidden=!group;
-  salonPosition.textContent='W salonie · '+rankText(ranking?.salon);
+  const position=$('#ranking-position');
+  position.hidden=!rank||rank.place<=3;
+  position.textContent=rank?'Twoja pozycja · '+rank.place+'. miejsce z '+rank.total:'';
 
   const leaders=ranking?.podium??[];
-  $('#ranking-table').hidden=!leaders.length;
+  const podium=$('#ranking-podium');
+  podium.hidden=!leaders.length;
   $('#ranking-empty').hidden=Boolean(leaders.length);
-  $('#ranking-podium').replaceChildren(...leaders.map(({place,name,salon,counts,self})=>{
-    const row=document.createElement('tr');
-    row.toggleAttribute('data-self',self);
-    const seller=document.createElement('th');
-    seller.scope='row';
-    seller.textContent=place+'. '+name+(self?' (Ty)':'');
+  const places=new Map();
+  for (const {place,name,salon,self} of leaders) {
+    if (!places.has(place)) {
+      const step=document.createElement('li');
+      step.value=place;
+      step.dataset.place=place;
+      const label=document.createElement('span');
+      label.className='podium-place';
+      label.textContent=place+'. miejsce';
+      step.append(label);
+      places.set(place,step);
+    }
+    const seller=document.createElement('div');
+    seller.className='podium-seller';
+    const sellerName=document.createElement('strong');
+    sellerName.textContent=self?name+' (Ty)':name;
+    seller.append(sellerName);
     if (group) {
       const location=document.createElement('small');
       location.textContent=salon;
       seller.append(location);
     }
-    row.append(seller);
-    for (const count of counts) {
-      const cell=document.createElement('td');
-      cell.textContent=count;
-      row.append(cell);
-    }
-    return row;
-  }));
+    places.get(place).append(seller);
+  }
+  podium.replaceChildren(...places.values());
 }
 
 const tasksHeading=$('#today-tasks-heading');
