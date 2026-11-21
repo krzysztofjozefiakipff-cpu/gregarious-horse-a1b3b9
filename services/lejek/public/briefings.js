@@ -402,16 +402,28 @@ function renderBriefingSeller(person,report,open,salon) {
   const summary=reportElement('summary');
   const name=reportElement('span',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':''));
   name.className='briefing-seller-name';
+  const initials=person.name.trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toLocaleUpperCase('pl');
+  const avatar=reportElement('span',initials);
+  avatar.className='briefing-avatar';
+  avatar.setAttribute('aria-hidden','true');
+  const caption=reportElement('span');
+  caption.className='briefing-seller-caption';
+  caption.append(name);
   const {signoff,review}=person;
   const previousLabel='Wpis z poprzedniego dnia'+(review.day?' · '+dateLabel(review.day):'');
   if (person.editable) {
-    const state=signoff.completed?'Zatwierdzona':signoff.accepted?'Do zatwierdzenia':person.pendingToday?'Zgłoszenie w toku'
-      :signoff.previousReady?'Plan na dziś':review.status==='recorded'?'Sprawdź wykonanie':briefingReviewStates[review.status];
+    const awaitingToday=signoff.previousReady&&person.pendingToday;
+ const state=signoff.completed?'Zatwierdzona':signoff.accepted?'Do zatwierdzenia'
+      :signoff.previousReady?(awaitingToday?'Zgłoszenie w toku':'Plan na dziś')
+      :review.status==='recorded'?'Sprawdź wykonanie':briefingReviewStates[review.status];
+ const attention=awaitingToday||(!signoff.previousReady&&['missing','draft','pending'].includes(review.status));
     const badge=reportElement('span',state);
     badge.className='briefing-completed-badge';
     badge.dataset.complete=details.dataset.reviewComplete=String(signoff.completed);
-    summary.append(name,badge);
-  } else summary.append(name);
+    badge.dataset.tone=signoff.completed?'done':attention?'attention':'active';
+    caption.append(badge);
+  }
+  summary.append(avatar,caption);
   details.append(summary);
 
   const canEdit=person.editable&&!previewTarget;
@@ -483,6 +495,7 @@ async function loadBriefingPanel(message='',focusSeller) {
   briefingPdf.disabled=true;
   briefingStatus.textContent='Wczytywanie odprawy…';
   const open=new Set([...briefingResults.querySelectorAll('details[data-seller][open]')].map(row=>row.dataset.seller));
+  const openTotals=new Set([...briefingResults.querySelectorAll('.briefing-salon-totals[open]')].map(row=>row.closest('article').dataset.salon));
   try {
     const report=await api('/api/daily-briefing');
     if (version!==briefingLoadVersion||briefingHost.hidden) return;
@@ -494,6 +507,11 @@ async function loadBriefingPanel(message='',focusSeller) {
     briefingSalon.value=salons.includes(previous)?previous:salons.length>1?'':salons[0]??'';
     briefingHost.querySelector('#briefing-salon-filter').hidden=salons.length<2;
     briefingResults.replaceChildren();
+    if (!report.salons.length) {
+      const empty=reportElement('p','Brak przypisanych salonów do odprawy.');
+      empty.className='briefing-empty';
+      briefingResults.append(empty);
+    }
     for (const salon of report.salons) {
       const card=reportElement('article');
       card.dataset.salon=salon.salon;
@@ -501,17 +519,22 @@ async function loadBriefingPanel(message='',focusSeller) {
       heading.className='briefing-salon-heading';
       const count=reportElement('span');
       count.className='briefing-salon-count';
-      heading.append(reportElement('h2',salon.salon),count);
+      const icon=reportElement('span');
+      icon.className='briefing-salon-icon';
+      icon.innerHTML=panelIcon('building');
+      heading.append(icon,reportElement('h2',salon.salon),count);
       const totals=reportElement('details');
       totals.className='briefing-salon-totals';
+      totals.open=openTotals.has(salon.salon);
       totals.append(reportElement('summary','Wyniki i prognoza salonu'),
         briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
           briefingSalesLabels.map((label,i)=>[label,salon.actual[i],salon.plan[i],
             salon.forecast[i]==null?null:salon.forecast[i]+(salon.missing[i]?' (częściowa)':''),
             salon.missing[i]?null:briefingEnd(salon.actual[i],salon.forecast[i])])));
-      card.append(heading,totals);
+      card.append(heading);
       if (!salon.people.length) card.append(reportElement('p','Brak handlowców do odprawy.'));
       for (const person of salon.people) card.append(renderBriefingSeller(person,report,open.has(String(person.id)),salon.salon));
+      if (salon.people.length) card.append(totals);
       briefingResults.append(card);
     }
     filterBriefingSalons();
@@ -542,11 +565,13 @@ function openNextBriefing() {
 
 function updateBriefingProgress() {
   let done=0,total=0;
-  for (const card of briefingResults.children) {
+  for (const card of briefingResults.querySelectorAll('article[data-salon]')) {
     const count=card.querySelector('.briefing-salon-count');
     const reviews=card.querySelectorAll('[data-review-complete]');
     const complete=card.querySelectorAll('[data-review-complete="true"]').length;
-    count.textContent=reviews.length?complete+' z '+reviews.length:'';
+    count.hidden=!reviews.length;
+    count.textContent=complete+' z '+reviews.length;
+    count.setAttribute('aria-label','Zatwierdzone odprawy: '+count.textContent);
     if (card.hidden) continue;
     done+=complete;
     total+=reviews.length;
@@ -554,6 +579,7 @@ function updateBriefingProgress() {
   const box=briefingHost.querySelector('#briefing-progress');
   box.hidden=!total;
   box.querySelector('strong').textContent='Zatwierdzone odprawy · '+done+' z '+total;
+  box.querySelector('#briefing-progress-note').textContent=done===total?'Wszystkie odprawy zatwierdzone.':'Pozostało do zatwierdzenia: '+(total-done);
   const progress=box.querySelector('progress');
   progress.max=total||1;
   progress.value=done;
@@ -563,7 +589,7 @@ function updateBriefingProgress() {
 
 function filterBriefingSalons() {
   const selected=briefingSalon.value;
-  for (const card of briefingResults.children) card.hidden=Boolean(selected&&card.dataset.salon!==selected);
+  for (const card of briefingResults.querySelectorAll('article[data-salon]')) card.hidden=Boolean(selected&&card.dataset.salon!==selected);
   updateBriefingProgress();
 }
 
