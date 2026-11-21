@@ -37,6 +37,13 @@ if (!dailyArchiveReady.get()) {
     database.exec('COMMIT');
   } catch(error) { database.exec('ROLLBACK'); throw error; }
 }
+database.exec('BEGIN IMMEDIATE');
+try {
+  if (!database.prepare('PRAGMA table_info(daily_drafts)').all().some(column=>column.name==='saved_at')) {
+    database.exec(readFileSync('drizzle/0035_daily_draft_saved_at.sql','utf8'));
+  }
+  database.exec('COMMIT');
+} catch(error) { database.exec('ROLLBACK'); throw error; }
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
 const DB = {
   prepare(sql) {

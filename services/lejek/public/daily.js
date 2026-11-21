@@ -1240,6 +1240,71 @@ const taskVisibility=new IntersectionObserver(([entry])=>{
 taskVisibility.observe(tasksHeading);
 document.addEventListener('visibilitychange',recordVisibleTasks);
 
+function draftStatus(day) {
+  const savedAt=data.personal.draftSavedAt?.[day];
+  if (!savedAt) return 'Szkic zapisany';
+  const time=new Intl.DateTimeFormat('pl-PL',{
+    hour:'2-digit',minute:'2-digit',timeZone:'Europe/Warsaw'
+  }).format(new Date(savedAt));
+  return 'Szkic zapisany o '+time;
+}
+
+function renderToday(records,orders) {
+  const {today,personal,ranking}=data;
+  const next=personal.missing[0];
+  const exception=personal.exceptions[today];
+  const holiday=polishHoliday(today);
+  const status=$('#today-entry-status');
+  const link=$('#today-entry-link');
+  $('#today-date').textContent=dateLabel(today,{weekday:'long',day:'numeric',month:'long'});
+  link.href='#wyniki';
+  link.onclick=()=>{if (editDay) { editDay=null; renderSeller(); }};
+  if (records[today]||holiday||['zero','leave','training'].includes(exception)) {
+    status.textContent=records[today]?'Dzień zatwierdzony':holiday??'Dzień rozliczony';
+    link.textContent='Zobacz wpis';
+  } else if (next&&next!==today) {
+    const waiting=personal.exceptions[next]==='pending';
+    status.textContent=dateLabel(next)+' · '+(waiting?'Czeka na zatwierdzenie':'Najstarszy dzień do rozliczenia');
+    link.textContent=waiting?'Otwórz kalendarz':'Rozlicz dzień';
+    if (waiting) {
+      link.href='#kalendarz-pracy';
+      link.onclick=()=>{$('#seller-calendar-editor').dataset.calendarDraftDay=next;};
+    } else {
+      link.onclick=()=>{if (editDay!==next) { editDay=next; renderSeller(); }};
+    }
+  } else if (exception==='pending') {
+    status.textContent='Dzień czeka na zatwierdzenie';
+    link.textContent='Otwórz kalendarz';
+    link.href='#kalendarz-pracy';
+    link.onclick=()=>{$('#seller-calendar-editor').dataset.calendarDraftDay=today;};
+  } else if (personal.drafts?.[today]) {
+    status.textContent=draftStatus(today);
+    link.textContent='Wróć do szkicu';
+  } else {
+    status.textContent='Dzień do uzupełnienia';
+    link.textContent='Wpisz działania';
+  }
+
+  const {actual,target,delta}=orders;
+  const pace=$('#today-orders-pace');
+  const progress=$('#today-orders-progress');
+  $('#today-orders-count').textContent=target==null?String(actual):actual+' z '+target;
+  pace.hidden=target==null||delta==null;
+  pace.dataset.behind=String(delta<0);
+  pace.textContent=actual>=target?'Plan wykonany':delta<0?Math.abs(delta)+' poniżej tempa na dziś'
+    :delta>0?delta+' powyżej tempa na dziś':'Zgodnie z tempem';
+  progress.hidden=!(target>0);
+  progress.max=target>0?target:1;
+  progress.value=Math.min(actual,progress.max);
+  $('#today-orders-remaining').textContent=target==null?'Brak planu zamówień':actual>=target?'Cel miesiąca osiągnięty'
+    :'Do celu miesiąca brakuje '+(target-actual);
+
+  const rank=ranking?.groupName?ranking.group:ranking?.salon;
+  $('#today-rank').hidden=!rank;
+  $('#today-rank-label').textContent=ranking?.groupName?'Ranking grupy':'Ranking salonu';
+  $('#today-rank-value').textContent=rank?rank.place+'. miejsce ›':'';
+}
+
 function renderSeller() {
   const {brand,personal,cause}=data;
   const salon=data.sellers[0].salon;
@@ -1268,7 +1333,9 @@ function renderSeller() {
   const isScheduled=date=>isSalonWorkday(date)&&!['leave','training'].includes(personal.exceptions[date]);
   const [year,monthNumber]=currentMonth.split('-').map(Number);
   $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
-  renderTodayTasks(periodMetrics(data,currentMonth,1),data.previousDaily,data.today);
+  const currentMetrics=periodMetrics(data,currentMonth,1);
+  renderTodayTasks(currentMetrics,data.previousDaily,data.today);
+  renderToday(records,currentMetrics.find(metric=>metric.index===7));
   void recordVisibleTasks();
   renderPeriodPicker(periodValue.value||currentMonth);
   loadSellerPeriod();
@@ -1287,16 +1354,18 @@ function renderSeller() {
   $('#backlog-calendar').onclick=()=>{
     if (next) $('#seller-calendar-editor').dataset.calendarDraftDay=next;
   };
-  $('#save').disabled=$('#approve-day').disabled=busy||Boolean(blocked)||locked;
+  $('#save').disabled=$('#approve-day').disabled=busy||Boolean(blocked)||locked||Boolean(data.previewUser);
   const draft=personal.drafts?.[day];
   const matrix=records[day]?.[5]??draft;
   const legacy=records[day]&&!records[day][5];
+  $('#entry-draft-state').hidden=!draft||locked||Boolean(blocked);
+  $('#entry-draft-state').textContent=draft?draftStatus(day):'';
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(([,name])=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
   const previousSource=$('#entry-grid').dataset.day===day?Number(sourceSelect.value):0;
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(locked||blocked?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+label+(r===0&&(c===1||c===2)?'<small>Automatycznie</small>':'')+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(locked||blocked||data.previewUser?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
@@ -1307,7 +1376,7 @@ function renderSeller() {
   }
   $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':holiday?holiday+' · dzień bez aktywności.':locked?'Dzień rozliczony.'
     :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
-    :draft?'Zapisano roboczo. Możesz dalej edytować wartości.':'Możesz zapisywać zmiany w ciągu dnia.';
+    :data.previewUser?'Podgląd wpisu.':draft?'Możesz dalej edytować wartości.':'Po zatwierdzeniu dzień trafi do wyników.';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;
@@ -2384,6 +2453,58 @@ salonPlans.addEventListener('toggle',()=>{
   if (salonPlans.open&&!salonPlans.hidden) loadSalonPlans();
 });
 
+const mobilePanel=matchMedia('(max-width:850px)');
+const mobileTabs={
+  seller:[['dzisiaj','Dzisiaj','calendar'],['plan','Wyniki','bars'],['kalendarz-pracy','Kalendarz','clock']],
+  manager:[['odprawa-dzienna','Odprawa','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
+  group:[['wykonanie','Salony','building'],['plany-salonow','Plany','calendar'],['raporty','Raporty','bars']],
+  admin:[['konta-uzytkownikow','Użytkownicy','people'],['salony','Salony','building'],['grupy','Grupy','bars']]
+};
+const mobileIcons={
+  calendar:'<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16M8 4v4m8-4v4"/>',
+  bars:'<path d="M5 19h14M8 16v-4m4 4V8m4 8V5"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  people:'<circle cx="10" cy="8" r="3"/><path d="M4 19v-1a6 6 0 0 1 12 0v1m2-12a3 3 0 0 1 0 6m0 2a4 4 0 0 1 2 4"/>',
+  building:'<rect x="5" y="5" width="14" height="15" rx="1"/><path d="M9 9h1m4 0h1m-6 4h1m4 0h1m-4 7v-3h2v3"/>',
+  more:'<path d="M6 12h.01m6 0h.01m6 0h.01" stroke-width="3"/>'
+};
+
+function mobileLink(route,label) {
+  const link=document.createElement('a');
+  link.dataset.panelRoute='';
+  link.href='#'+route;
+  link.textContent=label;
+  return link;
+}
+
+function renderMobileNav(role,active) {
+  const nav=$(role==='seller'?'#seller-mobile-nav':'#management-mobile-nav');
+  const tabs=[...mobileTabs[role],['wiecej','Więcej','more']];
+  if (nav.dataset.role!==role) {
+    nav.dataset.role=role;
+    nav.replaceChildren(...tabs.map(([route,label,icon])=>{
+      const link=mobileLink(route,label);
+      link.insertAdjacentHTML('afterbegin','<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+mobileIcons[icon]+'</svg>');
+      return link;
+    }));
+  }
+  const current=tabs.some(([route])=>route===active)?active:'wiecej';
+  for (const link of nav.children) {
+    if (link.hash==='#'+current) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  }
+  nav.hidden=false;
+}
+
+function renderManagementMore(routes) {
+  const host=$('#management-more-links');
+  host.replaceChildren(...routes.map(([route,label])=>{
+    const link=mobileLink(route,label);
+    link.className='mobile-menu-link';
+    return link;
+  }));
+}
+
 const managementFunctions={
   'wykonanie': ['Realizacja planów'],
   'odprawa-dzienna': ['Odprawa dzienna'],
@@ -2407,8 +2528,16 @@ const managementFunctionOrder={
 
 function selectRoleFunction(routes) {
   const requested=location.hash.slice(1);
-  const active=requested==='administracja'?'plany-salonow':requested==='dni-bez-aktywnosci'?'kalendarz-pracy':routes.includes(requested)?requested:routes[0];
-  const [label,blockId,settingId]=managementFunctions[active];
+  const fallback=mobilePanel.matches?mobileTabs[data.role][0][0]:routes[0];
+  const active=requested==='administracja'?'plany-salonow':requested==='dni-bez-aktywnosci'?'kalendarz-pracy'
+    :requested==='wiecej'||routes.includes(requested)?requested:fallback;
+  const [label,blockId,settingId]=managementFunctions[active]??[];
+  renderMobileNav(data.role,active);
+  $('#management-more').hidden=active!=='wiecej';
+  if (active==='wiecej') {
+    const primary=new Set(mobileTabs[data.role].map(([route])=>route));
+    renderManagementMore(routes.filter(route=>!primary.has(route)).map(route=>[route,managementFunctions[route][0]]));
+  }
   const buttons=$('#role-function-buttons');
   const select=$('#role-function-select');
   if (buttons.dataset.role!==data.role) {
@@ -2426,7 +2555,7 @@ function selectRoleFunction(routes) {
     if (link.hash==='#'+active) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
   }
-  select.value=active;
+  select.value=active==='wiecej'?fallback:active;
   $('#admin').dataset.function=active;
   $('#management-reports').hidden=active!=='raporty';
   if (active==='raporty') renderReportPicker(data);
@@ -2437,7 +2566,7 @@ function selectRoleFunction(routes) {
   $('#manager-team-view').hidden=active!=='zespol';
   $('#user-accounts-view').hidden=active!=='konta-uzytkownikow';
   $('#administration-view').hidden=!blockId;
-  $('#administration-title').textContent=label;
+  $('#administration-title').textContent=label??'Administracja';
   for (const block of document.querySelectorAll('#administration-view > .admin-block')) {
     block.hidden=block.id!==blockId;
     block.open=!block.hidden;
@@ -2460,6 +2589,9 @@ function selectManagementView() {
     block.open=true;
   }
   const routes=managementFunctionOrder[data?.role];
+  $('#management-mobile-nav').hidden=true;
+  $('#management-more').hidden=true;
+  $('#admin').toggleAttribute('data-mobile-preview',Boolean(managerPreviewSalon||groupPreviewName));
   $('#role-function-nav').hidden=!routes;
   $('#management-nav').hidden=Boolean(routes);
   if (routes) {
@@ -2472,14 +2604,30 @@ function selectManagementView() {
   }
   $('#management-reports').hidden=true;
   $('#daily-briefing').hidden=true;
-  const administration=location.hash==='#administracja';
-  const accounts=location.hash==='#konta-uzytkownikow';
+  const preview=Boolean(managerPreviewSalon||groupPreviewName);
+  const primaryAdmin=mobilePanel.matches&&!preview;
+  const route=location.hash.slice(1)||(primaryAdmin?'konta-uzytkownikow':'wykonanie');
+  const adminBlock={salony:'admin-salons-block',grupy:'admin-groups-block'}[route];
+  const more=route==='wiecej';
+  const administration=route==='administracja'||Boolean(adminBlock);
+  const accounts=route==='konta-uzytkownikow';
+  if (!preview) renderMobileNav('admin',route);
+  $('#management-more').hidden=!more;
+  if (more) renderManagementMore([['wykonanie','Wykonanie planu'],['administracja','Administracja']]);
+  if (adminBlock) $('#'+adminBlock).open=true;
+  $('#administration-title').textContent=adminBlock?(route==='salony'?'Salony':'Grupy dealerskie'):'Administracja';
+  if (!preview) {
+    for (const block of document.querySelectorAll('#administration-view > .admin-block')) {
+      if (block.id==='group-add-salon-block'||block.id==='salon-plans') continue;
+      block.hidden=Boolean(adminBlock&&block.id!==adminBlock);
+    }
+  }
   const team=(['manager','group'].includes(data?.role)||Boolean(managerPreviewSalon||groupPreviewName))&&location.hash==='#zespol';
   $('#manager-team-view').hidden=!team;
   $('#management-team').setAttribute('aria-current',team?'page':'false');
   salonPlans.hidden=!['group','manager'].includes(data?.role);
   if (!salonPlans.hidden&&!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
-  $('#performance-view').hidden=administration||team||accounts;
+  $('#performance-view').hidden=administration||team||accounts||more;
   $('#user-accounts-view').hidden=!accounts;
   $('#administration-view').hidden=!administration;
   $('#management-performance').setAttribute('aria-current',administration||team||accounts?'false':'page');
@@ -2859,7 +3007,8 @@ function renderStoryQueue(stories) {
 function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
-  const active=links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
+  const active=requested==='wiecej'||links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
+  renderMobileNav('seller',active==='wyniki'?'dzisiaj':active);
   for (const link of links) {
     if (link.dataset.sellerTab===active) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
@@ -2882,6 +3031,9 @@ const navigation=panelNavigation(()=>{
 });
 
 $('#role-function-select').onchange=event=>navigation.go('#'+event.target.value);
+mobilePanel.addEventListener('change',()=>{
+  if (data&&data.role!=='seller'&&!detailSeller&&!location.hash) selectManagementView();
+});
 
 const historyPanels=[...document.querySelectorAll('[data-history]')];
 const monthLabel=month=>dateLabel(month+'-01',{month:'long',year:'numeric'});
