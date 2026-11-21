@@ -517,7 +517,7 @@ async function handle(request, env, buildDailyReport=false) {
     const reviewPlans=await list(db,'SELECT person,month,target FROM review_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('review_plans','review_plans.month'),...months,...params);
     const funnelPlans=await list(db,'SELECT person,month,targets FROM funnel_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('funnel_plans','funnel_plans.month'),...months,...params);
     const absenceAdjustments=await calendarAdjustments(db,months,scope,...params);
-    const groupName=user.role==='group'?user.group:user.role==='manager'
+    const groupName=user.role==='group'?user.group:['manager','seller'].includes(user.role)
       ?(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first())?.group_name:null;
     let groupBrand=null;
     if (groupName) {

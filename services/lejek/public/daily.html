@@ -442,30 +442,30 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 #entry-draft-state { margin:10px 0; color:#235a3c; font-weight:700; }
 .mobile-panel-nav,.mobile-header-row { display:none; }
 #mobile-account {
-  width:min(380px,calc(100% - 32px));
-  max-height:75dvh;
-  padding:16px;
+  position:absolute;
+  z-index:7;
+  inset:auto 0 auto auto;
+  top:calc(100% + 3px);
+  width:min(240px,calc(100vw - 32px));
+  max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 70px);
+  overflow:auto;
+  padding:6px;
   background:#fff;
   color:var(--panel-ink);
   border:1px solid var(--panel-border);
-  border-radius:16px;
+  border-radius:14px;
+  box-shadow:0 12px 32px #25162429;
 }
-#mobile-account::backdrop { background:#25162480; }
-.mobile-account-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.mobile-account-heading h2 { margin:0; }
-.mobile-account-heading button { min-height:44px; }
-#mobile-account-content { display:grid; gap:12px; padding-top:12px; }
-#mobile-account #dealer,#mobile-account #display-date,#mobile-account #salon:empty { display:none; }
-#mobile-account .identity { gap:10px; }
-#mobile-account .dealer-logo { max-height:28px; max-width:95px; }
-#mobile-account #salon { flex:1 1 130px; color:var(--panel-muted); overflow-wrap:anywhere; }
-#mobile-account #account-role-bar { display:grid; gap:4px; margin:0; }
-#mobile-account #account-role { min-height:44px; }
-#mobile-account .header-account { display:grid; gap:12px; }
-#mobile-account .signed-in { color:var(--panel-muted); overflow-wrap:anywhere; }
-#mobile-account .signed-in strong { color:var(--panel-ink); }
-#mobile-account .panel-signout { margin:0; }
-#mobile-account .panel-signout button { color:var(--panel-plum); border-color:currentColor; }
+#mobile-account-logo { display:block; width:auto; height:auto; max-width:135px; max-height:44px; object-fit:contain; margin:10px auto 12px; }
+#mobile-account-roles:not(:empty) { border-top:1px solid var(--panel-border); padding-top:4px; }
+#mobile-account button {
+  display:block; width:100%; min-height:44px; padding:8px 12px; margin:0;
+  border:0; border-radius:8px; background:transparent; color:var(--panel-ink);
+  text-align:left; font-size:.94rem; font-weight:680;
+}
+#mobile-account button:hover,#mobile-account button:focus-visible { background:var(--panel-lilac); }
+#mobile-account .panel-signout { margin:4px 0 0; padding-top:4px; border-top:1px solid var(--panel-border); }
+#mobile-account .panel-signout button { color:var(--panel-plum); }
 #briefing-progress { margin:14px 0; padding:16px; background:var(--panel-plum); color:#fff; border-radius:16px; }
 #briefing-progress progress { display:block; margin-top:9px; accent-color:var(--panel-orange); }
 #daily-briefing .briefing-seller { border:1px solid var(--panel-border); border-radius:12px; padding:0 12px; margin-top:8px; }
@@ -531,8 +531,11 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
     font-size:1rem; line-height:1;
     font-weight:850; letter-spacing:.025em; transform:skewX(-9deg);
   }
+  .mobile-account-ready > :is(.identity,.header-account),body:has(.mobile-account-ready) #account-role-bar { display:none; }
+  .mobile-account-switcher { position:relative; }
   #mobile-account-open { display:flex; align-items:center; gap:7px; min-height:44px; padding:4px 6px 4px 10px; background:transparent; color:white; font-size:.86rem; }
   #mobile-account-open::after { content:""; width:6px; height:6px; border-right:2px solid; border-bottom:2px solid; transform:rotate(45deg); margin:-3px 2px 0; }
+  #mobile-account-open[aria-expanded="true"]::after { transform:rotate(225deg); margin:3px 2px 0; }
   #daily .seller-nav, #admin:not([data-mobile-preview]) :is(#role-function-nav,#management-nav) { display:none; }
   .mobile-panel-nav { position:fixed; z-index:5; inset:auto 0 0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); min-height:60px; padding:5px max(4px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); background:#fff; border-top:1px solid var(--panel-border); }
   .mobile-panel-nav a { display:grid; justify-items:center; align-content:center; gap:3px; min-height:52px; text-align:center; text-decoration:none; color:var(--panel-muted); font-size:.8rem; font-weight:650; }
@@ -573,20 +576,19 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
       <span class="mobile-brand-mark" aria-hidden="true"></span>
       <span class="mobile-brand-wordmark" aria-hidden="true">biegwyzej.pl</span>
     </span>
-    <button type="button" id="mobile-account-open" aria-haspopup="dialog" aria-controls="mobile-account">
-      <span id="mobile-account-role">Konto</span><span class="entry-visually-hidden"> · Opcje konta</span>
-    </button>
+    <div class="mobile-account-switcher">
+      <button type="button" id="mobile-account-open" aria-expanded="false" aria-controls="mobile-account">
+        <span id="mobile-account-role">Konto</span><span class="entry-visually-hidden"> · Opcje konta</span>
+      </button>
+      <div id="mobile-account" hidden>
+        <img id="mobile-account-logo" alt="" hidden>
+        <div id="mobile-account-roles"></div>
+      </div>
+    </div>
   </div>
   <div class="identity"><img id="logo" class="dealer-logo" alt="" hidden><strong id="dealer">Bieg Wyżej</strong><span id="salon"></span></div>
   <div class="header-account"><span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span><span id="display-date"></span><form class="panel-signout" method="post" action="/logout"><button type="submit">Wyloguj się</button></form></div>
 </header>
-<dialog id="mobile-account" aria-labelledby="mobile-account-heading">
-  <div class="mobile-account-heading">
-    <h2 id="mobile-account-heading">Konto</h2>
-    <form method="dialog"><button class="secondary" autofocus>Zamknij</button></form>
-  </div>
-  <div id="mobile-account-content"></div>
-</dialog>
 <main>
 <section id="seller-detail" hidden aria-labelledby="seller-detail-heading">
   <a class="panel-return-link" id="seller-detail-return" href="/daily.html#wykonanie">← Wróć do realizacji planów</a>
