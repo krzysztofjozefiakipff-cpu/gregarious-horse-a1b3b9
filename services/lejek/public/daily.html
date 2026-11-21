@@ -9,7 +9,7 @@
 header,main,footer{max-width:1720px;margin:auto;padding:16px clamp(16px,2.4vw,40px)}
 header,footer,.heading,.save{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;letter-spacing:-.045em}
-.identity{display:flex;align-items:center;gap:14px;min-width:0}#salon{color:var(--muted)}footer{border-top:1px solid var(--line);font-size:.9rem}
+footer{border-top:1px solid var(--line);font-size:.9rem}
 .layout{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(250px,1fr);gap:20px}.layout>*{min-width:0}h1,h2,p,blockquote{margin:0}h1,h2{letter-spacing:-.045em;line-height:1.12}h2{font-size:1.45rem;margin-bottom:12px}
 .eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}
 .quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
@@ -402,10 +402,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   #role-function-select { min-height:44px; width:100%; background:#fff; color:var(--accent-ink); font-size:1rem; font-weight:750; }
 }
 #manager-team-list details { scroll-margin-top:66px; }
-.panel-header .identity { flex-wrap:wrap; row-gap:3px; }
 @media(max-width:560px) {
-  .panel-header .header-account { justify-content:space-between; flex:1 1 100%; }
-  .panel-header #display-date { order:1; flex-basis:100%; color:var(--on-plum-muted); font-size:.875rem; }
   .management-nav { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; }
   .management-nav a { padding-inline:5px; overflow-wrap:anywhere; }
 }
@@ -452,30 +449,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .mobile-menu-link { color:var(--panel-plum); text-decoration:none; font-weight:700; }
 .mobile-menu-link { display:flex; align-items:center; min-height:48px; margin-top:8px; }
 #entry-draft-state { margin:10px 0; color:#235a3c; font-weight:700; }
-.mobile-panel-nav,.mobile-header-row { display:none; }
-#mobile-account {
-  position:absolute;
-  z-index:7;
-  inset:auto 0 auto auto;
-  top:calc(100% + 3px);
-  width:min(240px,calc(100vw - 32px));
-  max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 70px);
-  overflow:auto;
-  padding:6px;
-  background:#fff;
-  color:var(--panel-ink);
-  border:1px solid var(--panel-border);
-  border-radius:14px;
-  box-shadow:0 12px 32px #25162429;
-}
-#mobile-account button {
-  display:block; width:100%; min-height:44px; padding:8px 12px; margin:0;
-  border:0; border-radius:8px; background:transparent; color:var(--panel-ink);
-  text-align:left; font-size:.94rem; font-weight:680;
-}
-#mobile-account button:hover,#mobile-account button:focus-visible { background:var(--panel-lilac); }
-#mobile-account .panel-signout { margin:4px 0 0; padding-top:4px; border-top:1px solid var(--panel-border); }
-#mobile-account .panel-signout button { color:var(--panel-plum); }
+.mobile-panel-nav { display:none; }
 #briefing-progress { margin:14px 0; padding:16px; background:var(--panel-plum); color:#fff; border-radius:16px; }
 #briefing-progress progress { display:block; margin-top:9px; accent-color:var(--panel-orange); }
 #daily-briefing .briefing-seller { border:1px solid var(--panel-border); border-radius:12px; padding:0 12px; margin-top:8px; }
@@ -528,25 +502,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 }
 @media(max-width:850px) {
   body:has(.mobile-panel-nav:not([hidden])) { background:var(--panel-paper); color:var(--panel-ink); padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
-  .panel-header.mobile-account-ready {
-    display:block;
-    background:var(--panel-plum);
-    padding:calc(env(safe-area-inset-top) + 3px) 16px 3px;
-    box-shadow:none;
-    border-bottom:0;
-  }
-  .mobile-account-ready .mobile-header-row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-  .mobile-header-row .product-brand { flex:none; }
-  .mobile-account-ready > :is(.identity,.header-account),body:has(.mobile-account-ready) #account-role-bar { display:none; }
-  .mobile-account-switcher { position:relative; display:grid; justify-items:end; }
-  #mobile-account-logo {
-    display:block; width:auto; height:auto; max-width:112px; max-height:26px;
-    object-fit:contain; padding:3px 5px; margin:3px 0 0;
-    background:#fff; border-radius:5px;
-  }
-  #mobile-account-open { display:flex; align-items:center; gap:7px; min-height:44px; padding:4px 6px 4px 10px; background:transparent; color:white; font-size:.86rem; }
-  #mobile-account-open::after { content:""; width:6px; height:6px; border-right:2px solid; border-bottom:2px solid; transform:rotate(45deg); margin:-3px 2px 0; }
-  #mobile-account-open[aria-expanded="true"]::after { transform:rotate(225deg); margin:3px 2px 0; }
   #daily .seller-nav, #admin:not([data-mobile-preview]) :is(#role-function-nav,#management-nav) { display:none; }
   .mobile-panel-nav { position:fixed; z-index:5; inset:auto 0 0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); min-height:60px; padding:5px max(4px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); background:#fff; border-top:1px solid var(--panel-border); }
   .mobile-panel-nav a { display:grid; justify-items:center; align-content:center; gap:3px; min-height:52px; text-align:center; text-decoration:none; color:var(--panel-muted); font-size:.8rem; font-weight:650; }
@@ -557,9 +512,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .daily-work .actions { background:white; border-color:var(--panel-border); }
   #daily .daily-inspiration { margin-top:16px; }
   #daily .daily-inspiration > * { margin-bottom:14px; }
-  body:has([data-seller-panel="wyniki"]:not([hidden])) { padding-top:env(safe-area-inset-top); }
-  body:has([data-seller-panel="wyniki"]:not([hidden]))::before { content:""; position:fixed; inset:0 0 auto; z-index:6; height:env(safe-area-inset-top); background:var(--panel-paper); pointer-events:none; }
-  body:has([data-seller-panel="wyniki"]:not([hidden])) :is(.panel-header,#account-role-bar,footer) { display:none; }
+  body:has([data-seller-panel="wyniki"]:not([hidden])) footer { display:none; }
   main:has([data-seller-panel="wyniki"]:not([hidden])) { padding-top:6px; }
   #entry .entry-heading { margin-bottom:5px; }
   .entry-heading h1 { font-size:1.3rem; letter-spacing:-.03em; }
@@ -582,25 +535,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </style>
 </head>
 <body>
-<header class="panel-header">
-  <div class="mobile-header-row">
-    <span class="product-brand" role="img" aria-label="biegwyzej.pl">
-      <span class="product-mark" aria-hidden="true"></span>
-      <span class="product-wordmark" aria-hidden="true">biegwyzej.pl</span>
-    </span>
-    <div class="mobile-account-switcher">
-      <img id="mobile-account-logo" alt="" hidden>
-      <button type="button" id="mobile-account-open" aria-expanded="false" aria-controls="mobile-account">
-        <span id="mobile-account-role">Konto</span><span class="entry-visually-hidden"> · Opcje konta</span>
-      </button>
-      <div id="mobile-account" hidden>
-        <div id="mobile-account-roles"></div>
-      </div>
-    </div>
-  </div>
-  <div class="identity"><span class="product-brand"><span class="product-mark" aria-hidden="true"></span><span class="product-wordmark">biegwyzej.pl</span></span><img id="logo" class="dealer-logo" alt="" hidden><strong id="dealer">Bieg Wyżej</strong><span id="salon"></span></div>
-  <div class="header-account"><a id="life-panel-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a><span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span><span id="display-date"></span><form class="panel-signout" method="post" action="/logout"><button type="submit">Wyloguj się</button></form></div>
-</header>
+<!-- ACCOUNT_HEADER -->
 <main>
 <section id="seller-detail" hidden aria-labelledby="seller-detail-heading">
   <a class="panel-return-link" id="seller-detail-return" href="/daily.html#wykonanie">← Wróć do realizacji planów</a>
@@ -625,7 +560,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <span>Tylko do odczytu</span>
   <a class="panel-return-link" href="/daily.html?role=admin#zarzadzaj-uzytkownikami">← Wróć do panelu administratora</a>
 </div>
-<div id="account-role-bar" class="manager-preview-bar" hidden><label for="account-role">Aktywna rola</label> <select id="account-role"></select></div>
+<a class="panel-return-link" id="life-panel-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a>
 <div id="daily" hidden>
 <nav class="panel-nav seller-nav" aria-label="Panel handlowca">
   <a data-panel-route href="#dzisiaj" data-seller-tab="dzisiaj">Dzisiaj</a>
@@ -1120,5 +1055,5 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </template>
 </main>
 <footer><strong class="product-brand"><span class="product-mark" aria-hidden="true"></span><span class="product-wordmark">biegwyzej.pl</span></strong></footer>
-<script src="panel-navigation.js"></script><script src="workbook-plan.js"></script><script src="work-calendar.js"></script><script src="reports.js"></script><script src="briefings.js"></script><script src="daily.js"></script>
+<script src="panel-navigation.js"></script><script src="workbook-plan.js"></script><script src="work-calendar.js"></script><script src="reports.js"></script><script src="briefings.js"></script><script src="account-header.js"></script><script src="daily.js"></script>
 </body></html>

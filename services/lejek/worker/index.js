@@ -535,13 +535,8 @@ async function handle(request, env, buildDailyReport=false) {
     const absenceAdjustments=await calendarAdjustments(db,months,scope,...params);
     const groupName=user.role==='group'?user.group:['manager','seller'].includes(user.role)
       ?(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first())?.group_name:null;
-    let groupBrand=null;
-    if (groupName) {
-      const saved=await db.prepare('SELECT logo FROM dealer_group_brand WHERE group_name=?').bind(groupName).first();
-      const logos=saved?[]:await list(db,`SELECT DISTINCT b.logo FROM dealer_brand b JOIN dealer_group_salons gs USING(salon)
-        WHERE gs.group_name=? AND b.logo<>'' LIMIT 2`,groupName);
-      groupBrand={name:groupName,logo:saved?.logo??(logos.length===1?logos[0].logo:'')};
-    }
+    const {firstName,brand:headerBrand,groupBrand,dealer:brand}=await loadAccountHeader(db,user,groupName??null);
+    const accountHeader={firstName,brand:headerBrand};
     if (path==='/api/daily') {
       const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN ('+placeholders+') AND '+scope+' AND '+includedDailyResult,...months,...params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('plans','plans.month'),...months,...params);
@@ -561,7 +556,6 @@ async function handle(request, env, buildDailyReport=false) {
         personal.drafts=Object.fromEntries(drafts.map(({day,rows})=>[day,JSON.parse(rows)]));
         personal.draftSavedAt=Object.fromEntries(drafts.map(({day,saved_at})=>[day,saved_at]));
       }
-      const brand=personal?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
       const calendar=await list(db,`SELECT person,day,kind,status FROM work_calendar
         WHERE (substr(day,1,7) IN (${placeholders}) OR status='pending') AND ${scope}
         UNION ALL SELECT person,day,kind,'approved' FROM daily_exceptions
@@ -669,7 +663,7 @@ async function handle(request, env, buildDailyReport=false) {
       const salonLife=personal&&!period?await db.prepare(`SELECT title FROM salon_life_posts
         WHERE status='approved' AND scope='salon' AND audience=?
         ORDER BY published_day DESC,id DESC LIMIT 1`).bind(user.salon).first():null;
-      return json({signedInAs,previewUser,users,roles,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,previewUser,users,roles,accountHeader,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand:personal?brand:null,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -687,7 +681,7 @@ async function handle(request, env, buildDailyReport=false) {
       reportMonths.get(id).push(month);
     }
     const reportSellers=sellers.map(seller=>({...seller,reportMonths:reportMonths.get(seller.id)??[]}));
-    return json({signedInAs,previewUser,roles,role:user.role,groupBrand,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
+    return json({signedInAs,previewUser,roles,accountHeader,role:user.role,groupBrand,sourcePlans,sellers:reportSellers,results,plans,reviewPlans,funnelPlans,accounts,salons,absenceAdjustments});
   }
   if (request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);

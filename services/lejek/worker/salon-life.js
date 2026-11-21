@@ -59,7 +59,8 @@ async function viewSalonLife(db,current,scopes,email,today,week,user,roles,previ
       label,votes:votes.find(row=>row.choice===i)?.votes??0
     }))};
   }
-  return json({role:user.role,roles,scopes,current,posts,hit,pending,poll,readOnly:preview});
+  const {firstName,brand}=await loadAccountHeader(db,user);
+  return json({role:user.role,roles,accountHeader:{firstName,brand},scopes,current,posts,hit,pending,poll,readOnly:preview});
 }
 
 async function handleSalonLife(request,url,db,user,roles,email,preview) {

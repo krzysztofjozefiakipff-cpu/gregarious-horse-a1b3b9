@@ -39,15 +39,7 @@ async function refresh() {
   try {
     const data=await api('/api/state?month='+encodeURIComponent(month));
     if(latest!==revision) return;
-    const logo=get('group-logo');
-    logo.hidden=!data.groupBrand?.logo;
-    if (!logo.hidden) {
-      logo.src=data.groupBrand.logo;
-      logo.alt=data.groupBrand.name;
-    } else logo.removeAttribute('src');
-    const signedIn=get('signed-in');
-    signedIn.querySelector('strong').textContent=data.signedInAs??'';
-    signedIn.hidden=!data.signedInAs;
+    renderAccountHeader(data);
     if (data.role==='seller') { location.replace('/daily.html'); return; }
     sessionStorage.setItem('lejek-active-role',data.role);
     const panel=panelNames[data.role];
