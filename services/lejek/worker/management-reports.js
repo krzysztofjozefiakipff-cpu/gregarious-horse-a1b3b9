@@ -31,9 +31,9 @@ function addReportCounts(totals,values) {
   values.forEach((value,index)=>{totals[index]+=value;});
 }
 
-function summarizeReportRows(rows) {
+function summarizeReportRows(rows,marketing=false) {
   const actuals=reportCounterIndexes.map(()=>0);
-  const sources=Array.from({length:sourceCount},()=>({leads:0,orders:0}));
+  const sources=Array.from({length:sourceCount},()=>marketing?{leads:0,orders:0,stages:Array(9).fill(0)}:{leads:0,orders:0});
   for (const row of rows) {
     const values=JSON.parse(row.counters);
     if (Array.isArray(values[5])) {
@@ -41,6 +41,7 @@ function summarizeReportRows(rows) {
         addReportCounts(actuals,reportCounterIndexes.map(i=>source[i]??0));
         sources[index].leads+=source[0]??0;
         sources[index].orders+=source[7]??0;
+        if (marketing) addReportCounts(sources[index].stages,reportCounterIndexes.slice(0,9).map(i=>source[i]??0));
       }
     } else {
       // Old aggregate-only records did not track lead sources.
@@ -136,31 +137,91 @@ function completeDailySalon(salon,month,through,sourceGoals) {
   return {...salon,expected,actions};
 }
 
-function recommendLeadSources(sellers,plans,nextPlans) {
-  const assignable=[1,2,4,7,8,12];
-  const nextBySeller=new Map(nextPlans.map(plan=>[plan.id,plan]));
-  const plansBySeller=new Map(plans.map(plan=>[plan.id,plan]));
-  const recommendations=[];
-  for (const seller of sellers) {
-    if (seller.archived) continue;
-    const next=nextBySeller.get(seller.id);
-    const plan=next?.sourceTargets?.length?next:plansBySeller.get(seller.id);
-    if (!plan?.sourceTargets?.length) continue;
-    const planned=effectiveSourcePlan(plan.sourceTargets,plan.absenceAdjustment);
-    for (const source of assignable) {
-      const {leads,orders}=seller.sources[source];
-      const extra=Math.max(0,(planned[source]?.[0]??0)-leads);
-      const conversion=leads?orders/leads:0;
-      if (extra>0&&leads>=20&&orders>0&&orders<=leads&&conversion>=sourceAssumptions[source][0]) {
-        recommendations.push({seller:seller.name,source,extra,leads,orders,basis:plan===next?'next':'current'});
-      }
-    }
+const marketingStages=[
+  {label:'Próby kontaktu / lead',numerator:1,denominator:0,frequency:true},
+  {label:'Spotkania / leady',numerator:2,denominator:0},
+  {label:'Jazdy próbne / spotkania',numerator:3,denominator:2},
+  {label:'Oferty / leady',numerator:4,denominator:0},
+  {label:'Follow-up / ofertę',numerator:5,denominator:4,frequency:true},
+  {label:'Zamówienia / oferty',numerator:6,denominator:4},
+  {label:'Zamówienia / leady',numerator:6,denominator:0},
+  {label:'Faktury / zamówienia',numerator:7,denominator:6},
+  {label:'Rejestracje / faktury',numerator:8,denominator:7}
+];
+const marketingMarket=[
+  {study:'Foureyes, raport 2026 · dane z 2025',sample:'Kwalifikowane leady ze stron dealerów w USA',
+    url:'https://www.foureyes.io/blog/2026-automotive-dealer-benchmarks-report',
+    rows:[['Zakup / kwalifikowane leady',.117]]},
+  {study:'Foureyes, badanie ok. 700 dealerów · II połowa 2023',sample:'Nowe auta, zapytania internetowe i telefoniczne w USA',
+    url:'https://www.foureyes.io/blog/dealership-data-study-appointment-rates',
+    rows:[['Kontakt dwustronny / leady, internet',.60],['Kontakt dwustronny / leady, telefon',.73],
+      ['Umówione wizyty / nawiązane kontakty, internet',.32],['Umówione wizyty / nawiązane kontakty, telefon',.73],
+      ['Sprzedaż / odbyte wizyty, internet i telefon',.41]]}
+];
+const marketingMethod='Wskaźniki dzielą liczbę zdarzeń w wybranym okresie i źródle. Wpisy nie łączą etapów tego samego klienta, więc wynik może przekroczyć 100%. Próby kontaktu i follow-up pokazują częstotliwość. Brak mianownika oznaczamy kreską.';
+const marketingMarketNote='Punkt odniesienia z USA. Raporty mierzą zakup i kontakt dwustronny, a Bieg Wyżej rejestruje zamówienia i próby kontaktu. Założenia planu dla źródeł to cele wewnętrzne. Brak porównywalnej publicznej średniej dla Polski dla tych etapów i źródeł.';
+const marketingGuidance=[
+  'Zwiększ liczbę wizyt dzięki kampanii lokalnej z zaproszeniem do salonu.',
+  'Dołóż formularze Meta z wyborem modelu, salonu i terminu zakupu.',
+  'Kieruj ruch na formularz konkretnego modelu z możliwością umówienia jazdy.',
+  'Promuj połączenia do właściwego salonu i sprawdź odbieralność w godzinach kampanii.',
+  'Wyróżnij ogłoszenia aut dostępnych od ręki i uzupełnij cenę, zdjęcia oraz wersję.',
+  'Poproś klientów po odbiorze o polecenia i oznaczaj źródło zapytań.',
+  'Skieruj kampanię do klientów blisko wymiany auta lub końca finansowania.',
+  'Uzgodnij z importerem przydział zapytań według modelu i obszaru salonu.',
+  'Poproś brokerów o zapytania z określonym modelem, budżetem i terminem.',
+  'Zaproś klientów serwisu na wycenę odkupu lub jazdę próbną.',
+  'Na stoisku zbieraj zgłoszenia z wybranym modelem i terminem kontaktu.',
+  'Po wydarzeniu kieruj zapytania do salonu po modelu i terminie zakupu.',
+  'Przekaż do BDC kontakty do odzyskania i sprawdzaj ponowne umówienia.'
+];
+
+function marketingAnalysis(sources,goals,nextPlans,closed) {
+  const nextLeads=Array(sourceCount).fill(0);
+  for (const plan of nextPlans) {
+    if (!plan.sourceTargets?.length) continue;
+    const targets=effectiveSourcePlan(plan.sourceTargets,plan.absenceAdjustment);
+    targets.forEach((row,index)=>{nextLeads[index]+=row[7];});
   }
-  return recommendations.sort((a,b)=>b.extra-a.extra||b.orders/b.leads-a.orders/a.leads);
+  const recommendations=[];
+  for (const [source,{leads,orders,stages}] of sources.entries()) {
+    const [targetRate,,meetingRate,driveRate,offerRate]=sourceAssumptions[source];
+    const basis=closed&&nextLeads[source]>0?'Plan kolejnego miesiąca':closed?'Plan badanego miesiąca':'Plan narastająco do daty';
+    const plan=closed?(nextLeads[source]||goals[source].leads):Math.ceil(goals[source].expected-1e-9);
+    const gap=Math.max(0,plan-leads);
+    const rate=leads?orders/leads:null;
+    let action,advice,extra=0,priority;
+    if ((!leads&&orders)||rate>1) {
+      [action,advice,priority]=['Sprawdź przypisanie','Zweryfikuj źródło w CRM i sprawdź, ile zamówień dotyczy leadów z wcześniejszych okresów.',3];
+    } else if (leads<20) {
+      if (!gap&&!leads) continue;
+      [action,advice,priority]=['Zbierz próbę','Oceń źródło po zebraniu co najmniej 20 leadów. Przy tej próbie nie zwiększaj jeszcze przydziału.',2];
+    } else if (rate<targetRate) {
+      const [,attempts,meetings,drives,offers]=stages;
+      const candidates=[
+        [meetings/leads/meetingRate,'Więcej spotkań','Sprawdź jakość zapytań i czas reakcji. Z handlowcami przejrzyj zaproszenia na spotkanie.'],
+        [offers/leads/offerRate,'Więcej ofert','Sprawdź zgodność reklamy z ofertą, dostępność aut i wysyłanie ofert po kontakcie.']
+      ];
+      if (meetings>=10) candidates.push([drives/meetings/driveRate,'Więcej jazd próbnych','Sprawdź dostępność aut demonstracyjnych i możliwość rezerwacji jazdy.']);
+      const [score,stage,hint]=candidates.sort((a,b)=>a[0]-b[0])[0];
+      action=score<1?stage:'Sprawdź domknięcie';
+      advice=!attempts?'Sprawdź obsługę w CRM. W raporcie brak zarejestrowanych prób kontaktu.':score<1?hint
+        :'Przejrzyj oferty bez zamówienia, przyczyny utraty i ponowny kontakt przed zwiększeniem dopływu.';
+      priority=1;
+    } else if (gap) {
+      [action,advice,extra,priority]=['Zwiększ dopływ',marketingGuidance[source],gap,0];
+    } else if (!goals[source].leads&&!nextLeads[source]) {
+      [action,advice,priority]=['Ustal plan leadów','Wynik jest na poziomie założenia. Ustal wolumen dla salonu i sprawdź koszt zamówienia.',2];
+    } else continue;
+    recommendations.push({source,leads,orders,rate,targetRate,plan,basis,extra,action,advice,priority});
+  }
+  return recommendations.sort((a,b)=>a.priority-b.priority||b.extra-a.extra||b.leads-a.leads);
 }
 
 async function buildManagementReport(db,{type,month,through,reportDay,sellers,salons,scope,params,loadPlans}) {
   const first=month+'-01';
+  const marketing=type==='marketing';
+  const closed=marketing&&month<reportClock().day.slice(0,7);
   const days=reportWorkdays(month);
   const elapsedThrough=days.filter(day=>day<=through).length;
   const nextDate=new Date(first+'T00:00:00Z');
@@ -177,7 +238,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
     list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params),
     calendarAdjustments(db,sameMonth?[month]:[month,goalsMonth],scope,...params),
     loadPlans(month),
-    type==='marketing'?loadPlans(nextMonth):null,
+    marketing&&closed?loadPlans(nextMonth):null,
     sameMonth?null:loadPlans(goalsMonth),
     type==='daily'?list(db,`SELECT a.id AS person,p.first_excluded_day,p.restored_day FROM archive_report_days p
       JOIN accounts a USING(email) WHERE ${scope.replace(/^person /,'a.id ')}`,...params):[]
@@ -192,7 +253,8 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
   const salonsWithSellers=Map.groupBy(sellers,seller=>seller.salon);
   const archiveDaysBySeller=new Map(sellers.map(seller=>[seller.id,archivesByPerson.get(seller.id)??[]]));
 
-  return {type,month,through,salons:salons.map(({salon})=>{
+  return {type,month,through,...(marketing?{marketing:{stages:marketingStages,market:marketingMarket,
+    method:marketingMethod,marketNote:marketingMarketNote}}:{}),salons:salons.map(({salon})=>{
     const plan=plansBySalon.get(salon);
     const sellerPlans=plan?.team??[];
     const byId=new Map(sellerPlans.map(person=>[person.id,person]));
@@ -203,7 +265,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       const rows=records.get(seller.id)??[];
       const archived=seller.accountStatus==='inactive';
       if (archived&&!rows.length) return [];
-      const {actuals,sources}=summarizeReportRows(rows);
+      const {actuals,sources}=summarizeReportRows(rows,marketing);
       const adjustment=adjustments[seller.id+'/'+month];
       const sellerPlan=byId.get(seller.id);
       const targets=reportSellerTargets(sellerPlan,adjustment);
@@ -218,7 +280,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       const scheduled=days.filter(day=>!leave.has(day));
       const elapsed=scheduled.filter(day=>day<=through).length;
       const expected=targets.map(target=>target==null?null:scheduled.length?target*elapsed/scheduled.length:0);
-      if (type==='daily'&&!archived&&scheduled.length&&sellerPlan?.sourceTargets?.length) {
+      if ((type==='daily'||marketing)&&!archived&&scheduled.length&&sellerPlan?.sourceTargets?.length) {
         for (const [index,row] of effectiveSourcePlan(sellerPlan.sourceTargets,adjustment).entries()) {
           if (!row[7]) continue;
           const goal=sourceGoals[index];
@@ -254,12 +316,13 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       return [item];
     });
     const totals=reportCounterIndexes.map(()=>0);
-    const sources=Array.from({length:sourceCount},()=>({leads:0,orders:0}));
+    const sources=Array.from({length:sourceCount},()=>marketing?{leads:0,orders:0,stages:Array(9).fill(0)}:{leads:0,orders:0});
     for (const person of people) {
       addReportCounts(totals,person.actuals);
       for (const [index,source] of person.sources.entries()) {
         sources[index].leads+=source.leads;
         sources[index].orders+=source.orders;
+        if (marketing) addReportCounts(sources[index].stages,source.stages);
       }
     }
     const salonTargets=reportCounterIndexes.map((_,index)=>{
@@ -268,8 +331,9 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
       const goals=people.map(person=>person.targets[index]).filter(value=>value!=null);
       return goals.length?goals.reduce((sum,value)=>sum+value,0):null;
     });
-    const summary={salon,totals,targets:salonTargets,people,sources,
-      recommendations:type==='marketing'?recommendLeadSources(people,sellerPlans,nextBySalon.get(salon)?.team??[]):[]};
+    const summary={salon,totals,targets:salonTargets,people,sources,recommendations:[]};
+    if (marketing) return {salon,sources,recommendations:marketingAnalysis(sources,sourceGoals,
+      nextBySalon.get(salon)?.team??[],closed)};
     if (type==='monthly') return {salon,totals,targets:salonTargets,sources,
       expected:reportSalonExpected(summary,days.length,elapsedThrough)};
     if (type==='daily') return completeDailySalon({...summary,dailyGoals},month,through,sourceGoals.map((source,index)=>({

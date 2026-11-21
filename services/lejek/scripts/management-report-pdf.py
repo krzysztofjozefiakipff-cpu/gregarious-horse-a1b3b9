@@ -286,25 +286,58 @@ def monthly_report(salon):
     ]
 
 
-def marketing_report(salon):
-    rows = source_conversion_rows(salon)
-    ranked = sorted((row for row in rows if row[1] > 0), key=lambda row: row[2] / row[1], reverse=True)[:7]
-    story = []
-    if ranked:
-        chart = [(name, orders / leads, percent(orders, leads)) for name, leads, orders in ranked]
-        story.append(KeepTogether([p('Najwyższa konwersja według źródła', 'section'),
-                                  bars(chart, max(0.01, *(row[1] for row in chart)))]))
-    story.append(p('Konwersja źródeł', 'section'))
-    story.append(source_conversion_table(rows))
-    story.append(p('Rekomendowane dodatkowe leady', 'section'))
-    if salon['recommendations']:
-        story.append(table(['Handlowiec', 'Źródło', 'Więcej leadów', 'Konwersja', 'Podstawa'], [
-            [row['seller'], SOURCES[row['source']], row['extra'], percent(row['orders'], row['leads']),
-             'Kolejny miesiąc' if row['basis'] == 'next' else 'Raportowany miesiąc']
-            for row in salon['recommendations']
-        ], [.24, .23, .16, .15, .22]))
-    else:
-        story.append(p('Brak źródeł spełniających warunki rekomendacji.'))
+def marketing_benchmarks(benchmarks):
+    story = [p('Benchmark rynkowy', 'section'), p(benchmarks['marketNote'], 'hint')]
+    for study in benchmarks['market']:
+        link = escape(study['url'], quote=True)
+        title = escape(study['study'])
+        story.extend([
+            Paragraph(f'<link href="{link}" color="#52294f">{title}</link>', STYLES['action']),
+            p(study['sample'], 'hint'),
+            table(['Wskaźnik', 'Średnia w badaniu'],
+                  [[label, percent(rate, 1)] for label, rate in study['rows']],
+                  [.76, .24], header_color=PLUM),
+            Spacer(1, 8),
+        ])
+    return story
+
+
+def marketing_stage_cell(source, stage):
+    counts = source['stages']
+    n, d = counts[stage['numerator']], counts[stage['denominator']]
+    if not d:
+        return '–' if not n else f'– ({n} / 0)'
+    ratio = number(n / d) if stage.get('frequency') else percent(n, d)
+    return Paragraph(f'{ratio}<br/><font size="7">({n} / {d})</font>', STYLES['cell'])
+
+
+def marketing_report(salon, benchmarks):
+    story = [p('Wskazówki dla marketingu', 'section')]
+    for row in salon['recommendations']:
+        action = f"+{row['extra']} leadów" if row['extra'] else row['action']
+        details = (f"{row['leads']} leadów · {row['orders']} zamówień · "
+                   f"{percent(row['rate'], 1) if row['rate'] is not None else '–'} / "
+                   f"{percent(row['targetRate'], 1)} założenia")
+        if row['plan']:
+            details += f" · {row['basis'].lower()} {row['plan']} leadów"
+        story.append(KeepTogether([p(f"{SOURCES[row['source']]} · {action}", 'action'),
+                                   p(row['advice']), p(details, 'hint')]))
+    if not salon['recommendations']:
+        story.append(p('Brak źródeł, dla których dane i plan wskazują zmianę dopływu lub obsługi.'))
+    story.extend([p('Konwersja według źródła', 'section'),
+                  source_conversion_table(source_conversion_rows(salon), header_color=PLUM)])
+    active = [(SOURCES[i], source) for i, source in enumerate(salon['sources']) if any(source['stages'])]
+    if active:
+        story.extend([p('Etapy lejka według źródła', 'section'),
+                      p('Pod wskaźnikiem podano licznik i mianownik. Liczby bez znaku % oznaczają częstotliwość.', 'hint')])
+        for stages in (benchmarks['stages'][:5], benchmarks['stages'][5:]):
+            widths = [.23] + [.77 / len(stages)] * len(stages)
+            story.extend([
+                table(['Źródło', *[stage['label'] for stage in stages]], [
+                    [name, *[marketing_stage_cell(source, stage) for stage in stages]] for name, source in active
+                ], widths, header_color=PLUM),
+                Spacer(1, 8),
+            ])
     return story
 
 
@@ -488,8 +521,9 @@ def render(report, output):
             story.extend(monthly_overview(report['salons']))
             story.append(PageBreak())
     elif kind == 'marketing':
-        story.append(p('Konwersja to zamówienia podzielone przez leady zapisane w tym samym miesiącu. '
-                       'Rekomendacja uwzględnia plan źródłowy, co najmniej 20 leadów i konwersję na poziomie założenia dla źródła.', 'hint'))
+        story.append(p(report['marketing']['method'], 'hint'))
+        story.extend(marketing_benchmarks(report['marketing']))
+        story.append(PageBreak())
     elif kind == 'daily':
         story.append(p('Wyniki obejmują zatwierdzone aktywności do końca poprzedniego dnia. '
                        'Cele dzienne uwzględniają pozostały plan i dni pracy handlowca.', 'hint'))
@@ -507,7 +541,7 @@ def render(report, output):
         if kind == 'daily':
             story.extend(daily_report(salon, report['reportDay'][:7] > report['month'], report.get('dailyGoalsDate')))
         elif kind == 'marketing':
-            story.extend(marketing_report(salon))
+            story.extend(marketing_report(salon, report['marketing']))
         elif kind == 'briefing':
             story.extend(briefing_report(salon))
         else:
