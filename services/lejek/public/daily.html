@@ -428,6 +428,8 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .today-entry .entry-link { width:auto; margin:0; background:var(--panel-orange); color:var(--panel-ink); min-height:48px; }
 .daily-work { display:grid; align-content:start; gap:16px; }
 .daily-work .actions { margin:0; }
+.life-teaser { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--panel-border); border-radius:12px; background:var(--panel-lilac); color:var(--panel-plum); text-decoration:none; }
+.life-teaser small { display:block; color:var(--panel-muted); overflow-wrap:anywhere; }
 #cookie summary {
   position:absolute; inset-block-start:10px; inset-inline-end:10px; display:grid; place-items:center;
   width:44px; height:44px; border-radius:12px; color:white; background:#ffffff1a;
@@ -551,6 +553,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .mobile-panel-nav a[aria-current="page"] { color:var(--panel-plum); font-weight:800; }
   .mobile-panel-nav svg { width:40px; height:26px; padding:3px 10px; border-radius:16px; stroke:currentColor; }
   .mobile-panel-nav a[aria-current="page"] svg { background:var(--panel-lilac); }
+  #life-panel-link { display:none; }
   .daily-work .actions { background:white; border-color:var(--panel-border); }
   #daily .daily-inspiration { margin-top:16px; }
   #daily .daily-inspiration > * { margin-bottom:14px; }
@@ -596,7 +599,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
     </div>
   </div>
   <div class="identity"><span class="product-brand"><span class="product-mark" aria-hidden="true"></span><span class="product-wordmark">biegwyzej.pl</span></span><img id="logo" class="dealer-logo" alt="" hidden><strong id="dealer">Bieg Wyżej</strong><span id="salon"></span></div>
-  <div class="header-account"><span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span><span id="display-date"></span><form class="panel-signout" method="post" action="/logout"><button type="submit">Wyloguj się</button></form></div>
+  <div class="header-account"><a id="life-panel-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a><span class="signed-in" id="signed-in" hidden>Zalogowano jako <strong></strong></span><span id="display-date"></span><form class="panel-signout" method="post" action="/logout"><button type="submit">Wyloguj się</button></form></div>
 </header>
 <main>
 <section id="seller-detail" hidden aria-labelledby="seller-detail-heading">
@@ -645,6 +648,9 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
     </details>
     <a class="entry-link" id="today-entry-link" data-panel-route href="#wyniki">Wpisz działania</a>
   </section>
+  <a class="life-teaser" data-life-link href="/z-zycia-salonu.html">
+    <span><strong>Z życia salonu</strong><small id="life-headline">Zobacz wpisy i ankietę zespołu</small></span><span aria-hidden="true">›</span>
+  </a>
   <section class="actions"><h2 id="today-tasks-heading">Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><p id="followup-reminder" class="task-note" hidden></p><div id="tasks"></div></section>
   <section class="today-results" id="today-results">
     <h2 id="today-results-title">Twoje wyniki w tym miesiącu</h2>
@@ -662,7 +668,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </section>
 </div>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
-<section id="meme" hidden><div class="eyebrow">Z życia salonu</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
+<section id="meme" hidden><div class="eyebrow">Mem dnia</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
 <div id="meme-actions" hidden><div id="meme-votes" role="group" aria-label="Oceń mem"><button type="button" data-meme-vote="1" class="secondary" aria-pressed="false">👍 Podoba mi się</button> <button type="button" data-meme-vote="-1" class="secondary" aria-pressed="false">👎 Nie podoba mi się</button></div><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
 <form id="meme-form" hidden><p>Opisz sytuację bez nazwisk, numerów rejestracyjnych i danych klientów.</p><label>Tytuł <input name="title" maxlength="120" required></label><label>Historia <textarea name="caption" rows="4" maxlength="500" required></textarea></label><button>Wyślij do administratora</button></form>
 <p id="meme-status" role="status"></p></section></div>
@@ -741,6 +747,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <nav id="seller-mobile-nav" class="mobile-panel-nav" hidden aria-label="Panel handlowca"></nav>
 <section id="seller-more" data-seller-panel="wiecej" hidden>
   <h1>Więcej</h1>
+  <a class="mobile-menu-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a>
   <a class="mobile-menu-link" data-panel-route href="#wyniki">Wpis dzienny</a>
   <a class="mobile-menu-link" data-panel-route href="#kalendarz-pracy">Zgłoś dzień bez aktywności</a>
 </section>
@@ -838,7 +845,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </details>
 <div id="manager-scope-bar" class="manager-preview-bar" hidden><label for="manager-scope">Salon</label> <select id="manager-scope"></select></div>
 <nav id="management-mobile-nav" class="mobile-panel-nav" aria-label="Panel zarządzania" hidden></nav>
-<section id="management-more" hidden><h1>Więcej</h1><div id="management-more-links"></div></section>
+<section id="management-more" hidden><h1>Więcej</h1><a class="mobile-menu-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a><div id="management-more-links"></div></section>
 <nav id="management-nav" class="panel-nav management-nav" aria-label="Panel">
   <a data-panel-route href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a data-panel-route href="#zespol" id="management-team" hidden>Zespół</a>
@@ -901,6 +908,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <label id="user-group-role"><input type="checkbox" name="roles" value="group"> Szef grupy dealerskiej</label>
 <label id="user-manager-role"><input type="checkbox" name="roles" value="manager"> Kierownik salonu</label>
 <label><input type="checkbox" name="roles" value="seller"> Handlowiec</label>
+<label><input type="checkbox" name="roles" value="staff"> Pracownik · Z życia salonu</label>
 </fieldset>
 <label id="user-group-label" hidden>Grupa dealerska <select name="dealerGroup"></select></label>
 <label id="user-salon-label" hidden>Salon <select name="salon"></select></label>
