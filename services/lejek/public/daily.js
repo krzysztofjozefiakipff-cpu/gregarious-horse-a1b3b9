@@ -1513,11 +1513,30 @@ const managerActions={
 function coachingSellerLink(seller) {
   const link=document.createElement('a');
   link.textContent=seller.name;
-  link.href=sellerDetailUrl(seller.id,'wykonanie');
-  link.target='_blank';
-  link.rel='noopener';
-  link.setAttribute('aria-label',seller.name+' – szczegóły lejka w nowej karcie');
+  const url=new URL(location.href);
+  url.hash='zespol';
+  url.searchParams.set('osoba',seller.id);
+  const scope=$('#manager-scope');
+  if (!$('#manager-scope-bar').hidden&&scope.value) url.searchParams.set('salon',scope.value);
+  else url.searchParams.delete('salon');
+  link.href=url;
+  link.setAttribute('aria-label',seller.name+' – wyniki w zespole');
+  link.onclick=event=>{
+    if (event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey) return;
+    event.preventDefault();
+    navigation.go('#zespol',{teamSellerId:seller.id});
+    const row=document.getElementById('zespol-handlowiec-'+seller.id);
+    row?.querySelector('summary').focus({preventScroll:true});
+    row?.scrollIntoView({block:'start'});
+  };
   return link;
+}
+
+function selectedTeamSeller() {
+  const person=history.state?.teamSellerId??detailParams.get('osoba');
+  const row=person==null?null:document.getElementById('zespol-handlowiec-'+person);
+  if (row) row.open=true;
+  return row;
 }
 
 function salonQuickTotals(plan,titleId,elapsed,total,number,completed) {
@@ -1899,7 +1918,6 @@ function renderManagerDashboard(view,detailOnly=false) {
       figures.append(row);
     }
     detail.id='zespol-handlowiec-'+seller.id;
-    if (detailParams.get('osoba')===String(seller.id)) detail.open=true;
     detail.append(summary,figures);
     if (view.role==='manager'&&data.role==='manager'&&seller.accountStatus!=='inactive') {
       const link=document.createElement('a');
@@ -1909,6 +1927,7 @@ function renderManagerDashboard(view,detailOnly=false) {
     }
     list.append(detail);
   }
+  if (location.hash==='#zespol') selectedTeamSeller();
   return team;
 }
 
@@ -3175,6 +3194,7 @@ const navigation=panelNavigation(()=>{
     showView();
   } else if (data.role==='seller') selectSellerTab();
   else selectManagementView();
+  if (location.hash==='#zespol') selectedTeamSeller();
 });
 
 $('#role-function-select').onchange=event=>navigation.go('#'+event.target.value);
@@ -3577,7 +3597,7 @@ async function applyDailySnapshot(snapshot) {
   if (!restoredNavigation) {
     restoredNavigation=true;
     const anchor=detailSeller&&location.hash==='#reopen-day-form'?'reopen-day-form'
-      :location.hash==='#zespol'&&detailParams.has('osoba')?'zespol-handlowiec-'+detailParams.get('osoba'):null;
+      :location.hash==='#zespol'?selectedTeamSeller()?.id:null;
     navigation.restoreInitialPosition(anchor);
   }
 }
