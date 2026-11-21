@@ -1251,7 +1251,7 @@ function draftStatus(day) {
   return 'Szkic zapisany o '+time;
 }
 
-function renderToday(records,orders) {
+function renderToday(records,metrics) {
   const {today,personal,ranking}=data;
   const next=personal.missing[0];
   const exception=personal.exceptions[today];
@@ -1287,19 +1287,13 @@ function renderToday(records,orders) {
     link.textContent='Wpisz działania';
   }
 
-  const {actual,target,delta}=orders;
-  const pace=$('#today-orders-pace');
-  const progress=$('#today-orders-progress');
-  $('#today-orders-count').textContent=target==null?String(actual):actual+' z '+target;
-  pace.hidden=target==null||delta==null;
-  pace.dataset.behind=String(delta<0);
-  pace.textContent=actual>=target?'Plan wykonany':delta<0?Math.abs(delta)+' poniżej tempa na dziś'
-    :delta>0?delta+' powyżej tempa na dziś':'Zgodnie z tempem';
-  progress.hidden=!(target>0);
-  progress.max=target>0?target:1;
-  progress.value=Math.min(actual,progress.max);
-  $('#today-orders-remaining').textContent=target==null?'Brak planu zamówień':actual>=target?'Cel miesiąca osiągnięty'
-    :'Do celu miesiąca brakuje '+(target-actual);
+  for (const cell of document.querySelectorAll('[data-today-result]')) {
+    const index=Number(cell.dataset.todayResult);
+    const {actual,target}=metrics.find(metric=>metric.index===index);
+    cell.textContent=actual+'/'+(target??'—');
+    if (target==null) cell.title='Brak planu na ten miesiąc';
+    else cell.removeAttribute('title');
+  }
 
   const rank=ranking?.groupName?ranking.group:ranking?.salon;
   $('#today-rank').hidden=!rank;
@@ -1337,7 +1331,7 @@ function renderSeller() {
   $('#seller-calendar-days').textContent='Dni pracy do końca miesiąca: '+remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
   const currentMetrics=periodMetrics(data,currentMonth,1);
   renderTodayTasks(currentMetrics,data.previousDaily,data.today);
-  renderToday(records,currentMetrics.find(metric=>metric.index===7));
+  renderToday(records,currentMetrics);
   void recordVisibleTasks();
   renderPeriodPicker(periodValue.value||currentMonth);
   loadSellerPeriod();
