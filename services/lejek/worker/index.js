@@ -660,9 +660,9 @@ async function handle(request, env, buildDailyReport=false) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      const salonLife=personal&&!period?await db.prepare(`SELECT title FROM salon_life_posts
-        WHERE status='approved' AND scope='salon' AND audience=?
-        ORDER BY published_day DESC,id DESC LIMIT 1`).bind(user.salon).first():null;
+      const salonLife=personal&&!period?await db.prepare(`SELECT p.title FROM salon_life_posts p
+        WHERE p.status='approved' AND ${lifePostAudience}
+        ORDER BY p.published_day DESC,p.id DESC LIMIT 1`).bind('salon',user.salon).first():null;
       return json({signedInAs,previewUser,users,roles,accountHeader,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand:personal?brand:null,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([

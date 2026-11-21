@@ -33,20 +33,28 @@ function lifePhoto(value) {
   } catch { return false; }
 }
 
-async function viewSalonLife(db,current,scopes,email,today,week,user,roles,preview) {
+const lifePostAudience=`((p.scope=?1 AND p.audience=?2) OR
+    (?1='salon' AND p.scope='group' AND p.audience IN
+      (SELECT group_name FROM dealer_group_salons WHERE salon=?2)))`;
+
+async function viewSalonLife(db,current,scopes,email,today,week,user,roles,preview,before) {
   const {scope,name}=current;
-  const posts=await list(db,`SELECT p.id,p.title,p.message,p.photo IS NOT NULL AS hasPhoto,p.published_day AS day,
+  const posts=await list(db,`SELECT p.id,p.scope,p.audience,p.title,p.message,p.photo IS NOT NULL AS hasPhoto,p.published_day AS day,
     (SELECT name FROM accounts a WHERE a.email=p.author) AS author,
     (SELECT count(*) FROM salon_life_reactions r WHERE r.post=p.id) AS reactions,
-    EXISTS(SELECT 1 FROM salon_life_reactions r WHERE r.post=p.id AND r.email=?) AS reacted
-    FROM salon_life_posts p WHERE p.scope=? AND p.audience=? AND p.status='approved'
-    ORDER BY p.published_day DESC,p.id DESC LIMIT 40`,email,scope,name);
-  const hit=await db.prepare(`SELECT p.id,p.title,p.message,p.photo IS NOT NULL AS hasPhoto,p.published_day AS day,
+    EXISTS(SELECT 1 FROM salon_life_reactions r WHERE r.post=p.id AND r.email=?3) AS reacted
+    FROM salon_life_posts p WHERE ${lifePostAudience} AND p.status='approved'
+      AND (?4 IS NULL OR (p.published_day,p.id)<(SELECT p.published_day,p.id
+        FROM salon_life_posts p WHERE p.id=?4 AND ${lifePostAudience}))
+    ORDER BY p.published_day DESC,p.id DESC LIMIT 41`,scope,name,email,before);
+  const hasOlder=posts.length>40;
+  if (hasOlder) posts.pop();
+  const hit=await db.prepare(`SELECT p.id,p.scope,p.audience,p.title,p.message,p.photo IS NOT NULL AS hasPhoto,p.published_day AS day,
     (SELECT name FROM accounts a WHERE a.email=p.author) AS author,
-    count(r.email) AS reactions, MAX(r.email=?) AS reacted
+    count(r.email) AS reactions, MAX(r.email=?3) AS reacted
     FROM salon_life_posts p JOIN salon_life_reactions r ON r.post=p.id
-    WHERE p.scope=? AND p.audience=? AND p.status='approved' AND p.published_day BETWEEN ? AND ?
-    GROUP BY p.id ORDER BY reactions DESC,p.id DESC LIMIT 1`).bind(email,scope,name,week,today).first();
+    WHERE ${lifePostAudience} AND p.status='approved' AND p.published_day BETWEEN ?4 AND ?5
+    GROUP BY p.id ORDER BY reactions DESC,p.id DESC LIMIT 1`).bind(scope,name,email,week,today).first();
   const drafts=await list(db,`SELECT id,title,message,photo IS NOT NULL AS hasPhoto FROM salon_life_posts
     WHERE scope=? AND audience=? AND author=? AND status='pending' ORDER BY id DESC LIMIT 40`,scope,name,email);
   const ballot=await db.prepare(`SELECT id,question,options FROM salon_life_polls
@@ -60,7 +68,7 @@ async function viewSalonLife(db,current,scopes,email,today,week,user,roles,previ
     }))};
   }
   const {firstName,brand}=await loadAccountHeader(db,user);
-  return json({role:user.role,roles,accountHeader:{firstName,brand},scopes,current,posts,hit,drafts,poll,readOnly:preview});
+  return json({role:user.role,roles,accountHeader:{firstName,brand},scopes,current,posts,hit,drafts,poll,hasOlder,readOnly:preview});
 }
 
 async function handleSalonLife(request,url,db,user,roles,email,preview) {
@@ -75,13 +83,17 @@ async function handleSalonLife(request,url,db,user,roles,email,preview) {
 
   if (request.method==='GET'&&url.pathname==='/api/salon-life/photo') {
     const id=Number(url.searchParams.get('id'));
-    const row=await db.prepare(`SELECT photo FROM salon_life_posts WHERE id=? AND scope=? AND audience=?
-      AND photo IS NOT NULL AND (status='approved' OR (status='pending' AND author=?))`).bind(id,...key,email).first();
+    const row=await db.prepare(`SELECT p.photo FROM salon_life_posts p WHERE p.id=?4 AND p.photo IS NOT NULL
+      AND ((p.status='approved' AND ${lifePostAudience})
+        OR (p.status='pending' AND p.scope=?1 AND p.audience=?2 AND p.author=?3))`).bind(...key,email,id).first();
     if (!row) return json({error:'Zdjęcie jest niedostępne.'},404);
     const bytes=Uint8Array.from(atob(row.photo.split(',')[1]),char=>char.charCodeAt(0));
     return new Response(bytes,{headers:{...headers,'Content-Type':'image/jpeg'}});
   }
-  if (request.method==='GET') return viewSalonLife(db,current,scopes,email,today,week,user,roles,preview);
+  if (request.method==='GET') {
+    const before=Number(url.searchParams.get('before'));
+    return viewSalonLife(db,current,scopes,email,today,week,user,roles,preview,Number.isSafeInteger(before)&&before>0?before:null);
+  }
   if (url.pathname!=='/api/salon-life'||request.method!=='POST'||preview||request.headers.get('Origin')!==url.origin||
       !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Niedozwolone żądanie.'},403);
   const body=await request.json().catch(()=>null);
@@ -98,10 +110,10 @@ async function handleSalonLife(request,url,db,user,roles,email,preview) {
   }
   if (action==='react'&&Number.isSafeInteger(id)&&typeof body.active==='boolean') {
     const sql=body.active?`INSERT INTO salon_life_reactions(post,email)
-      SELECT id,?1 FROM salon_life_posts WHERE id=?2 AND scope=?3 AND audience=?4 AND status='approved'
-      ON CONFLICT(post,email) DO NOTHING`:`DELETE FROM salon_life_reactions WHERE email=?1 AND post IN
-      (SELECT id FROM salon_life_posts WHERE id=?2 AND scope=?3 AND audience=?4 AND status='approved')`;
-    await db.prepare(sql).bind(email,id,...key).run();
+      SELECT p.id,?3 FROM salon_life_posts p WHERE p.id=?4 AND ${lifePostAudience} AND p.status='approved'
+      ON CONFLICT(post,email) DO NOTHING`:`DELETE FROM salon_life_reactions WHERE email=?3 AND post IN
+      (SELECT p.id FROM salon_life_posts p WHERE p.id=?4 AND ${lifePostAudience} AND p.status='approved')`;
+    await db.prepare(sql).bind(...key,email,id).run();
     return json({ok:true});
   }
   if (action==='vote'&&Number.isSafeInteger(id)&&Number.isInteger(body.choice)&&body.choice>=0) {
