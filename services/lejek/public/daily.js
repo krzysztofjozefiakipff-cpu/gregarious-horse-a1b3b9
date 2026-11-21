@@ -1597,6 +1597,7 @@ function selectedManagementMonth() {
 
 async function renderManagementPerformance() {
   const {view,team}=performanceView;
+  $('#management-filter-salon').textContent=view.salons.length>1?'Wszystkie salony':view.salons[0]?.salon??'Brak salonu';
   const type=managementPeriodType.value;
   const current=data.today.slice(0,7);
   if (!managementMonth.value&&type==='month') setManagementPeriod(current);
@@ -1612,17 +1613,16 @@ async function renderManagementPerformance() {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||!Number.isInteger(Number(month.slice(0,4)))||
       Number(month.slice(0,4))<1000||Number(month.slice(0,4))>9998) {
     status.textContent='Wybierz prawidłowy okres.';
-    $('#salon-period').textContent='';
+    $('#salon-period').textContent='Wybierz okres';
     $('#salon-pace-key').hidden=true;
     $('#salon-results').replaceChildren();
     return;
   }
+  $('#salon-period').textContent=periodName(month,type);
   if (isCurrent) {
     renderSalonSummary(view,team);
     return;
   }
-  const label=periodName(month,type);
-  $('#salon-period').textContent=label;
   status.textContent='Wczytywanie okresu…';
   $('#salon-pace-key').hidden=true;
   $('#salon-results').replaceChildren();
@@ -1639,7 +1639,7 @@ async function renderManagementPerformance() {
     if (revision!==performanceRevision) return;
     status.textContent='';
     const completed=months.at(-1).month<current;
-    renderSalonSummary(view,[],{...aggregateSalonPerformance(months,data.today),label,completed});
+    renderSalonSummary(view,[],{...aggregateSalonPerformance(months,data.today),completed});
   } catch (error) {
     if (revision===performanceRevision) status.textContent=error.message;
   }
@@ -1673,7 +1673,6 @@ function renderSalonSummary(view,team=[],period=null) {
   results.replaceChildren();
   if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
   if (!period&&!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
-  $('#salon-period').textContent=period?.label??dateLabel(view.today,{month:'long',year:'numeric'});
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
   const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
   const [year,month]=view.today.split('-').map(Number);
@@ -2617,7 +2616,10 @@ function placeManagementScope(inResults) {
   const scope=$('#manager-scope-bar');
   const picker=$('#management-period-picker');
   if (inResults&&scope.parentElement!==picker) picker.prepend(scope);
-  if (!inResults&&scope.parentElement===picker) $('#manager-scope-anchor').after(scope);
+  if (!inResults&&scope.parentElement===picker) {
+    $('#manager-scope-anchor').after(scope);
+    $('#management-filters').open=false;
+  }
 }
 
 function selectRoleFunction(routes) {
@@ -2655,7 +2657,7 @@ function selectRoleFunction(routes) {
   $('#daily-briefing').hidden=active!=='odprawa-dzienna';
   if (active==='odprawa-dzienna') loadBriefingPanel();
   $('#performance-view').hidden=active!=='wykonanie'&&active!=='historia-planow';
-  $('#performance-title').textContent=active==='historia-planow'?label:'Realizacja planów salonów';
+  $('#performance-title').textContent=active==='historia-planow'?label:data.role==='manager'?'Wyniki':'Realizacja planów salonów';
   $('#manager-team-view').hidden=active!=='zespol';
   $('#user-accounts-view').hidden=active!=='konta-uzytkownikow';
   $('#administration-view').hidden=!blockId;
