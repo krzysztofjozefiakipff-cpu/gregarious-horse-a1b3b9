@@ -699,15 +699,19 @@ async function handle(request, env, buildDailyReport=false) {
     const briefing=await loadBriefing(today,seller);
     const current=briefing.salons[0].people[0];
     const timestamp=new Date().toISOString();
-    if (action==='confirm') {
-      if (current.review.status!=='recorded'||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
-          (version!==undefined&&version!==current.review.version))
-        return json({error:'Wynik jest niezatwierdzony lub zmienił się po otwarciu odprawy. Odśwież dane.'},409);
-      await db.prepare(`INSERT INTO daily_briefing_reviews VALUES (?,?,?,?,?,?)
-        ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,actuals=excluded.actuals,
-          goals=excluded.goals,reviewed_at=excluded.reviewed_at
-          WHERE daily_briefing_reviews.actuals<>excluded.actuals`)
-        .bind(person,current.review.day,user.id,current.review.version,JSON.stringify(current.review.goals),timestamp).run();
+    const confirmWithEdits=action==='confirm'&&rows!==undefined;
+    const reviewStatement=(reviewVersion,afterCorrection=false)=>db.prepare(`INSERT INTO daily_briefing_reviews
+      SELECT ?,?,?,?,?,? ${afterCorrection?'WHERE changes()=1':''}
+      ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,actuals=excluded.actuals,
+        goals=excluded.goals,reviewed_at=excluded.reviewed_at
+      WHERE daily_briefing_reviews.actuals<>excluded.actuals`)
+      .bind(person,current.review.day,user.id,reviewVersion,JSON.stringify(current.review.goals),timestamp);
+    if (action==='confirm'&&(current.review.status!=='recorded'||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
+        (version!==undefined&&version!==current.review.version))) {
+      return json({error:'Wynik jest niezatwierdzony lub zmienił się po otwarciu odprawy. Odśwież dane.'},409);
+    }
+    if (action==='confirm'&&!confirmWithEdits) {
+      await reviewStatement(current.review.version).run();
     } else if (action==='accept-today') {
       if (!current.signoff.previousReady) return json({error:'Najpierw potwierdź wykonanie z poprzedniego dnia pracy.'},409);
       if (current.pendingToday) return json({error:'Najpierw rozpatrz zgłoszenie w kalendarzu pracy.'},409);
@@ -724,7 +728,7 @@ async function handle(request, env, buildDailyReport=false) {
       const written=await db.prepare(`UPDATE daily_briefing_signoffs SET manager=?,completed_version=?,completed_at=?
         WHERE person=? AND day=? AND accepted_plan=?`).bind(user.id,version,timestamp,person,today,current.signoff.planVersion).run();
       if (!written.meta.changes) return json({error:'Dane odprawy zmieniły się. Odśwież panel.'},409);
-    } else if (action==='correct') {
+    } else if (action==='correct'||confirmWithEdits) {
       if (current.review.status!=='recorded'||!current.review.rows) return json({error:'Możesz skorygować zatwierdzony wpis, który ma podział na źródła.'},409);
       if (JSON.stringify(current.review.rows)!==JSON.stringify(previousRows)||
           (version!==undefined&&version!==current.review.version))
@@ -737,15 +741,27 @@ async function handle(request, env, buildDailyReport=false) {
       const existing=await db.prepare('SELECT counters FROM daily_results WHERE person=? AND day=?').bind(person,dayBefore).first();
       if (!existing||JSON.stringify(JSON.parse(existing.counters)[5])!==JSON.stringify(previousRows))
         return json({error:'Wpis zmienił się albo został odblokowany. Odśwież dane odprawy.'},409);
-      if (next===existing.counters) return json({ok:true});
-      const [updated]=await db.batch([
+      if (next===existing.counters) {
+        if (confirmWithEdits) await reviewStatement(current.review.version).run();
+        return json({ok:true});
+      }
+      const statements=[
         db.prepare('UPDATE daily_results SET counters=? WHERE person=? AND day=? AND counters=?')
           .bind(next,person,dayBefore,existing.counters),
         db.prepare(`INSERT INTO daily_briefing_result_corrections
           (person,day,manager,previous_counters,corrected_counters,corrected_at)
-          SELECT ?,?,?,?,?,? WHERE changes()=1`).bind(person,dayBefore,user.id,existing.counters,next,timestamp),
-        db.prepare('DELETE FROM daily_briefing_reviews WHERE person=? AND day=? AND changes()=1').bind(person,dayBefore)
-      ]);
+          SELECT ?,?,?,?,?,? WHERE changes()=1`).bind(person,dayBefore,user.id,existing.counters,next,timestamp)
+      ];
+      if (confirmWithEdits) {
+        const correctedActual=summarizeReportRows([{counters:next}]).actuals;
+        statements.push(
+          reviewStatement(JSON.stringify([dayBefore,correctedActual,next]),true),
+          db.prepare('DELETE FROM daily_briefing_signoffs WHERE person=? AND day=? AND changes()=1').bind(person,today)
+        );
+      } else {
+        statements.push(db.prepare('DELETE FROM daily_briefing_reviews WHERE person=? AND day=? AND changes()=1').bind(person,dayBefore));
+      }
+      const [updated]=await db.batch(statements);
       if (!updated.meta.changes) return json({error:'Wpis zmienił się albo został odblokowany. Odśwież dane odprawy.'},409);
     } else if (action==='save') {
       const valid=(values,length)=>Array.isArray(values)&&values.length===length&&values.every(value=>value===null||countValid(value));
