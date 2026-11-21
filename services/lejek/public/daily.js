@@ -1485,7 +1485,7 @@ function renderSeller() {
   $('#progress-text').textContent=done+' z '+expected+' dni pracy rozliczonych do dziś';
   $('#progress').max=expected||1;
   $('#progress').value=done;
-  $('#fortune').textContent=records[data.today]?fortunes[dayIndex%fortunes.length]:'Otworzy się po zatwierdzeniu dzisiejszych wyników.';
+  $('#fortune').textContent=fortunes[dayIndex%fortunes.length];
   selectSellerTab();
   $('#daily').hidden=false;
 }
@@ -3639,7 +3639,7 @@ async function applyDailySnapshot(snapshot) {
     navigation.restoreInitialPosition(anchor);
   }
 }
-async function run(operation,openCookie=false) {
+async function run(operation) {
   if (busy) return;
   busy=true;
   const entryWasDisabled=$('#save').disabled;
@@ -3648,7 +3648,6 @@ async function run(operation,openCookie=false) {
     await operation();
     busy=false;
     await refresh();
-    if (openCookie) $('#cookie').open=true;
     if (data.role!=='seller') $('#load').textContent='Zapisano zmiany.';
   } catch(error) {
     $('#load').textContent=error.message;
@@ -3670,7 +3669,7 @@ $('#entry').onsubmit=event=>{
     for (const [index] of columns) row[index]=Number(event.target.elements['v'+r+'_'+index].value);
     return row;
   });
-  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today);
+  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}));
 };
 function readBrandLogo(file) {
   return new Promise((resolve,reject)=>{
