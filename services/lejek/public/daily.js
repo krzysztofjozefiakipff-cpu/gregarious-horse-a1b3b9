@@ -1107,6 +1107,7 @@ function renderGif(config) {
 }
 
 const sourceSelect=$('#entry-source');
+$('#entry-help-button').onclick=()=>$('#entry-guide').showModal();
 function showEntrySource(index) {
   sourceSelect.value=String(index);
   for (const row of $('#rows').rows) row.classList.toggle('active-source',Number(row.dataset.source)===index);
@@ -1120,7 +1121,7 @@ function updateSourceStatuses() {
     const inputs=Array.from(row.querySelectorAll('input'));
     for (const input of inputs) input.classList.toggle('has-value',input.valueAsNumber>0);
     const hasResults=inputs.some(input=>input.valueAsNumber>0);
-    sourceSelect.options[index].textContent=sources[index]+(hasResults?' — wpisano wyniki':'');
+    sourceSelect.options[index].textContent=sources[index]+(hasResults?' ✓':'');
   }
 }
 
@@ -1347,6 +1348,7 @@ function renderSeller() {
   calendarLink.dataset.panelRoute='';
   calendarLink.textContent='Otwórz Kalendarz pracy';
   reminder.replaceChildren('Dni wolne czekające na zatwierdzenie: '+pending+'. ',calendarLink);
+  $('#entry-date').dateTime=day;
   $('#entry-date').textContent=dateLabel(day);
   $('#backlog').hidden=!next;
   $('#backlog-text').textContent=next?personal.missing.length+' do rozliczenia · '+dateLabel(next)+(waiting?' · Czeka na zatwierdzenie':''):'';
@@ -1365,9 +1367,8 @@ function renderSeller() {
   $('#entry-grid').dataset.day=day;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+label+(r===0&&(c===1||c===2)?'<small>Automatycznie</small>':'')+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(locked||blocked||data.previewUser?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<td><span class="entry-field-label" aria-hidden="true">'+(c===10?'Faktury':label)+(r===0&&(c===1||c===2)?'<small>Auto</small>':'')+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(locked||blocked||data.previewUser?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
-  $('#entry-navigation').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
   if (!legacy) {
     sourceSelect.replaceChildren(...sources.map((name,i)=>new Option(name,String(i))));
@@ -1376,7 +1377,7 @@ function renderSeller() {
   }
   $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':holiday?holiday+' · dzień bez aktywności.':locked?'Dzień rozliczony.'
     :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
-    :data.previewUser?'Podgląd wpisu.':draft?'Możesz dalej edytować wartości.':'Po zatwierdzeniu dzień trafi do wyników.';
+    :data.previewUser?'Podgląd wpisu.':'';
   const showMeme=data.sidebarMode==='meme';
   $('#cause').hidden=showMeme;
   $('#meme').hidden=!showMeme;

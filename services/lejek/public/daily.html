@@ -65,22 +65,6 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 .pace-item{flex:1 1 170px;min-width:0}.pace-note{display:block;margin-top:6px;padding:6px 9px;border-radius:7px;background:#e7f5eb;color:#194d30;font-size:.87rem;line-height:1.35}
 .pace-note-behind{background:#fff0df;color:#743b18}
 .mobile-entry,.entry-field-label{display:none}
-@media(max-width:1050px){
-  #mobile-entry{display:grid;gap:6px;margin:10px 0 12px}#mobile-entry label{font-weight:750}
-  #entry-source{min-height:44px;width:100%;font-size:1rem}#entry-help{color:var(--muted);font-size:.9rem}
-  #entry-grid{overflow:visible}#entry-grid thead,#entry-grid tbody tr:not(.active-source),#entry-grid th{display:none}
-  #entry-grid table,#entry-grid tbody{display:block}
-  #entry-grid tr.active-source{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:12px}
-  #entry-grid tr.active-source th[scope=row]{display:block;grid-column:1/-1;background:var(--blue);color:white;border:0;border-radius:8px;padding:10px 12px;font-size:1.25rem;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
-  #entry-grid tr.active-source th[scope=row]::before{content:"Wpisujesz dla";display:block;font-size:.76rem;letter-spacing:.04em;font-weight:650;margin-bottom:3px}
-  #entry-grid td{display:grid;gap:4px;padding:0;border:0;min-width:0}
-  .entry-field-label{display:block;font-weight:650;font-size:.87rem;overflow-wrap:anywhere}
-  #entry-grid input{min-height:44px;min-width:0;font-size:1rem}
-  #entry-navigation{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-top:10px}
-  #entry-navigation button{min-height:44px;padding-inline:7px;font-size:.9rem}
-  #entry-count{font-size:.85rem;color:var(--muted);white-space:nowrap}
-  #save{width:100%;min-height:44px}
-}
 #review-plan{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:white}#review-plan h3{margin:0 0 5px;font-size:1rem}#review-count{font-size:1.3rem;margin-right:6px}
 #daily-lesson{order:0;background:white;border:1px solid var(--line);border-inline-start:4px solid var(--blue);border-radius:14px;padding:18px;margin-bottom:20px}
 #daily-lesson h2{margin:6px 0 10px}#lesson-remember{margin-top:12px;background:var(--tint);border-radius:8px;padding:10px;color:var(--ink);white-space:pre-wrap}
@@ -108,9 +92,11 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
   .seller-nav{flex-wrap:nowrap;position:fixed;z-index:2;bottom:0;left:0;right:0;margin:0;padding:6px 12px calc(6px + env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;box-shadow:0 -3px 14px #0b152212}
 }
 #meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:var(--ink);color:#fff}
-#entry-guide{margin:10px 0 14px;border:1px solid var(--line);border-inline-start:4px solid var(--blue);border-radius:10px;background:var(--tint)}
-#entry-guide summary{min-height:44px;padding:10px 12px;cursor:pointer;font-weight:750}
-#entry-guide .guide-content{padding:0 12px 14px;display:grid;gap:14px}
+#entry-guide{width:min(680px,calc(100% - 32px));max-height:75dvh;padding:16px;color:var(--ink);border:1px solid var(--line);border-radius:14px;background:var(--paper)}
+#entry-guide::backdrop{background:#25162480}
+#entry-guide .guide-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+#entry-guide .guide-heading h2{margin:0}
+#entry-guide .guide-content{display:grid;gap:14px}
 #entry-guide h3{margin:0 0 6px;font-size:1rem}
 #entry-guide ol{margin:0;padding-inline-start:22px}
 #entry-guide li+li{margin-top:6px}
@@ -466,15 +452,28 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 .briefing-salon-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
 .briefing-salon-heading h2 { margin:0; overflow-wrap:anywhere; }
 .briefing-salon-count { color:var(--panel-muted); font-size:.92rem; white-space:nowrap; }
+#entry .entry-heading { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.entry-heading h1 { margin:0; }
+#entry-date { color:var(--muted); }
+.entry-heading #entry-help-button { margin-inline-start:auto; }
+.entry-heading button,#entry-guide button { min-height:44px; }
+.entry-back { display:none; }
+#entry #status:empty { display:none; }
+.entry-visually-hidden { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+
 @media(max-width:1050px) {
-  #entry-grid tr.active-source { grid-template-columns:minmax(0,1fr); gap:0; padding:6px 12px; }
-  #entry-grid tr.active-source th[scope=row] { background:white; color:var(--panel-plum); padding:9px 0; }
-  #entry-grid tr.active-source th[scope=row]::before { content:none; }
-  #entry-grid td { grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; padding:5px 0; border-top:1px solid var(--panel-border); }
-  #entry-grid td input { width:4.25rem; min-height:48px; }
-  .entry-field-label small { display:block; color:var(--panel-muted); font-weight:500; }
+  #mobile-entry { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; gap:6px; margin:8px 0; }
+  #entry-source { width:100%; min-width:0; min-height:44px; font-size:1rem; font-weight:700; text-overflow:ellipsis; }
+  #mobile-entry button { min-height:44px; padding:0; font-size:1.4rem; }
+  #entry-grid { overflow:visible; }
+  #entry-grid table,#entry-grid tbody { display:block; }
+  #entry-grid thead,#entry-grid tbody tr:not(.active-source),#entry-grid th { display:none; }
+  #entry-grid tr.active-source { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; padding:9px 10px 10px; background:#fff; border:1px solid var(--line); border-radius:12px; }
+  #entry-grid td { display:grid; grid-template-rows:auto 1fr; align-items:end; gap:2px; padding:0; min-width:0; border:0; }
+  .entry-field-label { display:flex; align-items:baseline; flex-wrap:wrap; gap:0 5px; min-width:0; font-size:.85rem; font-weight:720; line-height:1.15; overflow-wrap:anywhere; }
+  .entry-field-label small { font-weight:650; color:var(--muted); }
+  #entry-grid td input { width:100%; min-width:0; min-height:44px; padding-block:3px; font-size:1rem; }
 }
-@media(min-width:1051px) { .entry-field-label small { display:none; } }
 @media(max-width:850px) {
   body:has(.mobile-panel-nav:not([hidden])) { background:var(--panel-paper); color:var(--panel-ink); padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
   body:has(.mobile-panel-nav:not([hidden])) .panel-header { background:var(--panel-plum); padding-top:max(12px,env(safe-area-inset-top)); }
@@ -501,8 +500,19 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
   .daily-work .actions { background:white; border-color:var(--panel-border); }
   #daily .daily-inspiration { margin-top:16px; }
   #daily .daily-inspiration > *,#cookie { margin-bottom:14px; }
-  #entry .save { position:sticky; z-index:2; bottom:calc(62px + max(5px,env(safe-area-inset-bottom))); padding:8px 0; background:var(--panel-paper); }
-  #entry:has(input:focus) .save { position:static; }
+  body:has([data-seller-panel="wyniki"]:not([hidden])) { padding-top:env(safe-area-inset-top); }
+  body:has([data-seller-panel="wyniki"]:not([hidden]))::before { content:""; position:fixed; inset:0 0 auto; z-index:6; height:env(safe-area-inset-top); background:var(--panel-paper); pointer-events:none; }
+  body:has([data-seller-panel="wyniki"]:not([hidden])) :is(.panel-header,#account-role-bar,footer) { display:none; }
+  main:has([data-seller-panel="wyniki"]:not([hidden])) { padding-top:6px; }
+  #entry .entry-heading { margin-bottom:5px; }
+  .entry-heading h1 { font-size:1.3rem; letter-spacing:-.03em; }
+  #entry-date { display:block; font-size:.85rem; font-weight:550; }
+  .entry-back { display:grid; place-items:center; flex:0 0 44px; min-height:44px; color:var(--panel-plum); text-decoration:none; font-size:1.5rem; }
+  .entry-heading #entry-help-button { padding-inline:9px; font-size:.85rem; }
+  #entry-draft-state { margin:3px 0 4px; font-size:.85rem; }
+  #entry .save { margin-top:8px; gap:5px; }
+  #entry #backlog { padding:7px 10px; margin:5px 0; font-size:.87rem; }
+  #entry #backlog-calendar { min-height:44px; display:inline-flex; align-items:center; }
   #entry .entry-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
   #entry .entry-actions button { min-height:48px; }
   #entry #approve-day:not(:disabled) { background:var(--panel-plum); }
@@ -590,10 +600,36 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
 </div>
 <div data-seller-panel="wyniki" hidden>
 <form id="entry">
-<div class="heading"><h1>Wpis dzienny</h1><strong id="entry-date"></strong></div>
+<div class="entry-heading">
+  <a data-panel-route href="#dzisiaj" class="entry-back" aria-label="Wróć do ekranu Dzisiaj">‹</a>
+  <div><h1>Wpis dzienny</h1><time id="entry-date"></time></div>
+  <button type="button" class="secondary" id="entry-help-button" aria-haspopup="dialog">Pomoc</button>
+</div>
 <p id="entry-draft-state" hidden></p>
-<details id="entry-guide">
-  <summary>Instrukcja wypełniania lejka</summary>
+<div id="backlog" hidden><strong id="backlog-text"></strong><div id="options">
+<button type="button" id="resolve">Rozlicz dzień</button>
+<a id="backlog-calendar" data-panel-route href="#kalendarz-pracy">Otwórz ten dzień w kalendarzu</a>
+</div></div>
+<div id="mobile-entry" class="mobile-entry" hidden>
+  <button type="button" class="secondary" id="entry-prev" aria-label="Poprzednie źródło">‹</button>
+  <label for="entry-source" class="entry-visually-hidden">Źródło kontaktu</label>
+  <select id="entry-source"></select>
+  <button type="button" class="secondary" id="entry-next" aria-label="Następne źródło">›</button>
+  <span id="entry-count" class="entry-visually-hidden" aria-live="polite"></span>
+</div>
+<div class="scroll" id="entry-grid"><table aria-label="Wyniki według źródeł"><thead id="columns"></thead><tbody id="rows"></tbody></table></div>
+<div class="save">
+  <span id="status" role="status"></span>
+  <div class="entry-actions">
+    <button type="submit" id="save" class="secondary">Zapisz szkic</button>
+    <button type="submit" id="approve-day">Zatwierdź dzień</button>
+  </div>
+</div></form>
+<dialog id="entry-guide" aria-labelledby="entry-guide-title">
+  <div class="guide-heading">
+    <h2 id="entry-guide-title">Instrukcja wypełniania lejka</h2>
+    <form method="dialog"><button class="secondary" autofocus>Zamknij</button></form>
+  </div>
   <div class="guide-content">
     <section>
       <h3>Jak zapisywać dzień</h3>
@@ -626,29 +662,7 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
     </section>
     <p class="guide-example"><strong>Przykład.</strong> Dziś otrzymujesz 1 nowy lead z OTOMOTO i dzwonisz do klienta dwa razy. Wpisz w OTOMOTO 1 w „Leady” i 2 w „Próby kontaktu”. Jeśli jutro klient przyjedzie i odbędzie jazdę próbną, w jutrzejszym wpisie pod OTOMOTO dodaj 1 spotkanie i 1 jazdę próbną. Lead został już zapisany pierwszego dnia.</p>
   </div>
-</details>
-<div id="backlog" hidden><strong id="backlog-text"></strong><div id="options">
-<button type="button" id="resolve">Rozlicz dzień</button>
-<a id="backlog-calendar" data-panel-route href="#kalendarz-pracy">Otwórz ten dzień w kalendarzu</a>
-</div></div>
-<div id="mobile-entry" class="mobile-entry" hidden>
-  <label for="entry-source">Źródło kontaktu</label>
-  <select id="entry-source" aria-describedby="entry-help"></select>
-  <p id="entry-help">Wpisz tylko wykonane działania. Puste pola zapiszą się jako 0.</p>
-</div>
-<div class="scroll" id="entry-grid"><table aria-label="Wyniki według źródeł"><thead id="columns"></thead><tbody id="rows"></tbody></table></div>
-<nav id="entry-navigation" class="mobile-entry" aria-label="Przejdź do innego źródła" hidden>
-  <button type="button" class="secondary" id="entry-prev">Poprzednie</button>
-  <span id="entry-count" aria-live="polite"></span>
-  <button type="button" class="secondary" id="entry-next">Następne</button>
-</nav>
-<div class="save">
-  <span id="status" role="status"></span>
-  <div class="entry-actions">
-    <button type="submit" id="save" class="secondary">Zapisz szkic</button>
-    <button type="submit" id="approve-day">Zatwierdź dzień</button>
-  </div>
-</div></form>
+</dialog>
 </div>
 <nav id="seller-mobile-nav" class="mobile-panel-nav" hidden aria-label="Panel handlowca"></nav>
 <section id="seller-more" data-seller-panel="wiecej" hidden>
