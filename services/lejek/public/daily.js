@@ -335,7 +335,7 @@ const detailParams=new URLSearchParams(location.search);
 const detailSeller=detailParams.get('handlowiec');
 const previewTarget=detailParams.get('podglad');
 let data;
-let editDay;
+let showTodayEntry=false;
 let busy=false;
 const allPreviewSalons='\u0000all-salons';
 let managerPreviewSalon=history.state?.managerPreviewSalon??'';
@@ -1282,10 +1282,11 @@ function renderToday(records,metrics) {
   const link=$('#today-entry-link');
   $('#today-date').textContent=dateLabel(today,{weekday:'long',day:'numeric',month:'long'});
   link.href='#wyniki';
-  link.onclick=()=>{if (editDay) { editDay=null; renderSeller(); }};
+  link.onclick=()=>{if (showTodayEntry) { showTodayEntry=false; renderSeller(); }};
   if (records[today]||holiday||['zero','leave','training'].includes(exception)) {
     status.textContent=records[today]?'Dzień zatwierdzony':holiday??'Dzień rozliczony';
     link.textContent='Zobacz wpis';
+    link.onclick=()=>{if (next&&!showTodayEntry) { showTodayEntry=true; renderSeller(); }};
   } else if (next&&next!==today) {
     const waiting=personal.exceptions[next]==='pending';
     status.textContent=dateLabel(next)+' · '+(waiting?'Czeka na zatwierdzenie':'Najstarszy dzień do rozliczenia');
@@ -1293,8 +1294,6 @@ function renderToday(records,metrics) {
     if (waiting) {
       link.href='#kalendarz-pracy';
       link.onclick=()=>{$('#seller-calendar-editor').dataset.calendarDraftDay=next;};
-    } else {
-      link.onclick=()=>{if (editDay!==next) { editDay=next; renderSeller(); }};
     }
   } else if (exception==='pending') {
     status.textContent='Dzień czeka na zatwierdzenie';
@@ -1324,7 +1323,7 @@ function renderSeller() {
   showPanelLogo(brand?.logo);
   const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
   const next=personal.missing[0];
-  const day=next&&editDay===next?editDay:data.today;
+  const day=showTodayEntry?data.today:next??data.today;
   const exception=personal.exceptions[day];
   const waiting=personal.exceptions[next]==='pending';
   const blocked=(next&&day!==next)||exception==='pending';
@@ -3547,14 +3546,13 @@ async function refresh() {
     navigation.restoreInitialPosition(anchor);
   }
 }
-async function run(operation,openCookie=false,keepEditDay=false) {
+async function run(operation,openCookie=false) {
   if (busy) return;
   busy=true;
   const entryWasDisabled=$('#save').disabled;
   $('#save').disabled=$('#approve-day').disabled=true;
   try {
     await operation();
-    if (!keepEditDay) editDay=null;
     busy=false;
     await refresh();
     if (openCookie) $('#cookie').open=true;
@@ -3567,11 +3565,11 @@ async function run(operation,openCookie=false,keepEditDay=false) {
     }
   } finally {busy=false;}
 }
-$('#resolve').onclick=()=>{editDay=data.personal.missing[0];renderSeller();$('#rows .active-source input')?.focus();};
+$('#resolve').onclick=()=>{showTodayEntry=false;renderSeller();$('#rows .active-source input')?.focus();};
 $('#entry').onsubmit=event=>{
   event.preventDefault();
   if(data?.role!=='seller'||busy||$('#save').disabled) return;
-  const day=editDay??data.today;
+  const day=$('#entry-date').dateTime;
   const draft=event.submitter!==$('#approve-day');
   if (!draft&&!confirm('Czy na pewno chcesz zatwierdzić dzień '+dateLabel(day)+'? Po zatwierdzeniu edycja wartości będzie zablokowana.')) return;
   const rows=sources.map((_,r)=>{
@@ -3579,7 +3577,7 @@ $('#entry').onsubmit=event=>{
     for (const [index] of columns) row[index]=Number(event.target.elements['v'+r+'_'+index].value);
     return row;
   });
-  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today,draft);
+  run(()=>api('/api/daily',{person:data.sellers[0].id,day,rows,draft}),!draft&&day===data.today);
 };
 function readBrandLogo(file) {
   return new Promise((resolve,reject)=>{
