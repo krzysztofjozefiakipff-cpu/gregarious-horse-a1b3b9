@@ -78,7 +78,7 @@ function briefingResultCorrection(person,report) {
         return values;
       });
       await api('/api/daily-briefing',{person:person.id,day:report.today,action:'correct',rows,previousRows:original,version:person.review.version});
-      await loadBriefingPanel('Zapisano korektę wykonania i przeliczono pozostały plan dla '+person.name+'.');
+      await loadBriefingPanel('Zapisano korektę wykonania · '+person.name,person.id);
     } catch(error) {
       status.textContent=error.message;
       save.disabled=false;
@@ -86,6 +86,31 @@ function briefingResultCorrection(person,report) {
   };
   editor.append(form);
   return editor;
+}
+
+function briefingOverview(headers,rows) {
+  const overview=briefingTable(headers,rows);
+  overview.classList.add('briefing-overview');
+  return overview;
+}
+
+function briefingFold(label,...nodes) {
+  const details=reportElement('details');
+  details.className='briefing-extra';
+  details.append(reportElement('summary',label),...nodes);
+  return details;
+}
+
+function briefingStepper(active,completed) {
+  const stepper=reportElement('ol');
+  stepper.className='briefing-stepper';
+  ['Wykonanie','Plan na dziś','Zatwierdzenie'].forEach((label,i)=>{
+    const step=reportElement('li',label);
+    if (completed||i+1<active) step.dataset.done='true';
+    else if (i+1===active) step.setAttribute('aria-current','step');
+    stepper.append(step);
+  });
+  return stepper;
 }
 
 function briefingStep(number,title,state) {
@@ -118,7 +143,7 @@ function briefingAction(parent,label,person,report,payload,message) {
     button.disabled=true;
     try {
       await api('/api/daily-briefing',{person:person.id,day:report.today,...payload});
-      await loadBriefingPanel(message);
+      await loadBriefingPanel(message,person.id);
     } catch(error) {
       status.textContent=error.message;
       button.disabled=false;
@@ -139,13 +164,20 @@ function briefingSave(form,label,person,report,fields,part) {
     try {
       const values=fields.map(input=>input.value===''?null:input.valueAsNumber);
       await api('/api/daily-briefing',{person:person.id,day:report.today,action:'save',part,[part]:values});
-      await loadBriefingPanel('Zapisano '+(part==='goals'?'cele':'prognozę')+' · '+person.name);
+      await loadBriefingPanel('Zapisano '+(part==='goals'?'cele':'prognozę')+' · '+person.name,person.id);
     } catch(error) {
       status.textContent=error.message;
       submit.disabled=false;
     }
   };
   return submit;
+}
+
+function briefingCalendarLink() {
+  const link=reportElement('a','Otwórz kalendarz pracy');
+  link.href='#kalendarz-pracy';
+  link.dataset.panelRoute='';
+  return link;
 }
 
 function briefingReviewStep(person,report,canEdit) {
@@ -155,13 +187,22 @@ function briefingReviewStep(person,report,canEdit) {
   const step=briefingStep(1,title,state);
   if (review.day&&review.day!==report.yesterday) step.append(reportElement('p','Kalendarz pominął dni wolne.'));
   if (review.status==='none') step.append(reportElement('p','Ewidencja handlowca nie obejmuje wcześniejszego dnia pracy.'));
-  if (review.status==='missing') step.append(reportElement('p','Poczekaj na zatwierdzenie wpisu handlowca lub rozpatrz jego zgłoszenie w kalendarzu.'));
+  if (review.status==='missing') step.append(
+    reportElement('p','Poczekaj na zatwierdzenie wpisu handlowca lub rozpatrz jego zgłoszenie w kalendarzu.'),briefingCalendarLink());
   if (review.stale) step.append(reportElement('p','Wyniki zmieniły się od potwierdzenia. Sprawdź je ponownie.'));
   if (!review.actual) return step;
   if (review.confirmed) step.append(reportElement('p','Potwierdził: '+review.confirmed.by));
-  step.append(briefingTable(['Aktywność','Plan','Wykonanie','Status'],
-    columns.map(([,label],i)=>[label,review.goals[i],review.actual[i],
-      review.goals[i]==null?'—':review.actual[i]>=review.goals[i]?'Wykonany':'Poniżej celu']),true));
+  step.append(briefingOverview(['Aktywność','Plan','Wykonanie'],
+    columns.map(([,label],i)=>{
+      const actual=reportElement('span',String(review.actual[i]));
+      if (review.goals[i]!=null&&review.actual[i]<review.goals[i]) {
+        actual.className='briefing-below-target';
+        const note=reportElement('span',' · poniżej celu');
+        note.className='entry-visually-hidden';
+        actual.append(note);
+      }
+      return [label,review.goals[i],actual];
+    })));
   if (canEdit&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
     {action:'confirm',actual:review.actual,version:review.version},'Potwierdzono poprzedni dzień pracy · '+person.name);
   if (canEdit&&review.rows) step.append(briefingResultCorrection(person,report));
@@ -173,21 +214,22 @@ function briefingTodayStep(person,report,canEdit,onDraftChange) {
   const state=signoff.accepted?'Zaakceptowany':person.pendingToday?'Zgłoszenie w toku':person.workday?'Do akceptacji':'Dzień wolny';
   const step=briefingStep(2,'Dzisiaj · '+dateLabel(report.today),state);
   if (person.pendingToday) {
-    const link=reportElement('a','Otwórz kalendarz pracy');
-    link.href='#kalendarz-pracy';
-    link.dataset.panelRoute='';
-    step.append(reportElement('p','Rozpatrz zgłoszenie na dziś przed zaakceptowaniem dnia.'),link);
+    step.append(reportElement('p','Rozpatrz zgłoszenie na dziś przed zaakceptowaniem dnia.'),briefingCalendarLink());
     return step;
   }
 
   let fields=[],save,accept;
   if (person.workday) {
-    const form=reportElement('form');
-    fields=columns.map(([,label],i)=>briefingNumberField('Korekta · '+label,person.correction[i],person.todayGoals[i]));
-    form.append(briefingTable(['Aktywność','Cel na dziś',...(canEdit?['Korekta']:[])],
-      columns.map(([,label],i)=>[label,person.todayGoals[i],...(canEdit?[fields[i]]:[])]),true));
-    if (canEdit) save=briefingSave(form,'Zapisz korektę celów',person,report,fields,'goals');
-    step.append(form);
+    step.append(briefingOverview(['Aktywność','Cel na dziś'],columns.map(([,label],i)=>[label,person.todayGoals[i]])));
+    if (canEdit) {
+      const editor=briefingFold('Zmień cele na dziś');
+      const form=reportElement('form');
+      fields=columns.map(([,label],i)=>briefingNumberField('Korekta · '+label,person.correction[i],person.todayGoals[i]));
+      form.append(briefingOverview(['Aktywność','Korekta'],columns.map(([,label],i)=>[label,fields[i]])));
+      save=briefingSave(form,'Zapisz korektę celów',person,report,fields,'goals');
+      editor.append(form);
+      step.append(editor);
+    }
   } else {
     const reason=calendarKinds[person.dayOff]??(person.dayOff==='off'?'Zgodnie z grafikiem':person.dayOff);
     step.append(reportElement('p',reason+' · bez celów na dziś.'));
@@ -258,15 +300,44 @@ function renderBriefingSeller(person,report,open,salon) {
 
   const canEdit=person.editable&&!previewTarget;
   if (person.editable) {
+    const stage=signoff.accepted?3:signoff.previousReady?2:1;
+    details.dataset.actionable=String(canEdit&&!signoff.completed&&
+      (stage===1?review.status==='recorded':!person.pendingToday));
     const workflow=reportElement('div');
     workflow.className='briefing-workflow';
-    const previous=briefingReviewStep(person,report,canEdit);
-    const final=briefingStep(3,'Podsumowanie odprawy',signoff.completed?'Zatwierdzona':signoff.accepted?'Gotowa':'Oczekuje');
-    if (!signoff.accepted) final.append(reportElement('p','Zakończ dwa wcześniejsze kroki, aby zatwierdzić odprawę.'));
-    const finish=canEdit&&signoff.accepted&&!signoff.completed?briefingAction(final,'Zatwierdź odprawę',person,report,
-      {action:'complete',version:signoff.completionVersion},'Zatwierdzono odprawę · '+person.name):null;
-    const today=briefingTodayStep(person,report,canEdit,dirty=>{if (finish) finish.disabled=dirty;});
-    workflow.append(previous,today,final);
+    workflow.append(briefingStepper(stage,signoff.completed));
+
+    let active;
+    if (stage===1) {
+      active=briefingReviewStep(person,report,canEdit);
+    } else {
+      const final=briefingStep(3,'Podsumowanie odprawy',signoff.completed?'Zatwierdzona':'Gotowa');
+      let finish;
+      if (stage===3) {
+        if (signoff.completed) {
+          final.append(reportElement('p','Odprawa została zapisana.'));
+          const next=reportElement('button','Następna odprawa');
+          next.type='button';
+          next.className='secondary';
+          next.dataset.briefingNext='';
+          next.onclick=openNextBriefing;
+          final.append(next);
+        } else {
+          final.append(reportElement('p','Wykonanie potwierdzone. '+(person.workday?'Plan na dziś zaakceptowany.':'Dzień wolny zaakceptowany.')));
+          if (canEdit) finish=briefingAction(final,'Zatwierdź odprawę',person,report,
+            {action:'complete',version:signoff.completionVersion},'Zatwierdzono odprawę · '+person.name);
+        }
+      }
+      const today=briefingTodayStep(person,report,canEdit,dirty=>{if (finish) finish.disabled=dirty;});
+      active=stage===2?today:final;
+      const previous=briefingReviewStep(person,report,canEdit);
+      workflow.append(active,briefingFold('Poprzedni dzień pracy',previous));
+      if (stage===3) workflow.append(briefingFold('Plan na dziś',today));
+    }
+    if (stage===1) workflow.append(active);
+    active.classList.add('briefing-current-step');
+    const heading=active.querySelector('h3');
+    heading.tabIndex=-1;
     details.append(workflow);
   }
   details.append(briefingForecast(person,report,(person.editable||person.ownForecast)&&!previewTarget));
@@ -281,7 +352,7 @@ function renderBriefingSeller(person,report,open,salon) {
   return details;
 }
 
-async function loadBriefingPanel(message='') {
+async function loadBriefingPanel(message='',focusSeller) {
   const version=++briefingLoadVersion;
   briefingReady=false;
   briefingPdf.disabled=true;
@@ -322,9 +393,26 @@ async function loadBriefingPanel(message='') {
     briefingReady=Boolean(report.salons.length);
     briefingPdf.disabled=!briefingReady||briefingDownloading;
     briefingStatus.textContent=message;
+    if (focusSeller) {
+      const row=briefingResults.querySelector('[data-seller="'+focusSeller+'"]');
+      if (row?.open&&!row.closest('article').hidden) focusBriefingStep(row);
+    }
   } catch(error) {
     if (version===briefingLoadVersion) briefingStatus.textContent=error.message;
   }
+}
+
+function focusBriefingStep(row) {
+  const target=row.querySelector('.briefing-current-step h3')??row.querySelector('summary');
+  target.focus({preventScroll:true});
+  row.scrollIntoView({block:'start'});
+}
+
+function openNextBriefing() {
+  const row=briefingResults.querySelector('article:not([hidden]) [data-actionable="true"]');
+  if (!row) return;
+  row.open=true;
+  focusBriefingStep(row);
 }
 
 function updateBriefingProgress() {
@@ -344,6 +432,8 @@ function updateBriefingProgress() {
   const progress=box.querySelector('progress');
   progress.max=total||1;
   progress.value=done;
+  const hasActionable=Boolean(briefingResults.querySelector('article:not([hidden]) [data-actionable="true"]'));
+  for (const button of briefingHost.querySelectorAll('[data-briefing-next]')) button.hidden=!hasActionable;
 }
 
 function filterBriefingSalons() {
@@ -353,6 +443,7 @@ function filterBriefingSalons() {
 }
 
 briefingSalon.onchange=filterBriefingSalons;
+briefingHost.querySelector('#briefing-next').onclick=openNextBriefing;
 briefingHost.querySelector('#briefing-refresh').onclick=()=>loadBriefingPanel();
 briefingPdf.onclick=async()=>{
   if (!briefingReady||briefingDownloading) return;
