@@ -178,7 +178,23 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #daily-briefing summary { cursor:pointer; font-weight:700; }
 #daily-briefing button, #briefing-salon { min-height:44px; }
 .briefing-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-.briefing-workflow { display:grid; gap:9px; }
+.briefing-workflow { display:grid; gap:8px; }
+.briefing-stepper { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin:0; padding:0; list-style:none; }
+.briefing-stepper li { border-radius:7px; padding:6px 3px; text-align:center; background:var(--panel-paper); color:var(--panel-muted); overflow-wrap:anywhere; font-size:.74rem; font-weight:700; }
+.briefing-stepper [data-done="true"] { color:#235a3c; background:#e5f3e9; }
+.briefing-stepper [aria-current="step"] { color:#fff; background:var(--panel-plum); }
+.briefing-seller { scroll-margin-top:16px; }
+.briefing-overview .briefing-table { table-layout:fixed; }
+.briefing-overview :is(th,td):first-child { width:52%; min-width:0; overflow-wrap:anywhere; }
+.briefing-overview :is(th,td):not(:first-child) { text-align:right; }
+.briefing-overview input { width:min(100%,6.5rem); }
+.briefing-below-target { color:var(--error); font-weight:750; }
+#briefing-next { margin-top:10px; background:#fff; color:var(--panel-plum); }
+@media(max-width:420px) {
+  .briefing-overview :is(th,td) { padding:5px 3px; }
+  .briefing-overview td { font-size:.82rem; }
+  .briefing-overview th { font-size:.72rem; }
+}
 .briefing-step { min-width:0; padding:12px; border:1px solid var(--line); border-radius:12px; }
 .briefing-step-heading { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .briefing-step-heading h3 { font-size:1rem; margin:0; flex:1 1 155px; }
@@ -931,6 +947,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <div id="briefing-progress" hidden>
     <strong id="briefing-progress-label" aria-live="polite"></strong>
     <progress aria-labelledby="briefing-progress-label"></progress>
+    <button type="button" id="briefing-next" data-briefing-next hidden>Następna odprawa</button>
   </div>
   <p id="briefing-status" role="status"></p>
   <div id="briefing-results"></div>
