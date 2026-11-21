@@ -54,3 +54,40 @@ function panelNavigation(render) {
     }
   };
 }
+
+const mobileTabs={
+  seller:[['dzisiaj','Dzisiaj','calendar'],['plan','Wyniki','bars'],['kalendarz-pracy','Kalendarz','clock']],
+  manager:[['odprawa-dzienna','Odprawa','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
+  group:[['wykonanie','Salony','building'],['plany-salonow','Plany','calendar'],['raporty','Raporty','bars']],
+  admin:[['konta-uzytkownikow','Użytkownicy','people'],['salony','Salony','building'],['grupy','Grupy','bars']]
+};
+const mobileIcons={
+  calendar:'<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16M8 4v4m8-4v4"/>',
+  bars:'<path d="M5 19h14M8 16v-4m4 4V8m4 8V5"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  people:'<circle cx="10" cy="8" r="3"/><path d="M4 19v-1a6 6 0 0 1 12 0v1m2-12a3 3 0 0 1 0 6m0 2a4 4 0 0 1 2 4"/>',
+  building:'<rect x="5" y="5" width="14" height="15" rx="1"/><path d="M9 9h1m4 0h1m-6 4h1m4 0h1m-4 7v-3h2v3"/>',
+  more:'<path d="M6 12h.01m6 0h.01m6 0h.01" stroke-width="3"/>'
+};
+
+function renderPanelTabs(nav,role,active,hrefForRoute) {
+  const tabs=[...mobileTabs[role],['wiecej','Więcej','more']];
+  if (nav.dataset.role!==role) {
+    nav.dataset.role=role;
+    nav.replaceChildren(...tabs.map(([route,label,icon])=>{
+      const link=document.createElement('a');
+      link.dataset.route=route;
+      if (!hrefForRoute) link.dataset.panelRoute='';
+      link.href=hrefForRoute?hrefForRoute(route):'#'+route;
+      link.textContent=label;
+      link.insertAdjacentHTML('afterbegin','<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+mobileIcons[icon]+'</svg>');
+      return link;
+    }));
+  }
+  const current=tabs.some(([route])=>route===active)?active:'wiecej';
+  for (const link of nav.children) {
+    if (link.dataset.route===current) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  }
+  nav.hidden=false;
+}

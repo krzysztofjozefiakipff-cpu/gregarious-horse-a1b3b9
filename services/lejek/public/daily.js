@@ -2438,46 +2438,12 @@ salonPlans.addEventListener('toggle',()=>{
 });
 
 const mobilePanel=matchMedia('(max-width:850px)');
-const mobileTabs={
-  seller:[['dzisiaj','Dzisiaj','calendar'],['plan','Wyniki','bars'],['kalendarz-pracy','Kalendarz','clock']],
-  manager:[['odprawa-dzienna','Odprawa','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
-  group:[['wykonanie','Salony','building'],['plany-salonow','Plany','calendar'],['raporty','Raporty','bars']],
-  admin:[['konta-uzytkownikow','Użytkownicy','people'],['salony','Salony','building'],['grupy','Grupy','bars']]
-};
-const mobileIcons={
-  calendar:'<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16M8 4v4m8-4v4"/>',
-  bars:'<path d="M5 19h14M8 16v-4m4 4V8m4 8V5"/>',
-  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
-  people:'<circle cx="10" cy="8" r="3"/><path d="M4 19v-1a6 6 0 0 1 12 0v1m2-12a3 3 0 0 1 0 6m0 2a4 4 0 0 1 2 4"/>',
-  building:'<rect x="5" y="5" width="14" height="15" rx="1"/><path d="M9 9h1m4 0h1m-6 4h1m4 0h1m-4 7v-3h2v3"/>',
-  more:'<path d="M6 12h.01m6 0h.01m6 0h.01" stroke-width="3"/>'
-};
-
 function mobileLink(route,label) {
   const link=document.createElement('a');
   link.dataset.panelRoute='';
   link.href='#'+route;
   link.textContent=label;
   return link;
-}
-
-function renderMobileNav(role,active) {
-  const nav=$(role==='seller'?'#seller-mobile-nav':'#management-mobile-nav');
-  const tabs=[...mobileTabs[role],['wiecej','Więcej','more']];
-  if (nav.dataset.role!==role) {
-    nav.dataset.role=role;
-    nav.replaceChildren(...tabs.map(([route,label,icon])=>{
-      const link=mobileLink(route,label);
-      link.insertAdjacentHTML('afterbegin','<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+mobileIcons[icon]+'</svg>');
-      return link;
-    }));
-  }
-  const current=tabs.some(([route])=>route===active)?active:'wiecej';
-  for (const link of nav.children) {
-    if (link.hash==='#'+current) link.setAttribute('aria-current','page');
-    else link.removeAttribute('aria-current');
-  }
-  nav.hidden=false;
 }
 
 function renderManagementMore(routes) {
@@ -2515,11 +2481,13 @@ function selectRoleFunction(routes) {
   const active=requested==='administracja'?'plany-salonow':requested==='dni-bez-aktywnosci'?'kalendarz-pracy'
     :requested==='wiecej'||routes.includes(requested)?requested:fallback;
   const [label,blockId,settingId]=managementFunctions[active]??[];
-  renderMobileNav(data.role,active);
+  const nav=$('#management-mobile-nav');
+  const primaryRoutes=new Set(mobileTabs[data.role].map(([route])=>route));
+  nav.classList.toggle('persistent-panel-nav',!primaryRoutes.has(active));
+  renderPanelTabs(nav,data.role,active);
   $('#management-more').hidden=active!=='wiecej';
   if (active==='wiecej') {
-    const primary=new Set(mobileTabs[data.role].map(([route])=>route));
-    renderManagementMore(routes.filter(route=>!primary.has(route)).map(route=>[route,managementFunctions[route][0]]));
+    renderManagementMore(routes.filter(route=>!primaryRoutes.has(route)).map(route=>[route,managementFunctions[route][0]]));
   }
   const buttons=$('#role-function-buttons');
   const select=$('#role-function-select');
@@ -2592,7 +2560,11 @@ function selectManagementView() {
   const more=route==='wiecej';
   const administration=route==='administracja'||Boolean(adminBlock);
   const accounts=route==='konta-uzytkownikow';
-  if (!preview) renderMobileNav('admin',route);
+  if (!preview) {
+    const nav=$('#management-mobile-nav');
+    nav.classList.toggle('persistent-panel-nav',['#wiecej','#administracja','#wykonanie'].includes(location.hash));
+    renderPanelTabs(nav,'admin',route);
+  }
   $('#management-more').hidden=!more;
   if (more) renderManagementMore([['wykonanie','Wykonanie planu'],['administracja','Administracja']]);
   if (adminBlock) $('#'+adminBlock).open=true;
@@ -3018,7 +2990,9 @@ function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
   const active=requested==='wiecej'||links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
-  renderMobileNav('seller',active==='wyniki'?'dzisiaj':active);
+  const nav=$('#seller-mobile-nav');
+  nav.classList.toggle('persistent-panel-nav',['wiecej','wyniki','kalendarz-pracy'].includes(active));
+  renderPanelTabs(nav,'seller',active==='wyniki'?'dzisiaj':active);
   for (const link of links) {
     if (link.dataset.sellerTab===active) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');

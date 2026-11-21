@@ -91,12 +91,12 @@ function showWall() {
   scopePicker.value=String(scopes.findIndex(item=>item.scope===current.scope&&item.name===current.name));
   scopePicker.disabled=scopes.length<2;
   const panelRole=wall.role==='staff'?wall.roles.find(item=>item!=='staff'):wall.role;
-  life('#return-panel').hidden=!panelRole;
   renderAccountHeader(wall,preview);
-  const returnParams=new URLSearchParams(panelRole?{role:panelRole}:{});
-
-  if (preview) returnParams.set('podglad',preview);
-  life('#return-panel').href='/daily.html?'+returnParams;
+  if (panelRole) {
+    const params=new URLSearchParams({role:panelRole});
+    if (preview) params.set('podglad',preview);
+    renderPanelTabs(life('#life-panel-nav'),panelRole,'wiecej',route=>'/daily.html?'+params+'#'+route);
+  }
   life('#add-post').hidden=readOnly;
   life('#wall').hidden=false;
   life('#hit').hidden=!hit;
