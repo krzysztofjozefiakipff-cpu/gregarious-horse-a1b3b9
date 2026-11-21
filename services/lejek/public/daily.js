@@ -1912,9 +1912,22 @@ function renderManagerDashboard(view,detailOnly=false) {
     badges.append(badge);
     summary.append(name,badges,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
     const figures=document.createElement('ul');
+    figures.className='team-metrics';
+    figures.setAttribute('role','list');
     for (const metric of metrics) {
       const row=document.createElement('li');
       row.textContent=metric.label+' · '+metric.actual+(metric.target==null?' · brak celu':' / '+metric.target+' w miesiącu');
+      const achieved=metric.target>0&&metric.actual>=metric.target;
+      if (achieved||metric.goal>0) {
+        const behind=!achieved&&metric.delta<0;
+        row.dataset.pace=behind?'behind':'ahead';
+        const symbol=reportElement('span',behind?'↓':'✓');
+        symbol.className='team-metric-symbol';
+        symbol.setAttribute('aria-hidden','true');
+        const description=reportElement('span',achieved?' · Plan wykonany':behind?' · Poniżej tempa':' · W tempie lub powyżej');
+        description.className='entry-visually-hidden';
+        row.append(symbol,description);
+      }
       figures.append(row);
     }
     detail.id='zespol-handlowiec-'+seller.id;
