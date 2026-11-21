@@ -1174,6 +1174,7 @@ $('#entry').addEventListener('invalid',event=>{
 function labelPanel(role,scope='',preview=false) {
   const title=panelNames[role];
   $('#dealer').textContent=title;
+  $('#mobile-account-role').textContent=shortPanelNames[role];
   $('#salon').textContent=[preview?'Podgląd':'',scope].filter(Boolean).join(' · ');
   document.title=title+' · Bieg Wyżej';
 }
@@ -2455,6 +2456,27 @@ salonPlans.addEventListener('toggle',()=>{
 });
 
 const mobilePanel=matchMedia('(max-width:850px)');
+const shortPanelNames={seller:'Handlowiec',manager:'Kierownik',group:'Szef grupy',admin:'Administrator'};
+const mobileAccount=$('#mobile-account');
+const panelHeader=$('.panel-header');
+const roleBar=$('#account-role-bar');
+const roleBarAnchor=roleBar.nextElementSibling;
+const panelIdentity=panelHeader.querySelector('.identity');
+const panelAccount=panelHeader.querySelector('.header-account');
+
+function placeAccountControls() {
+  panelHeader.classList.toggle('mobile-account-ready',mobilePanel.matches);
+  if (mobilePanel.matches) {
+    $('#mobile-account-content').append(panelIdentity,roleBar,panelAccount);
+  } else {
+    if (mobileAccount.open) mobileAccount.close();
+    panelHeader.append(panelIdentity,panelAccount);
+    roleBarAnchor.before(roleBar);
+  }
+}
+$('#mobile-account-open').onclick=()=>mobileAccount.showModal();
+placeAccountControls();
+mobilePanel.addEventListener('change',placeAccountControls);
 const mobileTabs={
   seller:[['dzisiaj','Dzisiaj','calendar'],['plan','Wyniki','bars'],['kalendarz-pracy','Kalendarz','clock']],
   manager:[['odprawa-dzienna','Odprawa','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
