@@ -94,7 +94,7 @@ const loginPage = `<!doctype html>
     .login { width: min(100%, 480px); margin: clamp(24px, 10vh, 96px) auto; padding: 0 16px; }
     .login-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 6vw, 36px); box-shadow: 0 20px 55px #0004; }
     .product-brand { font-weight: 750; font-size: 1.125rem; }
-    h1 { margin: 20px 0 24px; font-size: clamp(1.65rem, 6vw, 2.25rem); }
+    .login-card .product-brand { margin-bottom: 16px; }
     form, label { display: grid; gap: 6px; }
     form { gap: 16px; }
     label { font-weight: 700; }
@@ -112,7 +112,7 @@ const loginPage = `<!doctype html>
   <main class="login">
     <section class="login-card" aria-labelledby="login-heading">
       <a class="product-brand" style="text-decoration:none" href="/"><span class="product-mark" aria-hidden="true"></span><span class="product-wordmark">biegwyzej.pl</span></a>
-      <h1 id="login-heading">AUTH_TITLE</h1>
+      <h1 class="screen-title" id="login-heading">AUTH_TITLE</h1>
       <form method="post" action="AUTH_ACTION">
         <input type="hidden" name="csrf" value="LOGIN_CSRF">
         AUTH_FIELDS

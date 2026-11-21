@@ -51,7 +51,6 @@ button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shad
   .calendar-fields, .calendar-fields .calendar-day-fields { display:grid; grid-template-columns:minmax(0,1fr); }
   .calendar-entry-actions { width:100%; }
 }
-#seller-calendar h1 { font-size:clamp(1.45rem,5vw,2.25rem); }
 .seller-calendar-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
 .seller-calendar-heading button { min-height:44px; }
 .seller-calendar-layout { display:grid; gap:12px; align-items:start; }
@@ -105,7 +104,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #lesson-topic{white-space:pre-wrap;overflow-wrap:anywhere}#lesson-drafts fieldset{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:8px}#lesson-drafts textarea{resize:vertical}
 @media(max-width:850px){#daily-lesson{margin:0}}
 #salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
-.management-nav+section h1,#administration-view h1{margin-bottom:9px}
 #motivation{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}#motivation h3{margin:0 0 8px;font-size:1.08rem}#motivation ol{margin:10px 0;padding-inline-start:23px}#motivation ol:empty{display:none}#motivation li+li{margin-top:6px}#motivation-message{margin-top:8px}
 #performance-view,#manager-team-view{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
 #daily-lesson,#daily .actions,#entry{margin:0 0 14px}
@@ -191,8 +189,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .daily-report-actions li p{margin:4px 0 0}
 #daily-briefing { max-width:1040px; }
 .briefing-header { margin-block:2px 12px; }
-.briefing-header h1 { margin:0; }
-.briefing-header h1 { font-size:clamp(1.45rem,5vw,2.25rem); }
 #briefing-dates { text-transform:capitalize; }
 #briefing-results { display:grid; gap:12px; }
 #daily-briefing article { min-width:0; background:#fff; border:1px solid var(--line); border-radius:16px; padding:12px; }
@@ -441,7 +437,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 }
 #seller-rating { font-size:.875rem; color:var(--muted); }
 .plan-period { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
-.plan-period h1 { margin:0; font-size:1.4rem; }
 .period-controls { display:flex; min-width:0; gap:6px; }
 .period-controls select { min-height:44px; min-width:0; padding:4px 6px; font-size:1rem; }
 #seller-period-value { flex:1; }
@@ -500,10 +495,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #role-function-buttons a[aria-current="page"]::before {
   content:""; flex:none; width:8px; height:14px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg) translateY(-2px);
 }
-#admin[data-function] :is(#performance-title,#administration-title,#user-accounts-title,#manager-team-view > h1) {
-  padding-inline-start:10px; border-inline-start:4px solid var(--primary);
-  line-height:1.16;
-}
 #role-function-picker { display:none; }
 #admin[data-function] #administration-view .admin-block > summary,
 #admin[data-function] #settings > details > summary,
@@ -530,7 +521,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 @media(min-width:850px) { .salon-coaching { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 .today-heading { display:grid; grid-template-columns:minmax(84px,auto) minmax(0,1fr); align-items:center; gap:clamp(8px,3vw,28px); margin-bottom:16px; }
-.today-heading h1 { font-size:clamp(1.45rem,5vw,2.25rem); }
 .today-heading .quote { margin:0; padding:9px 11px; border-inline-start:3px solid var(--panel-orange); border-radius:11px; background:var(--panel-plum); color:#fff; }
 .today-heading .quote blockquote { font-size:clamp(.82rem,2.7vw,1rem); line-height:1.32; font-weight:650; overflow-wrap:anywhere; }
 #calendar-reminder:not([hidden]) { margin-bottom:14px; }
@@ -551,7 +541,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #cookie summary::-webkit-details-marker { display:none; }
 #cookie[open] summary { background:#ffffff30; }
 #fortune { margin:0 0 12px; padding:8px 10px; border-radius:8px; background:#ffffff1a; color:#fff; line-height:1.4; }
-#seller-more h1, #management-more h1 { margin-bottom:18px; font-size:clamp(1.45rem,5vw,2.25rem); }
 .module-menu { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px 8px; max-width:700px; }
 .module-menu a { display:grid; grid-template-rows:auto 1fr; justify-items:center; align-items:start; gap:7px; padding:3px; border-radius:12px; text-align:center; text-decoration:none; color:var(--panel-ink); font-size:.82rem; font-weight:720; line-height:1.25; }
 .module-menu a > span:last-child { min-width:0; overflow-wrap:anywhere; }
@@ -597,7 +586,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .briefing-salon-totals { margin:10px 0 0; border-top:1px solid var(--panel-border); }
 .briefing-salon-totals summary { color:var(--panel-plum); font-size:.9rem; }
 #entry .entry-heading { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-.entry-heading h1 { margin:0; }
 #entry-date { color:var(--muted); }
 .entry-heading #entry-help-button { margin-inline-start:auto; }
 .entry-heading button,#entry-guide button { min-height:44px; }
@@ -646,7 +634,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   body:has([data-seller-panel="wyniki"]:not([hidden])) footer { display:none; }
   main:has([data-seller-panel="wyniki"]:not([hidden])) { padding-top:6px; }
   #entry .entry-heading { margin-bottom:5px; }
-  .entry-heading h1 { font-size:1.3rem; letter-spacing:-.03em; }
   #entry-date { display:block; font-size:.85rem; font-weight:550; }
   .entry-heading #entry-help-button { padding-inline:9px; font-size:.85rem; }
   #entry-draft-state { margin:3px 0 4px; font-size:.85rem; }
@@ -666,7 +653,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <main>
 <section id="seller-detail" hidden aria-labelledby="seller-detail-heading">
   <a class="panel-return-link" id="seller-detail-return" href="/daily.html#wykonanie">← Wróć do realizacji planów</a>
-  <h1 id="seller-detail-heading">Praca na lejku</h1>
+  <h1 class="screen-title" id="seller-detail-heading">Praca na lejku</h1>
   <p id="seller-detail-period"></p>
   <div id="seller-detail-table" class="scroll" hidden>
     <table>
@@ -698,7 +685,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </nav>
 <div data-seller-panel="dzisiaj">
 <div class="today-heading">
-  <div><h1>Dzisiaj</h1><p id="today-date"></p></div>
+  <div><h1 class="screen-title">Dzisiaj</h1><p id="today-date"></p></div>
   <div class="quote"><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
 </div>
 <div class="daily-work">
@@ -734,7 +721,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <div data-seller-panel="wyniki" hidden>
 <form id="entry">
 <div class="entry-heading">
-  <div><h1>Wpis dzienny</h1><time id="entry-date"></time></div>
+  <div><h1 class="screen-title">Wpis dzienny</h1><time id="entry-date"></time></div>
   <button type="button" class="secondary" id="entry-help-button" aria-haspopup="dialog">Pomoc</button>
 </div>
 <p id="entry-draft-state" role="status" hidden></p>
@@ -803,14 +790,15 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </div>
 <nav id="seller-mobile-nav" class="mobile-panel-nav" hidden aria-label="Panel handlowca"></nav>
 <section id="seller-more" data-seller-panel="wiecej" hidden>
-  <h1>Więcej</h1>
+  <h1 class="screen-title">Więcej</h1>
   <nav id="seller-more-links" class="module-menu" aria-label="Moduły handlowca"></nav>
 </section>
 <section id="seller-lesson" data-seller-panel="lekcja" hidden>
+  <h1 class="screen-title">Lekcja na dziś</h1>
 </section>
 <div data-seller-panel="plan" hidden>
 <div class="plan-period">
-  <h1 id="period-results-title">Wyniki</h1>
+  <h1 class="screen-title" id="period-results-title">Wyniki</h1>
   <div class="period-controls">
     <select id="seller-period-type" aria-label="Rodzaj okresu"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select>
     <select id="seller-period-value" aria-label="Wyświetlany okres"></select>
@@ -867,13 +855,14 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </div>
 <section id="seller-calendar" data-seller-panel="kalendarz-pracy" hidden>
   <div class="seller-calendar-heading">
-    <h1>Kalendarz</h1>
+    <h1 class="screen-title">Kalendarz</h1>
     <button type="button" class="secondary" id="seller-calendar-today">Dzisiaj</button>
   </div>
   <div id="seller-calendar-editor"></div>
 </section>
 </div>
 <section id="admin" hidden>
+<h1 class="screen-title" id="admin-tools-title" hidden></h1>
 <div id="manager-preview-bar" class="manager-preview-bar" hidden>
   <label for="manager-preview-salon">Salon do podglądu</label>
   <select id="manager-preview-salon"></select>
@@ -905,7 +894,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <template id="manager-scope-anchor"></template>
 <div id="manager-scope-bar" class="manager-preview-bar" hidden><label for="manager-scope">Salon</label> <select id="manager-scope"></select></div>
 <nav id="management-mobile-nav" class="mobile-panel-nav" aria-label="Panel zarządzania" hidden></nav>
-<section id="management-more" hidden><h1>Więcej</h1><nav id="management-more-links" class="module-menu" aria-label="Moduły panelu"></nav></section>
+<section id="management-more" hidden><h1 class="screen-title">Więcej</h1><nav id="management-more-links" class="module-menu" aria-label="Moduły panelu"></nav></section>
 <nav id="management-nav" class="panel-nav management-nav" aria-label="Panel">
   <a data-panel-route href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a data-panel-route href="#zespol" id="management-team" hidden>Zespół</a>
@@ -918,7 +907,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <label id="role-function-picker">Aktywna funkcja <select id="role-function-select"></select></label>
 </nav>
 <section id="performance-view">
-  <h1 id="performance-title">Wykonanie planu</h1>
+  <h1 class="screen-title" id="performance-title">Wykonanie planu</h1>
   <p id="management-plan-period"></p>
   <details class="month-history" data-history="management">
   <summary>Historia planów i aktywności</summary>
@@ -953,12 +942,12 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   </section>
 </section>
 <section id="manager-team-view" hidden>
-  <h1>Zespół</h1>
+  <h1 class="screen-title">Zespół</h1>
   <h2>Aktywni handlowcy</h2>
   <div id="manager-team-list"></div>
 </section>
 <section id="user-accounts-view" aria-labelledby="user-accounts-title" hidden>
-<h1 id="user-accounts-title">Konta użytkowników</h1>
+<h1 class="screen-title" id="user-accounts-title">Konta użytkowników</h1>
 <details id="admin-users-block" class="admin-block" name="user-tools">
 <summary>Dodaj użytkownika</summary>
 <form id="user-editor" hidden>
@@ -1009,7 +998,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </details>
 </section>
 <section id="daily-briefing" hidden>
-  <div class="briefing-header"><h1>Odprawa dzienna</h1><p id="briefing-dates"></p></div>
+  <div class="briefing-header"><h1 class="screen-title">Odprawa dzienna</h1><p id="briefing-dates"></p></div>
   <div id="briefing-progress" hidden>
     <div class="briefing-progress-copy">
       <strong id="briefing-progress-label" aria-live="polite"></strong>
@@ -1049,7 +1038,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <div id="briefing-results"></div>
 </section>
 <section id="management-reports" hidden>
-  <h1>Raporty zarządcze</h1>
+  <h1 class="screen-title">Raporty zarządcze</h1>
   <form id="management-report-form">
     <div class="user-search-fields">
       <label>Raport <select name="type"><option value="monthly">Podsumowanie miesiąca</option><option value="daily">Raport dzienny · 8:00</option><option value="marketing">Raport dla marketingu</option></select></label>
@@ -1068,7 +1057,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <div id="management-report-results"></div>
 </section>
 <section id="administration-view" hidden>
-<h1 id="administration-title">Administracja</h1>
+<h1 class="screen-title" id="administration-title">Administracja</h1>
 <details id="salon-plans" class="admin-block" hidden>
   <summary>Plany salonów</summary>
   <div>

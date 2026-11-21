@@ -2710,6 +2710,7 @@ function selectManagementView() {
   const routes=managementFunctionOrder[data?.role];
   $('#management-mobile-nav').hidden=true;
   $('#management-more').hidden=true;
+  $('#admin-tools-title').hidden=true;
   $('#admin').toggleAttribute('data-mobile-preview',Boolean(managerPreviewSalon||groupPreviewName));
   $('#role-function-nav').hidden=!routes;
   $('#management-nav').hidden=Boolean(routes);
@@ -2744,7 +2745,16 @@ function selectManagementView() {
     if (adminPreviewBars.some(id=>!$('#'+id).hidden)) modules.push(['podglad-paneli','Podgląd paneli','eye']);
     renderMoreMenu($('#management-more-links'),[...modules,salonLifeModule]);
   }
-  if (route==='zalegle-aktywnosci'&&!adminBackfill.hidden) adminBackfill.open=true;
+  const toolsTitle=$('#admin-tools-title');
+  if (route==='zalegle-aktywnosci'&&!adminBackfill.hidden) {
+    adminBackfill.open=true;
+    toolsTitle.textContent='Zaległe aktywności';
+    toolsTitle.hidden=false;
+  }
+  if (route==='podglad-paneli') {
+    toolsTitle.textContent='Podgląd paneli';
+    toolsTitle.hidden=false;
+  }
   if (adminBlock) $('#'+adminBlock).open=true;
   $('#administration-title').textContent=adminBlock?moduleLabel:'Administracja';
   if (!preview) {
