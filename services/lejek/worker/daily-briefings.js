@@ -21,27 +21,42 @@ function briefingRemainingPlan(targets,past,days,today,todayGoals) {
 
 async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTargets,salonPlans,managerId}) {
   const yesterday=new Date(Date.parse(today)-86400000).toISOString().slice(0,10);
-  const month=today.slice(0,7), reviewMonth=yesterday.slice(0,7);
-  const months=month===reviewMonth?[month]:[reviewMonth,month];
+  const month=today.slice(0,7);
+  const [calendar,tracking]=await Promise.all([
+    list(db,`SELECT person,day,kind,status FROM work_calendar WHERE day<=? AND status IN ('approved','pending') AND `+scope+
+      ` UNION ALL SELECT person,day,kind,CASE kind WHEN 'pending' THEN 'pending' ELSE 'approved' END FROM daily_exceptions
+      WHERE day<=? AND kind IN ('leave','training','zero','pending') AND `+scope,today,...params,today,...params),
+    list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params)
+  ]);
+  const personalCalendar=Map.groupBy(calendar,row=>row.person);
+  const trackingDays=new Map(tracking.map(row=>[row.person,row.start_day]));
+  const schedules=new Map(sellers.map(({id})=>{
+    const calendar=personalCalendar.get(id)??[];
+    const off=new Set(calendar.filter(row=>row.status==='approved'&&row.kind!=='zero').map(row=>row.day));
+    const trackingStart=trackingDays.get(id);
+    let day=yesterday;
+    while ((!trackingStart||day>=trackingStart)&&(!isSalonWorkday(day)||off.has(day))) {
+      day=new Date(Date.parse(day)-86400000).toISOString().slice(0,10);
+    }
+    return [id,{off,previousDay:trackingStart&&day<trackingStart?null:day}];
+  }));
+  const months=[...new Set([month,...[...schedules.values()].map(({previousDay})=>previousDay?.slice(0,7)).filter(Boolean)])].sort();
   const first=months[0]+'-01';
-  const [results,calendar,tracking,settings,reviews,adjustments,plans]=await Promise.all([
+  const activeDays=[...new Set([today,...[...schedules.values()].map(({previousDay})=>previousDay).filter(Boolean)])];
+  const [results,settings,reviews,signoffs,adjustments,plans]=await Promise.all([
     list(db,'SELECT person,day,counters FROM daily_results WHERE day BETWEEN ? AND ? AND '+scope+' AND '+includedDailyResult,first,today,...params),
-    list(db,`SELECT person,day,'off' AS kind FROM work_calendar WHERE substr(day,1,7) IN (?,?) AND status='approved' AND `+scope+
-      ` UNION ALL SELECT person,day,CASE WHEN kind='zero' THEN 'zero' ELSE 'off' END FROM daily_exceptions
-      WHERE substr(day,1,7) IN (?,?) AND kind IN ('leave','training','zero') AND `+scope,
-      reviewMonth,month,...params,reviewMonth,month,...params),
-    list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params),
     list(db,'SELECT * FROM daily_briefing_settings WHERE day BETWEEN ? AND ? AND '+scope+' ORDER BY day DESC',first,today,...params),
-    list(db,'SELECT r.*,a.name AS manager_name FROM daily_briefing_reviews r JOIN accounts a ON a.id=r.manager WHERE r.day=? AND '+scope,yesterday,...params),
+    list(db,`SELECT r.*,a.name AS manager_name FROM daily_briefing_reviews r JOIN accounts a ON a.id=r.manager
+      WHERE r.day IN (SELECT value FROM json_each(?)) AND `+scope,JSON.stringify(activeDays),...params),
+    list(db,'SELECT * FROM daily_briefing_signoffs WHERE day=? AND '+scope,today,...params),
     calendarAdjustments(db,months,scope,...params),
     Promise.all(salons.flatMap(({salon})=>months.map(async m=>[salon+'/'+m,new Map((await sellerTargets(salon,m)).map(plan=>[plan.id,plan]))])))
   ]);
   const personalResults=Map.groupBy(results,row=>row.person);
-  const personalCalendar=Map.groupBy(calendar,row=>row.person);
   const personalSettings=Map.groupBy(settings,row=>row.person);
   const participants=Map.groupBy(sellers,row=>row.salon);
-  const trackingDays=new Map(tracking.map(row=>[row.person,row.start_day]));
-  const reviewed=new Map(reviews.map(row=>[row.person,row]));
+  const reviewed=new Map(reviews.map(row=>[row.person+'/'+row.day,row]));
+  const signed=new Map(signoffs.map(row=>[row.person,row]));
   const plansByMonth=new Map(plans);
   const salonPlanByName=new Map(salonPlans.map(row=>[row.salon,row]));
 
@@ -54,7 +69,8 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       if (archived&&!current.length) return [];
       const editable=!archived&&Boolean(seller.planEligible);
       const dates=personalCalendar.get(id)??[];
-      const off=new Set(dates.filter(row=>row.kind==='off').map(row=>row.day));
+      const {off,previousDay}=schedules.get(id);
+      const reviewMonth=previousDay?.slice(0,7)??month;
       const scheduled=m=>reportWorkdays(m).filter(date=>!off.has(date));
       const days=scheduled(month);
       const reviewDays=reviewMonth===month?days:scheduled(reviewMonth);
@@ -62,24 +78,33 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const sales=monthlyGoals(month);
       const actuals=summarizeReportRows(current).actuals;
       const past=summarizeReportRows(current.filter(row=>row.day<today)).actuals;
-      const reviewPast=reviewMonth===month?
-        summarizeReportRows(current.filter(row=>row.day<yesterday)).actuals:
-        summarizeReportRows(rows.filter(row=>row.day<yesterday)).actuals;
+      const reviewPast=summarizeReportRows(rows.filter(row=>row.day.startsWith(reviewMonth)&&row.day<previousDay)).actuals;
       const personSettings=personalSettings.get(id)??[];
       const todaySettings=personSettings.find(row=>row.day===today);
-      const yesterdaySettings=personSettings.find(row=>row.day===yesterday);
+      const previousSettings=personSettings.find(row=>row.day===previousDay);
       const forecastSettings=personSettings.find(row=>row.day.startsWith(month));
-      const yesterdayRow=rows.find(row=>row.day===yesterday);
-      const yesterdayMatrix=yesterdayRow&&JSON.parse(yesterdayRow.counters)[5];
-      const previousActual=summarizeReportRows(yesterdayRow?[yesterdayRow]:[]).actuals;
-      const previousStatus=yesterdayRow||dates.some(row=>row.day===yesterday&&row.kind==='zero')?'recorded'
-        :reviewDays.includes(yesterday)?'missing':'off';
-      const review=reviewed.get(id);
-      const matched=review&&previousStatus==='recorded'&&review.actuals===JSON.stringify(previousActual);
+      const previousRow=rows.find(row=>row.day===previousDay);
+      const previousMatrix=previousRow&&JSON.parse(previousRow.counters)[5];
+      const previousActual=summarizeReportRows(previousRow?[previousRow]:[]).actuals;
+      const previousStatus=!previousDay?'none':previousRow||dates.some(row=>row.day===previousDay&&row.kind==='zero')?'recorded':'missing';
+      const reviewVersion=JSON.stringify([previousDay,previousActual,previousRow?.counters??null]);
+      const review=reviewed.get(id+'/'+previousDay);
+      const matched=review&&previousStatus==='recorded'&&[reviewVersion,JSON.stringify(previousActual)].includes(review.actuals);
       const correction=todaySettings?JSON.parse(todaySettings.goals):Array(10).fill(null);
-      const previousGoals=matched?JSON.parse(review.goals):briefingGoalValues(monthlyGoals(reviewMonth),reviewPast,reviewDays,
-        yesterday,yesterdaySettings?JSON.parse(yesterdaySettings.goals):[]);
+      const previousGoals=matched?JSON.parse(review.goals):previousDay?briefingGoalValues(monthlyGoals(reviewMonth),reviewPast,reviewDays,
+        previousDay,previousSettings?JSON.parse(previousSettings.goals):[]):[];
+      const workday=days.includes(today);
       const todayGoals=briefingGoalValues(sales,past,days,today,correction);
+      const defaultTodayGoals=briefingGoalValues(sales,past,days,today);
+      const calendarToday=dates.filter(row=>row.day===today);
+      const dayOff=workday?null:polishHoliday(today)??calendarToday.find(row=>row.status==='approved'&&row.kind!=='zero')?.kind??'off';
+      const pendingToday=workday&&calendarToday.some(row=>row.status==='pending');
+      const planVersion=JSON.stringify([todayGoals,dayOff]);
+      const signoff=signed.get(id);
+      const previousReady=previousStatus==='none'||Boolean(matched);
+      const accepted=previousReady&&!pendingToday&&signoff?.accepted_plan===planVersion;
+      const completionVersion=JSON.stringify([previousDay,matched?review.reviewed_at:null,reviewVersion,planVersion]);
+      const completed=accepted&&signoff.completed_version===completionVersion;
       const firstTracking=[trackingDays.get(id),current[0]?.day].filter(Boolean).sort()[0];
       const elapsed=firstTracking?days.filter(day=>day>=firstTracking&&day<today).length:0;
       const remaining=days.filter(day=>day>=today).length;
@@ -93,10 +118,11 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       });
       const forecast=briefingSalesIndexes.map((i,slot)=>remaining&&!archived&&manual[slot]!=null
         ?Math.max(0,manual[slot]-Math.max(0,actuals[i]-baseline[slot])):automaticForecast[slot]);
-      return [{id,name,archived,editable,ownForecast:!archived&&id===managerId,workday:days.includes(today),todayGoals,correction,
+      return [{id,name,archived,editable,ownForecast:!archived&&id===managerId,workday,todayGoals,defaultTodayGoals,correction,dayOff,pendingToday,
+        signoff:{previousReady,planVersion,accepted,completionVersion,completed},
         remainingPlan:editable?briefingRemainingPlan(sales,past,days,today,todayGoals):[],
-        review:{status:previousStatus,actual:previousStatus==='recorded'?previousActual:null,goals:previousGoals,
-          rows:editable&&reviewDays.includes(yesterday)&&validDailyRows(yesterdayMatrix)?yesterdayMatrix:null,
+        review:{day:previousDay,version:reviewVersion,status:previousStatus,actual:previousStatus==='recorded'?previousActual:null,goals:previousGoals,
+          rows:editable&&validDailyRows(previousMatrix)?previousMatrix:null,
           confirmed:matched?{by:review.manager_name,at:review.reviewed_at}:null,stale:Boolean(review&&!matched)},
         actual:briefingSalesIndexes.map(i=>actuals[i]),plan:briefingSalesIndexes.map(i=>sales[i]),
         forecast,automaticForecast,manual:forecast.map((value,i)=>!archived&&remaining&&manual[i]!=null?value:null)}];
