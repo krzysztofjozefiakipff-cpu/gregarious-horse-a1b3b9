@@ -69,6 +69,16 @@ jobs:
           if(!bundle) throw Error('Bundle ID is missing from the Apple team: '+id);
           const apps=await api('apps?'+new URLSearchParams({'filter[bundleId]':id}));
           if(apps.length!==1) throw Error('App Store Connect must have one app record for '+id);
+          const push=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'));
+          if (push.head_commit?.message==="Lejek: release corrected TestFlight build after approved certificate revocation") {
+            const revoke=await fetch('https://api.appstoreconnect.apple.com/v1/certificates/ALVTP684NM',{
+              method:'DELETE',headers:{Authorization:'Bearer '+token}
+            });
+            if (revoke.status!==204&&revoke.status!==404) {
+              throw Error('Revocation of ALVTP684NM returned '+revoke.status);
+            }
+            console.log(revoke.status===204?'Revoked unused certificate ALVTP684NM':'Unused certificate ALVTP684NM was already absent');
+          }
           const cert=await api('certificates',{type:'certificates',attributes:{
             certificateType:'DISTRIBUTION',csrContent:readFileSync(join(tmp,'ios-signing.csr'),'utf8')
           }});
