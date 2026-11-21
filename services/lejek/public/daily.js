@@ -2613,6 +2613,13 @@ const adminModules=[
 ];
 const adminPreviewBars=['manager-preview-bar','group-preview-bar','seller-preview-bar'];
 
+function placeManagementScope(inResults) {
+  const scope=$('#manager-scope-bar');
+  const picker=$('#management-period-picker');
+  if (inResults&&scope.parentElement!==picker) picker.prepend(scope);
+  if (!inResults&&scope.parentElement===picker) $('#manager-scope-anchor').after(scope);
+}
+
 function selectRoleFunction(routes) {
   const requested=location.hash.slice(1);
   const fallback=mobilePanel.matches?mobileTabs[data.role][0][0]:routes[0];
@@ -2642,6 +2649,7 @@ function selectRoleFunction(routes) {
   }
   select.value=active;
   $('#admin').dataset.function=active;
+  placeManagementScope(active==='wykonanie');
   $('#management-reports').hidden=active!=='raporty';
   if (active==='raporty') renderReportPicker(data);
   $('#daily-briefing').hidden=active!=='odprawa-dzienna';
@@ -2690,6 +2698,7 @@ function selectManagementView() {
   const preview=Boolean(managerPreviewSalon||groupPreviewName);
   const primaryAdmin=mobilePanel.matches&&!preview;
   const route=location.hash.slice(1)||(primaryAdmin?'konta-uzytkownikow':'wykonanie');
+  placeManagementScope(route==='wykonanie');
   const [,moduleLabel,,adminBlock,settingId]=adminModules.find(([id])=>id===route)??[];
   const more=route==='wiecej';
   const administration=route==='administracja'||Boolean(adminBlock);
@@ -3069,7 +3078,7 @@ function renderAdmin() {
   const multiple=(baseView.role==='manager'||group)&&baseView.salons.length>1;
   $('#manager-scope-bar').hidden=!multiple;
   if (multiple) {
-    managerScope.replaceChildren(new Option(group?'Wszystkie salony grupy':'Wszystkie moje salony',''),...baseView.salons.map(({salon})=>new Option(salon,salon)));
+    managerScope.replaceChildren(new Option('Wszystkie salony',''),...baseView.salons.map(({salon})=>new Option(salon,salon)));
     if (baseView.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
   }
   const selected=managerPreview?(managerPreviewSalon===allPreviewSalons?'':managerPreviewSalon):multiple?managerScope.value:'';
