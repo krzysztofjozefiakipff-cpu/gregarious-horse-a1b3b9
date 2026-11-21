@@ -182,7 +182,10 @@ function briefingSave(form,label,person,report,fields,part) {
     event.preventDefault();
     submit.disabled=true;
     try {
-      const values=fields.map(input=>input.value===''?null:input.valueAsNumber);
+      const values=fields.map((input,i)=>{
+        const value=input.value===''?null:input.valueAsNumber;
+        return part==='goals'&&value===person.defaultTodayGoals[i]?null:value;
+      });
       await api('/api/daily-briefing',{person:person.id,day:report.today,action:'save',part,[part]:values});
       await loadBriefingPanel('Zapisano '+(part==='goals'?'cele':'prognozę')+' · '+person.name,person.id);
     } catch(error) {
@@ -271,9 +274,9 @@ function briefingTodayStep(person,report,canEdit,onDraftChange) {
   if (person.workday) {
     if (canEdit) {
       const form=reportElement('form');
-      fields=columns.map(([,label],i)=>briefingNumberField('Cel na dziś · '+label,person.correction[i],person.defaultTodayGoals[i]));
+      fields=columns.map(([,label],i)=>briefingNumberField('Cel na dziś · '+label,person.todayGoals[i],person.defaultTodayGoals[i]));
       form.append(briefingOverview(['Aktywność','Cel na dziś'],columns.map(([,label],i)=>[label,fields[i]])),
-        reportElement('p','Puste pole korzysta z wyliczonego celu.'));
+        reportElement('p','Cele pochodzą z planu dnia handlowca. Zmień tylko te, które wymagają korekty.'));
       addNumberControlsIn(form);
       save=briefingSave(form,'Zapisz cele',person,report,fields,'goals');
       step.append(form);

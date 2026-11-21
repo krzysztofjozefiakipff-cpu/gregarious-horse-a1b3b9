@@ -566,6 +566,9 @@ async function handle(request, env, buildDailyReport=false) {
       const sidebar=await db.prepare('SELECT mode FROM dashboard_sidebar WHERE id=1').bind().first();
       const today=localDay();
       const correction=personal?await db.prepare('SELECT goals FROM daily_briefing_settings WHERE person=? AND day=?').bind(user.id,today).first():null;
+      const acceptedPlan=personal?await db.prepare('SELECT accepted_plan FROM daily_briefing_signoffs WHERE person=? AND day=?')
+        .bind(user.id,today).first():null;
+      const dailyGoalPlan=acceptedBriefingGoals(acceptedPlan,null);
       const tasksRead=Boolean(personal&&await db.prepare("SELECT 1 FROM management_report_events WHERE email=? AND day=? AND kind='read'").bind(email,today).first());
       const teamDay=['manager','group','admin'].includes(user.role)?await list(db,`SELECT accounts.id AS person,t.start_day AS started,d.person IS NOT NULL AS saved,e.kind, EXISTS (SELECT 1 FROM archived_users WHERE email=accounts.email) AS archived
         FROM accounts
@@ -663,7 +666,7 @@ async function handle(request, env, buildDailyReport=false) {
       const salonLife=personal&&!period?await db.prepare(`SELECT p.title FROM salon_life_posts p
         WHERE p.status='approved' AND ${lifePostAudience}
         ORDER BY p.published_day DESC,p.id DESC LIMIT 1`).bind('salon',user.salon).first():null;
-      return json({signedInAs,previewUser,users,roles,accountHeader,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand:personal?brand:null,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      return json({signedInAs,previewUser,users,roles,accountHeader,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,dailyGoalPlan,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand:personal?brand:null,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
