@@ -2555,27 +2555,44 @@ function mobileLink(route,label) {
   return link;
 }
 
-function renderManagementMore(routes) {
-  const host=$('#management-more-links');
-  host.replaceChildren(...routes.map(([route,label])=>{
-    const link=mobileLink(route,label);
-    link.className='mobile-menu-link';
+const salonLifeModule=['z-zycia-salonu','Z życia salonu','chat'];
+const sellerModules=[
+  ['dzisiaj','Dzisiaj','calendar'],['wyniki','Wpis dzienny','clipboard'],['plan','Wyniki','bars'],
+  ['kalendarz-pracy','Kalendarz pracy','clock'],['lekcja','Lekcja na dziś','book'],salonLifeModule
+];
+
+function renderMoreMenu(host,modules) {
+  const params=new URLSearchParams({role:data.role});
+  if (previewTarget) params.set('podglad',previewTarget);
+  const signature=JSON.stringify([String(params),modules]);
+  if (host.dataset.modules===signature) return;
+  host.dataset.modules=signature;
+  host.replaceChildren(...modules.map(([route,label,icon])=>{
+    const external=route===salonLifeModule[0];
+    const link=external?document.createElement('a'):mobileLink(route,label);
+    if (external) link.href='/z-zycia-salonu.html?'+params;
+    const tile=document.createElement('span');
+    tile.className='module-menu-icon';
+    tile.innerHTML=panelIcon(icon);
+    const caption=document.createElement('span');
+    caption.textContent=label;
+    link.replaceChildren(tile,caption);
     return link;
   }));
 }
 
 const managementFunctions={
-  'wykonanie': ['Realizacja planów'],
-  'odprawa-dzienna': ['Odprawa dzienna'],
-  'raporty': ['Raporty zarządcze'],
-  'plany-salonow': ['Plany salonów','salon-plans'],
-  'zespol': ['Zespół'],
-  'kalendarz-pracy': ['Kalendarz pracy','admin-absence-block'],
-  'lekcja': ['Lekcja na dziś','admin-lessons-block'],
-  'historia-planow': ['Historia planów i aktywności'],
-  'konta-uzytkownikow': ['Konta użytkowników'],
-  'dodaj-salon': ['Dodaj salon do grupy','group-add-salon-block'],
-  'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
+  'wykonanie': ['Realizacja planów','target'],
+  'odprawa-dzienna': ['Odprawa dzienna','clipboard'],
+  'raporty': ['Raporty zarządcze','report'],
+  'plany-salonow': ['Plany salonów','building','salon-plans'],
+  'zespol': ['Zespół','people'],
+  'kalendarz-pracy': ['Kalendarz pracy','clock','admin-absence-block'],
+  'lekcja': ['Lekcja na dziś','book','admin-lessons-block'],
+  'historia-planow': ['Historia planów i aktywności','layers'],
+  'konta-uzytkownikow': ['Konta użytkowników','people'],
+  'dodaj-salon': ['Dodaj salon do grupy','add','group-add-salon-block'],
+  'dane-dealera': ['Dane dealera','card','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
   manager:['wykonanie','odprawa-dzienna','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
@@ -2584,38 +2601,48 @@ const managementFunctionOrder={
     'dodaj-salon','lekcja','dane-dealera']
 };
 
+const adminModules=[
+  ['konta-uzytkownikow','Konta użytkowników','people'],
+  ['salony','Salony kierowników','building','admin-salons-block'],
+  ['grupy','Grupy dealerskie','layers','admin-groups-block'],
+  ['wykonanie','Wykonanie planu','target'],
+  ['historia-planow','Historia planów i aktywności','report'],
+  ['kalendarz-pracy','Kalendarz pracy','clock','admin-absence-block'],
+  ['lekcja','Lekcja na dziś','book','admin-lessons-block'],
+  ['dane-dealera','Dane dealera','card','admin-settings-block','dealer-settings'],
+  ['cel-miesiaca','Cel miesiąca','heart','admin-settings-block','global-charity-settings'],
+  ['administracja','Administracja','settings']
+];
+const adminPreviewBars=['manager-preview-bar','group-preview-bar','seller-preview-bar'];
+
 function selectRoleFunction(routes) {
   const requested=location.hash.slice(1);
   const fallback=mobilePanel.matches?mobileTabs[data.role][0][0]:routes[0];
   const active=requested==='administracja'?'plany-salonow':requested==='dni-bez-aktywnosci'?'kalendarz-pracy'
     :requested==='wiecej'||routes.includes(requested)?requested:fallback;
-  const [label,blockId,settingId]=managementFunctions[active]??[];
+  const [label,,blockId,settingId]=managementFunctions[active]??[];
   const nav=$('#management-mobile-nav');
   const primaryRoutes=new Set(mobileTabs[data.role].map(([route])=>route));
   nav.classList.toggle('persistent-panel-nav',!primaryRoutes.has(active));
   renderPanelTabs(nav,data.role,active);
   $('#management-more').hidden=active!=='wiecej';
   if (active==='wiecej') {
-    renderManagementMore(routes.filter(route=>!primaryRoutes.has(route)).map(route=>[route,managementFunctions[route][0]]));
+    const modules=routes.map(route=>[route,...managementFunctions[route].slice(0,2)]);
+    renderMoreMenu($('#management-more-links'),[...modules,salonLifeModule]);
   }
   const buttons=$('#role-function-buttons');
   const select=$('#role-function-select');
   if (buttons.dataset.role!==data.role) {
     buttons.dataset.role=data.role;
-    buttons.replaceChildren(...routes.map(route=>{
-      const link=document.createElement('a');
-      link.dataset.panelRoute='';
-      link.href='#'+route;
-      link.textContent=managementFunctions[route][0];
-      return link;
-    }));
-    select.replaceChildren(...routes.map(route=>new Option(managementFunctions[route][0],route)));
+    const items=[...routes.map(route=>[route,managementFunctions[route][0]]),['wiecej','Więcej']];
+    buttons.replaceChildren(...items.map(([route,label])=>mobileLink(route,label)));
+    select.replaceChildren(...items.map(([route,label])=>new Option(label,route)));
   }
   for (const link of buttons.children) {
     if (link.hash==='#'+active) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
   }
-  select.value=active==='wiecej'?fallback:active;
+  select.value=active;
   $('#admin').dataset.function=active;
   $('#management-reports').hidden=active!=='raporty';
   if (active==='raporty') renderReportPicker(data);
@@ -2665,20 +2692,38 @@ function selectManagementView() {
   const preview=Boolean(managerPreviewSalon||groupPreviewName);
   const primaryAdmin=mobilePanel.matches&&!preview;
   const route=location.hash.slice(1)||(primaryAdmin?'konta-uzytkownikow':'wykonanie');
-  const adminBlock={salony:'admin-salons-block',grupy:'admin-groups-block'}[route];
+  const [,moduleLabel,,adminBlock,settingId]=adminModules.find(([id])=>id===route)??[];
   const more=route==='wiecej';
   const administration=route==='administracja'||Boolean(adminBlock);
   const accounts=route==='konta-uzytkownikow';
   if (!preview) {
     const nav=$('#management-mobile-nav');
-    nav.classList.toggle('persistent-panel-nav',['#wiecej','#administracja','#wykonanie'].includes(location.hash));
+    nav.classList.toggle('persistent-panel-nav',Boolean(location.hash)&&
+      !mobileTabs.admin.some(([id])=>id===route));
     renderPanelTabs(nav,'admin',route);
   }
   $('#management-more').hidden=!more;
-  if (more) renderManagementMore([['wykonanie','Wykonanie planu'],['administracja','Administracja']]);
+  if (more) {
+    const modules=[...adminModules];
+    if (!adminBackfill.hidden) modules.push(['zalegle-aktywnosci','Zaległe aktywności','clipboard']);
+    if (adminPreviewBars.some(id=>!$('#'+id).hidden)) modules.push(['podglad-paneli','Podgląd paneli','eye']);
+    renderMoreMenu($('#management-more-links'),[...modules,salonLifeModule]);
+  }
+  if (route==='zalegle-aktywnosci'&&!adminBackfill.hidden) adminBackfill.open=true;
   if (adminBlock) $('#'+adminBlock).open=true;
-  $('#administration-title').textContent=adminBlock?(route==='salony'?'Salony':'Grupy dealerskie'):'Administracja';
+  $('#administration-title').textContent=adminBlock?moduleLabel:'Administracja';
   if (!preview) {
+    delete $('#admin').dataset.function;
+    const history=route==='historia-planow';
+    if (history) $('#admin').dataset.function=route;
+    const historyPanel=$('[data-history="management"]');
+    historyPanel.hidden=false;
+    if (history) historyPanel.open=true;
+    for (const id of ['dealer-settings','global-charity-settings']) {
+      const setting=$('#'+id);
+      setting.hidden=Boolean(settingId&&id!==settingId);
+      if (id===settingId) setting.open=true;
+    }
     for (const block of document.querySelectorAll('#administration-view > .admin-block')) {
       if (block.id==='group-add-salon-block'||block.id==='salon-plans') continue;
       block.hidden=Boolean(adminBlock&&block.id!==adminBlock);
@@ -2689,12 +2734,14 @@ function selectManagementView() {
   $('#management-team').setAttribute('aria-current',team?'page':'false');
   salonPlans.hidden=!['group','manager'].includes(data?.role);
   if (!salonPlans.hidden&&!salonPlanMonth.value) salonPlanMonth.value=data.today.slice(0,7);
-  $('#performance-view').hidden=administration||team||accounts||more;
+  $('#performance-view').hidden=administration||team||accounts||more||['podglad-paneli','zalegle-aktywnosci'].includes(route);
+  if (!preview) $('#performance-title').textContent=route==='historia-planow'?moduleLabel:'Wykonanie planu';
   $('#user-accounts-view').hidden=!accounts;
   $('#administration-view').hidden=!administration;
   $('#management-performance').setAttribute('aria-current',administration||team||accounts?'false':'page');
   $('#management-accounts').setAttribute('aria-current',accounts?'page':'false');
   $('#management-admin').setAttribute('aria-current',administration?'page':'false');
+  $('#management-more-link').setAttribute('aria-current',more?'page':'false');
 }
 
 
@@ -3098,9 +3145,13 @@ function renderAdmin() {
 function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
-  const active=requested==='wiecej'||links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
+  const active=requested==='lekcja'||links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
+  if (active==='wiecej') renderMoreMenu($('#seller-more-links'),sellerModules);
+  const lesson=$('#daily-lesson');
+  const lessonHost=active==='lekcja'?$('#seller-lesson'):$('.daily-inspiration');
+  if (lesson.parentElement!==lessonHost) lessonHost.append(lesson);
   const nav=$('#seller-mobile-nav');
-  nav.classList.toggle('persistent-panel-nav',['wiecej','wyniki','kalendarz-pracy'].includes(active));
+  nav.classList.toggle('persistent-panel-nav',['wiecej','wyniki','kalendarz-pracy','lekcja'].includes(active));
   renderPanelTabs(nav,'seller',active==='wyniki'?'dzisiaj':active);
   for (const link of links) {
     if (link.dataset.sellerTab===active) link.setAttribute('aria-current','page');
