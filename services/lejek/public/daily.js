@@ -320,7 +320,8 @@ const fortunes = [
   "Gdy dzień zrobił się zbyt ciasny, przeznacz chwilę na to, co ma największe znaczenie.",
   "Gdy czyjś wysiłek ułatwia Ci dzień, wymień ten wkład, kiedy opowiadasz o wyniku."
 ];
-const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
+const warsawDay = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw'}).format(new Date());
+const today = warsawDay();
 const dateLabel = (day,options={day:'numeric',month:'long'}) => new Date(day+'T12:00:00Z').toLocaleDateString('pl-PL',options);
 const remainingDays = (start,end,isScheduled=isSalonWorkday) => {
   let count=0;
@@ -337,6 +338,8 @@ const previewTarget=detailParams.get('podglad');
 let data;
 let showTodayEntry=false;
 let busy=false;
+let pendingWrites=0;
+let writeRevision=0;
 const allPreviewSalons='\u0000all-salons';
 let managerPreviewSalon=history.state?.managerPreviewSalon??'';
 let groupPreviewName=history.state?.groupPreviewName??'';
@@ -349,10 +352,19 @@ async function api(path,body) {
   if (previewTarget) url.searchParams.set('podglad',previewTarget);
   const selectedRole=data?.role||detailParams.get('role')||!previewTarget&&sessionStorage.getItem('lejek-active-role');
   if (selectedRole) url.searchParams.set('role',selectedRole);
-  const response=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
-  const result=await response.json();
-  if (!response.ok) throw new Error(result.error);
-  return result;
+  const writing=body!==undefined;
+  if (writing) {
+    pendingWrites++;
+    writeRevision++;
+  }
+  try {
+    const response=await fetch(url,writing?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
+    const result=await response.json();
+    if (!response.ok) throw new Error(result.error);
+    return result;
+  } finally {
+    if (writing) pendingWrites--;
+  }
 }
 
 const calendarKinds={leave:'Urlop',sick:'Chorobowe',training:'Szkolenie',saturday:'Wolna sobota',other:'Inny dzień bez aktywności',noActivity:'Brak aktywności'};
@@ -632,7 +644,10 @@ function renderPeriodPicker(anchor=data.today.slice(0,7)) {
   }
   const options=[...new Set([...months].map(month=>periodStart(month,type)))].sort().reverse();
   const previous=periodStart(anchor,type);
-  periodValue.replaceChildren(...options.map(month=>new Option(periodName(month,type),month)));
+  if (periodValue.options.length!==options.length||options.some((month,index)=>{
+    const option=periodValue.options[index];
+    return option.value!==month||option.text!==periodName(month,type);
+  })) periodValue.replaceChildren(...options.map(month=>new Option(periodName(month,type),month)));
   periodValue.value=options.includes(previous)?previous:periodStart(current,type);
 }
 
@@ -642,17 +657,20 @@ function periodNotice(month,type,currentMonth) {
   return month<current?'Wyświetlasz zakończony okres.':'Wyświetlasz przyszły okres.';
 }
 
-async function loadSellerPeriod() {
+async function loadSellerPeriod({silent=false}={}) {
   const type=periodType.value;
   const month=periodValue.value;
   const revision=++periodRevision;
+  const writes=writeRevision;
   const status=$('#seller-period-status');
-  status.hidden=false;
-  status.textContent='Wczytywanie okresu…';
+  if (!silent) {
+    status.hidden=false;
+    status.textContent='Wczytywanie okresu…';
+  }
   try {
     const snapshot=type==='month'&&month===data.today.slice(0,7)?data
       :await api('/api/daily?month='+encodeURIComponent(month)+'&period='+type);
-    if (revision!==periodRevision) return;
+    if (revision!==periodRevision||silent&&(writes!==writeRevision||!canAutoRefreshSeller())) return;
     renderPlans(snapshot,month,type);
     renderRanking(snapshot.ranking);
     const message=periodNotice(month,type,snapshot.today.slice(0,7));
@@ -660,7 +678,7 @@ async function loadSellerPeriod() {
     $('#seller-period-notice').hidden=!message;
     status.hidden=true;
   } catch (error) {
-    if (revision!==periodRevision) return;
+    if (revision!==periodRevision||silent) return;
     status.textContent=error.message;
   }
 }
@@ -669,7 +687,7 @@ periodType.onchange=()=>{
   renderPeriodPicker(periodValue.value);
   loadSellerPeriod();
 };
-periodValue.onchange=loadSellerPeriod;
+periodValue.onchange=()=>loadSellerPeriod();
 $('#seller-period-reset').onclick=()=>{
   periodType.value='month';
   renderPeriodPicker(data.today.slice(0,7));
@@ -3519,8 +3537,23 @@ function switchAccountRole(role) {
 }
 $('#account-role').onchange=event=>switchAccountRole(event.target.value);
 let restoredNavigation=false;
+let refreshRevision=0;
+let explicitRefreshes=0;
+const loadDailySnapshot=()=>api('/api/daily?month='+warsawDay().slice(0,7));
+
 async function refresh() {
-  data=await api('/api/daily?month='+today.slice(0,7));
+  const revision=++refreshRevision;
+  explicitRefreshes++;
+  try {
+    const snapshot=await loadDailySnapshot();
+    if (revision===refreshRevision) await applyDailySnapshot(snapshot);
+  } finally {
+    explicitRefreshes--;
+  }
+}
+
+async function applyDailySnapshot(snapshot) {
+  data=snapshot;
   const month=data.today.slice(0,7);
   const [year,number]=month.split('-').map(Number);
   for (const panel of historyPanels) {
@@ -3855,4 +3888,45 @@ if (previewTarget) {
   $('#user-preview-banner').hidden=false;
   $('.panel-signout').hidden=true;
 }
+const sellerRefreshInterval=30_000;
+let sellerRefreshInFlight=false;
+let lastSellerRefresh=0;
+
+function canAutoRefreshSeller() {
+  if (data?.role!=='seller'||detailSeller||document.visibilityState!=='visible'||busy||pendingWrites||explicitRefreshes) return false;
+  if (document.activeElement?.matches('#entry input, #entry select, #seller-calendar input, #seller-calendar select, textarea, [contenteditable="true"]')||
+      document.querySelector('dialog[open]')) return false;
+  const entryFields=$('#rows').querySelectorAll('input');
+  if (Array.from(entryFields).some(field=>field.validity.badInput||field.value!==field.defaultValue)) return false;
+  const calendar=$('#seller-calendar');
+  return calendar.hidden||!['start','end','reason'].some(field=>calendar.querySelector('[data-calendar-'+field+']')?.value);
+}
+
+async function autoRefreshSeller() {
+  if (sellerRefreshInFlight||Date.now()-lastSellerRefresh<1_000||!canAutoRefreshSeller()) return;
+  sellerRefreshInFlight=true;
+  lastSellerRefresh=Date.now();
+  const revision=refreshRevision;
+  const writes=writeRevision;
+  try {
+    const snapshot=await loadDailySnapshot();
+    if (revision!==refreshRevision||writes!==writeRevision||!canAutoRefreshSeller()) return;
+    if (JSON.stringify(snapshot)!==JSON.stringify(data)) {
+      await applyDailySnapshot(snapshot);
+    } else if (location.hash==='#plan'&&$('#seller-period-status').hidden&&
+      (periodType.value!=='month'||periodValue.value!==snapshot.today.slice(0,7))) {
+      await loadSellerPeriod({silent:true});
+    }
+  } catch {
+    // Keep the current panel available and retry on the next check.
+  } finally {
+    sellerRefreshInFlight=false;
+  }
+}
+
+document.addEventListener('visibilitychange',autoRefreshSeller);
+window.addEventListener('focus',autoRefreshSeller);
+window.addEventListener('online',autoRefreshSeller);
+window.addEventListener('pageshow',event=>{if(event.persisted) autoRefreshSeller();});
+window.setInterval(autoRefreshSeller,sellerRefreshInterval);
 refresh().catch(error=>{$('#load').textContent=error.message;});
