@@ -20,72 +20,57 @@ progress{width:100%;accent-color:var(--highlight)}
 .plan-tools { display:grid; gap:10px; }
 .plan-tools summary { padding:4px 0; color:var(--ink); }
 .plan-tools summary::marker { color:var(--primary); }
-.plan-tools input, .calendar-fields select, .calendar-fields input { min-height:42px; }
-.calendar-fields [data-calendar-person] { grid-column:1 / -1; }
-.calendar-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); align-items:end; gap:12px; margin-block:12px; }
-.calendar-fields label { display:grid; gap:5px; min-width:0; font-weight:650; }
-.calendar-fields input, .calendar-fields select { width:100%; min-width:0; }
-.calendar-fields .calendar-day-fields { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
-[data-calendar-grid] { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; padding:0; list-style:none; }
+.plan-tools input, .work-calendar :is(input,select,button) { min-height:44px; }
+.work-calendar { max-width:940px; min-width:0; }
+.calendar-controls { display:flex; justify-content:flex-end; align-items:end; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
+.calendar-controls label { display:grid; gap:4px; flex:1 1 195px; min-width:0; font-weight:650; }
+.calendar-controls select { width:100%; min-width:0; }
+.calendar-layout { display:grid; gap:12px; align-items:start; }
+.calendar-month, .calendar-side { min-width:0; padding:12px; background:white; border:1px solid var(--panel-border); border-radius:16px; }
+.calendar-toolbar { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:8px; text-align:center; }
+.calendar-toolbar input { width:100%; min-width:0; max-width:220px; padding-inline:6px; text-align:center; font-weight:750; }
+.calendar-toolbar button.secondary { display:grid; place-items:center; padding:0; border-color:var(--panel-border); }
+.calendar-toolbar svg { width:19px; height:19px; }
+[data-calendar-days] { color:var(--panel-muted); font-size:.8rem; margin:3px 0 0; }
+[data-calendar-grid] { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; margin:8px 0 10px; padding:0; list-style:none; }
 .calendar-weekday { text-align:center; padding:4px 0; color:var(--muted); font-size:.8rem; font-weight:750; }
-.calendar-day { display:grid; place-items:center; position:relative; min-height:44px; padding:3px 0; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-variant-numeric:tabular-nums; }
-button.calendar-day { width:100%; min-height:44px; padding:2px 0 11px; }
-button.calendar-day::after,.calendar-legend [data-status]::before { content:""; display:inline-block; inline-size:7px; block-size:7px; flex:none; border-radius:50%; background:currentColor; }
-button.calendar-day::after { position:absolute; inset-block-end:5px; inset-inline-start:calc(50% - 3.5px); }
-button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shadow:inset 0 0 0 1px var(--primary); }
-.calendar-day[aria-current="date"] { text-decoration:underline; text-underline-offset:3px; }
-.calendar-day[data-status="automatic"],.calendar-legend [data-status="automatic"] { background:var(--tint); color:var(--muted); }
-.calendar-day[data-status="approved"],.calendar-day[data-status="recorded"],.calendar-legend [data-status="approved"] { background:#dff3e8; color:#175b3b; }
-.calendar-day[data-status="pending"],.calendar-legend [data-status="pending"] { background:#fff0c2; color:#614400; }
-.calendar-day[data-status="rejected"],.calendar-legend [data-status="rejected"] { background:#fbe5e5; color:#842c2c; }
-.calendar-legend { display:flex; flex-wrap:wrap; gap:5px 10px; margin:8px 0; padding:0; list-style:none; color:var(--muted); font-size:.8rem; }
-.calendar-legend li { display:inline-flex; align-items:center; gap:5px; padding:2px 6px; border-radius:5px; }
-[data-calendar-detail] { display:grid; gap:8px; padding:12px; margin-top:10px; border:1px solid var(--line); border-inline-start:4px solid var(--primary); border-radius:9px; }
-[data-calendar-detail] h3 { margin:0; }
+.calendar-day { display:grid; place-items:center; position:relative; width:100%; padding:0; border:1px solid transparent; border-radius:9px; background:white; color:var(--ink); font-variant-numeric:tabular-nums; }
+.calendar-day[data-status] { padding-bottom:8px; }
+.calendar-day[data-status]::after, .calendar-legend [data-status]::before { content:""; display:inline-block; inline-size:7px; block-size:7px; flex:none; border-radius:50%; background:currentColor; }
+.calendar-day[data-status]::after { position:absolute; inset-block-end:5px; inset-inline-start:calc(50% - 3.5px); }
+.calendar-day[data-status="automatic"] { color:var(--muted); background:var(--panel-lilac); }
+.calendar-day[aria-current="date"] { font-weight:850; box-shadow:inset 0 0 0 1px var(--primary); }
+.calendar-day[aria-pressed="true"] { color:white; background:var(--primary); }
+.calendar-legend { display:flex; flex-wrap:wrap; gap:4px; margin:0; padding:0; list-style:none; color:var(--muted); font-size:.74rem; }
+.calendar-legend li { display:inline-flex; align-items:center; gap:5px; padding:0 4px; }
+[data-calendar-detail] { display:grid; gap:6px; }
+[data-calendar-detail] p { margin:0; }
 .calendar-entry-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.calendar-status { border-radius:999px; padding:3px 8px; font-size:.82rem; font-weight:750; }
+.calendar-entry-actions button { flex:1 1 auto; }
+.calendar-detail-top { display:flex; flex-wrap:wrap; align-items:start; justify-content:space-between; gap:6px; }
+.calendar-detail-top h3 { margin:0; font-size:1.04rem; text-transform:capitalize; }
+.calendar-status { background:var(--tint); color:var(--accent-ink); border-radius:999px; padding:3px 8px; font-size:.82rem; font-weight:750; }
+.calendar-status[data-status="approved"], .calendar-status[data-status="recorded"] { background:#dff3e8; color:#175b3b; }
+.calendar-legend :is([data-status="approved"],[data-status="recorded"]), .calendar-day:is([data-status="approved"],[data-status="recorded"]):not([aria-pressed="true"]) { color:#175b3b; }
 .calendar-status[data-status="pending"] { background:#fff0c2; color:#614400; }
-.calendar-status[data-status="approved"] { background:#dff3e8; color:#175b3b; }
+.calendar-legend [data-status="pending"], .calendar-day[data-status="pending"]:not([aria-pressed="true"]) { color:#614400; }
 .calendar-status[data-status="rejected"] { background:#fbe5e5; color:#842c2c; }
-@media(max-width:540px) {
-  .calendar-fields, .calendar-fields .calendar-day-fields { display:grid; grid-template-columns:minmax(0,1fr); }
-  .calendar-entry-actions { width:100%; }
-}
-.seller-calendar-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
-.seller-calendar-heading button { min-height:44px; }
-.seller-calendar-layout { display:grid; gap:12px; align-items:start; }
-.seller-calendar-month, .seller-calendar-side { min-width:0; padding:12px; background:#fff; border:1px solid var(--panel-border); border-radius:16px; }
-.seller-calendar-toolbar { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:8px; text-align:center; }
-.seller-calendar-toolbar h2 { font-size:clamp(1.05rem,4vw,1.28rem); margin:0; text-transform:capitalize; }
-.seller-calendar-toolbar button.secondary { display:grid; place-items:center; min-height:44px; padding:0; border-color:var(--panel-border); }
-.seller-calendar-toolbar svg { width:19px; height:19px; }
-#seller-calendar-days { color:var(--panel-muted); font-size:.8rem; margin:3px 0 0; }
-#seller-calendar [data-calendar-grid] { margin:8px 0 10px; gap:3px; }
-#seller-calendar .calendar-day { background:#fff; border-color:transparent; border-radius:9px; padding:0 0 8px; }
-#seller-calendar .calendar-day:not([data-status]) { padding-bottom:0; }
-#seller-calendar .calendar-day::after { display:none; }
-#seller-calendar .calendar-day[data-status]::after { display:block; }
-#seller-calendar .calendar-day[data-status="automatic"] { color:var(--muted); background:var(--panel-lilac); }
-#seller-calendar .calendar-day[aria-current="date"] { font-weight:850; text-decoration:none; box-shadow:inset 0 0 0 1px var(--primary); }
-#seller-calendar .calendar-day[aria-pressed="true"] { color:white; background:var(--primary); }
-#seller-calendar .calendar-legend { margin:0; gap:4px; font-size:.74rem; }
-#seller-calendar .calendar-legend li { background:transparent; padding:0 4px; }
-#seller-calendar [data-calendar-detail] { padding:0; border:0; margin:0; gap:6px; }
-.seller-calendar-detail-top { display:flex; flex-wrap:wrap; align-items:start; justify-content:space-between; gap:6px; }
-.seller-calendar-detail-top h3 { font-size:1.04rem; text-transform:capitalize; }
-.seller-calendar-status { display:inline-block; background:var(--tint); color:var(--accent-ink); }
-.seller-calendar-status[data-status="recorded"] { background:#dff3e8; color:#175b3b; }
-.seller-calendar-side [data-calendar-status]:not(:empty) { margin-top:8px; font-size:.9rem; }
-.seller-calendar-side .calendar-fields, .seller-calendar-side .calendar-day-fields { grid-template-columns:minmax(0,1fr); }
-.seller-calendar-side .calendar-fields { border-top:1px solid var(--line); margin:12px 0 0; padding-top:10px; gap:8px; }
-.seller-calendar-side .calendar-day-fields { gap:8px; }
-.seller-calendar-side [readonly] { background:var(--panel-paper); }
-.seller-calendar-side :is(button,input,select) { min-height:44px; }
-.seller-calendar-side .calendar-entry-actions button { flex:1 1 auto; }
-@media(min-width:740px) {
-  .seller-calendar-layout { grid-template-columns:minmax(335px,1fr) minmax(270px,.72fr); max-width:940px; }
-  .seller-calendar-month, .seller-calendar-side { padding:16px; }
-  #seller-calendar [data-calendar-grid] { gap:5px; }
+.calendar-legend [data-status="rejected"], .calendar-day[data-status="rejected"]:not([aria-pressed="true"]) { color:#842c2c; }
+[data-calendar-status] { margin:8px 0 0; font-size:.9rem; }
+[data-calendar-status]:empty { margin:0; }
+.calendar-fields { display:grid; gap:8px; margin:12px 0 0; padding-top:10px; border-top:1px solid var(--line); }
+.calendar-fields label { display:grid; gap:5px; min-width:0; font-weight:650; }
+.calendar-fields :is(input,select) { width:100%; min-width:0; }
+.calendar-fields [readonly] { background:var(--panel-paper); }
+.calendar-pending { margin-top:12px; }
+.calendar-pending summary { padding-block:10px; font-weight:700; cursor:pointer; }
+#administration-view.calendar-screen #admin-absence-block { margin:0; border:0; background:transparent; overflow:visible; }
+#administration-view.calendar-screen #admin-absence-block > summary { display:none; }
+#administration-view.calendar-screen #absence-panel { padding:0; }
+@media(min-width:720px) {
+  .calendar-layout { grid-template-columns:minmax(0,1fr) minmax(260px,.72fr); }
+  .calendar-month, .calendar-side { padding:16px; }
+  [data-calendar-grid] { gap:5px; }
 }
 #calendar-reminder{padding:10px;border-left:4px solid var(--primary);background:var(--tint)}
 #backlog{padding:13px;background:var(--highlight);border-radius:10px;margin:10px 0}#options{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
@@ -892,10 +877,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </details>
 </div>
 <section id="seller-calendar" data-seller-panel="kalendarz-pracy" hidden>
-  <div class="seller-calendar-heading">
-    <h1 class="screen-title">Kalendarz</h1>
-    <button type="button" class="secondary" id="seller-calendar-today">Dzisiaj</button>
-  </div>
+  <h1 class="screen-title">Kalendarz pracy</h1>
   <div id="seller-calendar-editor"></div>
 </section>
 </div>
@@ -1179,51 +1161,56 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </div>
 </details>
 </section></section>
-<template id="seller-calendar-layout">
-  <div class="seller-calendar-layout">
-    <div class="seller-calendar-month">
-      <div class="seller-calendar-toolbar">
-        <button type="button" class="secondary" data-month-offset="-1" aria-label="Poprzedni miesiąc">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-        </button>
-        <div aria-live="polite">
-          <h2 data-seller-calendar-month></h2>
-          <p id="seller-calendar-days" hidden></p>
+<template id="calendar-template">
+  <div class="work-calendar">
+    <div class="calendar-controls">
+      <label data-calendar-person hidden>Handlowiec <select></select></label>
+      <button type="button" class="secondary" data-calendar-today>Dzisiaj</button>
+    </div>
+    <div class="calendar-layout">
+      <div class="calendar-month">
+        <div class="calendar-toolbar">
+          <button type="button" class="secondary" data-month-offset="-1" aria-label="Poprzedni miesiąc">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <input type="month" aria-label="Miesiąc kalendarza">
+          <button type="button" class="secondary" data-month-offset="1" aria-label="Następny miesiąc">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
         </div>
-        <button type="button" class="secondary" data-month-offset="1" aria-label="Następny miesiąc">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-        </button>
+        <p data-calendar-days hidden></p>
+        <ol data-calendar-grid aria-label="Kalendarz miesiąca"></ol>
+        <ul class="calendar-legend" aria-label="Oznaczenia kalendarza">
+          <li data-status="automatic">Z grafiku</li><li data-status="approved">Zatwierdzone / rozliczone</li>
+          <li data-status="pending">Oczekuje</li><li data-status="rejected">Odrzucone</li>
+        </ul>
+      </div>
+      <div class="calendar-side">
+        <div data-calendar-detail hidden></div>
+        <div class="calendar-fields" hidden>
+          <label>Rodzaj <select data-calendar-kind required>
+            <option value="">Wybierz rodzaj</option>
+            <option value="leave">Urlop</option><option value="sick">Chorobowe</option>
+            <option value="training">Szkolenie</option><option value="saturday">Wolna sobota</option>
+            <option value="other">Inny dzień bez aktywności</option>
+            <option value="noActivity">Brak aktywności</option>
+          </select></label>
+          <label>Data od <input data-calendar-start type="date" required></label>
+          <label data-calendar-end-label hidden>Data do <input data-calendar-end type="date"></label>
+          <label data-calendar-reason-label hidden>Powód <input data-calendar-reason maxlength="120"></label>
+          <div class="calendar-entry-actions">
+            <button type="button" data-calendar-save disabled></button>
+            <button type="button" class="secondary" data-calendar-cancel>Anuluj</button>
+          </div>
+        </div>
+        <p data-calendar-status role="status"></p>
       </div>
     </div>
-    <div class="seller-calendar-side"></div>
+    <details class="calendar-pending" hidden>
+      <summary></summary>
+      <div data-calendar-pending class="calendar-entry-actions"></div>
+    </details>
   </div>
-</template>
-<template id="calendar-template">
-  <div class="calendar-fields">
-    <label data-calendar-person hidden>Handlowiec <select aria-label="Handlowiec"></select></label>
-    <label data-calendar-kind-label>Rodzaj <select data-calendar-kind required>
-      <option value="">Wybierz rodzaj</option>
-      <option value="leave">Urlop</option><option value="sick">Chorobowe</option>
-      <option value="training">Szkolenie</option><option value="saturday">Wolna sobota</option>
-      <option value="other">Inny dzień bez aktywności</option>
-      <option value="noActivity">Brak aktywności</option>
-    </select></label>
-    <label>Wyświetlany miesiąc <input type="month"></label>
-    <div class="calendar-day-fields" data-calendar-editor-fields>
-      <label>Data od <input data-calendar-start type="date" required></label>
-      <label data-calendar-end-label hidden>Data do <input data-calendar-end type="date"></label>
-      <label data-calendar-reason-label hidden>Powód <input data-calendar-reason maxlength="120"></label>
-      <button type="button" data-calendar-save disabled></button>
-    </div>
-  </div>
-  <p data-calendar-status role="status"></p>
-  <div data-calendar-pending class="calendar-entry-actions" hidden></div>
-  <ul class="calendar-legend" aria-label="Oznaczenia kalendarza">
-    <li data-status="automatic">Z grafiku</li><li data-status="approved">Zatwierdzony</li>
-    <li data-status="pending">Oczekuje</li><li data-status="rejected">Odrzucony</li>
-  </ul>
-  <ol data-calendar-grid aria-label="Kalendarz miesiąca"></ol>
-  <div data-calendar-detail hidden></div>
 </template>
 <template id="sales-results-card">
   <div class="sales-results-card">
