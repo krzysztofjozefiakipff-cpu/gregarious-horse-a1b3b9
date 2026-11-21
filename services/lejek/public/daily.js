@@ -1656,7 +1656,7 @@ function renderSalonSummary(view,team=[],period=null) {
         progress.value=Math.min(actual,target);
         progress.setAttribute('aria-label',plan.salon+' · '+label);
         progress.setAttribute('aria-valuetext',values.textContent);
-        progress.style.setProperty('--plan-progress',pace.tone==='behind'?'#a12626':pace.tone==='ahead'?'#12633b':'#64748b');
+        progress.style.setProperty('--plan-progress',pace.tone==='behind'?'#a12626':pace.tone==='ahead'?'#12633b':'var(--muted)');
         const status=document.createElement('strong');
         status.className=pace.tone;
         status.textContent=pace.status;

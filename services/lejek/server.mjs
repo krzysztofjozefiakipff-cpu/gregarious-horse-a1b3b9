@@ -82,12 +82,12 @@ const loginPage = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1522">
+  <meta name="theme-color" content="#52294f">
   <title>AUTH_TITLE</title>
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="stylesheet" href="/theme.css">
   <style>
-    body { min-height: 100dvh; display: flow-root; background: linear-gradient(160deg, #0b1522 0%, #142f54 70%, #1a4376 100%); }
+    body { min-height: 100dvh; display: flow-root; background: linear-gradient(160deg, var(--accent-ink), var(--primary)); }
     .login { width: min(100%, 480px); margin: clamp(24px, 10vh, 96px) auto; padding: 0 16px; }
     .login-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 6vw, 36px); box-shadow: 0 20px 55px #0004; }
     .product-brand { font-weight: 750; font-size: 1.125rem; }
@@ -100,7 +100,7 @@ const loginPage = `<!doctype html>
     .remember-device { display: flex; align-items: center; gap: 10px; min-height: 44px; }
     .remember-device input { min-height: 0; width: 20px; height: 20px; flex-shrink: 0; margin: 0; }
     .remember-device small { display: block; font-weight: 400; }
-    button { background: var(--blue); color: white; border: 0; font-weight: 750; cursor: pointer; }
+    button { background: var(--primary); color: white; border: 0; font-weight: 750; cursor: pointer; }
     button:hover { background: var(--accent-ink); }
     [role="alert"] { color: var(--error); margin: 0; }
   </style>
@@ -108,7 +108,7 @@ const loginPage = `<!doctype html>
 <body>
   <main class="login">
     <section class="login-card" aria-labelledby="login-heading">
-      <a class="product-brand" style="text-decoration:none" href="/"><span class="product-mark" aria-hidden="true"></span>Bieg Wyżej</a>
+      <a class="product-brand" style="text-decoration:none" href="/"><span class="product-mark" aria-hidden="true"></span><span class="product-wordmark">biegwyzej.pl</span></a>
       <h1 id="login-heading">AUTH_TITLE</h1>
       <form method="post" action="AUTH_ACTION">
         <input type="hidden" name="csrf" value="LOGIN_CSRF">
