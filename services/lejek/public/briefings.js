@@ -49,9 +49,7 @@ function briefingNumberField(label,value,placeholder) {
   return input;
 }
 
-function briefingResultCorrection(person,report) {
-  const editor=reportElement('details');
-  editor.append(reportElement('summary','Skoryguj wykonanie według źródeł'));
+function briefingResultEditor(person,report,updateActuals) {
   const form=reportElement('form');
   const original=person.review.rows;
   const fields=sources.map((source,row)=>columns.map(([index,label])=>
@@ -62,7 +60,7 @@ function briefingResultCorrection(person,report) {
   fields[0][1].readOnly=fields[0][2].readOnly=true;
   fields[0][0].oninput=updateWalkIn;
   updateWalkIn();
-  const save=reportElement('button','Zapisz korektę wykonania');
+  const save=reportElement('button',person.review.confirmed?'Potwierdź ponownie':'Potwierdź wykonanie');
   save.type='submit';
   const status=reportElement('p');
   status.setAttribute('role','status');
@@ -72,27 +70,42 @@ function briefingResultCorrection(person,report) {
   rows[0].cells[2].classList.add('mobile-automatic-field');
   rows[0].cells[3].classList.add('mobile-automatic-field');
   addNumberControlsIn(entry);
-  addMobileEntryPicker(entry,rows,sources);
-  form.append(reportElement('p','Wpisz rzeczywiste wyniki według źródeł. Po zapisie plan na pozostałe dni przeliczy się automatycznie.'),
-    entry,save,status);
+  const selectSource=addMobileEntryPicker(entry,rows,sources);
+  selectSource(Math.max(0,original.findIndex(row=>row.some(value=>value>0))));
+  const readRows=()=>fields.map((inputs,row)=>{
+    const values=Array.from({length:11},(_,i)=>original[row]?.[i]??0);
+    columns.forEach(([index],i)=>{values[index]=Number(inputs[i].value);});
+    return values;
+  });
+  const baseline=JSON.stringify(readRows());
+  const modified=()=>JSON.stringify(readRows())!==baseline;
+  const update=()=>{
+    const values=readRows();
+    const changed=JSON.stringify(values)!==baseline;
+    save.textContent=changed
+      ?(person.review.confirmed?'Zapisz zmiany i potwierdź ponownie':'Zapisz zmiany i potwierdź')
+      :'Potwierdź wykonanie';
+    save.disabled=Boolean(person.review.confirmed)&&!changed;
+    updateActuals(changed?columns.map(([index])=>values.reduce((total,row)=>total+row[index],0)):person.review.actual);
+  };
+  form.append(reportElement('h4','Wpis według źródeł'),entry,save,status);
+  form.addEventListener('input',update);
+  update();
   form.onsubmit=async event=>{
     event.preventDefault();
+    if (save.disabled) return;
+    const edits=modified()?{rows:readRows(),previousRows:original}:{};
     save.disabled=true;
     try {
-      const rows=fields.map((inputs,row)=>{
-        const values=Array.from({length:11},(_,i)=>original[row]?.[i]??0);
-        columns.forEach(([index],i)=>{values[index]=Number(inputs[i].value);});
-        return values;
-      });
-      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'correct',rows,previousRows:original,version:person.review.version});
-      await loadBriefingPanel('Zapisano korektę wykonania · '+person.name,person.id);
+      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'confirm',
+        actual:person.review.actual,version:person.review.version,...edits});
+      await loadBriefingPanel('Potwierdzono poprzedni dzień pracy · '+person.name,person.id);
     } catch(error) {
       status.textContent=error.message;
       save.disabled=false;
     }
   };
-  editor.append(form);
-  return editor;
+  return form;
 }
 
 function briefingOverview(headers,rows) {
@@ -111,7 +124,7 @@ function briefingFold(label,...nodes) {
 function briefingStepper(active,completed) {
   const stepper=reportElement('ol');
   stepper.className='briefing-stepper';
-  ['Wykonanie','Plan na dziś','Zatwierdzenie'].forEach((label,i)=>{
+  ['Wykonanie','Plan na dziś','Prognoza'].forEach((label,i)=>{
     const step=reportElement('li',label);
     if (completed||i+1<active) step.dataset.done='true';
     else if (i+1===active) step.setAttribute('aria-current','step');
@@ -220,21 +233,28 @@ function briefingReviewStep(person,report,canEdit) {
   if (review.stale) step.append(reportElement('p','Wyniki zmieniły się od potwierdzenia. Sprawdź je ponownie.'));
   if (!review.actual) return step;
   if (review.confirmed) step.append(reportElement('p','Potwierdził: '+review.confirmed.by));
+  const actualCells=review.actual.map(()=>reportElement('span'));
+  const renderActuals=values=>values.forEach((value,i)=>{
+    const cell=actualCells[i];
+    cell.textContent=value;
+    const behind=review.goals[i]!=null&&value<review.goals[i];
+    cell.classList.toggle('briefing-below-target',behind);
+    if (behind) {
+      const note=reportElement('span',' · poniżej celu');
+      note.className='entry-visually-hidden';
+      cell.append(note);
+    }
+  });
+  renderActuals(review.actual);
   step.append(briefingOverview(['Aktywność','Plan','Wykonanie'],
-    columns.map(([,label],i)=>{
-      const actual=reportElement('span',String(review.actual[i]));
-      if (review.goals[i]!=null&&review.actual[i]<review.goals[i]) {
-        actual.className='briefing-below-target';
-        const note=reportElement('span',' · poniżej celu');
-        note.className='entry-visually-hidden';
-        actual.append(note);
-      }
-      return [label,review.goals[i],actual];
-    })));
-  if (review.rows) step.append(briefingSourceReview(review.rows));
-  if (canEdit&&review.status==='recorded'&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
-    {action:'confirm',actual:review.actual,version:review.version},'Potwierdzono poprzedni dzień pracy · '+person.name);
-  if (canEdit&&review.status==='recorded'&&review.rows) step.append(briefingResultCorrection(person,report));
+    columns.map(([,label],i)=>[label,review.goals[i],actualCells[i]])));
+  if (canEdit&&review.status==='recorded'&&review.rows) {
+    step.append(briefingResultEditor(person,report,renderActuals));
+  } else {
+    if (review.rows) step.append(briefingSourceReview(review.rows));
+    if (canEdit&&review.status==='recorded'&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
+      {action:'confirm',actual:review.actual,version:review.version},'Potwierdzono poprzedni dzień pracy · '+person.name);
+  }
   return step;
 }
 
@@ -249,16 +269,16 @@ function briefingTodayStep(person,report,canEdit,onDraftChange) {
 
   let fields=[],save,accept;
   if (person.workday) {
-    step.append(briefingOverview(['Aktywność','Cel na dziś'],columns.map(([,label],i)=>[label,person.todayGoals[i]])));
     if (canEdit) {
-      const editor=briefingFold('Zmień cele na dziś');
       const form=reportElement('form');
-      fields=columns.map(([,label],i)=>briefingNumberField('Korekta · '+label,person.correction[i],person.todayGoals[i]));
-      form.append(briefingOverview(['Aktywność','Korekta'],columns.map(([,label],i)=>[label,fields[i]])));
+      fields=columns.map(([,label],i)=>briefingNumberField('Cel na dziś · '+label,person.correction[i],person.defaultTodayGoals[i]));
+      form.append(briefingOverview(['Aktywność','Cel na dziś'],columns.map(([,label],i)=>[label,fields[i]])),
+        reportElement('p','Puste pole korzysta z wyliczonego celu.'));
       addNumberControlsIn(form);
-      save=briefingSave(form,'Zapisz korektę celów',person,report,fields,'goals');
-      editor.append(form);
-      step.append(editor);
+      save=briefingSave(form,'Zapisz cele',person,report,fields,'goals');
+      step.append(form);
+    } else {
+      step.append(briefingOverview(['Aktywność','Cel na dziś'],columns.map(([,label],i)=>[label,person.todayGoals[i]])));
     }
   } else {
     const reason=calendarKinds[person.dayOff]??(person.dayOff==='off'?'Zgodnie z grafikiem':person.dayOff);
@@ -371,7 +391,7 @@ function renderBriefingSeller(person,report,open,salon) {
           next.onclick=openNextBriefing;
           final.append(next);
         } else {
-          if (canEdit) finish=briefingAction(final,'Zatwierdź odprawę',person,report,
+          if (canEdit) finish=briefingAction(final,'Zatwierdź prognozę i odprawę',person,report,
             {action:'complete',version:signoff.completionVersion},'Zatwierdzono odprawę · '+person.name);
         }
       }
