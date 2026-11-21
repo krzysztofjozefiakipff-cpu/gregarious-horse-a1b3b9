@@ -205,16 +205,11 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #daily-briefing .briefing-step > button { margin-block:4px; }
 .briefing-action-status:empty, #briefing-status:empty { display:none; }
 .briefing-extra, .briefing-salon-totals { padding-block:9px; }
-@media(max-width:650px) {
-  .briefing-table-compact, .briefing-table-compact tbody { display:block; }
-  .briefing-table-compact thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-  .briefing-table-compact tr { display:grid; grid-template-columns:repeat(auto-fit,minmax(82px,1fr)); gap:5px 8px; padding:7px 2px; border-bottom:1px solid var(--line); }
-  .briefing-table-compact td { display:grid; align-content:start; gap:3px; border:0; min-width:0; padding:0; font-size:.86rem; }
-  .briefing-table-compact td:first-child { grid-column:1/-1; font-weight:750; }
-  .briefing-table-compact td:not(:first-child)::before { content:attr(data-label); color:var(--muted); font-size:.72rem; line-height:1.2; }
-  .briefing-table-compact input { width:100%; }
-  .briefing-table-compact td:has(.number-entry) { grid-column:1/-1; }
-}
+.briefing-month-summary { margin:6px 0; }
+.briefing-month-summary :is(th,td) { padding:5px 4px; font-size:clamp(.72rem,2.8vw,.9rem); }
+.briefing-month-summary :is(th,td):first-child { width:44%; }
+.briefing-month-summary td:not(:first-child) { overflow-wrap:anywhere; }
+.briefing-month .briefing-extra { padding-block:5px; }
 @media(max-width:560px){
   #management-report-results .daily-sales-report table{min-width:21rem;font-size:.85rem}
   #management-report-results .daily-sales-report :is(th,td){padding:6px;overflow-wrap:anywhere}
