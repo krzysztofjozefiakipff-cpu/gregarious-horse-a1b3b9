@@ -2730,11 +2730,11 @@ const userSearchSalon=$('#user-search-salon');
 const userSearchName=$('#user-search-name');
 const userSearchPhone=$('#user-search-phone');
 const userSearchResults=$('#user-search-results');
-let editableUsers=[];
+let managedUsers=[];
 let fixedUserGroup='';
 let userEditorRole='';
 let selectedUserEmail='';
-const selectedEditableUser=()=>editableUsers.find(user=>user.email===selectedUserEmail);
+const selectedEditableUser=()=>managedUsers.find(user=>!user.archived&&user.email===selectedUserEmail);
 const editingUsers=()=>userEditor.parentElement===editUserBlock;
 for (const block of [addUserBlock,editUserBlock]) block.addEventListener('toggle',()=>{
   if (!block.open||block.hidden||userEditor.parentElement===block) return;
@@ -2760,35 +2760,40 @@ function renderUserSearch() {
   const surname=normalizedSurname(userSearchName.value);
   const phoneQuery=userSearchPhone.value.trim();
   const phone=normalizedPhone(phoneQuery);
-  const matches=editableUsers.filter(user=>
+  const matches=managedUsers.filter(user=>
     (!salon||user.salon===salon)&&
     (!surname||normalizedSurname(userSurname(user)).includes(surname))&&
     (!phoneQuery||Boolean(phone&&user.phone&&normalizedPhone(user.phone)===phone)));
   $('#user-search-status').textContent=matches.length?'Wyniki: '+matches.length
-    :editableUsers.length?'Nie znaleziono użytkowników pasujących do filtrów.':'Brak użytkowników w tym zakresie.';
+    :managedUsers.length?'Nie znaleziono użytkowników pasujących do filtrów.':'Brak użytkowników w tym zakresie.';
   userSearchResults.replaceChildren();
-  if (matches.length) {
+  for (const archived of [false,true]) {
+    const users=matches.filter(user=>Boolean(user.archived)===archived);
+    if (!users.length) continue;
     const section=document.createElement('section');
     const heading=document.createElement('h3');
-    heading.textContent='Aktywni użytkownicy';
+    heading.textContent=archived?'Usunięci użytkownicy':'Aktywni użytkownicy';
     const list=document.createElement('ul');
-    for (const user of matches) {
+    for (const user of users) {
       const item=document.createElement('li');
-      const button=document.createElement('button');
-      button.type='button';
-      button.className='secondary user-result';
-      button.dataset.email=user.email;
+      const result=document.createElement(archived?'div':'button');
+      result.className=archived?'user-result user-result-archived':'secondary user-result';
       const label=document.createElement('span');
       const name=document.createElement('strong');
       name.textContent=user.name;
       const details=document.createElement('small');
       details.textContent=[user.salon||user.dealerGroup,user.phone,user.name!==user.email?user.email:''].filter(Boolean).join(' · ');
       label.append(name,details);
-      const arrow=document.createElement('span');
-      arrow.setAttribute('aria-hidden','true');
-      arrow.textContent='›';
-      button.append(label,arrow);
-      item.append(button);
+      result.append(label);
+      if (!archived) {
+        result.type='button';
+        result.dataset.email=user.email;
+        const arrow=document.createElement('span');
+        arrow.setAttribute('aria-hidden','true');
+        arrow.textContent='›';
+        result.append(arrow);
+      }
+      item.append(result);
       list.append(item);
     }
     section.append(heading,list);
@@ -2873,9 +2878,9 @@ function renderUserEditor(view) {
   userEditorRole=view.role;
   const delegated=view.role!=='admin';
   const visibleSalons=new Set(view.salons.map(({salon})=>salon));
-  editableUsers=data.users.filter(user=>!user.archived&&(!delegated||
+  managedUsers=data.users.filter(user=>!delegated||
     visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
-    (view.role!=='manager'||user.roles==='seller')));
+    (view.role!=='manager'||user.roles==='seller'));
   fixedUserGroup=view.role==='group'?view.dealerGroup:'';
   const managerRole=$('#user-manager-role');
   managerRole.hidden=view.role==='manager';
