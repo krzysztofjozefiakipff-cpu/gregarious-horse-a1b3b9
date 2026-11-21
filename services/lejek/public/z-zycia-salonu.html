@@ -34,6 +34,7 @@
     article { display:grid; gap:7px; overflow-wrap:anywhere; }
     article p { white-space:pre-wrap; }
     article img { width:100%; max-height:420px; object-fit:contain; border-radius:8px; background:var(--tint); }
+    #older-posts { margin-top:10px; }
     #hit { border-inline-start:4px solid var(--accent); background:var(--tint); }
     .react[aria-pressed="true"], .poll-choice[aria-pressed="true"] { color:var(--accent-ink); background:var(--tint); border-color:var(--accent-ink); }
     .poll-choice { display:flex; text-align:start; justify-content:space-between; width:100%; gap:8px; }
@@ -59,7 +60,7 @@
   <div class="columns" id="wall" hidden>
     <div class="list">
       <section id="hit" class="card" hidden aria-labelledby="hit-title"><h2 id="hit-title">Hit tygodnia</h2><div id="hit-post"></div></section>
-      <section id="feed-section" aria-labelledby="feed-title"><h2 id="feed-title">Ściana</h2><div id="feed" class="list"></div></section>
+      <section id="feed-section" aria-labelledby="feed-title"><h2 id="feed-title">Ściana</h2><div id="feed" class="list"></div><button type="button" class="secondary" id="older-posts" hidden>Pokaż starsze wpisy</button></section>
     </div>
     <div class="list">
       <section id="poll" class="card" aria-labelledby="poll-title">

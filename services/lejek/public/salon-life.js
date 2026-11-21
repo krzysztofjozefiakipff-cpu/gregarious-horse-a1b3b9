@@ -4,6 +4,7 @@ const role=query.get('role')??sessionStorage.getItem('lejek-active-role');
 const preview=query.get('podglad');
 const scopePicker=life('#scope');
 const postDialog=life('#post-dialog');
+const olderPosts=life('#older-posts');
 let wall;
 let loading=0;
 let sending=false;
@@ -20,9 +21,10 @@ function lifeUrl(path,scope=wall?.current) {
   return path+'?'+params;
 }
 
-async function requestLife(scope,body) {
+async function requestLife(scope,body,before) {
   const options=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{};
-  const response=await fetch(lifeUrl('/api/salon-life',scope),options);
+  const url=lifeUrl('/api/salon-life',scope);
+  const response=await fetch(before?url+'&before='+before:url,options);
   const result=await response.json();
   if (!response.ok) throw Error(result.error);
   return result;
@@ -45,6 +47,7 @@ function lifeButton(label,fn,className='secondary') {
 function storyCard(post,draft=false) {
   const article=element('article','',draft||post===wall.hit?'':'card');
   article.append(element('h3',post.title));
+  if (post.scope==='group'&&wall.current.scope==='salon') article.append(element('p','Grupa · '+post.audience,'hint'));
   if (post.day) {
     const date=new Date(post.day+'T12:00:00Z');
     const time=element('time',date.toLocaleDateString('pl-PL',{day:'numeric',month:'long'}));
@@ -74,7 +77,7 @@ function storyCard(post,draft=false) {
     reaction.setAttribute('aria-label',active?'Cofnij polubienie':'Polub wpis');
     reaction.setAttribute('aria-pressed',String(active));
     actions.append(reaction);
-    if (wall.current.moderate) {
+    if (wall.current.moderate&&post.scope===wall.current.scope) {
       actions.append(lifeButton('Usuń wpis',()=>{
         if (confirm('Usunąć ten wpis ze ściany?')) change({action:'remove',id:post.id},'Wpis usunięty.');
       }));
@@ -103,6 +106,7 @@ function showWall() {
   life('#hit-post').replaceChildren(...(hit?[storyCard(hit)]:[]));
   const regularPosts=posts.filter(post=>post.id!==hit?.id);
   life('#feed-section').hidden=Boolean(hit)&&!regularPosts.length;
+  olderPosts.hidden=!wall.hasOlder;
   life('#feed').replaceChildren(...(posts.length
     ?regularPosts.map(post=>storyCard(post))
     :[element('p','Na tej ścianie nie ma jeszcze wpisów.','card')]));
@@ -123,12 +127,14 @@ function showWall() {
   }
 }
 
-async function loadWall(scope,message='') {
+async function loadWall(scope,message='',before=null) {
   const revision=++loading;
   scopePicker.disabled=true;
+  olderPosts.disabled=true;
   try {
-    const next=await requestLife(scope);
+    const next=await requestLife(scope,null,before);
     if (revision!==loading) return;
+    if (before) next.posts=[...wall.posts,...next.posts];
     wall=next;
     showWall();
     life('#status').textContent=message;
@@ -136,7 +142,7 @@ async function loadWall(scope,message='') {
     if (revision!==loading) return;
     if (wall) showWall();
     life('#status').textContent=error.message;
-  }
+  } finally { if (revision===loading) olderPosts.disabled=false; }
 }
 
 async function change(body,message='',status=life('#status')) {
@@ -154,10 +160,11 @@ async function change(body,message='',status=life('#status')) {
   } finally { sending=false; }
 }
 
+olderPosts.onclick=()=>loadWall(wall.current,'',wall.posts.at(-1).id);
 scopePicker.onchange=()=>loadWall(wall.scopes[Number(scopePicker.value)]);
 life('#add-post').onclick=()=>{
   life('#post-status').textContent='';
-  life('#post-scope').textContent='Ściana · '+wall.current.name;
+  life('#post-scope').textContent=(wall.current.scope==='group'?'Grupa i jej salony · ':'Tylko salon · ')+wall.current.name;
   postDialog.showModal();
 };
 life('#cancel-post').onclick=()=>{if (!sending) postDialog.close();};
