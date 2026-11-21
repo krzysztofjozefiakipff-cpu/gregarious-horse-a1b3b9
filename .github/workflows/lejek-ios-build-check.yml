@@ -108,10 +108,9 @@ jobs:
           profiles="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
           mkdir -p "$profiles"
           cp "$RUNNER_TEMP/ios-signing.mobileprovision" "$profiles/$uuid.mobileprovision"
-          sed -i '' -e "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = $APPLE_TEAM_ID; PROVISIONING_PROFILE_SPECIFIER = $uuid; CODE_SIGN_IDENTITY = \"Apple Distribution\";/" \
-            ios/App/App.xcodeproj/project.pbxproj
           identity=$(openssl x509 -in "$RUNNER_TEMP/ios-signing.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
-          sed -i '' -e "s/CODE_SIGN_IDENTITY = \\"Apple Distribution\\";/CODE_SIGN_IDENTITY = $identity;/" ios/App/App.xcodeproj/project.pbxproj
+          sed -i '' -e "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = $APPLE_TEAM_ID; PROVISIONING_PROFILE_SPECIFIER = $uuid; CODE_SIGN_IDENTITY = $identity;/" \
+            ios/App/App.xcodeproj/project.pbxproj
           archive="$RUNNER_TEMP/BiegWyzej.xcarchive"
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$archive" \
