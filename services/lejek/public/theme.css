@@ -30,6 +30,16 @@ body {
   font: 16px/1.45 system-ui, sans-serif;
 }
 h1, h2 { letter-spacing: -.045em; line-height: 1.12; }
+h1.screen-title {
+  margin: 0 0 8px;
+  padding-inline-start: 10px;
+  border-inline-start: 4px solid var(--panel-plum);
+  color: var(--panel-ink);
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 700;
+  line-height: 1.16;
+  overflow-wrap: anywhere;
+}
 a { color: var(--ink); }
 :where(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--focus-ring);
