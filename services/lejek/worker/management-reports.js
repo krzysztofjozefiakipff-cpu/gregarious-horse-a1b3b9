@@ -90,15 +90,19 @@ function dailyLeadAction(sourceGoals) {
   };
 }
 
+function reportSalonExpected(salon,days,elapsed) {
+  return salon.targets.map((target,index)=>{
+    if (target==null) return null;
+    if (reportSalesIndexes.includes(index)) return days?target*elapsed/days:0;
+    return salon.people.reduce((sum,person)=>sum+(person.expected[index]??0),0);
+  });
+}
+
 function completeDailySalon(salon,month,through,sourceGoals) {
   const days=reportWorkdays(month);
   const elapsed=days.filter(day=>day<=through).length;
   const remaining=days.length-elapsed;
-  const expected=salon.targets.map((target,index)=>{
-    if (target==null) return null;
-    if (reportSalesIndexes.includes(index)) return days.length?target*elapsed/days.length:0;
-    return salon.people.reduce((sum,person)=>sum+(person.expected[index]??0),0);
-  });
+  const expected=reportSalonExpected(salon,days.length,elapsed);
   const open=salon.people.flatMap(({name,check})=>{
     const count=check?check.missing.length+check.drafts.length+check.pending.length:0;
     return count?[{name,count}]:[];
@@ -158,6 +162,7 @@ function recommendLeadSources(sellers,plans,nextPlans) {
 async function buildManagementReport(db,{type,month,through,reportDay,sellers,salons,scope,params,loadPlans}) {
   const first=month+'-01';
   const days=reportWorkdays(month);
+  const elapsedThrough=days.filter(day=>day<=through).length;
   const nextDate=new Date(first+'T00:00:00Z');
   nextDate.setUTCMonth(nextDate.getUTCMonth()+1);
   const nextMonth=nextDate.toISOString().slice(0,7);
@@ -265,9 +270,11 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
     });
     const summary={salon,totals,targets:salonTargets,people,sources,
       recommendations:type==='marketing'?recommendLeadSources(people,sellerPlans,nextBySalon.get(salon)?.team??[]):[]};
-    return type==='daily'?completeDailySalon({...summary,dailyGoals},month,through,sourceGoals.map((source,index)=>({
+    if (type==='monthly') summary.expected=reportSalonExpected(summary,days.length,elapsedThrough);
+    if (type==='daily') return completeDailySalon({...summary,dailyGoals},month,through,sourceGoals.map((source,index)=>({
       ...source,rate:Math.max(sourceAssumptions[index][0],source.leads?source.orders/source.leads:0)
-    }))):summary;
+    })));
+    return summary;
   })};
 }
 

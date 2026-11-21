@@ -38,54 +38,104 @@ function reportTable(headers,rows) {
   return wrapper;
 }
 
+const briefingPdfDialog=reportGet('#briefing-pdf-dialog');
+const briefingPdfShare=briefingPdfDialog.querySelector('#briefing-pdf-share');
+const briefingPdfDownload=briefingPdfDialog.querySelector('#briefing-pdf-download');
+const briefingPdfStatus=briefingPdfDialog.querySelector('#briefing-pdf-status');
+const briefingPdfOptions=briefingPdfDialog.querySelector('#briefing-pdf-options');
+const briefingPdfPreview=briefingPdfDialog.querySelector('#briefing-pdf-preview');
+const briefingPdfView=briefingPdfDialog.querySelector('#briefing-pdf-view');
+let briefingPdfAddress;
+
+briefingPdfDialog.onclose=()=>{
+  URL.revokeObjectURL(briefingPdfAddress);
+  briefingPdfAddress=undefined;
+  briefingPdfDownload.removeAttribute('href');
+  briefingPdfShare.onclick=null;
+  briefingPdfPreview.onclick=null;
+  briefingPdfView.querySelector('iframe')?.remove();
+  briefingPdfDialog.classList.remove('previewing');
+  briefingPdfOptions.hidden=false;
+  briefingPdfView.hidden=true;
+};
+
+async function requestManagementPdf(endpoint) {
+  const response=await fetch(endpoint,{cache:'no-store'});
+  if (!response.ok) throw new Error((await response.json().catch(()=>null))?.error||'Nie udało się przygotować PDF.');
+  const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+\.pdf)"/)?.[1];
+  if (!response.headers.get('Content-Type')?.startsWith('application/pdf')||!filename)
+    throw new Error('Serwer nie zwrócił pliku PDF.');
+  return new File([await response.blob()],filename,{type:'application/pdf'});
+}
+
+function showManagementPdf(file,endpoint,salon,title,back) {
+  briefingPdfDialog.setAttribute('aria-label',title);
+  briefingPdfDialog.querySelector('h2').textContent=title;
+  briefingPdfView.querySelector('button').textContent=back;
+  const shareData={files:[file]};
+  briefingPdfAddress=URL.createObjectURL(file);
+  briefingPdfDownload.href=briefingPdfAddress;
+  briefingPdfDownload.download=file.name;
+  briefingPdfPreview.onclick=()=>{
+    const frame=reportElement('iframe');
+    frame.title=title;
+    frame.src=endpoint+'&disposition=inline';
+    briefingPdfOptions.hidden=true;
+    briefingPdfView.hidden=false;
+    briefingPdfDialog.classList.add('previewing');
+    briefingPdfView.append(frame);
+    briefingPdfView.querySelector('button').focus();
+  };
+  briefingPdfDialog.querySelector('#briefing-pdf-scope').textContent=salon||'Wszystkie salony';
+  briefingPdfShare.hidden=!(navigator.share&&navigator.canShare?.(shareData));
+  briefingPdfShare.onclick=async()=>{
+    briefingPdfStatus.textContent='';
+    try {
+      await navigator.share(shareData);
+    } catch(error) {
+      if (error.name!=='AbortError') briefingPdfStatus.textContent='Nie udało się udostępnić pliku. Otwórz podgląd PDF.';
+    }
+  };
+  briefingPdfStatus.textContent='';
+  briefingPdfDialog.showModal();
+}
+
 function showReportFields() {
-  const {type,month,day,pdfSalon}=reportForm.elements;
+  const {type,month,day,salon}=reportForm.elements;
   const daily=type.value==='daily';
   reportGet('#report-day-field').hidden=day.disabled=!daily;
   reportGet('#report-month-field').hidden=month.disabled=daily;
-  reportGet('#report-showrooms').hidden=daily;
-  reportGet('#report-pdf-salon-field').hidden=pdfSalon.disabled=!daily;
-  reportPdfExport.textContent=daily?'Pobierz PDF salonu':'Pobierz PDF';
+  reportGet('#report-filter-salon').textContent=salon.selectedOptions[0]?.textContent||'Brak salonów';
+  const date=daily?day.value:month.value;
+  reportGet('#report-filter-period').textContent=!date?'Wybierz okres':daily?dateLabel(date):monthLabel(date);
 }
 
 function renderReportPicker(snapshot) {
-  const {type,month,day,pdfSalon}=reportForm.elements;
+  const {type,month,day,salon}=reportForm.elements;
   month.max=snapshot.today.slice(0,7);
   day.max=snapshot.today;
   const firstOpen=!month.value;
   month.value ||= month.max;
   day.value ||= snapshot.today;
-  const choices=reportGet('#report-showrooms > div');
   const salonNames=snapshot.salons.map(row=>row.salon);
-  if (choices.dataset.salons!==JSON.stringify(salonNames)) {
-    const previous=pdfSalon.value;
-    pdfSalon.replaceChildren(new Option('Wybierz salon',''),...salonNames.map(salon=>new Option(salon,salon)));
-    pdfSalon.value=salonNames.length===1?salonNames[0]:salonNames.includes(previous)?previous:'';
-    choices.dataset.salons=JSON.stringify(salonNames);
-    choices.replaceChildren(...salonNames.map(salon=>{
-      const label=document.createElement('label');
-      const checkbox=document.createElement('input');
-      checkbox.type='checkbox';
-      checkbox.checked=true;
-      checkbox.name='salons';
-      checkbox.value=salon;
-      label.append(checkbox,salon);
-      return label;
-    }));
+  const signature=JSON.stringify(salonNames);
+  if (salon.dataset.salons!==signature) {
+    const previous=salon.value;
+    const options=salonNames.map(name=>new Option(name,name));
+    if (salonNames.length>1) options.unshift(new Option('Wszystkie salony',''));
+    salon.replaceChildren(...options);
+    if (salonNames.includes(previous)) salon.value=previous;
+    salon.dataset.salons=signature;
   }
   showReportFields();
   if (firstOpen) {
-    reportPdfExport.disabled=false;
-    if (type.value==='monthly') reportForm.requestSubmit();
+    reportPdfExport.disabled=!salon.options.length;
+    if (type.value==='monthly'&&salon.options.length) reportForm.requestSubmit();
   }
 }
 
 reportForm.onchange=event=>{
-  const {type,month,pdfSalon}=reportForm.elements;
-  if (event.target===pdfSalon) {
-    reportFilterRevision++;
-    return;
-  }
+  const {type,month}=reportForm.elements;
   if (event.target===type&&type.value==='marketing'&&month.value===data.today.slice(0,7)) {
     const [year,number]=month.value.split('-').map(Number);
     month.value=monthStart(year,number-2).slice(0,7);
@@ -100,10 +150,12 @@ reportForm.onchange=event=>{
 };
 
 function reportSelection() {
-  const {type,month,day}=reportForm.elements;
-  const query=new URLSearchParams({type:type.value,...(type.value==='daily'?{day:day.value}:{month:month.value})});
-  const selected=new Set(new FormData(reportForm).getAll('salons'));
-  return {query,selected};
+  const {type,month,day,salon}=reportForm.elements;
+  const liveBriefing=type.value==='daily'&&data.role==='manager'&&day.value===data.today;
+  const path=liveBriefing?'/api/daily-briefing':'/api/management-reports';
+  const query=new URLSearchParams(liveBriefing?{}:{type:type.value,
+    ...(type.value==='daily'?{day:day.value}:{month:month.value})});
+  return {path,query,salon:salon.value,liveBriefing};
 }
 
 function reportMetrics(actuals,targets,expected) {
@@ -201,16 +253,18 @@ function renderDailyManagementSalon(card,salon,csv,closed) {
   card.append(activities);
 }
 
-function renderManagementReport(report,selected) {
+function renderManagementReport(report,selectedSalon) {
   const daily=report.type==='daily';
   const marketing=report.type==='marketing';
-  const salons=report.salons.filter(row=>daily||selected.has(row.salon));
+  const salons=report.salons.filter(row=>!selectedSalon||row.salon===selectedSalon);
   const csv=marketing?[['Salon','Rodzaj','Handlowiec','Źródło','Leady','Zamówienia','Konwersja','Dodatkowe leady','Podstawa']]
     :[['Salon','Handlowiec','Wskaźnik','Wynik','Plan miesięczny','Realizacja','Plan do daty']];
   reportResults.replaceChildren();
   for (const salon of salons) {
     const card=reportElement('article');
-    card.append(reportElement('h2',salon.salon));
+    const title=reportElement('h2',salon.salon);
+    title.className='report-salon-title';
+    card.append(title);
     if (marketing) {
       const sourceRows=salon.sources.map(({leads,orders},index)=>[sources[index],leads,orders,leads?reportPercent.format(orders/leads):'—']);
       card.append(reportTable(['Źródło leadów','Leady','Zamówienia','Zamówienia / leady'],sourceRows));
@@ -226,21 +280,25 @@ function renderManagementReport(report,selected) {
     } else if (daily) {
       renderDailyManagementSalon(card,salon,csv,report.reportDay?.slice(0,7)>report.month);
     } else {
-      const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja'];
-      const metrics=reportMetrics(salon.totals,salon.targets);
-      card.append(reportTable(headers,metrics.map(row=>row.slice(0,headers.length))));
+      const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'];
+      const metrics=reportMetrics(salon.totals,salon.targets,salon.expected);
+      card.append(reportElement('h3','Realizacja sprzedaży i cele'),dailySalesTable(salon));
+      const details=reportElement('details');
+      details.append(reportElement('summary','Aktywności salonu'),reportTable(headers,metrics.slice(0,6)));
+      card.append(details);
       csv.push(...metrics.map(row=>[salon.salon,'Razem',...row]));
       for (const person of salon.people) {
         const details=reportElement('details');
         const name=person.name+(person.archived?' · archiwum':'');
         const personnelMetrics=reportMetrics(person.actuals,person.targets,person.expected);
-        details.append(reportElement('summary',name),reportTable(headers,personnelMetrics.map(row=>row.slice(0,headers.length))));
+        details.append(reportElement('summary',name),reportTable(headers,personnelMetrics));
         csv.push(...personnelMetrics.map(row=>[salon.salon,name,...row]));
         card.append(details);
       }
     }
     reportResults.append(card);
   }
+  if (report.type==='monthly'&&salons.length>1) reportResults.prepend(monthlyReportOverview(salons));
   reportCsv={rows:csv,filename:'bieg-wyzej-'+report.type+'-'+(report.reportDay??report.month)+'.csv'};
   reportExport.disabled=!salons.length;
   if (marketing) {
@@ -248,24 +306,74 @@ function renderManagementReport(report,selected) {
   }
 }
 
+function monthlyReportOverview(salons) {
+  const overview=reportElement('section');
+  overview.id='report-monthly-overview';
+  const metrics=[['Zamówienia',6],['Faktury',7],['Rejestracje',8],['Opinie Google',9]];
+  const combined=createResultsCard('monthly-report-overview-title');
+  const indexByMetric={7:6,10:7,8:8,9:9};
+  for (const cell of combined.querySelectorAll('[data-seller-result]')) {
+    const index=indexByMetric[cell.dataset.sellerResult];
+    const actual=salons.reduce((sum,salon)=>sum+salon.totals[index],0);
+    const plan=salons.every(salon=>salon.targets[index]!=null)
+      ?salons.reduce((sum,salon)=>sum+salon.targets[index],0):null;
+    cell.textContent=reportNumber.format(actual)+' / '+(plan==null?'—':reportNumber.format(plan));
+  }
+  const heading=reportElement('h2','Wszystkie salony · razem');
+  heading.id='monthly-report-overview-title';
+  overview.append(heading,combined,reportTable(['Salon',...metrics.map(([label])=>label)],
+    salons.map(salon=>[salon.salon,...metrics.map(([,index])=>reportNumber.format(salon.totals[index]))])));
+  return overview;
+}
+
+function renderLiveBriefingReport(report,selectedSalon) {
+  const salons=report.salons.filter(row=>!selectedSalon||row.salon===selectedSalon);
+  const labels=['Zamówienia','Faktury','Rejestracje','Opinie Google'];
+  const headers=['Wskaźnik','Wykonano','Plan','Jeszcze w miesiącu','Prognoza na koniec'];
+  const format=value=>value==null?'—':reportNumber.format(value);
+  const rows=({actual,plan,forecast,missing})=>labels.map((label,index)=>{
+    const partial=Boolean(missing?.[index]);
+    return [label,format(actual[index]),format(plan[index]),format(forecast[index])+
+      (partial&&forecast[index]!=null?' (częściowa)':''),
+      format(!partial&&forecast[index]!=null?actual[index]+forecast[index]:null)];
+  });
+  const csv=[['Salon','Handlowiec',...headers]];
+  for (const salon of salons) {
+    const card=reportElement('article');
+    const title=reportElement('h2',salon.salon);
+    title.className='report-salon-title';
+    const team=salon.people.filter(person=>person.editable);
+    const done=team.filter(person=>person.signoff.completed).length;
+    card.append(title,reportElement('p',done+' z '+team.length+' odpraw zatwierdzonych'),reportTable(headers,rows(salon)));
+    csv.push(...rows(salon).map(row=>[salon.salon,'Razem',...row]));
+    for (const person of salon.people) {
+      const details=reportElement('details');
+      const name=person.name+(person.archived?' · archiwum':'');
+      details.append(reportElement('summary',name),reportTable(headers,rows(person)));
+      card.append(details);
+      csv.push(...rows(person).map(row=>[salon.salon,name,...row]));
+    }
+    reportResults.append(card);
+  }
+  reportCsv={rows:csv,filename:'bieg-wyzej-odprawa-'+report.today+'.csv'};
+  reportExport.disabled=!salons.length;
+}
+
 reportForm.onsubmit=async event=>{
   event.preventDefault();
-  const {query,selected}=reportSelection();
+  const {path,query,salon,liveBriefing}=reportSelection();
   const revision=++reportRevision;
   reportExport.disabled=true;
   reportResults.replaceChildren();
-  if (query.get('type')!=='daily'&&!selected.size) {
-    reportStatus.textContent='Wybierz przynajmniej jeden salon.';
-    return;
-  }
   reportStatus.textContent='Wczytywanie raportu…';
   try {
-    const report=await api('/api/management-reports?'+query);
+    const report=await api(path+'?'+query);
     if (revision!==reportRevision) return;
-    const date=dateLabel(report.through,{day:'numeric',month:'long',year:'numeric'});
+    const date=dateLabel(liveBriefing?report.today:report.through,{day:'numeric',month:'long',year:'numeric'});
     const generated=report.generatedAt?new Intl.DateTimeFormat('pl-PL',{timeZone:'Europe/Warsaw',hour:'2-digit',minute:'2-digit'}).format(new Date(report.generatedAt)):null;
     reportStatus.textContent=monthLabel(report.month)+' · wyniki do '+date+(generated?' · wygenerowano o '+generated:'');
-    renderManagementReport(report,selected);
+    if (liveBriefing) renderLiveBriefingReport(report,salon);
+    else renderManagementReport(report,salon);
   } catch (error) {
     if (revision===reportRevision) reportStatus.textContent=error.message;
   }
@@ -290,39 +398,19 @@ reportExport.onclick=()=>{
 
 reportPdfExport.onclick=async ()=>{
   if (reportPdfExport.disabled||!reportForm.reportValidity()) return;
-  const {query,selected}=reportSelection();
-  const daily=query.get('type')==='daily';
-  const salon=reportForm.elements.pdfSalon.value;
-  if (daily?!salon:!selected.size) {
-    reportStatus.textContent=daily?'Wybierz salon do pobrania PDF.':'Wybierz przynajmniej jeden salon.';
-    if (daily) reportForm.elements.pdfSalon.focus();
-    return;
-  }
+  const {path,query,salon,liveBriefing}=reportSelection();
   query.set('format','pdf');
-  if (daily) query.set('salon',salon);
-  else for (const name of selected) query.append('salon',name);
+  if (salon) query.set('salon',salon);
   if (data.role) query.set('role',data.role);
   if (previewTarget) query.set('podglad',previewTarget);
   reportPdfExport.disabled=true;
   const revision=reportFilterRevision;
+  const endpoint=path+'?'+query;
   try {
-    const response=await fetch('/api/management-reports?'+query,{cache:'no-store'});
-    if (!response.ok) throw new Error((await response.json().catch(()=>null))?.error);
-    const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+\.pdf)"/)?.[1];
-    if (!response.headers.get('Content-Type')?.startsWith('application/pdf')||!filename) {
-      throw new Error('Serwer nie zwrócił pliku PDF.');
-    }
-    if (daily&&response.headers.get('X-Lejek-Report-Layout')!=='daily-plans') {
-      throw new Error('Serwer zwrócił starszy układ raportu dziennego. Odśwież stronę i pobierz raport ponownie.');
-    }
-    const file=await response.blob();
-    if (revision!==reportFilterRevision) return;
-    const url=URL.createObjectURL(file);
-    const link=document.createElement('a');
-    link.href=url;
-    link.download=filename;
-    link.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const file=await requestManagementPdf(endpoint);
+    if (revision!==reportFilterRevision||reportGet('#management-reports').hidden) return;
+    const title=liveBriefing?'Raport odprawy':reportForm.elements.type.selectedOptions[0].textContent;
+    showManagementPdf(file,endpoint,salon,title,'Wróć do raportów');
   } catch (error) {
     if (revision===reportFilterRevision) reportStatus.textContent=error.message||'Nie udało się przygotować PDF.';
   } finally {

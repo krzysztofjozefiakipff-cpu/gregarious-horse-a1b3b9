@@ -596,27 +596,6 @@ function filterBriefingSalons() {
 briefingSalon.onchange=filterBriefingSalons;
 briefingHost.querySelector('#briefing-next').onclick=openNextBriefing;
 briefingHost.querySelector('#briefing-refresh').onclick=()=>loadBriefingPanel();
-const briefingPdfDialog=briefingHost.querySelector('#briefing-pdf-dialog');
-const briefingPdfShare=briefingPdfDialog.querySelector('#briefing-pdf-share');
-const briefingPdfDownload=briefingPdfDialog.querySelector('#briefing-pdf-download');
-const briefingPdfStatus=briefingPdfDialog.querySelector('#briefing-pdf-status');
-const briefingPdfOptions=briefingPdfDialog.querySelector('#briefing-pdf-options');
-const briefingPdfPreview=briefingPdfDialog.querySelector('#briefing-pdf-preview');
-const briefingPdfView=briefingPdfDialog.querySelector('#briefing-pdf-view');
-let briefingPdfAddress;
-
-briefingPdfDialog.onclose=()=>{
-  URL.revokeObjectURL(briefingPdfAddress);
-  briefingPdfAddress=undefined;
-  briefingPdfDownload.removeAttribute('href');
-  briefingPdfShare.onclick=null;
-  briefingPdfPreview.onclick=null;
-  briefingPdfView.querySelector('iframe')?.remove();
-  briefingPdfDialog.classList.remove('previewing');
-  briefingPdfOptions.hidden=false;
-  briefingPdfView.hidden=true;
-};
-
 briefingPdf.onclick=async()=>{
   if (!briefingReady||briefingDownloading) return;
   briefingDownloading=briefingPdf.disabled=true;
@@ -627,39 +606,9 @@ briefingPdf.onclick=async()=>{
     if (salon) query.set('salon',salon);
     if (previewTarget) query.set('podglad',previewTarget);
     const endpoint='/api/daily-briefing?'+query;
-    const response=await fetch(endpoint,{cache:'no-store'});
-    if (!response.ok) throw Error((await response.json().catch(()=>null))?.error||'Nie udało się pobrać raportu.');
-    const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+\.pdf)"/)?.[1];
-    if (!filename||!response.headers.get('Content-Type')?.startsWith('application/pdf'))
-      throw Error('Serwer nie zwrócił pliku PDF.');
-    const file=new File([await response.blob()],filename,{type:'application/pdf'});
+    const file=await requestManagementPdf(endpoint);
     if (briefingHost.hidden) return;
-    const shareData={files:[file]};
-    briefingPdfAddress=URL.createObjectURL(file);
-    briefingPdfDownload.href=briefingPdfAddress;
-    briefingPdfDownload.download=filename;
-    briefingPdfPreview.onclick=()=>{
-      const frame=reportElement('iframe');
-      frame.title='Podgląd raportu odprawy';
-      frame.src=endpoint+'&disposition=inline';
-      briefingPdfOptions.hidden=true;
-      briefingPdfView.hidden=false;
-      briefingPdfDialog.classList.add('previewing');
-      briefingPdfView.append(frame);
-      briefingPdfView.querySelector('button').focus();
-    };
-    briefingPdfDialog.querySelector('#briefing-pdf-scope').textContent=salon||'Wszystkie salony';
-    briefingPdfShare.hidden=!(navigator.share&&navigator.canShare?.(shareData));
-    briefingPdfShare.onclick=async()=>{
-      briefingPdfStatus.textContent='';
-      try {
-        await navigator.share(shareData);
-      } catch(error) {
-        if (error.name!=='AbortError') briefingPdfStatus.textContent='Nie udało się udostępnić pliku. Otwórz podgląd PDF.';
-      }
-    };
-    briefingPdfStatus.textContent='';
-    briefingPdfDialog.showModal();
+    showManagementPdf(file,endpoint,salon,'Raport odprawy','Wróć do odprawy');
     briefingStatus.textContent='';
   } catch(error) {
     briefingStatus.textContent=error.message;
