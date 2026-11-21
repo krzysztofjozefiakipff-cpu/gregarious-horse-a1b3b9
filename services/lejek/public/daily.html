@@ -462,7 +462,17 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #cookie summary::-webkit-details-marker { display:none; }
 #cookie[open] summary { background:#ffffff30; }
 #fortune { margin:0 0 12px; padding:8px 10px; border-radius:8px; background:#ffffff1a; color:#fff; line-height:1.4; }
-.mobile-menu-link { background:white; border:1px solid var(--panel-border); border-radius:14px; padding:13px 15px; }
+#seller-more h1, #management-more h1 { margin-bottom:18px; font-size:clamp(1.45rem,5vw,2.25rem); }
+.module-menu { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px 8px; max-width:700px; }
+.module-menu a { display:grid; grid-template-rows:auto 1fr; justify-items:center; align-items:start; gap:7px; padding:3px; border-radius:12px; text-align:center; text-decoration:none; color:var(--panel-ink); font-size:.82rem; font-weight:720; line-height:1.25; }
+.module-menu a > span:last-child { min-width:0; overflow-wrap:anywhere; }
+.module-menu-icon { display:grid; place-items:center; width:clamp(52px,15vw,64px); aspect-ratio:1; border:1px solid var(--panel-border); border-radius:17px; background:var(--panel-lilac); color:var(--panel-plum); }
+.module-menu-icon svg { width:27px; height:27px; stroke:currentColor; }
+.module-menu a:hover .module-menu-icon { background:var(--highlight); }
+.module-menu a:active .module-menu-icon { background:var(--panel-plum); color:#fff; }
+@media(min-width:420px) { .module-menu { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+@media(min-width:760px) { .module-menu { grid-template-columns:repeat(5,minmax(0,1fr)); gap:20px 12px; } }
+#admin:has(#management-more:not([hidden])) > :is(.manager-preview-bar,#admin-backfill) { display:none; }
 .today-results h2 { font-size:1.16rem; margin-bottom:8px; }
 .seller-results-card { background:#fff; border:1px solid var(--panel-border); border-radius:14px; overflow:hidden; }
 .seller-results-card table { width:100%; table-layout:fixed; border-collapse:collapse; }
@@ -473,8 +483,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .seller-results-card tr > :not(:first-child) { border-inline-start:1px solid var(--panel-border); }
 .briefing-completed-badge { font-size:.82rem; font-weight:750; padding:4px 8px; border-radius:999px; background:#e5f3e9; color:#235a3c; }
 .briefing-completed-badge[data-complete="false"] { background:#fff0df; color:#774019; }
-.mobile-menu-link { color:var(--panel-plum); text-decoration:none; font-weight:700; }
-.mobile-menu-link { display:flex; align-items:center; min-height:48px; margin-top:8px; }
 #entry-draft-state { margin:10px 0; color:#235a3c; font-weight:700; }
 #briefing-progress { margin:14px 0; padding:16px; background:var(--panel-plum); color:#fff; border-radius:16px; }
 #briefing-progress progress { display:block; margin-top:9px; accent-color:var(--panel-orange); }
@@ -695,9 +703,9 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <nav id="seller-mobile-nav" class="mobile-panel-nav" hidden aria-label="Panel handlowca"></nav>
 <section id="seller-more" data-seller-panel="wiecej" hidden>
   <h1>Więcej</h1>
-  <a class="mobile-menu-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a>
-  <a class="mobile-menu-link" data-panel-route href="#wyniki">Wpis dzienny</a>
-  <a class="mobile-menu-link" data-panel-route href="#kalendarz-pracy">Zgłoś dzień bez aktywności</a>
+  <nav id="seller-more-links" class="module-menu" aria-label="Moduły handlowca"></nav>
+</section>
+<section id="seller-lesson" data-seller-panel="lekcja" hidden>
 </section>
 <div data-seller-panel="plan" hidden>
 <div class="plan-period">
@@ -795,12 +803,13 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </details>
 <div id="manager-scope-bar" class="manager-preview-bar" hidden><label for="manager-scope">Salon</label> <select id="manager-scope"></select></div>
 <nav id="management-mobile-nav" class="mobile-panel-nav" aria-label="Panel zarządzania" hidden></nav>
-<section id="management-more" hidden><h1>Więcej</h1><a class="mobile-menu-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a><div id="management-more-links"></div></section>
+<section id="management-more" hidden><h1>Więcej</h1><nav id="management-more-links" class="module-menu" aria-label="Moduły panelu"></nav></section>
 <nav id="management-nav" class="panel-nav management-nav" aria-label="Panel">
   <a data-panel-route href="#wykonanie" id="management-performance">Wykonanie planu</a>
   <a data-panel-route href="#zespol" id="management-team" hidden>Zespół</a>
   <a data-panel-route href="#konta-uzytkownikow" id="management-accounts">Konta użytkowników</a>
   <a data-panel-route href="#administracja" id="management-admin">Administracja</a>
+  <a data-panel-route href="#wiecej" id="management-more-link">Więcej</a>
 </nav>
 <nav id="role-function-nav" class="management-nav" aria-label="Funkcje panelu" hidden>
   <div id="role-function-buttons" class="panel-nav"></div>

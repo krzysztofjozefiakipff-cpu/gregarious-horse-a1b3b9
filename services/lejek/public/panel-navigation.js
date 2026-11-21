@@ -61,14 +61,29 @@ const mobileTabs={
   group:[['wykonanie','Salony','building'],['plany-salonow','Plany','calendar'],['raporty','Raporty','bars']],
   admin:[['konta-uzytkownikow','Użytkownicy','people'],['salony','Salony','building'],['grupy','Grupy','bars']]
 };
-const mobileIcons={
+const panelIcons={
   calendar:'<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16M8 4v4m8-4v4"/>',
   bars:'<path d="M5 19h14M8 16v-4m4 4V8m4 8V5"/>',
   clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
   people:'<circle cx="10" cy="8" r="3"/><path d="M4 19v-1a6 6 0 0 1 12 0v1m2-12a3 3 0 0 1 0 6m0 2a4 4 0 0 1 2 4"/>',
   building:'<rect x="5" y="5" width="14" height="15" rx="1"/><path d="M9 9h1m4 0h1m-6 4h1m4 0h1m-4 7v-3h2v3"/>',
+  clipboard:'<rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2m-6 5h6m-6 4h6m-6 4h3"/>',
+  book:'<path d="M12 20c-2-2-5-2.5-9-2V5c4-.5 7 0 9 2 2-2 5-2.5 9-2v13c-4-.5-7 0-9 2V7"/>',
+  chat:'<path d="M20 11a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 11Z"/><path d="M8 11h8m-8 3h5"/>',
+  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+  report:'<path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M9 12h6m-6 4h6"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5m-18 4 9 5 9-5"/>',
+  add:'<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 12h8m-4-4v8"/>',
+  settings:'<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="11" cy="17" r="2" fill="currentColor"/>',
+  card:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="M5.5 15c.5-2 4.5-2 5 0M13 10h5m-5 4h5"/>',
+  heart:'<path d="M12 20 4.5 12.5a4.5 4.5 0 0 1 6.4-6.4L12 7.2l1.1-1.1a4.5 4.5 0 0 1 6.4 6.4Z"/>',
+  eye:'<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
   more:'<path d="M6 12h.01m6 0h.01m6 0h.01" stroke-width="3"/>'
 };
+
+function panelIcon(name) {
+  return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+panelIcons[name]+'</svg>';
+}
 
 function renderPanelTabs(nav,role,active,hrefForRoute) {
   const tabs=[...mobileTabs[role],['wiecej','Więcej','more']];
@@ -80,7 +95,7 @@ function renderPanelTabs(nav,role,active,hrefForRoute) {
       if (!hrefForRoute) link.dataset.panelRoute='';
       link.href=hrefForRoute?hrefForRoute(route):'#'+route;
       link.textContent=label;
-      link.insertAdjacentHTML('afterbegin','<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+mobileIcons[icon]+'</svg>');
+      link.insertAdjacentHTML('afterbegin',panelIcon(icon));
       return link;
     }));
   }
