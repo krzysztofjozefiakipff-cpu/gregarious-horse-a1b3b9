@@ -583,7 +583,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 @media(min-width:420px) { .module-menu { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(min-width:760px) { .module-menu { grid-template-columns:repeat(5,minmax(0,1fr)); gap:20px 12px; } }
 #admin:has(#management-more:not([hidden])) > :is(.manager-preview-bar,#admin-backfill) { display:none; }
-#admin[data-function="odprawa-dzienna"] > #manager-scope-bar { display:none; }
+#admin:is([data-function="odprawa-dzienna"],[data-function="raporty"]) > #manager-scope-bar { display:none; }
 .today-results h2 { font-size:1.16rem; margin-bottom:8px; }
 .sales-results-card { background:#fff; border:1px solid var(--panel-border); border-radius:14px; overflow:hidden; }
 .sales-results-card table { width:100%; table-layout:fixed; border-collapse:collapse; }
