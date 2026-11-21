@@ -42,8 +42,8 @@ function lifeButton(label,fn,className='secondary') {
   return button;
 }
 
-function storyCard(post,pending=false) {
-  const article=element('article','',pending||post===wall.hit?'':'card');
+function storyCard(post,draft=false) {
+  const article=element('article','',draft||post===wall.hit?'':'card');
   article.append(element('h3',post.title));
   if (post.day) {
     const date=new Date(post.day+'T12:00:00Z');
@@ -65,11 +65,8 @@ function storyCard(post,pending=false) {
   }
   if (wall.readOnly) return article;
   const actions=element('div','','actions');
-  if (pending) {
-    actions.append(
-      lifeButton('Opublikuj',()=>change({action:'review',id:post.id,decision:'approve'},'Wpis opublikowany.'),''),
-      lifeButton('Odrzuć',()=>change({action:'review',id:post.id,decision:'reject'},'Wpis odrzucony.'))
-    );
+  if (draft) {
+    actions.append(lifeButton('Opublikuj mój wpis',()=>change({action:'publish-draft',id:post.id},'Wpis opublikowany.'),''));
   } else {
     const active=Boolean(post.reacted);
     const reaction=lifeButton((active?'❤️':'♡')+' '+(post.reactions??0),
@@ -78,8 +75,8 @@ function storyCard(post,pending=false) {
     reaction.setAttribute('aria-pressed',String(active));
     actions.append(reaction);
     if (wall.current.moderate) {
-      actions.append(lifeButton('Ukryj wpis',()=>{
-        if (confirm('Ukryć ten wpis na ścianie?')) change({action:'review',id:post.id,decision:'remove'},'Wpis ukryty.');
+      actions.append(lifeButton('Usuń wpis',()=>{
+        if (confirm('Usunąć ten wpis ze ściany?')) change({action:'remove',id:post.id},'Wpis usunięty.');
       }));
     }
   }
@@ -88,7 +85,7 @@ function storyCard(post,pending=false) {
 }
 
 function showWall() {
-  const {scopes,current,posts,hit,pending,poll,readOnly}=wall;
+  const {scopes,current,posts,hit,drafts,poll,readOnly}=wall;
   scopePicker.replaceChildren(...scopes.map((item,index)=>new Option(
     (item.scope==='salon'?'Salon · ':'Grupa · ')+item.name,String(index))));
   scopePicker.value=String(scopes.findIndex(item=>item.scope===current.scope&&item.name===current.name));
@@ -109,9 +106,8 @@ function showWall() {
   life('#feed').replaceChildren(...(posts.length
     ?regularPosts.map(post=>storyCard(post))
     :[element('p','Na tej ścianie nie ma jeszcze wpisów.','card')]));
-  life('#moderation').hidden=!current.moderate||readOnly;
-  life('#moderation-title').textContent='Wpisy do moderacji'+(pending.length?' · '+pending.length:'');
-  life('#queue').replaceChildren(...(pending.length?pending.map(post=>storyCard(post,true)):[element('p','Brak wpisów do moderacji.','hint')]));
+  life('#drafts').hidden=!drafts.length||readOnly;
+  life('#draft-list').replaceChildren(...drafts.map(post=>storyCard(post,true)));
   life('#poll-editor').hidden=Boolean(poll)||!current.moderate||readOnly;
   if (!poll) {
     life('#ballot').replaceChildren(element('p','Na ten tydzień nie ma ankiety.','hint'));
@@ -161,7 +157,7 @@ async function change(body,message='',status=life('#status')) {
 scopePicker.onchange=()=>loadWall(wall.scopes[Number(scopePicker.value)]);
 life('#add-post').onclick=()=>{
   life('#post-status').textContent='';
-  life('#post-scope').textContent='Publikacja po akceptacji · '+wall.current.name;
+  life('#post-scope').textContent='Ściana · '+wall.current.name;
   postDialog.showModal();
 };
 life('#cancel-post').onclick=()=>{if (!sending) postDialog.close();};
@@ -200,7 +196,7 @@ life('#post-form').onsubmit=async event=>{
   if (submit) submit.disabled=true;
   try {
     const photo=await photoData(values.get('photo'));
-    if (await change({action:'post',title:values.get('title'),message:values.get('message'),photo},'Wpis czeka na moderację.',status)) {
+    if (await change({action:'post',title:values.get('title'),message:values.get('message'),photo},'Wpis opublikowany.',status)) {
       form.reset();
       postDialog.close();
     }

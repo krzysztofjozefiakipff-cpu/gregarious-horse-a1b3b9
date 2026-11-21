@@ -15,7 +15,8 @@ footer{border-top:1px solid var(--line);font-size:.9rem}
 .quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
 .task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--primary);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
 .behind{color:#a12528}.ahead{color:#12633b}
-#meme{background:var(--highlight);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--primary);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--highlight)}
+textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}
+#cause{margin-top:16px;color:white;background:var(--primary);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--highlight)}
 .plan-tools { display:grid; gap:10px; }
 .plan-tools summary { padding:4px 0; color:var(--ink); }
 .plan-tools summary::marker { color:var(--primary); }
@@ -58,7 +59,7 @@ button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shad
 .entry-actions{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:560px){.entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}}
 a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
-@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#entry,#cause{margin:0}.actions{order:1}#cause{order:2}#entry{order:5}}
+@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#entry{margin:0}.actions{order:1}#entry{order:5}}
 .pace-item{flex:1 1 170px;min-width:0}.pace-note{display:block;margin-top:6px;padding:6px 9px;border-radius:7px;background:#e7f5eb;color:#194d30;font-size:.87rem;line-height:1.35}
 .pace-note-behind{background:#fff0df;color:#743b18}
 .mobile-entry,.entry-field-label,.entry-field-group,.entry-increment{display:none}
@@ -84,7 +85,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .seller-nav a{flex:1 1 0;min-width:0;padding-inline:4px;font-size:clamp(.72rem,2.8vw,.875rem);overflow-wrap:anywhere}
   .seller-nav{flex-wrap:nowrap;position:fixed;z-index:2;bottom:0;left:0;right:0;margin:0;padding:6px 12px calc(6px + env(safe-area-inset-bottom));border-radius:0;border-width:1px 0 0;box-shadow:0 -3px 14px #2d203112}
 }
-#meme-votes{display:flex;flex-wrap:wrap;gap:8px}#meme-actions button{min-height:44px}#meme-votes button[aria-pressed=true]{background:var(--ink);color:#fff}
 #entry-guide{width:min(680px,calc(100% - 32px));max-height:75dvh;padding:16px;color:var(--ink);border:1px solid var(--line);border-radius:14px;background:var(--paper)}
 #entry-guide::backdrop{background:#25162480}
 #entry-guide .guide-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
@@ -226,21 +226,13 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   [data-seller-panel="dzisiaj"] {
     display:grid;
     grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
-    grid-template-areas:"heading heading" "work lesson" "work meme" "cause cause";
-    grid-template-rows:min-content min-content auto auto;
+    grid-template-areas:"heading heading" "work lesson";
+    grid-template-rows:min-content auto;
     gap:14px 20px;
     align-items:start;
   }
-  #sidebar-feature { display:contents; }
-  #daily #sidebar-feature > * { margin:0; }
   .today-heading { grid-area:heading; }
   .daily-inspiration { grid-area:lesson; }
-  #meme { grid-area:meme; }
-  [data-seller-panel="dzisiaj"]:has(#meme[hidden]) {
-    grid-template-areas:"heading heading" "work lesson" "cause cause";
-    grid-template-rows:min-content min-content auto;
-  }
-  #cause { grid-area:cause; }
   [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
   .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
   #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
@@ -567,6 +559,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <a data-panel-route href="#wyniki" data-seller-tab="wyniki">Wpisz działania</a>
   <a data-panel-route href="#plan" data-seller-tab="plan">Plan</a>
   <a data-panel-route href="#kalendarz-pracy" data-seller-tab="kalendarz-pracy">Kalendarz pracy</a>
+  <a data-panel-route href="#wiecej" data-seller-tab="wiecej">Więcej</a>
 </nav>
 <div data-seller-panel="dzisiaj">
 <div class="today-heading">
@@ -602,11 +595,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <p id="lesson-remember" hidden><strong>Zapamiętaj!</strong> <span></span></p>
 </section>
 </div>
-<div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
-<section id="meme" hidden><div class="eyebrow">Mem dnia</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
-<div id="meme-actions" hidden><div id="meme-votes" role="group" aria-label="Oceń mem"><button type="button" data-meme-vote="1" class="secondary" aria-pressed="false">👍 Podoba mi się</button> <button type="button" data-meme-vote="-1" class="secondary" aria-pressed="false">👎 Nie podoba mi się</button></div><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
-<form id="meme-form" hidden><p>Opisz sytuację bez nazwisk, numerów rejestracyjnych i danych klientów.</p><label>Tytuł <input name="title" maxlength="120" required></label><label>Historia <textarea name="caption" rows="4" maxlength="500" required></textarea></label><button>Wyślij do administratora</button></form>
-<p id="meme-status" role="status"></p></section></div>
 </div>
 <div data-seller-panel="wyniki" hidden>
 <form id="entry">
@@ -685,6 +673,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <a class="mobile-menu-link" data-life-link href="/z-zycia-salonu.html">Z życia salonu</a>
   <a class="mobile-menu-link" data-panel-route href="#wyniki">Wpis dzienny</a>
   <a class="mobile-menu-link" data-panel-route href="#kalendarz-pracy">Zgłoś dzień bez aktywności</a>
+  <section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 </section>
 <div data-seller-panel="plan" hidden>
 <div class="plan-period">
@@ -970,7 +959,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <details id="admin-settings-block" class="admin-block" hidden>
 <summary>Dodatkowe ustawienia</summary>
 <div id="settings" hidden>
-<details id="story-moderation"><summary>Historie do moderacji</summary><div id="story-queue"></div></details>
 <details id="dealer-settings"><summary>Dane dealera</summary><form id="brand"><label>Salon <select name="salon"></select></label><label>Nazwa dealera <span id="dealer-name-optional" hidden>(opcjonalnie)</span> <input name="name" required maxlength="120"></label><label>Logo opcjonalne (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label><label><input name="removeLogo" type="checkbox"> Usuń zapisane logo</label><button>Zapisz dane dealera</button></form>
 <form id="group-brand" hidden>
   <h3>Logo grupy dealerskiej</h3>
@@ -979,7 +967,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <button>Zapisz logo grupy</button>
   <p id="group-brand-status" role="status"></p>
 </form></details>
-<details id="global-sidebar-settings"><summary>Co pokazać handlowcom?</summary><form id="sidebar-settings"><label>Zawartość sekcji <select name="mode"><option value="cause">Cel miesiąca</option><option value="meme">Memy z naszej bazy</option><option id="giphy-option" value="giphy">Nasze memy i GIF-y z GIPHY</option></select></label><button>Zapisz wybór</button></form></details>
 <details id="global-charity-settings"><summary>Cel miesiąca</summary><form id="charity"><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form></details>
 </div>
 </details>

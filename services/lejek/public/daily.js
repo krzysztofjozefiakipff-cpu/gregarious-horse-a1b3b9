@@ -1078,71 +1078,6 @@ function renderQuote(text) {
   requestAnimationFrame(frame);
 }
 
-let giphyRequest;
-async function giphyResults(config,assignedId) {
-  const params=new URLSearchParams({api_key:config.key,rating:'g'});
-  if (!assignedId) params.set('limit','50');
-  const endpoint=assignedId?encodeURIComponent(assignedId):'trending';
-  const response=await fetch('https://api.giphy.com/v1/gifs/'+endpoint+'?'+params,{
-    cache:'no-store',signal:AbortSignal.timeout(6500)
-  });
-  if (!response.ok) throw new Error('GIF niedostępny.');
-  const {data}=await response.json();
-  return (assignedId?[data]:data??[]).filter(item=>{
-    const media=item?.images?.fixed_width?.url;
-    const url=URL.canParse(media??'')?new URL(media):null;
-    return typeof item?.id==='string'&&url?.protocol==='https:'&&url.hostname.endsWith('.giphy.com');
-  });
-}
-
-async function dailyGif(config) {
-  let items=await giphyResults(config,config.id);
-  if (!config.id&&items.length) {
-    const {id}=await api('/api/giphy-assign',{ids:items.map(item=>item.id)});
-    if (!id) return null;
-    if (!items.some(item=>item.id===id)) items=await giphyResults(config,id);
-    return items.find(item=>item.id===id)??null;
-  }
-  return items[0]??null;
-}
-
-const voteButtons=[...document.querySelectorAll('[data-meme-vote]')];
-let memeVoteSource='local';
-function renderMemeVotes(source) {
-  memeVoteSource=source;
-  $('#meme-votes').hidden=source==='local'&&!data.meme;
-  for (const button of voteButtons) {
-    button.setAttribute('aria-pressed',String(data.memeVotes?.[source]===Number(button.dataset.memeVote)));
-  }
-}
-
-function renderGif(config) {
-  const card=$('#giphy-card');
-  const icon=$('#meme-icon');
-  const caption=$('#meme-caption');
-  card.hidden=true;
-  renderMemeVotes('local');
-  icon.hidden=false;
-  caption.hidden=false;
-  if (!config||matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const request=giphyRequest??=dailyGif(config).catch(()=>null);
-  request.then(item=>{
-    if (!item||$('#meme').hidden||request!==giphyRequest) return;
-    const image=$('#giphy-image');
-    image.onload=()=>{
-      if (request!==giphyRequest||$('#meme').hidden) return;
-      $('#meme-title').hidden=true;
-      icon.hidden=true;
-      caption.hidden=true;
-      renderMemeVotes('giphy');
-      card.hidden=false;
-    };
-    image.onerror=()=>{card.hidden=true;};
-    image.alt=item.content_description||item.title||'GIF dnia';
-    image.src=item.images.fixed_width.url;
-  });
-}
-
 const entrySources=$('#entry-sources');
 const entrySourceList=$('#entry-source-list');
 let activeEntrySource=0;
@@ -1446,19 +1381,6 @@ function renderSeller() {
   $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':holiday?holiday+' · dzień bez aktywności.':locked?'Dzień rozliczony.'
     :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
     :data.previewUser?'Podgląd wpisu.':'';
-  const showMeme=data.sidebarMode==='meme';
-  $('#cause').hidden=showMeme;
-  $('#meme').hidden=!showMeme;
-  $('#meme-actions').hidden=!showMeme;
-  $('#meme-status').textContent='';
-  if (showMeme) {
-    const [title,icon,caption]=data.meme??['Na dziś wszystkie memy są rozdane.', '🙂', 'Zajrzyj jutro po kolejną scenkę z salonu.'];
-    $('#meme-title').hidden=false;
-    $('#meme-title').textContent=title;
-    $('#meme-icon').textContent=icon;
-    $('#meme-caption').textContent=caption;
-    renderGif(data.giphy);
-  }
   $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
   $('#cause-org').textContent=cause?.organization??'';
   $('#cause-description').textContent=cause?.description??'Organizacja i opis pojawią się po opublikowaniu celu.';
@@ -2585,14 +2507,13 @@ const managementFunctions={
   'historia-planow': ['Historia planów i aktywności'],
   'konta-uzytkownikow': ['Konta użytkowników'],
   'dodaj-salon': ['Dodaj salon do grupy','group-add-salon-block'],
-  'historie': ['Historie do moderacji','admin-settings-block','story-moderation'],
   'dane-dealera': ['Dane dealera','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
   manager:['wykonanie','odprawa-dzienna','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
-    'konta-uzytkownikow','historie','dane-dealera'],
+    'konta-uzytkownikow','dane-dealera'],
   group:['wykonanie','raporty','plany-salonow','historia-planow','zespol','kalendarz-pracy','konta-uzytkownikow',
-    'dodaj-salon','lekcja','historie','dane-dealera']
+    'dodaj-salon','lekcja','dane-dealera']
 };
 
 function selectRoleFunction(routes) {
@@ -2640,11 +2561,9 @@ function selectRoleFunction(routes) {
     block.hidden=block.id!==blockId;
     block.open=!block.hidden;
   }
-  for (const id of ['story-moderation','dealer-settings']) {
-    const setting=$('#'+id);
-    setting.hidden=id!==settingId;
-    setting.open=!setting.hidden;
-  }
+  const settings=$('#dealer-settings');
+  settings.hidden=settingId!=='dealer-settings';
+  settings.open=!settings.hidden;
   const historyPanel=$('[data-history="management"]');
   historyPanel.hidden=active!=='historia-planow';
   historyPanel.open=!historyPanel.hidden;
@@ -3074,7 +2993,6 @@ function renderAdmin() {
   $('#lesson-editor').hidden=false;
   $('#team').textContent=view.sellers.filter(seller=>seller.accountStatus!=='inactive').length+' aktywnych handlowców';
   $('#settings').hidden=false;
-  $('#global-sidebar-settings').hidden=view.role!=='admin';
   $('#global-charity-settings').hidden=view.role!=='admin';
   for (const [block,content] of [
     ['admin-groups-block','group-editor'],
@@ -3097,33 +3015,12 @@ function renderAdmin() {
     const selected=form.elements.salon.value;
     form.elements.salon.replaceChildren(...view.salons.map(({salon})=>new Option(salon,salon)));
     if (view.salons.some(({salon})=>salon===selected)) form.elements.salon.value=selected;
-    renderStoryQueue(readOnlyPreview?[]:view.memeStories);
   }
   if (view.role==='admin') {
-    $('#giphy-option').disabled=!view.giphyAvailable;
-    $('#sidebar-settings').elements.mode.value=view.giphy?'giphy':view.sidebarMode;
     $('#charity').elements.month.value ||= view.today.slice(0,7);
   }
   selectManagementView();
 }
-function renderStoryQueue(stories) {
-  const queue=$('#story-queue');
-  queue.replaceChildren();
-  if (!stories.length) queue.textContent='Brak nowych zgłoszeń.';
-  for (const {id,title,caption} of stories) {
-    const form=document.createElement('form');
-    form.innerHTML='<label>Tytuł <input name="title" maxlength="120" required></label><label>Historia <textarea name="caption" maxlength="500" required></textarea></label><div><button>Zatwierdź</button> <button type="button" class="secondary">Odrzuć</button></div>';
-    form.elements.title.value=title;
-    form.elements.caption.value=caption;
-    form.onsubmit=event=>{
-      event.preventDefault();
-      run(()=>api('/api/meme-review',{id,approve:true,...Object.fromEntries(new FormData(form))}));
-    };
-    form.querySelector('.secondary').onclick=()=>run(()=>api('/api/meme-review',{id,approve:false}));
-    queue.append(form);
-  }
-}
-
 function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
@@ -3630,55 +3527,6 @@ $('#brand').onsubmit=event=>{
     removeLogo.checked=false;
   });
 };
-for (const button of voteButtons) button.onclick=async()=>{
-  if (data.role!=='seller') {
-    for (const control of voteButtons) control.setAttribute('aria-pressed',String(control===button));
-    return;
-  }
-  const {today:day}=data;
-  const source=memeVoteSource;
-  const vote=Number(button.dataset.memeVote);
-  for (const control of voteButtons) control.disabled=true;
-  try {
-    await api('/api/meme-vote',{source,vote,day});
-    if (data.today===day) {
-      (data.memeVotes??={})[source]=vote;
-      renderMemeVotes(memeVoteSource);
-      $('#meme-status').textContent='Zapisano ocenę.';
-    }
-  } catch(error) {
-    $('#meme-status').textContent=error.message;
-  } finally {
-    for (const control of voteButtons) control.disabled=false;
-  }
-};
-$('#meme-suggest').onclick=event=>{
-  const form=$('#meme-form');
-  form.hidden=!form.hidden;
-  event.currentTarget.setAttribute('aria-expanded',String(!form.hidden));
-  if (!form.hidden) form.elements.title.focus();
-};
-$('#meme-form').onsubmit=async event=>{
-  event.preventDefault();
-  const form=event.currentTarget;
-  if (data.role!=='seller') {
-    $('#meme-status').textContent='Podgląd · historię możesz wysłać z konta handlowca.';
-    return;
-  }
-  const submit=form.querySelector('button');
-  submit.disabled=true;
-  try {
-    await api('/api/meme-story',Object.fromEntries(new FormData(form)));
-    form.reset();
-    form.hidden=true;
-    $('#meme-suggest').setAttribute('aria-expanded','false');
-    $('#meme-status').textContent='Dzięki! Historia czeka na decyzję administratora.';
-  } catch(error) {
-    $('#meme-status').textContent=error.message;
-  } finally {
-    submit.disabled=false;
-  }
-};
 function renderDealerGroups(groups) {
   const list=$('#group-list');
   list.replaceChildren();
@@ -3836,11 +3684,6 @@ lessonEditor.onsubmit=async event=>{
     await loadLessonPacks();
   } catch(error) {status.textContent=error.message;}
   finally {lessonBusy=false;updateLessonButtons();}
-};
-$('#sidebar-settings').onsubmit=event=>{
-  event.preventDefault();
-  giphyRequest=undefined;
-  run(()=>api('/api/sidebar',{mode:event.target.elements.mode.value}));
 };
 $('#charity').onsubmit=event=>{
   event.preventDefault();

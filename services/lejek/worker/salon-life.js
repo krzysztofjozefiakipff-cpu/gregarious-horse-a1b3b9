@@ -34,7 +34,7 @@ function lifePhoto(value) {
 }
 
 async function viewSalonLife(db,current,scopes,email,today,week,user,roles,preview) {
-  const {scope,name,moderate}=current;
+  const {scope,name}=current;
   const posts=await list(db,`SELECT p.id,p.title,p.message,p.photo IS NOT NULL AS hasPhoto,p.published_day AS day,
     (SELECT name FROM accounts a WHERE a.email=p.author) AS author,
     (SELECT count(*) FROM salon_life_reactions r WHERE r.post=p.id) AS reactions,
@@ -47,8 +47,8 @@ async function viewSalonLife(db,current,scopes,email,today,week,user,roles,previ
     FROM salon_life_posts p JOIN salon_life_reactions r ON r.post=p.id
     WHERE p.scope=? AND p.audience=? AND p.status='approved' AND p.published_day BETWEEN ? AND ?
     GROUP BY p.id ORDER BY reactions DESC,p.id DESC LIMIT 1`).bind(email,scope,name,week,today).first();
-  const pending=moderate?await list(db,`SELECT id,title,message,photo IS NOT NULL AS hasPhoto FROM salon_life_posts
-    WHERE scope=? AND audience=? AND status='pending' ORDER BY id LIMIT 40`,scope,name):[];
+  const drafts=await list(db,`SELECT id,title,message,photo IS NOT NULL AS hasPhoto FROM salon_life_posts
+    WHERE scope=? AND audience=? AND author=? AND status='pending' ORDER BY id DESC LIMIT 40`,scope,name,email);
   const ballot=await db.prepare(`SELECT id,question,options FROM salon_life_polls
     WHERE scope=? AND audience=? AND week=?`).bind(scope,name,week).first();
   let poll=null;
@@ -60,7 +60,7 @@ async function viewSalonLife(db,current,scopes,email,today,week,user,roles,previ
     }))};
   }
   const {firstName,brand}=await loadAccountHeader(db,user);
-  return json({role:user.role,roles,accountHeader:{firstName,brand},scopes,current,posts,hit,pending,poll,readOnly:preview});
+  return json({role:user.role,roles,accountHeader:{firstName,brand},scopes,current,posts,hit,drafts,poll,readOnly:preview});
 }
 
 async function handleSalonLife(request,url,db,user,roles,email,preview) {
@@ -76,7 +76,7 @@ async function handleSalonLife(request,url,db,user,roles,email,preview) {
   if (request.method==='GET'&&url.pathname==='/api/salon-life/photo') {
     const id=Number(url.searchParams.get('id'));
     const row=await db.prepare(`SELECT photo FROM salon_life_posts WHERE id=? AND scope=? AND audience=?
-      AND photo IS NOT NULL AND (status='approved' OR (status='pending' AND ?))`).bind(id,...key,Number(current.moderate)).first();
+      AND photo IS NOT NULL AND (status='approved' OR (status='pending' AND author=?))`).bind(id,...key,email).first();
     if (!row) return json({error:'Zdjęcie jest niedostępne.'},404);
     const bytes=Uint8Array.from(atob(row.photo.split(',')[1]),char=>char.charCodeAt(0));
     return new Response(bytes,{headers:{...headers,'Content-Type':'image/jpeg'}});
@@ -92,8 +92,8 @@ async function handleSalonLife(request,url,db,user,roles,email,preview) {
     const {title,message,photo}=body;
     if (!lifeText(title,80)||!lifeText(message,800)||(photo!=null&&!lifePhoto(photo)))
       return json({error:'Wpisz tytuł i treść. Zdjęcie powinno mieć maksymalnie 175 KB po zmniejszeniu.'},400);
-    await db.prepare('INSERT INTO salon_life_posts(scope,audience,author,title,message,photo) VALUES (?,?,?,?,?,?)')
-      .bind(...key,email,title.trim(),message.trim(),photo??null).run();
+    await db.prepare(`INSERT INTO salon_life_posts(scope,audience,author,title,message,photo,status,published_day)
+      VALUES (?,?,?,?,?,?,'approved',?)`).bind(...key,email,title.trim(),message.trim(),photo??null,today).run();
     return json({ok:true});
   }
   if (action==='react'&&Number.isSafeInteger(id)&&typeof body.active==='boolean') {
@@ -110,13 +110,16 @@ async function handleSalonLife(request,url,db,user,roles,email,preview) {
       ON CONFLICT(poll,email) DO UPDATE SET choice=excluded.choice`).bind(email,body.choice,id,...key,week).run();
     return result.meta.changes?json({ok:true}):json({error:'Ta ankieta jest niedostępna.'},409);
   }
-  if (!current.moderate) return json({error:'Tę zmianę może wprowadzić moderator.'},403);
-  if (action==='review'&&Number.isSafeInteger(id)&&['approve','reject','remove'].includes(body.decision)) {
-    const approve=body.decision==='approve';
-    const result=await db.prepare(`UPDATE salon_life_posts SET status=?,published_day=?
-      WHERE id=? AND scope=? AND audience=? AND status=?`)
-      .bind(approve?'approved':'rejected',approve?today:null,id,...key,body.decision==='remove'?'approved':'pending').run();
-    return result.meta.changes?json({ok:true}):json({error:'Ten wpis został już rozpatrzony.'},409);
+  if (action==='publish-draft'&&Number.isSafeInteger(id)) {
+    const result=await db.prepare(`UPDATE salon_life_posts SET status='approved',published_day=?
+      WHERE id=? AND scope=? AND audience=? AND author=? AND status='pending'`).bind(today,id,...key,email).run();
+    return result.meta.changes?json({ok:true}):json({error:'Ten szkic jest niedostępny.'},404);
+  }
+  if (!current.moderate) return json({error:'Brak uprawnień do tej operacji.'},403);
+  if (action==='remove'&&Number.isSafeInteger(id)) {
+    const result=await db.prepare(`UPDATE salon_life_posts SET status='rejected'
+      WHERE id=? AND scope=? AND audience=? AND status='approved'`).bind(id,...key).run();
+    return result.meta.changes?json({ok:true}):json({error:'Ten wpis jest już niedostępny.'},404);
   }
   if (action==='poll') {
     const {question,options}=body;
