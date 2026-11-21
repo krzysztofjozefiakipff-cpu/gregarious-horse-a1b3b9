@@ -21,9 +21,37 @@ jobs:
           printf '%s\n' '{"name":"bieg-wyzej-test","version":"0.1.0","private":true}' > package.json
           printf '%s\n' '{"appId":"pl.biegwyzej.pilot","appName":"Bieg Wyżej Test","webDir":"www","server":{"url":"https://lejek.carvamo.com/","appStartPath":"login"}}' > capacitor.config.json
           printf '%s\n' '<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Bieg Wyżej Test</title></head><body><p>Połącz się z internetem i uruchom Bieg Wyżej ponownie.</p></body></html>' > www/index.html
+          cp www/index.html www/login
           npm install --save-exact @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/ios@8.6.2
           npx cap add ios
           /usr/libexec/PlistBuddy -c 'Add :ITSAppUsesNonExemptEncryption bool false' ios/App/App/Info.plist
+      - name: Verify startup on an iPhone simulator
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/bieg-wyzej"
+          test -s ios/App/App/public/login
+          device=$(xcrun simctl list devices available -j | node -e '
+            const fs=require("node:fs");
+            const {devices}=JSON.parse(fs.readFileSync(0,"utf8"));
+            const iphone=Object.entries(devices).filter(([id])=>id.includes(".iOS-")).reverse()
+              .flatMap(([,entries])=>entries).find(d=>d.isAvailable&&d.name.startsWith("iPhone"));
+            if(!iphone) throw new Error("No iPhone simulator is available");
+            process.stdout.write(iphone.udid);
+          ')
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -destination "platform=iOS Simulator,id=$device" -derivedDataPath "$RUNNER_TEMP/bieg-simulator" \
+            CODE_SIGNING_ALLOWED=NO build
+          app=$(find "$RUNNER_TEMP/bieg-simulator/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
+          test -s "$app/public/login"
+          xcrun simctl install "$device" "$app"
+          result=$(xcrun simctl launch "$device" pl.biegwyzej.pilot)
+          pid=$(printf '%s\n' "$result" | awk '{print $NF}')
+          [[ "$pid" =~ ^[0-9]+$ ]]
+          sleep 12
+          kill -0 "$pid"
+          echo "The iOS app launched and remained running on the iPhone simulator."
       - name: Sign and upload to internal TestFlight
         env:
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
@@ -80,7 +108,7 @@ jobs:
             console.log(revoke.status===204?'Revoked unused certificate ALVTP684NM':'Unused certificate ALVTP684NM was already absent');
           }
           const cert=await api('certificates',{type:'certificates',attributes:{
-            certificateType:'DISTRIBUTION',csrContent:readFileSync(join(tmp,'ios-signing.csr'),'utf8')
+            certificateType:'IOS_DISTRIBUTION',csrContent:readFileSync(join(tmp,'ios-signing.csr'),'utf8')
           }});
           console.log('Distribution certificate created:',cert.id);
           writeFileSync(join(tmp,'ios-signing.cer'),Buffer.from(cert.attributes.certificateContent,'base64'));
