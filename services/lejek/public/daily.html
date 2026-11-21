@@ -15,7 +15,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
 .task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--primary);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
 .behind{color:#a12528}.ahead{color:#12633b}
-#meme{background:var(--highlight);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--primary);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--highlight)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
+#meme{background:var(--highlight);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--primary);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--highlight)}
 .plan-tools { display:grid; gap:10px; }
 .plan-tools summary { padding:4px 0; color:var(--ink); }
 .plan-tools summary::marker { color:var(--primary); }
@@ -58,7 +58,7 @@ button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shad
 .entry-actions{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:560px){.entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}}
 a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
-@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#entry,#cause,#cookie{margin:0}.actions{order:1}#cause{order:2}#entry{order:5}#cookie{order:6}}
+@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#entry,#cause{margin:0}.actions{order:1}#cause{order:2}#entry{order:5}}
 .pace-item{flex:1 1 170px;min-width:0}.pace-note{display:block;margin-top:6px;padding:6px 9px;border-radius:7px;background:#e7f5eb;color:#194d30;font-size:.87rem;line-height:1.35}
 .pace-note-behind{background:#fff0df;color:#743b18}
 .mobile-entry,.entry-field-label,.entry-field-group,.entry-increment{display:none}
@@ -226,8 +226,8 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   [data-seller-panel="dzisiaj"] {
     display:grid;
     grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
-    grid-template-areas:"heading heading" "work lesson" "work cookie" "work meme" "cause cause";
-    grid-template-rows:min-content min-content min-content auto auto;
+    grid-template-areas:"heading heading" "work lesson" "work meme" "cause cause";
+    grid-template-rows:min-content min-content auto auto;
     gap:14px 20px;
     align-items:start;
   }
@@ -236,10 +236,9 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .today-heading { grid-area:heading; }
   .daily-inspiration { grid-area:lesson; }
   #meme { grid-area:meme; }
-  #cookie { grid-area:cookie; }
   [data-seller-panel="dzisiaj"]:has(#meme[hidden]) {
-    grid-template-areas:"heading heading" "work lesson" "work cookie" "cause cause";
-    grid-template-rows:min-content min-content auto auto;
+    grid-template-areas:"heading heading" "work lesson" "cause cause";
+    grid-template-rows:min-content min-content auto;
   }
   #cause { grid-area:cause; }
   [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
@@ -429,6 +428,10 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .today-entry .entry-link { width:auto; margin:0; background:var(--panel-orange); color:var(--panel-ink); min-height:48px; }
 .daily-work { display:grid; align-content:start; gap:16px; }
 .daily-work .actions { margin:0; }
+#cookie { background:white; border:1px solid var(--panel-border); border-inline-start:3px solid var(--panel-orange); border-radius:12px; }
+#cookie[open] { background:var(--panel-lilac); }
+#cookie summary { min-height:44px; padding:9px 12px; cursor:pointer; color:var(--panel-plum); font-weight:750; }
+#fortune { margin:0; padding:0 12px 12px; color:var(--panel-ink); line-height:1.45; }
 .today-rank,.mobile-menu-link { background:white; border:1px solid var(--panel-border); border-radius:14px; padding:13px 15px; }
 .today-rank { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .today-results h2 { font-size:1.16rem; margin-bottom:8px; }
@@ -547,7 +550,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .mobile-panel-nav a[aria-current="page"] svg { background:var(--panel-lilac); }
   .daily-work .actions { background:white; border-color:var(--panel-border); }
   #daily .daily-inspiration { margin-top:16px; }
-  #daily .daily-inspiration > *,#cookie { margin-bottom:14px; }
+  #daily .daily-inspiration > * { margin-bottom:14px; }
   body:has([data-seller-panel="wyniki"]:not([hidden])) { padding-top:env(safe-area-inset-top); }
   body:has([data-seller-panel="wyniki"]:not([hidden]))::before { content:""; position:fixed; inset:0 0 auto; z-index:6; height:env(safe-area-inset-top); background:var(--panel-paper); pointer-events:none; }
   body:has([data-seller-panel="wyniki"]:not([hidden])) :is(.panel-header,#account-role-bar,footer) { display:none; }
@@ -630,6 +633,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <div class="quote"><div class="eyebrow">Hasło dnia</div><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
 </div>
 <div class="daily-work">
+  <details id="cookie"><summary><span aria-hidden="true">🥠</span> Ciasteczko dnia</summary><p id="fortune"></p></details>
   <section class="today-entry" aria-labelledby="today-entry-title">
     <h2 id="today-entry-title">Wpis dzienny</h2>
     <p id="today-entry-status"></p>
@@ -654,7 +658,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <p id="lesson-remember" hidden><strong>Zapamiętaj!</strong> <span></span></p>
 </section>
 </div>
-<details id="cookie"><summary>🥠 Ciasteczko dnia</summary><p id="fortune"></p></details>
 <div id="sidebar-feature"><section id="cause"><div class="eyebrow">Cel miesiąca</div><h2 id="cause-title"></h2><p id="cause-org"></p><p>Pula: 10% opłaconych abonamentów netto</p><p id="progress-text"></p><progress id="progress" aria-labelledby="progress-text" max="1"></progress><details id="cause-detail"><summary>Zobacz cel</summary><p id="cause-description"></p><p>Uzupełnij wszystkie zaplanowane dni pracy w miesiącu, aby uruchomić swoją część darowizny.</p></details></section>
 <section id="meme" hidden><div class="eyebrow">Z życia salonu</div><h2 id="meme-title"></h2><p id="meme-icon" aria-hidden="true"></p><p id="meme-caption"></p><div id="giphy-card" hidden><img id="giphy-image" alt=""><a id="giphy-credit" href="https://giphy.com/" target="_blank" rel="noopener noreferrer"><img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="" loading="lazy">Powered by GIPHY</a></div>
 <div id="meme-actions" hidden><div id="meme-votes" role="group" aria-label="Oceń mem"><button type="button" data-meme-vote="1" class="secondary" aria-pressed="false">👍 Podoba mi się</button> <button type="button" data-meme-vote="-1" class="secondary" aria-pressed="false">👎 Nie podoba mi się</button></div><button type="button" id="meme-suggest" class="secondary" aria-expanded="false" aria-controls="meme-form">Dodaj historię z salonu</button></div>
