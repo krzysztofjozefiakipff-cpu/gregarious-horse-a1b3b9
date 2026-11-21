@@ -13,8 +13,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .layout{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(250px,1fr);gap:20px}.layout>*{min-width:0}h1,h2,p,blockquote{margin:0}h1,h2{letter-spacing:-.045em;line-height:1.12}h2{font-size:1.45rem;margin-bottom:12px}
 .eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}
 .quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
-.cards section{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--primary);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
-.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 12px}.cards strong{display:block;font-size:clamp(1.3rem,3vw,2rem);line-height:1.15;font-variant-numeric:tabular-nums}
+.task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--primary);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
 .behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
 #meme{background:var(--highlight);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--primary);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--highlight)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
 .plan-tools { display:grid; gap:10px; }
@@ -59,8 +58,7 @@ button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shad
 .entry-actions{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:560px){.entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}}
 a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
-@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,.cards,#pace,#entry,#cause,#cookie{margin:0}.actions{order:1}#cause{order:2}.cards{order:3}#pace{order:4}#entry{order:5}#cookie{order:6}}
-.order-plan{background:var(--tint);border:1px solid var(--line);border-inline-start:4px solid var(--primary);border-radius:14px;padding:16px;margin:18px 0 12px}.order-plan h2{margin:0 0 4px;color:var(--ink)}.order-plan p{color:var(--muted);font-size:.92rem}.order-plan .cards{margin:12px 0 0}.order-plan .cards section{background:#fff;border-color:var(--line)}.order-plan .cards strong{color:var(--primary)}@media(max-width:850px){.order-plan{margin:0}}@media(max-width:480px){.order-plan{padding:12px}.order-plan .cards section{padding:8px}}
+@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#pace,#entry,#cause,#cookie{margin:0}.actions{order:1}#cause{order:2}#pace{order:4}#entry{order:5}#cookie{order:6}}
 #pace{display:block;border:1px solid var(--line);border-radius:14px;padding:14px 16px}.pace-intro h2{margin:0 0 4px}.pace-intro p{font-size:.9rem;color:var(--muted)}#pace-items{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:10px}#pace-items span{font-size:.95rem}
 .pace-item{flex:1 1 170px;min-width:0}.pace-note{display:block;margin-top:6px;padding:6px 9px;border-radius:7px;background:#e7f5eb;color:#194d30;font-size:.87rem;line-height:1.35}
 .pace-note-behind{background:#fff0df;color:#743b18}
@@ -75,16 +73,14 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #pace-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}#pace-items .pace-item{display:grid;align-content:start;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:white}#pace-items .pace-count{font-size:1.2rem}.pace-month{color:var(--muted)}
 #motivation{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}#motivation h3{margin:0 0 8px;font-size:1.08rem}#motivation ol{margin:10px 0;padding-inline-start:23px}#motivation ol:empty{display:none}#motivation li+li{margin-top:6px}#motivation-message{margin-top:8px}
 #performance-view,#manager-team-view{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
-#daily-lesson,#daily .actions,#entry,#daily .order-plan,#daily #pace{margin:0 0 14px}
+#daily-lesson,#daily .actions,#entry,#daily #pace{margin:0 0 14px}
 #daily-lesson,#daily .actions{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
 #daily .eyebrow{color:var(--accent-ink)}
 #daily #cause .eyebrow{color:var(--accent)}
 #lesson-remember{background:var(--ink);color:white;padding:10px 12px}
 #lesson-remember strong{color:var(--accent)}
 .entry-link{display:block;text-align:center;text-decoration:none;font-weight:800;background:var(--primary);color:white;padding:12px;border-radius:10px;margin:0 0 18px}
-#daily .order-plan,#daily #motivation{background:var(--tint);border-color:var(--line)}
-#daily .order-plan h2,#daily .order-plan p{color:var(--ink)}
-#daily .order-plan .cards section{border-color:var(--line)}
+#daily #motivation{background:var(--tint);border-color:var(--line)}
 @media(max-width:850px){
   body:has(#daily:not([hidden])){padding-bottom:calc(62px + env(safe-area-inset-bottom))}
   .seller-nav a{flex:1 1 0;min-width:0;padding-inline:4px;font-size:clamp(.72rem,2.8vw,.875rem);overflow-wrap:anywhere}
@@ -251,10 +247,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
   .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
   #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
-  .plan-top {
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    align-items:start;
-  }
   #manager-team-list, #administration-view {
     grid-template-columns:repeat(2,minmax(0,1fr));
     align-items:start;
@@ -295,8 +287,8 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .task-group ol { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .task-action { padding-block:3px; }
 }
-[data-seller-panel="plan"], .plan-top { display:grid; gap:14px; }
-#daily [data-seller-panel="plan"] .order-plan, #daily [data-seller-panel="plan"] #pace,
+[data-seller-panel="plan"] { display:grid; gap:14px; }
+#daily [data-seller-panel="plan"] #pace,
 #daily [data-seller-panel="plan"] #motivation { margin:0; min-width:0; }
 #seller-ranking {
   min-width:0; padding:10px 12px 12px; border-radius:12px;
@@ -322,14 +314,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .podium-seller { display:block; font-size:.875rem; line-height:1.2; }
 .podium-seller + .podium-seller { margin-block-start:5px; }
 .podium-seller small { display:block; font-size:.75rem; }
-.order-plan .cards strong { overflow-wrap:anywhere; }
-#daily .plan-top .order-plan { padding:12px; }
-#daily .plan-top .order-plan h2 { font-size:1.16rem; }
-#daily .plan-top .cards { gap:5px; margin-top:8px; }
-#daily .plan-top .cards section { padding:7px; font-size:.875rem; }
-#daily .plan-top .cards strong { font-size:clamp(1rem,1.5vw,1.35rem); color:var(--ink); }
-#daily .plan-top .cards small { font-size:.8rem; }
-#seller-plan-details .plan-top { margin-block-start:10px; }
 .rating {
   display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; padding-block-start:8px;
   border-block-start:1px solid var(--line); margin-block-start:10px;
@@ -747,21 +731,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <p id="ranking-empty" hidden>Brak zapisanych wyników sprzedaży w tym okresie.</p>
   <p id="ranking-position" hidden></p>
 </section>
-<details id="seller-plan-details" class="month-history">
-  <summary>Plan zamówień i faktur</summary>
-  <div class="plan-top">
-    <section class="order-plan plan-orders" aria-labelledby="order-plan-title">
-      <h2 id="order-plan-title">Realizacja planu zamówień</h2>
-      <p>Zamówienia podpisane / plan na dany okres</p>
-      <div class="cards" id="cards"></div>
-    </section>
-    <section class="order-plan plan-invoices" aria-labelledby="invoice-plan-title">
-      <h2 id="invoice-plan-title">Wystawione faktury</h2>
-      <p>Faktury wystawione / plan na dany okres</p>
-      <div class="cards" id="invoice-cards"></div>
-    </section>
-  </div>
-</details>
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
   <div id="pace-items"></div>
@@ -770,6 +739,13 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
     <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
     <p id="seller-rating"></p>
   </div>
+</section>
+<section id="motivation" aria-labelledby="motivation-title">
+  <h3 id="motivation-title">Podsumowanie i następny krok</h3>
+  <p id="motivation-best" class="pace-note" hidden></p>
+  <p id="motivation-low" class="pace-note pace-note-behind" hidden></p>
+  <ol id="motivation-actions"></ol>
+  <p id="motivation-message"></p>
 </section>
 <details id="seller-source-plan" class="month-history" hidden>
   <summary>Plan według źródeł pozyskania</summary>
@@ -781,13 +757,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
     </table>
   </div>
 </details>
-<section id="motivation" aria-labelledby="motivation-title">
-  <h3 id="motivation-title">Podsumowanie i następny krok</h3>
-  <p id="motivation-best" class="pace-note" hidden></p>
-  <p id="motivation-low" class="pace-note pace-note-behind" hidden></p>
-  <ol id="motivation-actions"></ol>
-  <p id="motivation-message"></p>
-</section>
 </div>
 <section id="seller-calendar" data-seller-panel="kalendarz-pracy" class="month-history" hidden>
   <h1>Kalendarz pracy</h1>

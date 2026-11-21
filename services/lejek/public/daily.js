@@ -607,7 +607,6 @@ const periodType=$('#seller-period-type');
 const periodValue=$('#seller-period-value');
 let periodRevision=0;
 const periodLength={month:1,quarter:3,year:12};
-const periodLabel={month:'Miesiąc',quarter:'Kwartał',year:'Rok'};
 
 function periodStart(month,type) {
   if (type==='year') return month.slice(0,4)+'-01';
@@ -748,17 +747,6 @@ function renderPlans(snapshot,month,type) {
     return [row];
   }));
   $('#seller-source-note').textContent='Miesiące z rozpisanym planem: '+saved.length+' / '+periodLength[type]+'.';
-  const label=periodLabel[type];
-  for (const [selector,index] of [['#cards',7],['#invoice-cards',10]]) {
-    const {actual,target,goal,doneToday,todayTarget}=metrics.find(metric=>metric.index===index);
-    const cards=[todayTarget==null?['Wykonanie narastająco',actual,goal]:['Dzisiaj',doneToday,todayTarget],[label,actual,target]];
-    $(selector).innerHTML=cards.map(([name,value,expected])=>{
-      const gap=expected==null?null:expected-value;
-      return '<section><span>'+name+'</span><strong>'+value+' / '+(expected??'—')+'</strong><small class="'+(gap>0?'behind':gap<0?'ahead':'')+'">'+
-        (gap==null?'Brak planu':gap>0?'Brakuje '+gap:gap<0?'Ponad plan':'Plan osiągnięty')+'</small></section>';
-    }).join('')+'<section><span>Pozostało do celu</span><strong>'+
-      (target==null?'—':Math.max(0,target-actual))+'</strong></section>';
-  }
   const ratedMetrics=metrics.filter(({goal})=>goal>0);
   const average=ratedMetrics.length
     ?ratedMetrics.reduce((total,{actual,goal})=>total+actual/goal,0)/ratedMetrics.length
