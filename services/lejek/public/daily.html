@@ -21,7 +21,6 @@ progress{width:100%;accent-color:var(--highlight)}
 .plan-tools summary { padding:4px 0; color:var(--ink); }
 .plan-tools summary::marker { color:var(--primary); }
 .plan-tools input, .calendar-fields select, .calendar-fields input { min-height:42px; }
-#seller-calendar-days { margin:10px 0 0; color:var(--muted); font-size:.9rem; }
 .calendar-fields [data-calendar-person] { grid-column:1 / -1; }
 .calendar-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); align-items:end; gap:12px; margin-block:12px; }
 .calendar-fields label { display:grid; gap:5px; min-width:0; font-weight:650; }
@@ -51,6 +50,43 @@ button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shad
 @media(max-width:540px) {
   .calendar-fields, .calendar-fields .calendar-day-fields { display:grid; grid-template-columns:minmax(0,1fr); }
   .calendar-entry-actions { width:100%; }
+}
+#seller-calendar h1 { font-size:clamp(1.45rem,5vw,2.25rem); }
+.seller-calendar-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+.seller-calendar-heading button { min-height:44px; }
+.seller-calendar-layout { display:grid; gap:12px; align-items:start; }
+.seller-calendar-month, .seller-calendar-side { min-width:0; padding:12px; background:#fff; border:1px solid var(--panel-border); border-radius:16px; }
+.seller-calendar-toolbar { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:8px; text-align:center; }
+.seller-calendar-toolbar h2 { font-size:clamp(1.05rem,4vw,1.28rem); margin:0; text-transform:capitalize; }
+.seller-calendar-toolbar button.secondary { display:grid; place-items:center; min-height:44px; padding:0; border-color:var(--panel-border); }
+.seller-calendar-toolbar svg { width:19px; height:19px; }
+#seller-calendar-days { color:var(--panel-muted); font-size:.8rem; margin:3px 0 0; }
+#seller-calendar [data-calendar-grid] { margin:8px 0 10px; gap:3px; }
+#seller-calendar .calendar-day { background:#fff; border-color:transparent; border-radius:9px; padding:0 0 8px; }
+#seller-calendar .calendar-day:not([data-status]) { padding-bottom:0; }
+#seller-calendar .calendar-day::after { display:none; }
+#seller-calendar .calendar-day[data-status]::after { display:block; }
+#seller-calendar .calendar-day[data-status="automatic"] { color:var(--muted); background:var(--panel-lilac); }
+#seller-calendar .calendar-day[aria-current="date"] { font-weight:850; text-decoration:none; box-shadow:inset 0 0 0 1px var(--primary); }
+#seller-calendar .calendar-day[aria-pressed="true"] { color:white; background:var(--primary); }
+#seller-calendar .calendar-legend { margin:0; gap:4px; font-size:.74rem; }
+#seller-calendar .calendar-legend li { background:transparent; padding:0 4px; }
+#seller-calendar [data-calendar-detail] { padding:0; border:0; margin:0; gap:6px; }
+.seller-calendar-detail-top { display:flex; flex-wrap:wrap; align-items:start; justify-content:space-between; gap:6px; }
+.seller-calendar-detail-top h3 { font-size:1.04rem; text-transform:capitalize; }
+.seller-calendar-status { display:inline-block; background:var(--tint); color:var(--accent-ink); }
+.seller-calendar-status[data-status="recorded"] { background:#dff3e8; color:#175b3b; }
+.seller-calendar-side [data-calendar-status]:not(:empty) { margin-top:8px; font-size:.9rem; }
+.seller-calendar-side .calendar-fields, .seller-calendar-side .calendar-day-fields { grid-template-columns:minmax(0,1fr); }
+.seller-calendar-side .calendar-fields { border-top:1px solid var(--line); margin:12px 0 0; padding-top:10px; gap:8px; }
+.seller-calendar-side .calendar-day-fields { gap:8px; }
+.seller-calendar-side [readonly] { background:var(--panel-paper); }
+.seller-calendar-side :is(button,input,select) { min-height:44px; }
+.seller-calendar-side .calendar-entry-actions button { flex:1 1 auto; }
+@media(min-width:740px) {
+  .seller-calendar-layout { grid-template-columns:minmax(335px,1fr) minmax(270px,.72fr); max-width:940px; }
+  .seller-calendar-month, .seller-calendar-side { padding:16px; }
+  #seller-calendar [data-calendar-grid] { gap:5px; }
 }
 #calendar-reminder{padding:10px;border-left:4px solid var(--primary);background:var(--tint)}
 #backlog{padding:13px;background:var(--highlight);border-radius:10px;margin:10px 0}#options{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
@@ -720,9 +756,11 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   </div>
 </details>
 </div>
-<section id="seller-calendar" data-seller-panel="kalendarz-pracy" class="month-history" hidden>
-  <h1>Kalendarz pracy</h1>
-  <p id="seller-calendar-days"></p>
+<section id="seller-calendar" data-seller-panel="kalendarz-pracy" hidden>
+  <div class="seller-calendar-heading">
+    <h1>Kalendarz</h1>
+    <button type="button" class="secondary" id="seller-calendar-today">Dzisiaj</button>
+  </div>
   <div id="seller-calendar-editor"></div>
 </section>
 </div>
@@ -959,6 +997,25 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </div>
 </details>
 </section></section>
+<template id="seller-calendar-layout">
+  <div class="seller-calendar-layout">
+    <div class="seller-calendar-month">
+      <div class="seller-calendar-toolbar">
+        <button type="button" class="secondary" data-month-offset="-1" aria-label="Poprzedni miesiąc">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div aria-live="polite">
+          <h2 data-seller-calendar-month></h2>
+          <p id="seller-calendar-days" hidden></p>
+        </div>
+        <button type="button" class="secondary" data-month-offset="1" aria-label="Następny miesiąc">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="seller-calendar-side"></div>
+  </div>
+</template>
 <template id="calendar-template">
   <div class="calendar-fields">
     <label data-calendar-person hidden>Handlowiec <select aria-label="Handlowiec"></select></label>
