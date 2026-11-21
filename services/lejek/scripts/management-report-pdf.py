@@ -30,7 +30,7 @@ RED = colors.HexColor('#9a3025')
 WIDTH = A4[0] - 76
 
 TITLES = {'monthly': 'Podsumowanie miesiąca', 'daily': 'Raport dzienny', 'marketing': 'Raport dla marketingu',
-          'briefing': 'Realizacja i prognoza sprzedaży'}
+          'briefing': 'Raport odprawy dziennej'}
 METRICS = ['Leady', 'Próby kontaktu', 'Spotkania', 'Jazdy próbne', 'Oferty', 'Follow-up', 'Zamówienia',
            'Wystawione faktury', 'Rejestracje', 'Opinie Google']
 SOURCES = ['Walk-in', 'Facebook', 'Strona WWW', 'Kontakt z salonem', 'OTOMOTO', 'Polecenia',
@@ -52,6 +52,8 @@ STYLES = {
     'priority': ParagraphStyle('priority', fontName='DejaVuBold', fontSize=11, leading=15, textColor=PLUM, spaceAfter=3),
     'instruction': ParagraphStyle('instruction', fontName='DejaVu', fontSize=10, leading=14, textColor=INK, spaceAfter=4),
     'evidence': ParagraphStyle('evidence', fontName='DejaVu', fontSize=8, leading=11, textColor=MUTED),
+    'briefing_value': ParagraphStyle('briefing_value', fontName='DejaVuBold', fontSize=19, leading=24, textColor=ORANGE),
+    'briefing_label': ParagraphStyle('briefing_label', fontName='DejaVu', fontSize=9, leading=13, textColor=colors.white),
     'task_number': ParagraphStyle('task_number', fontName='DejaVuBold', fontSize=12, leading=15,
                                   textColor=colors.white, alignment=1),
 }
@@ -75,14 +77,14 @@ def date_text(value):
     return date.fromisoformat(value).strftime('%d.%m.%Y')
 
 
-def table(headers, rows, fractions=None):
+def table(headers, rows, fractions=None, *, header_color=INK):
     widths = [WIDTH * fraction for fraction in fractions] if fractions else [WIDTH / len(headers)] * len(headers)
     cells = [[p(label, 'header') for label in headers]] + [
         [value if isinstance(value, Paragraph) else p(value, 'cell') for value in row] for row in rows
     ]
     grid = LongTable(cells, colWidths=widths, repeatRows=1, hAlign='LEFT')
     grid.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), INK),
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, LIGHT]),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
@@ -277,31 +279,129 @@ def marketing_report(salon):
     return story
 
 
+BRIEFING_HEADERS = ['Wskaźnik', 'Wykonano', 'Plan miesiąca', 'Jeszcze w miesiącu', 'Prognoza na koniec']
+BRIEFING_WIDTHS = [.30, .14, .16, .19, .21]
+
+
+def briefing_forecast_table(actual, plan, forecast, partial, manual=None):
+    rows = []
+    for slot, metric in enumerate(SALES):
+        remaining = forecast[slot]
+        annotation = ''
+        if remaining is not None and partial[slot]:
+            annotation = ' *'
+        elif manual is not None and manual[slot] is not None:
+            annotation = ' · korekta'
+        rows.append([METRICS[metric], number(actual[slot]), number(plan[slot]),
+                     number(remaining) + annotation,
+                     number(actual[slot] + remaining if remaining is not None and not partial[slot] else None)])
+    return table(BRIEFING_HEADERS, rows, BRIEFING_WIDTHS, header_color=PLUM)
+
+
+def briefing_status(person):
+    if not person['editable']:
+        return 'Poza odprawą'
+    if person['signoff']['completed']:
+        return 'Zatwierdzona'
+    if person['signoff']['accepted']:
+        return 'Do zatwierdzenia'
+    if person['signoff']['previousReady']:
+        return 'Zgłoszenie w toku' if person['pendingToday'] else 'Plan na dziś'
+    return 'Weryfikacja dnia pracy'
+
+
+def briefing_counts(salons):
+    people = [person for salon in salons for person in salon['people'] if person['editable']]
+    done = sum(person['signoff']['completed'] for person in people)
+    return done, len(people) - done
+
+
+def briefing_progress(salons):
+    done, left = briefing_counts(salons)
+    values = [(str(len(salons)), 'Salony w raporcie'),
+              (f'{done} / {done + left}', 'Zatwierdzone odprawy'),
+              (str(left), 'Pozostałe odprawy')]
+    tiles = Table([[p(value, 'briefing_value') for value, _ in values],
+                   [p(label, 'briefing_label') for _, label in values]],
+                  colWidths=[WIDTH / 3] * 3, hAlign='LEFT')
+    tiles.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), PLUM),
+        ('LINEAFTER', (0, 0), (1, -1), .5, colors.HexColor('#886482')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, 0), 9),
+        ('TOPPADDING', (0, 1), (-1, 1), 1),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 9),
+    ]))
+    return tiles
+
+
+def briefing_overview(salons):
+    actual = [sum(salon['actual'][i] for salon in salons) for i in range(4)]
+    plan = [sum(salon['plan'][i] for salon in salons)
+            if all(salon['plan'][i] is not None for salon in salons) else None for i in range(4)]
+    forecast = []
+    partial = []
+    for i in range(4):
+        values = [salon['forecast'][i] for salon in salons if salon['forecast'][i] is not None]
+        forecast.append(sum(values) if values else None)
+        partial.append(len(values) < len(salons) or any(salon['missing'][i] for salon in salons))
+    rows = []
+    for salon in salons:
+        done, left = briefing_counts([salon])
+        rows.append([salon['salon'], f'{done} / {done + left}', number(salon['actual'][0]),
+                     number(salon['plan'][0])])
+    return [
+        p('Podsumowanie wybranych salonów', 'section'),
+        briefing_forecast_table(actual, plan, forecast, partial),
+        Spacer(1, 5),
+        p('Plan łączny jest dostępny, gdy ustalono go we wszystkich ujętych salonach.', 'hint'),
+        p('Postęp według salonów', 'section'),
+        table(['Salon', 'Odprawy zatwierdzone', 'Zamówienia', 'Plan zamówień'], rows,
+              [.44, .22, .16, .18], header_color=PLUM),
+    ]
+
+
+def briefing_person_details(person):
+    name = person['name'] + (' · archiwum' if person['archived'] else '')
+    signoff = person['signoff']
+    status = briefing_status(person)
+    if not person['editable']:
+        return [KeepTogether([p(f'{name} · {status}', 'section'),
+                              briefing_forecast_table(person['actual'], person['plan'], person['forecast'],
+                                                      [False] * 4, person['manual'])])]
+    review = person['review']
+    previous_status = ('Zweryfikowano' if signoff['previousReady'] else
+                       {'recorded': 'Do weryfikacji', 'draft': 'Szkic', 'pending': 'Zgłoszenie w toku',
+                        'missing': 'Brak wpisu', 'off': 'Dzień wolny'}[review['status']])
+    today_status = ('Plan zaakceptowany' if signoff['accepted'] else 'Plan do akceptacji') if person['workday'] else 'Dzień wolny'
+    actual = review['actual'] or [None] * len(METRICS)
+    today_goals = person['todayGoals'] if person['workday'] else [None] * len(METRICS)
+    activity = table(['Aktywność', 'Plan poprzedniego dnia', 'Wykonanie poprzedniego dnia', 'Cel na dziś'],
+                     [[label, number(review['goals'][i]), number(actual[i]), number(today_goals[i])]
+                      for i, label in enumerate(METRICS)], [.38, .20, .22, .20], header_color=PLUM)
+    return [KeepTogether([
+                p(name, 'section'),
+                p(f'Odprawa · {status}   |   {date_text(review["day"])} · {previous_status}   |   Dziś · {today_status}', 'hint'),
+                activity]),
+            KeepTogether([Spacer(1, 6), p(f'Wyniki miesięczne i prognoza · {name}', 'action'),
+                          briefing_forecast_table(person['actual'], person['plan'], person['forecast'],
+                                                  [False] * 4, person['manual']), Spacer(1, 6)])]
+
+
 def briefing_report(salon):
-    labels = ['Zamówienia', 'Faktury', 'Rejestracje', 'Opinie Google']
-    widths = [.30, .15, .15, .19, .21]
-    headers = ['Wskaźnik', 'Wykonano', 'Plan', 'Jeszcze w miesiącu', 'Razem na koniec']
-    summary = []
-    for i, label in enumerate(labels):
-        actual, forecast, partial = salon['actual'][i], salon['forecast'][i], salon['missing'][i]
-        summary.append([label, number(actual), number(salon['plan'][i]),
-                        number(forecast) + ('*' if partial and forecast is not None else ''),
-                        number(actual + forecast if not partial and forecast is not None else None)])
-    story = [p('Podsumowanie salonu', 'section'), table(headers, summary, widths)]
-    if any(salon['missing']):
-        story.append(p('Prognoza salonu jest częściowa dla wskaźników z gwiazdką. Kreska oznacza brak pełnej prognozy.', 'hint'))
+    story = [p('Wyniki i prognoza salonu', 'section'),
+             briefing_forecast_table(salon['actual'], salon['plan'], salon['forecast'], salon['missing'])]
     if not salon['people']:
-        return story + [p('Brak handlowców do ujęcia w raporcie.', 'hint')]
-    story.append(p('Realizacja i prognoza handlowców', 'section'))
+        return story + [p('Brak handlowców w raporcie.', 'hint')]
+    rows = [[person['name'] + (' · archiwum' if person['archived'] else ''), briefing_status(person),
+             date_text(person['review']['day']) if person['editable'] else '–',
+             number(person['actual'][0]), number(person['plan'][0])]
+            for person in salon['people']]
+    story.extend([p('Odprawy i wyniki handlowców', 'section'),
+                  table(['Handlowiec', 'Stan odprawy', 'Sprawdzany dzień', 'Zamówienia', 'Plan zamówień'],
+                        rows, [.30, .24, .16, .15, .15], header_color=PLUM)])
     for person in salon['people']:
-        name = person['name'] + (' · archiwum' if person['archived'] else '')
-        rows = []
-        for i, label in enumerate(labels):
-            actual, forecast = person['actual'][i], person['forecast'][i]
-            rows.append([label, number(actual), number(person['plan'][i]),
-                         number(forecast) + (' · ręczna' if person['manual'][i] is not None else ''),
-                         number(actual + forecast if forecast is not None else None)])
-        story.append(KeepTogether([p(name, 'action'), table(headers, rows, widths), Spacer(1, 10)]))
+        story.extend(briefing_person_details(person))
     return story
 
 
@@ -356,8 +456,12 @@ def render(report, output):
         story.append(p('Wyniki obejmują zatwierdzone aktywności do końca poprzedniego dnia. '
                        'Cele dzienne uwzględniają pozostały plan i dni pracy handlowca.', 'hint'))
     elif kind == 'briefing':
-        story.append(p('Wyniki pochodzą z zatwierdzonych wpisów do dnia raportu. Prognoza automatyczna opiera się na '
-                       'dotychczasowym tempie, pozostałych dniach pracy i wykonaniu. Oznaczona korekta pochodzi od kierownika.', 'hint'))
+        story.extend([briefing_progress(report['salons']), Spacer(1, 8),
+                      p('Wyniki miesięczne obejmują zatwierdzone wpisy. Gwiazdka (*) oznacza prognozę częściową, '
+                        'kreska oznacza brak danych, a „korekta” wskazuje prognozę wpisaną przez kierownika.', 'hint')])
+        if len(report['salons']) > 1:
+            story.extend(briefing_overview(report['salons']))
+            story.append(PageBreak())
     for index, salon in enumerate(report['salons']):
         if index:
             story.append(PageBreak())

@@ -596,24 +596,54 @@ function filterBriefingSalons() {
 briefingSalon.onchange=filterBriefingSalons;
 briefingHost.querySelector('#briefing-next').onclick=openNextBriefing;
 briefingHost.querySelector('#briefing-refresh').onclick=()=>loadBriefingPanel();
+const briefingPdfDialog=briefingHost.querySelector('#briefing-pdf-dialog');
+const briefingPdfShare=briefingPdfDialog.querySelector('#briefing-pdf-share');
+const briefingPdfDownload=briefingPdfDialog.querySelector('#briefing-pdf-download');
+const briefingPdfStatus=briefingPdfDialog.querySelector('#briefing-pdf-status');
+let briefingPdfAddress;
+
+briefingPdfDialog.onclose=()=>{
+  URL.revokeObjectURL(briefingPdfAddress);
+  briefingPdfAddress=undefined;
+  briefingPdfDownload.removeAttribute('href');
+  briefingPdfShare.onclick=null;
+};
+
 briefingPdf.onclick=async()=>{
   if (!briefingReady||briefingDownloading) return;
   briefingDownloading=briefingPdf.disabled=true;
+  briefingStatus.textContent='Przygotowywanie raportu PDF…';
   try {
     const query=new URLSearchParams({format:'pdf',role:data.role});
-    if (briefingSalon.value) query.set('salon',briefingSalon.value);
+    const salon=briefingSalon.value;
+    if (salon) query.set('salon',salon);
     if (previewTarget) query.set('podglad',previewTarget);
-    const response=await fetch('/api/daily-briefing?'+query,{cache:'no-store'});
+    const endpoint='/api/daily-briefing?'+query;
+    const response=await fetch(endpoint,{cache:'no-store'});
     if (!response.ok) throw Error((await response.json().catch(()=>null))?.error||'Nie udało się pobrać raportu.');
     const filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+\.pdf)"/)?.[1];
     if (!filename||!response.headers.get('Content-Type')?.startsWith('application/pdf'))
       throw Error('Serwer nie zwrócił pliku PDF.');
-    const address=URL.createObjectURL(await response.blob());
-    const link=reportElement('a');
-    link.href=address;
-    link.download=filename;
-    link.click();
-    setTimeout(()=>URL.revokeObjectURL(address),1000);
+    const file=new File([await response.blob()],filename,{type:'application/pdf'});
+    if (briefingHost.hidden) return;
+    const shareData={files:[file]};
+    briefingPdfAddress=URL.createObjectURL(file);
+    briefingPdfDownload.href=briefingPdfAddress;
+    briefingPdfDownload.download=filename;
+    briefingPdfDialog.querySelector('#briefing-pdf-preview').href=endpoint+'&disposition=inline';
+    briefingPdfDialog.querySelector('#briefing-pdf-scope').textContent=salon||'Wszystkie salony';
+    briefingPdfShare.hidden=!(navigator.share&&navigator.canShare?.(shareData));
+    briefingPdfShare.onclick=async()=>{
+      briefingPdfStatus.textContent='';
+      try {
+        await navigator.share(shareData);
+      } catch(error) {
+        if (error.name!=='AbortError') briefingPdfStatus.textContent='Nie udało się udostępnić pliku. Otwórz podgląd PDF.';
+      }
+    };
+    briefingPdfStatus.textContent='';
+    briefingPdfDialog.showModal();
+    briefingStatus.textContent='';
   } catch(error) {
     briefingStatus.textContent=error.message;
   } finally {
