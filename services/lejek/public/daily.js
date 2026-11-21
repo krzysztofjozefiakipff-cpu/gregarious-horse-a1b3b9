@@ -635,8 +635,6 @@ async function loadSellerPeriod() {
     if (revision!==periodRevision) return;
     renderPlans(snapshot,month,type);
     renderRanking(snapshot.ranking);
-    const name=periodName(month,type);
-    $('#seller-plan-period').textContent=name;
     const message=periodNotice(month,type,snapshot.today.slice(0,7));
     $('#seller-period-notice-text').textContent=message;
     $('#seller-period-notice').hidden=!message;
@@ -1191,30 +1189,39 @@ function showPanelLogo(src,alt='') {
 }
 
 function renderRanking(ranking) {
-  const rankText=rank=>rank.place+'. miejsce (z '+rank.total+')';
-  $('#ranking-title').textContent=ranking?.groupName?'Ranking grupy dealerskiej · '+ranking.groupName:'Ranking salonu';
-  const podium=$('#ranking-podium');
-  const podiumEntries=ranking?.podium??[];
-  podium.hidden=!podiumEntries.length;
-  $('#ranking-empty').hidden=Boolean(podiumEntries.length);
-  podium.replaceChildren(...podiumEntries.map(({place,name,salon,self})=>{
-    const card=document.createElement('li');
-    card.dataset.place=place;
-    const medal=document.createElement('span');
-    medal.className='podium-medal';
-    medal.textContent=place+'. miejsce';
-    const seller=document.createElement('strong');
-    seller.textContent=self?name+' (Ty)':name;
-    const location=document.createElement('span');
-    location.textContent=salon;
-    card.append(medal,seller,location);
-    return card;
+  const rankText=rank=>rank?rank.place+'. miejsce z '+rank.total:'Brak pozycji';
+  const group=ranking?.groupName;
+  $('#ranking-title').textContent=group?'Ranking grupy':'Ranking salonu';
+  $('#ranking-position').textContent=rankText(group?ranking.group:ranking?.salon);
+  const groupName=$('#ranking-group-name');
+  groupName.hidden=!group;
+  groupName.textContent=group??'';
+  const salonPosition=$('#ranking-salon');
+  salonPosition.hidden=!group;
+  salonPosition.textContent='W salonie · '+rankText(ranking?.salon);
+
+  const leaders=ranking?.podium??[];
+  $('#ranking-table').hidden=!leaders.length;
+  $('#ranking-empty').hidden=Boolean(leaders.length);
+  $('#ranking-podium').replaceChildren(...leaders.map(({place,name,salon,counts,self})=>{
+    const row=document.createElement('tr');
+    row.toggleAttribute('data-self',self);
+    const seller=document.createElement('th');
+    seller.scope='row';
+    seller.textContent=place+'. '+name+(self?' (Ty)':'');
+    if (group) {
+      const location=document.createElement('small');
+      location.textContent=salon;
+      seller.append(location);
+    }
+    row.append(seller);
+    for (const count of counts) {
+      const cell=document.createElement('td');
+      cell.textContent=count;
+      row.append(cell);
+    }
+    return row;
   }));
-  $('#ranking-salon').textContent=ranking?.salon?rankText(ranking.salon):'Brak pozycji';
-  $('#ranking-group-row').hidden=!ranking?.groupName;
-  $('#ranking-group').textContent=ranking?.group?rankText(ranking.group):'Brak pozycji';
-  $('#ranking-result').textContent=ranking?.percent==null?'Brak planu'
-    :new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(ranking.percent)+'%';
 }
 
 const tasksHeading=$('#today-tasks-heading');

@@ -299,22 +299,28 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #daily [data-seller-panel="plan"] .order-plan, #daily [data-seller-panel="plan"] #pace,
 #daily [data-seller-panel="plan"] #motivation { margin:0; min-width:0; }
 #seller-ranking {
-  display:grid; gap:10px; align-items:center; min-width:0;
-  background:linear-gradient(120deg,var(--accent-ink),var(--primary)); color:white;
-  border-radius:14px; padding:clamp(10px,1vw,16px);
+  min-width:0; border:1px solid var(--line); border-radius:12px; background:white;
 }
-#seller-ranking h2 { margin:0; font-size:1.15rem; }
-#seller-ranking dl { margin:0; display:grid; gap:4px; }
-#seller-ranking dl > div { display:flex; align-items:baseline; flex-wrap:wrap; justify-content:space-between; gap:2px 12px; }
-#seller-ranking dt { color:var(--on-plum-muted); font-size:.875rem; }
-#seller-ranking dd { margin:0; font-weight:750; }
-.ranking-heading p { margin:4px 0 0; color:var(--on-plum-muted); font-size:.875rem; }
-.ranking-personal { display:contents; }
-.ranking-personal h3 { margin:0 0 6px; font-size:1rem; }
-@media(min-width:900px) {
-  #seller-ranking { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,.9fr); align-items:center; gap:8px 16px; }
-  .ranking-heading { grid-column:1/-1; }
+#seller-ranking summary {
+  display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; min-height:44px;
+  padding:6px 12px; cursor:pointer; color:var(--accent-ink); list-style:none;
 }
+#seller-ranking summary::-webkit-details-marker { display:none; }
+#seller-ranking summary::after {
+  content:""; width:7px; height:7px; border:solid currentColor; border-width:0 2px 2px 0;
+  transform:rotate(45deg); margin-inline-start:auto; margin-inline-end:2px;
+}
+#seller-ranking[open] summary::after { transform:rotate(225deg); }
+#ranking-position { color:var(--muted); font-size:.875rem; }
+.ranking-body { padding:8px 12px 12px; border-block-start:1px solid var(--line); }
+.ranking-body > p, #ranking-salon { font-size:.875rem; color:var(--muted); }
+.ranking-body > p + p { margin-block-start:4px; }
+.ranking-body table { width:100%; table-layout:fixed; margin-block-start:6px; font-size:.875rem; }
+.ranking-body th, .ranking-body td { padding:5px 2px; text-align:center; vertical-align:middle; white-space:normal; }
+.ranking-body th:first-child { width:44%; text-align:start; padding-inline:4px; overflow-wrap:anywhere; }
+.ranking-body th:not(:first-child) { font-size:.75rem; color:var(--muted); }
+.ranking-body th small { display:block; font-weight:400; color:var(--muted); }
+.ranking-body tr[data-self] { background:var(--tint); }
 .order-plan .cards strong { overflow-wrap:anywhere; }
 #daily .plan-top .order-plan { padding:12px; }
 #daily .plan-top .order-plan h2 { font-size:1.16rem; }
@@ -322,29 +328,28 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #daily .plan-top .cards section { padding:7px; font-size:.875rem; }
 #daily .plan-top .cards strong { font-size:clamp(1rem,1.5vw,1.35rem); color:var(--ink); }
 #daily .plan-top .cards small { font-size:.8rem; }
-.podium { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); align-items:end; gap:6px; margin:0; padding:0; list-style:none; }
-.podium li { display:grid; align-content:center; gap:1px; padding:6px 8px; border-radius:8px; background:#693662; text-align:center; overflow-wrap:anywhere; }
-.podium li[data-place="1"] { padding-block:10px; background:#ffda84; color:#332000; }
-.podium:has(li:nth-child(3)) li[data-place="1"] { grid-column:2; grid-row:1; }
-.podium:has(li:nth-child(3)) li[data-place="2"] { grid-column:1; grid-row:1; }
-.podium:has(li:only-child) { width:fit-content; max-width:100%; grid-auto-columns:auto; }
-.podium-medal { font-size:.82rem; font-weight:750; }
-.podium li span:last-child { font-size:.82rem; }
-.rating { border:1px solid #ffffff40; border-radius:10px; padding:6px 9px; background:#ffffff0c; }
-.rating h3 { margin:0; font-size:1rem; }
-.rating-stars { display:inline-block; white-space:nowrap; font-size:1.25rem; letter-spacing:.08em; color:#ffd371; }
-@supports (background-clip:text) {
-  .rating-stars { background:linear-gradient(90deg,#ffd371 var(--rating-fill,0%),#b291aa var(--rating-fill,0%)); background-clip:text; color:transparent; }
+.rating {
+  display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; padding-block-start:8px;
+  border-block-start:1px solid var(--line); margin-block-start:10px;
 }
-.rating p { font-size:.875rem; color:var(--on-plum-muted); }
-#seller-rating { font-weight:750; color:white; }
-.plan-period { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
-.plan-period p { color:var(--muted); }
-.plan-period.month-history label { display:grid; gap:4px; margin:0; }
-.plan-period select { min-height:42px; width:100%; }
-#seller-period-status { flex-basis:100%; margin:0; }
-#seller-period-notice { flex-basis:100%; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:10px 12px; border-inline-start:4px solid var(--primary); border-radius:8px; background:var(--tint); }
-#seller-period-notice p { margin:0; color:var(--ink); }
+.rating h3 { margin:0; font-size:.95rem; }
+.rating-stars { white-space:nowrap; font-size:1rem; letter-spacing:.08em; color:var(--accent-ink); }
+@supports (background-clip:text) {
+  .rating-stars { background:linear-gradient(90deg,var(--accent-ink) var(--rating-fill,0%),#967f93 var(--rating-fill,0%)); background-clip:text; color:transparent; }
+}
+#seller-rating { font-size:.875rem; color:var(--muted); }
+.plan-period { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
+.plan-period h1 { margin:0; font-size:1.4rem; }
+.period-controls { display:flex; min-width:0; gap:6px; }
+.period-controls select { min-height:44px; min-width:0; padding:4px 6px; font-size:1rem; }
+#seller-period-value { flex:1; }
+@media(max-width:440px) {
+  .period-controls { flex-basis:100%; }
+}
+.plan-period p { margin:0; color:var(--muted); font-size:.875rem; }
+#seller-period-status, #seller-absence-adjustment { flex-basis:100%; }
+#seller-period-notice { flex-basis:100%; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:4px 8px; }
+#seller-period-reset { border:0; padding:4px; min-height:36px; text-decoration:underline; }
 .month-history { background:white; border:1px solid var(--line); border-radius:12px; padding:14px; }
 .month-history summary { cursor:pointer; font-weight:750; }
 .month-history label { display:inline-flex; align-items:center; flex-wrap:wrap; gap:8px; margin-block:10px; }
@@ -760,43 +765,19 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <a class="mobile-menu-link" data-panel-route href="#kalendarz-pracy">Zgłoś dzień bez aktywności</a>
 </section>
 <div data-seller-panel="plan" hidden>
-<div class="plan-period month-history">
-  <strong id="seller-plan-period"></strong>
-  <label>Widok <select id="seller-period-type"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select></label>
-  <label>Wyświetlany okres <select id="seller-period-value"></select></label>
+<div class="plan-period">
+  <h1>Wyniki</h1>
+  <div class="period-controls">
+    <select id="seller-period-type" aria-label="Rodzaj okresu"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select>
+    <select id="seller-period-value" aria-label="Wyświetlany okres"></select>
+  </div>
   <p id="seller-period-status" role="status" hidden></p>
   <p id="seller-absence-adjustment" hidden></p>
   <div id="seller-period-notice" hidden>
     <p id="seller-period-notice-text" role="status"></p>
-    <button type="button" class="secondary" id="seller-period-reset">Wróć do bieżącego miesiąca</button>
+    <button type="button" class="secondary" id="seller-period-reset">Bieżący miesiąc</button>
   </div>
 </div>
-  <section id="seller-ranking" aria-labelledby="ranking-title">
-    <div class="ranking-heading">
-      <h2 id="ranking-title"></h2>
-      <p>Realizacja planu zamówień w wybranym okresie</p>
-    </div>
-    <div>
-      <ol class="podium" id="ranking-podium" hidden></ol>
-      <p id="ranking-empty" hidden>Brak handlowców z planem zamówień w tym okresie.</p>
-    </div>
-    <div class="ranking-personal">
-    <div>
-    <h3>Twoja pozycja</h3>
-    <dl>
-      <div><dt>W salonie</dt><dd id="ranking-salon"></dd></div>
-      <div id="ranking-group-row" hidden><dt>W grupie dealerskiej</dt><dd id="ranking-group"></dd></div>
-      <div><dt>Realizacja planu zamówień</dt><dd id="ranking-result"></dd></div>
-    </dl>
-    </div>
-    <div class="rating">
-      <h3>Ocena handlowca</h3>
-      <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
-      <p id="seller-rating"></p>
-      <p>Średnia realizacja celów narastająco w wybranym okresie.</p>
-    </div>
-    </div>
-  </section>
 <div class="plan-top">
   <section class="order-plan plan-orders" aria-labelledby="order-plan-title">
     <h2 id="order-plan-title">Realizacja planu zamówień</h2>
@@ -810,9 +791,32 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   </section>
 
 </div>
+<details id="seller-ranking">
+  <summary><strong id="ranking-title">Ranking</strong><span id="ranking-position"></span></summary>
+  <div class="ranking-body">
+    <p id="ranking-group-name" hidden></p>
+    <p id="ranking-salon" hidden></p>
+    <p id="ranking-empty" hidden>Brak zapisanych wyników sprzedaży w tym okresie.</p>
+    <table id="ranking-table" aria-label="Czołówka rankingu" hidden>
+      <thead><tr>
+        <th scope="col">Handlowiec</th>
+        <th scope="col" aria-label="Zamówienia">Zam.</th>
+        <th scope="col" aria-label="Rejestracje">Rej.</th>
+        <th scope="col" aria-label="Faktury">Fakt.</th>
+        <th scope="col" aria-label="Opinie Google">Google</th>
+      </tr></thead>
+      <tbody id="ranking-podium"></tbody>
+    </table>
+  </div>
+</details>
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
   <div id="pace-items"></div>
+  <div class="rating">
+    <h3>Ocena realizacji celów</h3>
+    <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
+    <p id="seller-rating"></p>
+  </div>
 </section>
 <details id="seller-source-plan" class="month-history" hidden>
   <summary>Plan według źródeł pozyskania</summary>

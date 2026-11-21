@@ -28,6 +28,21 @@ function dailyCounters(rows) {
   const totals=[1,3,4,5,7].map(index=>rows.reduce((sum,row)=>sum+row[index],0));
   return JSON.stringify([...totals,rows]);
 }
+const salesMetricIndexes=[7,8,10,9];
+function salesCounts(counters) {
+  const sources=counters[5];
+  const counts=[counters[4]??0,0,0,0];
+  for (const source of Array.isArray(sources)?sources:[]) {
+    for (let i=1;i<salesMetricIndexes.length;i++) counts[i]+=source[salesMetricIndexes[i]]??0;
+  }
+  return counts;
+}
+
+function compareSalesCounts(a,b) {
+  const [orders,registrations,invoices,reviews]=a.counts.map((count,index)=>b.counts[index]-count);
+  return orders||registrations||invoices||reviews;
+}
+
 const normalizeWalkIn=rows=>{rows[0][1]=rows[0][2]=rows[0][0];};
 const insertDailyResult=`INSERT INTO daily_results (person,day,counters)
   SELECT ?1,?2,?3
@@ -374,15 +389,10 @@ async function handle(request, env, buildDailyReport=false) {
       const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
       const totals=new Map(salons.map(({salon})=>[salon,[0,0,0,0]]));
       const daily=await list(db,'SELECT person,counters FROM daily_results WHERE substr(day,1,7)=? AND day<=? AND '+scope+' AND '+includedDailyResult,month,localDay(),...params);
-      const metricIndexes=[7,8,10,9];
       for (const row of daily) {
         const total=totals.get(sellerSalons.get(row.person));
         if (!total) continue;
-        const counters=JSON.parse(row.counters);
-        const counts=[counters[4]??0,0,0,0];
-        for (const source of Array.isArray(counters[5])?counters[5]:[]) {
-          for (let i=1;i<metricIndexes.length;i++) counts[i]+=source[metricIndexes[i]]??0;
-        }
+        const counts=salesCounts(JSON.parse(row.counters));
         counts.forEach((value,i)=>{total[i]+=value;});
         const seller=sellerById.get(row.person);
         if (historyView&&seller.accountStatus==='inactive') {
@@ -589,41 +599,45 @@ async function handle(request, env, buildDailyReport=false) {
       const lesson=lessons[position]??null;
       let ranking=null;
       if (personal) {
-        const group=await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first();
         const rankingStart=period?months[0]:today.slice(0,7);
         const rankingEnd=period?months.at(-1):rankingStart;
-        const candidates=await list(db,`SELECT a.id,a.name,a.salon,p.monthly_targets,
-          COALESCE((SELECT SUM(json_extract(d.counters,'$[4]')) FROM daily_results d
-            WHERE d.person=a.id AND substr(d.day,1,7) BETWEEN ?1 AND ?2 AND d.day<=?3
-              AND ${inReportDay('a.email','d.day')}),0) AS orders
-          FROM accounts a JOIN (
-            SELECT person,json_group_array(json_array(month,target)) AS monthly_targets FROM plans WHERE month BETWEEN ?1 AND ?2
-              AND ${includedResult('plans','plans.month')}
-            GROUP BY person HAVING SUM(target)>0
-          ) p ON p.person=a.id
+        const sellersInRanking=await list(db,`SELECT a.id,a.name,a.salon FROM accounts a
           WHERE ${accountRole('a','seller')} AND ${eligibleForPlans('a')}
           AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email=a.email)
-          AND (a.salon=?4 OR a.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?5))`,
-          rankingStart,rankingEnd,today,user.salon,group?.group_name??null);
-        const rankingAdjustments=await calendarAdjustments(db,period?months:[rankingStart],
-          'person IN (SELECT value FROM json_each(?))',JSON.stringify(candidates.map(row=>row.id)));
-        const ranks=candidates.map(row=>({...row,target:JSON.parse(row.monthly_targets).reduce((sum,[month,target])=>
-          sum+effectiveCalendarTarget(target,rankingAdjustments[row.id+'/'+month]),0)})).filter(row=>row.target>0);
-        ranks.sort((a,b)=>b.orders*a.target-a.orders*b.target || b.orders-a.orders || String(a.id).localeCompare(String(b.id)));
-        const salonRanks=ranks.filter(row=>row.salon===user.salon);
-        const positionIn=rows=>{
-          const index=rows.findIndex(row=>row.id===user.id);
-          return index<0?null:{place:index+1,total:rows.length};
+          AND (a.salon=? OR a.salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?))`,
+          user.salon,groupName??null);
+        const entries=new Map(sellersInRanking.map(seller=>[seller.id,{...seller,counts:[0,0,0,0]}]));
+        const lastDay=rankingEnd>=today.slice(0,7)?today:rankingEnd+'-31';
+        const results=await list(db,`SELECT person,counters FROM daily_results
+          WHERE day>=? AND day<=? AND person IN (SELECT value FROM json_each(?)) AND ${includedDailyResult}`,
+          rankingStart+'-01',lastDay,
+          JSON.stringify([...entries.keys()]));
+        for (const row of results) {
+          const {counts}=entries.get(row.person);
+          salesCounts(JSON.parse(row.counters)).forEach((count,index)=>{counts[index]+=count;});
+        }
+        const sorted=[...entries.values()].filter(row=>row.counts.some(count=>count>0))
+          .sort((a,b)=>compareSalesCounts(a,b)||(a.name??'').localeCompare(b.name??'','pl')||a.id-b.id);
+        const standings=rows=>{
+          let place=0;
+          return rows.map((row,index)=>{
+            if (index===0||compareSalesCounts(rows[index-1],row)!==0) place=index+1;
+            return {...row,place};
+          });
         };
-        const self=ranks.find(row=>row.id===user.id);
+        const salonRanks=standings(sorted.filter(row=>row.salon===user.salon));
+        const groupRanks=groupName?standings(sorted):null;
+        const positionIn=rows=>{
+          const self=rows?.find(row=>row.id===user.id);
+          return self?{place:self.place,total:rows.length}:null;
+        };
         ranking={
           salon:positionIn(salonRanks),
-          group:group?positionIn(ranks):null,
-          groupName:group?.group_name??null,
-          percent:self?self.orders/self.target*100:null,
-          podium:(group?ranks:salonRanks).slice(0,3).map((row,index)=>({
-            place:index+1, name:row.name?.trim().split(/\s+/)[0]||'Handlowiec',
-            salon:row.salon, self:row.id===user.id
+          group:positionIn(groupRanks),
+          groupName:groupName??null,
+          podium:(groupRanks??salonRanks).filter(row=>row.place<=3).map(row=>({
+            place:row.place, name:row.name?.trim().split(/\s+/)[0]||'Handlowiec',
+            salon:row.salon, counts:row.counts, self:row.id===user.id
           }))
         };
       }
