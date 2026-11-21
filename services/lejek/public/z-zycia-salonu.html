@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#52294f">
+  <title>Z życia salonu · Bieg Wyżej</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/theme.css">
+  <style>
+    [hidden] { display:none!important; }
+    body { min-height:100dvh; }
+    header { background:var(--primary); color:white; padding:calc(env(safe-area-inset-top) + 8px) 16px 8px; }
+    .top { max-width:960px; margin:auto; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .top a { color:white; display:inline-flex; align-items:center; min-height:44px; }
+    .top form { margin:0; }
+    main { max-width:960px; margin:auto; padding:18px 16px calc(24px + env(safe-area-inset-bottom)); }
+    h1 { font-size:clamp(1.8rem,5vw,2.5rem); margin:0 0 12px; }
+    h2, h3, p { margin:0; }
+    h2 { font-size:1.18rem; }
+    h3 { font-size:1.05rem; overflow-wrap:anywhere; }
+    label { display:grid; gap:4px; font-weight:650; }
+    input, textarea, select, button { font:inherit; }
+    select, input:not([type="file"]), textarea { width:100%; min-height:44px; padding:8px; color:var(--ink); background:white; border:1px solid var(--input-border); border-radius:8px; }
+    textarea { resize:vertical; }
+    input[type="file"] { width:100%; }
+    button { min-height:44px; padding:7px 12px; }
+    .actions { display:flex; align-items:end; flex-wrap:wrap; gap:8px; }
+    .actions > label { flex:1 1 180px; min-width:0; }
+    .actions > button { flex:none; }
+    .columns, .list, form { display:grid; gap:10px; min-width:0; }
+    .columns { margin-top:14px; gap:14px; }
+    .card { background:white; border:1px solid var(--line); border-radius:14px; padding:12px; }
+    .card h2, #feed-title { margin-bottom:8px; }
+    .card time, .hint { color:var(--muted); font-size:.875rem; }
+    article { display:grid; gap:7px; overflow-wrap:anywhere; }
+    article p { white-space:pre-wrap; }
+    article img { width:100%; max-height:420px; object-fit:contain; border-radius:8px; background:var(--tint); }
+    #hit { border-inline-start:4px solid var(--accent); background:var(--tint); }
+    .react[aria-pressed="true"], .poll-choice[aria-pressed="true"] { color:var(--accent-ink); background:var(--tint); border-color:var(--accent-ink); }
+    .poll-choice { display:flex; text-align:start; justify-content:space-between; width:100%; gap:8px; }
+    summary { cursor:pointer; font-weight:750; min-height:44px; padding-block:9px; }
+    #status:not(:empty) { margin-top:10px; }
+    dialog { width:min(580px,calc(100% - 24px)); max-height:calc(100dvh - 32px); background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:14px; padding:16px; }
+    dialog::backdrop { background:#25162480; }
+    dialog h2 { margin-bottom:12px; }
+    @media(min-width:720px) {
+      .columns { grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); align-items:start; }
+    }
+  </style>
+</head>
+<body>
+<header><div class="top">
+  <a id="return-panel" href="/daily.html">← Wróć do panelu</a>
+  <strong id="staff-brand" hidden>Bieg Wyżej</strong>
+  <form action="/logout" method="post"><button class="secondary">Wyloguj się</button></form>
+</div></header>
+<main>
+  <h1>Z życia salonu</h1>
+  <div class="actions">
+    <label>Wybierz ścianę<select id="scope" disabled></select></label>
+    <button id="add-post" type="button" hidden>Dodaj wpis</button>
+  </div>
+  <p id="status" role="status">Wczytywanie ściany…</p>
+  <div class="columns" id="wall" hidden>
+    <div class="list">
+      <section id="hit" class="card" hidden aria-labelledby="hit-title"><h2 id="hit-title">Hit tygodnia</h2><div id="hit-post"></div></section>
+      <section id="feed-section" aria-labelledby="feed-title"><h2 id="feed-title">Ściana</h2><div id="feed" class="list"></div></section>
+    </div>
+    <div class="list">
+      <section id="poll" class="card" aria-labelledby="poll-title">
+        <h2 id="poll-title">Ankieta tygodnia</h2>
+        <div id="ballot" class="list"></div>
+        <details id="poll-editor" hidden>
+          <summary>Utwórz ankietę</summary>
+          <form id="poll-form">
+            <label>Pytanie<input name="question" required maxlength="120"></label>
+            <label>Odpowiedź 1<input name="option" required maxlength="60"></label>
+            <label>Odpowiedź 2<input name="option" required maxlength="60"></label>
+            <label>Odpowiedź 3 (opcjonalnie)<input name="option" maxlength="60"></label>
+            <label>Odpowiedź 4 (opcjonalnie)<input name="option" maxlength="60"></label>
+            <button>Opublikuj ankietę</button>
+          </form>
+        </details>
+      </section>
+      <details id="moderation" class="card" hidden>
+        <summary id="moderation-title">Wpisy do moderacji</summary>
+        <div id="queue" class="list"></div>
+      </details>
+    </div>
+  </div>
+</main>
+<dialog id="post-dialog" aria-labelledby="post-title">
+  <h2 id="post-title">Dodaj wpis</h2>
+  <form id="post-form">
+    <p id="post-scope" class="hint"></p>
+    <label>Tytuł<input name="title" required maxlength="80"></label>
+    <label>Treść<textarea name="message" rows="4" required maxlength="800"></textarea></label>
+    <label>Zdjęcie lub mem (opcjonalnie)<input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></label>
+    <p class="hint">Pomiń dane klientów, numery rejestracyjne i zdjęcia osób bez ich zgody.</p>
+    <p id="post-status" role="status"></p>
+    <div class="actions"><button id="cancel-post" type="button" class="secondary">Anuluj</button><button>Wyślij do moderacji</button></div>
+  </form>
+</dialog>
+<script src="salon-life.js"></script>
+</body>
+</html>

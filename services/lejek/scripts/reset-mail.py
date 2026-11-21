@@ -33,6 +33,7 @@ def main():
         if invite:
             inviter, roles = details
             descriptions = {
+                "staff": "Pracownik: korzystasz ze wspólnej zakładki Z życia salonu.",
                 "seller": "Handlowiec: uzupełniasz działania i wyniki, śledzisz własny lejek i cele oraz korzystasz z lekcji dnia.",
                 "manager": "Kierownik salonu: zarządzasz zespołem w przypisanych salonach, ustawiasz plany i sprawdzasz wyniki handlowców.",
                 "group": "Szef grupy dealerskiej: przeglądasz i porównujesz wyniki salonów w swojej grupie oraz zarządzasz salonami i użytkownikami w zakresie swoich uprawnień.",

@@ -42,6 +42,9 @@ try {
   if (!database.prepare('PRAGMA table_info(daily_drafts)').all().some(column=>column.name==='saved_at')) {
     database.exec(readFileSync('drizzle/0035_daily_draft_saved_at.sql','utf8'));
   }
+  if (!database.prepare("SELECT 1 FROM sqlite_schema WHERE name='salon_life_posts'").get()) {
+    database.exec(readFileSync('drizzle/0036_salon_life.sql','utf8'));
+  }
   database.exec('COMMIT');
 } catch(error) { database.exec('ROLLBACK'); throw error; }
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
@@ -379,7 +382,8 @@ createServer(async (req,res)=>{
     let bytes=0;
     const host=req.headers.host;
     const origin=allowedHosts.has(host)?'https://'+host:previewOrigin;
-    const maxBytes=req.method==='POST'&&new URL(req.url,origin).pathname==='/api/lesson-import'?21_000_000:65_536;
+    const pathname=new URL(req.url,origin).pathname;
+    const maxBytes=req.method!=='POST'?65_536:pathname==='/api/lesson-import'?21_000_000:pathname==='/api/salon-life'?260_000:65_536;
     for await(const chunk of req) {
       bytes+=chunk.length;
       if(bytes>maxBytes){res.writeHead(413);res.end();return;}

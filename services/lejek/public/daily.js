@@ -331,7 +331,7 @@ const remainingDays = (start,end,isScheduled=isSalonWorkday) => {
   return count;
 };
 const monthStart = (year,month) => new Date(Date.UTC(year,month,1)).toISOString().slice(0,10);
-const panelNames={admin:'Panel administratora',group:'Panel szefa grupy dealerskiej',manager:'Panel kierownika salonu',seller:'Panel handlowca'};
+const panelNames={admin:'Panel administratora',group:'Panel szefa grupy dealerskiej',manager:'Panel kierownika salonu',seller:'Panel handlowca',staff:'Z życia salonu'};
 const detailParams=new URLSearchParams(location.search);
 const detailSeller=detailParams.get('handlowiec');
 const previewTarget=detailParams.get('podglad');
@@ -1375,6 +1375,7 @@ function renderToday(records,metrics) {
   }
 
   renderResultsCard(todayResults,metrics,'Brak planu na ten miesiąc');
+  $('#life-headline').textContent=data.salonLifeHeadline??'Zobacz wpisy i ankietę zespołu';
 }
 
 function renderSeller() {
@@ -2537,7 +2538,7 @@ salonPlans.addEventListener('toggle',()=>{
 });
 
 const mobilePanel=matchMedia('(max-width:850px)');
-const shortPanelNames={seller:'Handlowiec',manager:'Kierownik',group:'Szef grupy',admin:'Administrator'};
+const shortPanelNames={seller:'Handlowiec',manager:'Kierownik',group:'Szef grupy',admin:'Administrator',staff:'Pracownik'};
 const mobileAccount=$('#mobile-account');
 const mobileAccountToggle=$('#mobile-account-open');
 const panelHeader=$('.panel-header');
@@ -2955,7 +2956,7 @@ function updateUserRoleFields() {
   for (const input of choices) input.setCustomValidity('');
   available[0]?.setCustomValidity(roles.length?'':'Wybierz co najmniej jedną rolę użytkownika.');
   const group=roles.includes('group');
-  const salon=roles.includes('manager')||roles.includes('seller');
+  const salon=roles.some(role=>role!=='group');
   $('#user-group-label').hidden=!group;
   $('#user-salon-label').hidden=!salon;
   userEditor.elements.dealerGroup.disabled=Boolean(fixedUserGroup);
@@ -2971,7 +2972,7 @@ function loadUserEditor() {
   $('#user-edit-heading').textContent=selected?.name??'';
   const previewLinks=$('#admin-user-preview-links');
   const canPreview=data?.role==='admin'&&!managerPreviewSalon&&!groupPreviewName&&selected;
-  const roles=canPreview?['group','manager','seller'].filter(role=>selected.roles.split(',').includes(role)):[];
+  const roles=canPreview?['group','manager','seller','staff'].filter(role=>selected.roles.split(',').includes(role)):[];
   previewLinks.replaceChildren(...roles.map(role=>{
     const link=document.createElement('a');
     link.href=userPreviewUrl(selected.email,role);
@@ -3006,7 +3007,7 @@ function renderUserEditor(view) {
   const visibleSalons=new Set(view.salons.map(({salon})=>salon));
   managedUsers=data.users.filter(user=>!delegated||
     visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
-    (view.role!=='manager'||user.roles==='seller'));
+    (view.role!=='manager'||user.roles.split(',').every(role=>['seller','staff'].includes(role))));
   fixedUserGroup=view.role==='group'?view.dealerGroup:'';
   const managerRole=$('#user-manager-role');
   managerRole.hidden=view.role==='manager';
@@ -3599,7 +3600,17 @@ async function refresh() {
 }
 
 async function applyDailySnapshot(snapshot) {
+  if (snapshot.role==='staff') {
+    const params=new URLSearchParams({role:'staff'});
+    if (previewTarget) params.set('podglad',previewTarget);
+    if (!previewTarget) sessionStorage.setItem('lejek-active-role','staff');
+    location.replace(snapshot.redirect+'?'+params);
+    return;
+  }
   data=snapshot;
+  const lifeParams=new URLSearchParams({role:data.role});
+  if (previewTarget) lifeParams.set('podglad',previewTarget);
+  for (const link of document.querySelectorAll('[data-life-link]')) link.href='/z-zycia-salonu.html?'+lifeParams;
   const month=data.today.slice(0,7);
   const [year,number]=month.split('-').map(Number);
   for (const panel of historyPanels) {

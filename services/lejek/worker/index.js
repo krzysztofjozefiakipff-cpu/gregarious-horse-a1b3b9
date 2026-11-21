@@ -205,7 +205,7 @@ async function handle(request, env, buildDailyReport=false) {
   const assigned = await db.prepare('SELECT id, name, salon, role FROM accounts WHERE email=?').bind(email).first();
   const head=await db.prepare('SELECT group_name FROM dealer_group_heads WHERE email=?').bind(email).first();
   const explicitRoles=assigned?await list(db,'SELECT role FROM account_roles WHERE person=?',assigned.id):[];
-  const roles=owner?['admin']:explicitRoles.length?['group','manager','seller'].filter(role=>
+  const roles=owner?['admin']:explicitRoles.length?['group','manager','seller','staff'].filter(role=>
     explicitRoles.some(row=>row.role===role)&&(role!=='group'||head))
     :head?['group']:['manager','seller'].includes(assigned?.role)?[assigned.role]:[];
   if (!roles.length) return json({error:'Administrator musi przypisać Ci rolę w lejku.'},403);
@@ -213,12 +213,18 @@ async function handle(request, env, buildDailyReport=false) {
   if (requested&&!roles.includes(requested)&&(preview||request.method!=='GET')) return json({error:'Nie masz już wybranej roli. Odśwież widok.'},403);
   const role=roles.includes(requested)?requested:roles[0];
   if (managementPage) {
+    if (role==='staff') return new Response(null,{status:303,headers:{...headers,Location:'/z-zycia-salonu.html'}});
     return role==='seller'
       ? new Response(null,{status:303,headers:{...headers,Location:'/daily.html'}})
       : serveAsset(path,request.method);
   }
 
   const user={...assigned,role,group:head?.group_name};
+  if (path==='/api/salon-life'||path==='/api/salon-life/photo') return handleSalonLife(request,url,db,user,roles,email,preview);
+  if (role==='staff') {
+    if (path==='/api/daily'&&request.method==='GET') return json({role,redirect:'/z-zycia-salonu.html'});
+    return json({error:'To konto ma dostęp do zakładki Z życia salonu.'},403);
+  }
   const signedInAs=assigned?.name?.trim()||email;
   const previewUser=preview?{name:signedInAs,viewer}:null;
   const invitedNewAccount=async(address,roles)=>{
@@ -254,7 +260,7 @@ async function handle(request, env, buildDailyReport=false) {
   const canManage=['admin','group','manager'].includes(user.role);
   // A delegated operator may manage only subordinate accounts in their full scope.
   const delegatedScope=user.role==='manager'
-    ? filters.manager+' AND '+accountRole('a','seller')+' AND NOT '+accountRole('a','manager')
+    ? filters.manager+' AND ('+accountRole('a','seller')+' OR '+accountRole('a','staff')+') AND NOT '+accountRole('a','manager')
     : filters.group+` AND NOT EXISTS (
       SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND NOT EXISTS (
         SELECT 1 FROM dealer_group_salons gs WHERE gs.salon=ms.salon AND gs.group_name=?
@@ -660,7 +666,10 @@ async function handle(request, env, buildDailyReport=false) {
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
-      return json({signedInAs,previewUser,users,roles,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      const salonLife=personal&&!period?await db.prepare(`SELECT title FROM salon_life_posts
+        WHERE status='approved' AND scope='salon' AND audience=?
+        ORDER BY published_day DESC,id DESC LIMIT 1`).bind(user.salon).first():null;
+      return json({signedInAs,previewUser,users,roles,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -999,7 +1008,7 @@ async function handle(request, env, buildDailyReport=false) {
     if (!env.inviteReady) return json({error:'Wysyłka zaproszeń jest chwilowo niedostępna.'},503);
     const explicit=await list(db,'SELECT role FROM account_roles WHERE person=?',account.id);
     const roles=(explicit.length?explicit.map(row=>row.role):[account.group_name?'group':account.role])
-      .filter(role=>['group','manager','seller'].includes(role)&&(role!=='group'||account.group_name));
+      .filter(role=>['group','manager','seller','staff'].includes(role)&&(role!=='group'||account.group_name));
     if (!roles.length) return json({error:'Konto nie ma przypisanej roli.'},409);
     const sent=await env.sendInvitation(address,signedInAs,roles).catch(()=>false);
     return sent?json({ok:true}):json({error:'Nie udało się wysłać zaproszenia. Spróbuj ponownie za chwilę.'},503);
@@ -1033,10 +1042,10 @@ async function handle(request, env, buildDailyReport=false) {
   if (path==='/api/users' && canManage) {
     const {firstName,lastName,phone,roles:chosen,salon,dealerGroup}=body;
     const needsSalon=Array.isArray(chosen)&&chosen.some(role=>role!=='group');
-    if (!Array.isArray(chosen)||!chosen.length||chosen.length>3||new Set(chosen).size!==chosen.length||
-        !chosen.every(role=>['group','manager','seller'].includes(role))||
+    if (!Array.isArray(chosen)||!chosen.length||chosen.length>4||new Set(chosen).size!==chosen.length||
+        !chosen.every(role=>['group','manager','seller','staff'].includes(role))||
         (needsSalon&&!textValid(salon))||!textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim()))
-      return json({error:'Podaj dane użytkownika i zaznacz co najmniej jedną rolę. Dla kierownika lub handlowca wybierz salon.'},400);
+      return json({error:'Podaj dane użytkownika i zaznacz co najmniej jedną rolę. Wybierz salon dla każdej roli związanej z salonem.'},400);
     const address=body.email.trim().toLowerCase();
     const current=await db.prepare('SELECT id,role FROM accounts WHERE email=?').bind(address).first();
     const creating=body.createOnly===true||!current;
@@ -1056,7 +1065,7 @@ async function handle(request, env, buildDailyReport=false) {
     const createOnly=body.createOnly===true;
     if (wantsGroup&&user.role==='group'&&(!createOnly||dealerGroup!=null&&dealerGroup!==''&&dealerGroup!==user.group))
       return json({error:'Szef grupy może nadać tę rolę tylko nowemu użytkownikowi w swojej grupie.'},403);
-    if (user.role==='manager'&&chosen.some(role=>role!=='seller') ||
+    if (user.role==='manager'&&chosen.some(role=>!['seller','staff'].includes(role)) ||
         !owner&&needsSalon&&!managedSalons.has(salon.trim()))
       return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
     if (!owner&&!createOnly&&!await canEditDelegated(address))
