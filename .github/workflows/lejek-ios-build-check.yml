@@ -19,10 +19,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bieg-wyzej/www"
           cd "$RUNNER_TEMP/bieg-wyzej"
           printf '%s\n' '{"name":"bieg-wyzej-test","version":"0.1.0","private":true}' > package.json
-          printf '%s\n' '{"appId":"pl.biegwyzej.pilot","appName":"Bieg Wyżej Test","webDir":"www","server":{"url":"https://lejek.carvamo.com/login"}}' > capacitor.config.json
+          printf '%s\n' '{"appId":"pl.biegwyzej.pilot","appName":"Bieg Wyżej Test","webDir":"www","server":{"url":"https://lejek.carvamo.com/","appStartPath":"login"}}' > capacitor.config.json
           printf '%s\n' '<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Bieg Wyżej Test</title></head><body><p>Połącz się z internetem i uruchom Bieg Wyżej ponownie.</p></body></html>' > www/index.html
           npm install --save-exact @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/ios@8.6.2
           npx cap add ios
+          /usr/libexec/PlistBuddy -c 'Add :ITSAppUsesNonExemptEncryption bool false' ios/App/App/Info.plist
       - name: Sign and upload to internal TestFlight
         env:
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
