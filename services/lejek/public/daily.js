@@ -837,7 +837,7 @@ function periodMetrics(snapshot,start,count) {
     const daily=values[currentIndex];
     return {...metric,actual,goal,target:sum(values,'target'),delta:goal==null?null:actual-goal,
       doneToday:daily?.doneToday??0,todayTarget:daily&&isScheduled(snapshot.today)
-        ?snapshot.dailyGoalCorrection?.[index]??daily.todayTarget:daily?.todayTarget??null};
+        ?(snapshot.dailyGoalPlan?snapshot.dailyGoalPlan[index]:snapshot.dailyGoalCorrection?.[index]??daily.todayTarget):daily?.todayTarget??null};
   });
 }
 
@@ -911,7 +911,7 @@ function monthlyMetrics(records,current,monthPlan,funnel,reviewTarget,day,daysLe
   const monthEnd=monthStart(year,month);
   const daysMonth=remainingDays(day.slice(0,7)+'-01',monthEnd,isScheduled);
   const fraction=daysMonth?(remainingDays(day.slice(0,7)+'-01',day,isScheduled)+Number(isScheduled(day)))/daysMonth:0;
-  const monthTargets=monthPlan?sourceTargets(monthPlan):[];
+  const monthTargets=monthPlan==null?[]:sourceTargets(monthPlan);
   const custom=funnel?JSON.parse(funnel.targets):[];
   const customIndex={1:0,4:1,5:2,0:3,2:4,6:5,10:6,8:7};
   return columns.map(([index,label])=>{

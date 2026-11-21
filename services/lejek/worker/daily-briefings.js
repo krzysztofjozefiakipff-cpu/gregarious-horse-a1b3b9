@@ -19,6 +19,12 @@ function briefingRemainingPlan(targets,past,days,today,todayGoals) {
   });
 }
 
+function acceptedBriefingGoals(signoff,dayOff) {
+  if (!signoff) return null;
+  const [goals,savedDayOff]=JSON.parse(signoff.accepted_plan);
+  return savedDayOff===dayOff?goals:null;
+}
+
 async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTargets,salonPlans,managerId}) {
   const yesterday=new Date(Date.parse(today)-86400000).toISOString().slice(0,10);
   const month=today.slice(0,7);
@@ -49,7 +55,8 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
     list(db,'SELECT * FROM daily_briefing_settings WHERE day BETWEEN ? AND ? AND '+scope+' ORDER BY day DESC',first,today,...params),
     list(db,`SELECT r.*,a.name AS manager_name FROM daily_briefing_reviews r JOIN accounts a ON a.id=r.manager
       WHERE r.day IN (SELECT value FROM json_each(?)) AND `+scope,JSON.stringify(activeDays),...params),
-    list(db,'SELECT * FROM daily_briefing_signoffs WHERE day=? AND '+scope,today,...params),
+    list(db,'SELECT * FROM daily_briefing_signoffs WHERE (day=? OR day IN (SELECT value FROM json_each(?))) AND '+scope,
+      today,JSON.stringify(activeDays),...params),
     calendarAdjustments(db,months,scope,...params),
     Promise.all(salons.flatMap(({salon})=>months.map(async m=>[salon+'/'+m,new Map((await sellerTargets(salon,m)).map(plan=>[plan.id,plan]))])))
   ]);
@@ -58,7 +65,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
   const personalSettings=Map.groupBy(settings,row=>row.person);
   const participants=Map.groupBy(sellers,row=>row.salon);
   const reviewed=new Map(reviews.map(row=>[row.person+'/'+row.day,row]));
-  const signed=new Map(signoffs.map(row=>[row.person,row]));
+  const signed=new Map(signoffs.map(row=>[row.person+'/'+row.day,row]));
   const plansByMonth=new Map(plans);
   const salonPlanByName=new Map(salonPlans.map(row=>[row.salon,row]));
 
@@ -100,16 +107,19 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const review=reviewed.get(id+'/'+previousDay);
       const matched=review&&previousStatus==='recorded'&&[reviewVersion,JSON.stringify(previousActual)].includes(review.actuals);
       const correction=todaySettings?JSON.parse(todaySettings.goals):Array(10).fill(null);
-      const previousGoals=matched?JSON.parse(review.goals):previousDay?briefingGoalValues(monthlyGoals(reviewMonth),reviewPast,reviewDays,
-        previousDay,previousSettings?JSON.parse(previousSettings.goals):[]):[];
+      const previousGoals=matched?JSON.parse(review.goals):previousDay
+        ?acceptedBriefingGoals(signed.get(id+'/'+previousDay),null)??briefingGoalValues(monthlyGoals(reviewMonth),reviewPast,reviewDays,
+          previousDay,previousSettings?JSON.parse(previousSettings.goals):[])
+        :[];
       const workday=days.includes(today);
-      const todayGoals=briefingGoalValues(sales,past,days,today,correction);
       const defaultTodayGoals=briefingGoalValues(sales,past,days,today);
       const calendarToday=dates.filter(row=>row.day===today);
       const dayOff=workday?null:polishHoliday(today)??calendarToday.find(row=>row.status==='approved'&&row.kind!=='zero')?.kind??'off';
       const pendingToday=workday&&calendarToday.some(row=>row.status==='pending');
+      const signoff=signed.get(id+'/'+today);
+      const storedGoals=acceptedBriefingGoals(signoff,dayOff);
+      const todayGoals=storedGoals??briefingGoalValues(sales,past,days,today,correction);
       const planVersion=JSON.stringify([todayGoals,dayOff]);
-      const signoff=signed.get(id);
       const previousReady=previousStatus==='none'||Boolean(matched);
       const accepted=previousReady&&!pendingToday&&signoff?.accepted_plan===planVersion;
       const completionVersion=JSON.stringify([previousDay,matched?review.reviewed_at:null,reviewVersion,planVersion]);
