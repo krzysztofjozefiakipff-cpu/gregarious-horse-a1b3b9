@@ -709,12 +709,27 @@ async function handle(request, env, buildDailyReport=false) {
         goals=excluded.goals,reviewed_at=excluded.reviewed_at
       WHERE daily_briefing_reviews.actuals<>excluded.actuals`)
       .bind(person,current.review.day,user.id,reviewVersion,JSON.stringify(current.review.goals),timestamp);
-    if (action==='confirm'&&(current.review.status!=='recorded'||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
+    if (action==='confirm'&&(!['recorded','off'].includes(current.review.status)||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
         (version!==undefined&&version!==current.review.version))) {
       return json({error:'Wynik jest niezatwierdzony lub zmienił się po otwarciu odprawy. Odśwież dane.'},409);
     }
     if (action==='confirm'&&!confirmWithEdits) {
       await reviewStatement(current.review.version).run();
+    } else if (action==='resolve-previous') {
+      const {absence=null}=body;
+      const {review}=current;
+      if (!['draft','pending','missing'].includes(review.status)||version!==review.version||review.day>=today)
+        return json({error:'Stan poprzedniego dnia zmienił się. Odśwież odprawę.'},409);
+      if (absence!==null) {
+        if (!calendarKinds.includes(absence)||absence==='saturday'&&new Date(review.day+'T00:00:00Z').getUTCDay()!==6)
+          return json({error:'Wybierz prawidłowy rodzaj dnia wolnego.'},400);
+      } else {
+        if (!validDailyRows(rows)||rows.length!==sourceCount||rows.some(row=>row.length!==11))
+          return json({error:'Sprawdź liczby w wykonaniu według źródeł.'},400);
+        normalizeWalkIn(rows);
+      }
+      const resolved=await resolveBriefingPrevious(db,{person,today,manager:user.id,review,rows,absence,timestamp,reviewStatement});
+      if (!resolved) return json({error:'Wpis, szkic lub grafik zmienił się. Odśwież odprawę.'},409);
     } else if (action==='accept-today') {
       if (!current.signoff.previousReady) return json({error:'Najpierw potwierdź wykonanie z poprzedniego dnia pracy.'},409);
       if (current.pendingToday) return json({error:'Najpierw rozpatrz zgłoszenie w kalendarzu pracy.'},409);

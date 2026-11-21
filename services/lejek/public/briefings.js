@@ -49,9 +49,9 @@ function briefingNumberField(label,value,placeholder) {
   return input;
 }
 
-function briefingResultEditor(person,report,updateActuals) {
+function briefingResultEditor(person,report,updateActuals,resolve=false) {
   const form=reportElement('form');
-  const original=person.review.rows;
+  const original=person.review.rows??[];
   const fields=sources.map((source,row)=>columns.map(([index,label])=>
     briefingNumberField(source+' · '+label,original[row]?.[index]||'',0)));
   const updateWalkIn=()=>{
@@ -82,11 +82,11 @@ function briefingResultEditor(person,report,updateActuals) {
   const update=()=>{
     const values=readRows();
     const changed=JSON.stringify(values)!==baseline;
-    save.textContent=changed
+    save.textContent=resolve?'Zapisz i potwierdź wykonanie':changed
       ?(person.review.confirmed?'Zapisz zmiany i potwierdź ponownie':'Zapisz zmiany i potwierdź')
       :'Potwierdź wykonanie';
     save.disabled=Boolean(person.review.confirmed)&&!changed;
-    updateActuals(changed?columns.map(([index])=>values.reduce((total,row)=>total+row[index],0)):person.review.actual);
+    updateActuals(changed?columns.map(([index])=>values.reduce((total,row)=>total+row[index],0)):person.review.actual??columns.map(()=>null));
   };
   form.append(reportElement('h4','Wpis według źródeł'),entry,save,status);
   form.addEventListener('input',update);
@@ -97,8 +97,9 @@ function briefingResultEditor(person,report,updateActuals) {
     const edits=modified()?{rows:readRows(),previousRows:original}:{};
     save.disabled=true;
     try {
-      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'confirm',
-        actual:person.review.actual,version:person.review.version,...edits});
+      const result=resolve?{action:'resolve-previous',rows:readRows()}
+        :{action:'confirm',actual:person.review.actual,...edits};
+      await api('/api/daily-briefing',{person:person.id,day:report.today,version:person.review.version,...result});
       await loadBriefingPanel('Potwierdzono poprzedni dzień pracy · '+person.name,person.id);
     } catch(error) {
       status.textContent=error.message;
@@ -218,7 +219,52 @@ function briefingSourceReview(rows) {
   return details;
 }
 
-const briefingReviewStates={recorded:'Do potwierdzenia',draft:'Zapis roboczy',pending:'Zgłoszenie w toku',missing:'Brak wpisu',none:'Nie dotyczy'};
+function briefingPreviousResolution(person,report,renderActuals) {
+  const section=reportElement('div');
+  section.className='briefing-resolution';
+  const label=reportElement('label','Ustalenie z rozmowy');
+  const choice=reportElement('select');
+  choice.append(new Option('Wybierz',''),new Option('Dzień pracy · zapisz wykonanie','work'),new Option('Dzień wolny','off'));
+  label.append(choice);
+  const work=briefingResultEditor(person,report,renderActuals,true);
+  const absenceForm=reportElement('form');
+  const absenceLabel=reportElement('label','Rodzaj dnia wolnego');
+  const absence=reportElement('select');
+  absence.required=true;
+  absence.append(new Option('Wybierz rodzaj',''));
+  const kinds=['leave','sick','training','other'];
+  if (new Date(person.review.day+'T00:00:00Z').getUTCDay()===6) kinds.push('saturday');
+  for (const kind of kinds) absence.append(new Option(calendarKinds[kind],kind));
+  if (kinds.includes(person.review.absenceRequest?.kind)) absence.value=person.review.absenceRequest.kind;
+  absenceLabel.append(absence);
+  const save=reportElement('button','Zapisz i potwierdź dzień wolny');
+  save.type='submit';
+  const status=briefingStatusLine();
+  absenceForm.append(absenceLabel,save,status);
+  absenceForm.onsubmit=async event=>{
+    event.preventDefault();
+    save.disabled=true;
+    try {
+      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'resolve-previous',
+        version:person.review.version,absence:absence.value});
+      await loadBriefingPanel('Zapisano dzień wolny · '+person.name,person.id);
+    } catch(error) {
+      status.textContent=error.message;
+      save.disabled=false;
+    }
+  };
+  const update=()=>{
+    work.hidden=choice.value!=='work';
+    absenceForm.hidden=choice.value!=='off';
+  };
+  choice.value=person.review.status==='draft'?'work':'';
+  choice.onchange=update;
+  update();
+  section.append(label,work,absenceForm);
+  return section;
+}
+
+const briefingReviewStates={recorded:'Do potwierdzenia',draft:'Zapis roboczy',pending:'Zgłoszenie w toku',missing:'Brak wpisu',off:'Dzień wolny'};
 
 function briefingReviewStep(person,report,canEdit) {
   const {review}=person;
@@ -226,21 +272,23 @@ function briefingReviewStep(person,report,canEdit) {
   const state=review.confirmed?'Potwierdzony':briefingReviewStates[review.status];
   const step=briefingStep(1,title,state);
   if (review.day&&review.day!==report.yesterday) step.append(reportElement('p','Kalendarz pominął dni wolne.'));
-  if (review.status==='none') step.append(reportElement('p','Ewidencja handlowca nie obejmuje wcześniejszego dnia pracy.'));
   if (review.status==='draft') step.append(
-    reportElement('p','Możesz sprawdzić liczby. Potwierdzenie będzie dostępne po zatwierdzeniu wpisu przez handlowca.'));
-  if (review.status==='pending') step.append(
-    reportElement('p','Zgłoszenie na ten dzień czeka na decyzję.'),briefingCalendarLink());
+    reportElement('p','Handlowiec zapisał szkic. Sprawdź liczby i zapisz ustalenia z rozmowy.'));
+  if (review.absenceRequest) {
+    const {kind,reason}=review.absenceRequest;
+    const label=kind==='pending'?'Brak aktywności':calendarKinds[kind];
+    step.append(reportElement('p','Oczekujące zgłoszenie · '+label+(reason?' · '+reason:'')));
+  }
   if (review.status==='missing') step.append(
-    reportElement('p','Handlowiec nie zapisał wpisu na ten dzień. Jeśli miał wolne, sprawdź zgłoszenie w kalendarzu.'),briefingCalendarLink());
+    reportElement('p','Handlowiec nie zapisał wpisu na ten dzień. Uzupełnij wykonanie lub oznacz dzień wolny.'));
   if (review.stale) step.append(reportElement('p','Wyniki zmieniły się od potwierdzenia. Sprawdź je ponownie.'));
-  if (!review.actual) return step;
+  if (review.status==='off') step.append(reportElement('p',calendarKinds[review.dayOff]??'Dzień wolny'));
   if (review.confirmed) step.append(reportElement('p','Potwierdził: '+review.confirmed.by));
-  const actualCells=review.actual.map(()=>reportElement('span'));
+  const actualCells=columns.map(()=>reportElement('span'));
   const renderActuals=values=>values.forEach((value,i)=>{
     const cell=actualCells[i];
-    cell.textContent=value;
-    const behind=review.goals[i]!=null&&value<review.goals[i];
+    cell.textContent=briefingDisplay(value);
+    const behind=value!=null&&review.goals[i]!=null&&value<review.goals[i];
     cell.classList.toggle('briefing-below-target',behind);
     if (behind) {
       const note=reportElement('span',' · poniżej celu');
@@ -248,14 +296,16 @@ function briefingReviewStep(person,report,canEdit) {
       cell.append(note);
     }
   });
-  renderActuals(review.actual);
+  renderActuals(review.actual??columns.map(()=>null));
   step.append(briefingOverview(['Aktywność','Plan','Wykonanie'],
     columns.map(([,label],i)=>[label,review.goals[i],actualCells[i]])));
-  if (canEdit&&review.status==='recorded'&&review.rows) {
+  if (canEdit&&['draft','pending','missing'].includes(review.status)) {
+    step.append(briefingPreviousResolution(person,report,renderActuals));
+  } else if (canEdit&&review.status==='recorded'&&review.rows) {
     step.append(briefingResultEditor(person,report,renderActuals));
   } else {
     if (review.rows) step.append(briefingSourceReview(review.rows));
-    if (canEdit&&review.status==='recorded'&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
+    if (canEdit&&['recorded','off'].includes(review.status)&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
       {action:'confirm',actual:review.actual,version:review.version},'Potwierdzono poprzedni dzień pracy · '+person.name);
   }
   return step;
@@ -368,7 +418,7 @@ function renderBriefingSeller(person,report,open,salon) {
   if (person.editable) {
     const stage=signoff.accepted?3:signoff.previousReady?2:1;
     details.dataset.actionable=String(canEdit&&!signoff.completed&&
-      (stage===1?review.status==='recorded':!person.pendingToday));
+      (stage===1||!person.pendingToday));
     const workflow=reportElement('div');
     workflow.className='briefing-workflow';
     workflow.append(briefingStepper(stage,signoff.completed));
