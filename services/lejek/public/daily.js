@@ -1674,6 +1674,7 @@ function renderSalonSummary(view,team=[],period=null) {
   if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
   if (!period&&!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
   const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
+  const wholeNumber=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0});
   const [year,month]=view.today.split('-').map(Number);
   const first=monthStart(year,month-1);
   const end=monthStart(year,month);
@@ -1745,9 +1746,9 @@ function renderSalonSummary(view,team=[],period=null) {
       row.append(metric);
       const pace=paces[index];
       const expected=row.insertCell();
-      expected.textContent=pace?number.format(pace.expected):'—';
+      expected.textContent=pace?wholeNumber.format(pace.expected):'—';
       const forecast=row.insertCell();
-      forecast.textContent=pace?.forecast!=null?number.format(pace.forecast):'—';
+      forecast.textContent=pace?.forecast!=null?wholeNumber.format(pace.forecast):'—';
       if (pace?.forecast!=null) forecast.className=pace.tone;
       if (!pace) {
         const reason=plan.partial?.[index]?'Cel dostępny dla części miesięcy':plan.configured[index]?'Cel zerowy':'Brak celu';
