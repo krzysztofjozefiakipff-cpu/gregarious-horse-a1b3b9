@@ -242,12 +242,20 @@ async function handle(request) {
     }
     return response;
   }
+  const token=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek=([\w.-]{1,4096})(?:;|$)/)?.[1];
+  const localToken=token?.match(/^bw-([a-f0-9]{64})$/)?.[1];
+  const sharedToken=token?.startsWith('shared-')?token.slice(7):null;
+  const sessionAccount=async()=>localToken?identity.account(localToken):sharedToken?adminAccount(sharedToken):null;
   if (Object.hasOwn(forms,path)) {
     const csrf=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek-login=([a-f0-9]{64})(?:;|$)/)?.[1];
     const render=(message='',status=200,token='')=>loginForm(csrf??randomBytes(32).toString('hex'),message,status,path,token);
     if (request.method==='GET') {
       const params=new URL(request.url).searchParams;
       if (path==='/login'&&params.get('password')==='changed') return render('Hasło zostało zapisane. Zaloguj się ponownie.');
+      if (path==='/login') {
+        const account=await sessionAccount().catch(()=>null);
+        if (account?.id&&account?.email) return redirect('/daily.html');
+      }
       if (path==='/reset-password') {
         const token=params.get('token')??'';
         return validResetToken(token)?render('',200,token):render('Link do resetu jest nieprawidłowy.',400);
@@ -322,14 +330,11 @@ async function handle(request) {
     }
     return redirect('/daily.html',{'Set-Cookie':cookie+'=shared-'+session+cookieOptions+'; Max-Age=28800'});
   }
-  const token=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek=([\w.-]{1,4096})(?:;|$)/)?.[1];
-  const localToken=token?.match(/^bw-([a-f0-9]{64})$/)?.[1];
   if(path==='/logout' && request.method==='POST' && request.headers.get('Origin')===origin) {
     if (localToken) identity.logout(localToken);
     return redirect('/login',{'Set-Cookie':cookie+'='+cookieOptions+'; Max-Age=0'});
   }
-  const sharedToken=token?.startsWith('shared-')?token.slice(7):null;
-  const account=localToken?identity.account(localToken):sharedToken?await adminAccount(sharedToken):null;
+  const account=await sessionAccount();
   if (!account?.email || !account?.id) {
     if(path.startsWith('/api/')) return Response.json({error:'Zaloguj się ponownie.'},{status:401,headers});
     return redirect('/login');
