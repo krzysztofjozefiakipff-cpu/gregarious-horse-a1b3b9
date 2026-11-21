@@ -299,28 +299,29 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #daily [data-seller-panel="plan"] .order-plan, #daily [data-seller-panel="plan"] #pace,
 #daily [data-seller-panel="plan"] #motivation { margin:0; min-width:0; }
 #seller-ranking {
-  min-width:0; border:1px solid var(--line); border-radius:12px; background:white;
+  min-width:0; padding:10px 12px 12px; border-radius:12px;
+  background:linear-gradient(120deg,var(--accent-ink),var(--primary)); color:white;
 }
-#seller-ranking summary {
-  display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; min-height:44px;
-  padding:6px 12px; cursor:pointer; color:var(--accent-ink); list-style:none;
+.ranking-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 12px; }
+#ranking-title { margin:0; font-size:1.05rem; }
+#ranking-position, #ranking-empty { font-size:.875rem; color:var(--on-plum-muted); }
+#ranking-empty { margin-block-start:6px; }
+.podium {
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px; margin:8px 0 0; padding:0; list-style:none;
 }
-#seller-ranking summary::-webkit-details-marker { display:none; }
-#seller-ranking summary::after {
-  content:""; width:7px; height:7px; border:solid currentColor; border-width:0 2px 2px 0;
-  transform:rotate(45deg); margin-inline-start:auto; margin-inline-end:2px;
-}
-#seller-ranking[open] summary::after { transform:rotate(225deg); }
-#ranking-position { color:var(--muted); font-size:.875rem; }
-.ranking-body { padding:8px 12px 12px; border-block-start:1px solid var(--line); }
-.ranking-body > p, #ranking-salon { font-size:.875rem; color:var(--muted); }
-.ranking-body > p + p { margin-block-start:4px; }
-.ranking-body table { width:100%; table-layout:fixed; margin-block-start:6px; font-size:.875rem; }
-.ranking-body th, .ranking-body td { padding:5px 2px; text-align:center; vertical-align:middle; white-space:normal; }
-.ranking-body th:first-child { width:44%; text-align:start; padding-inline:4px; overflow-wrap:anywhere; }
-.ranking-body th:not(:first-child) { font-size:.75rem; color:var(--muted); }
-.ranking-body th small { display:block; font-weight:400; color:var(--muted); }
-.ranking-body tr[data-self] { background:var(--tint); }
+.podium:not(:has(> li:nth-child(3))) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.podium:has(> li:only-child) { grid-template-columns:minmax(0,1fr); }
+.podium > li { min-width:0; padding:5px 4px; border-radius:8px; background:#693662; text-align:center; overflow-wrap:anywhere; }
+.podium > li[data-place="1"] { background:#ffda84; color:#332000; }
+.podium > li[data-place="2"] { margin-block-start:7px; }
+.podium > li[data-place="3"] { margin-block-start:12px; }
+.podium:has(> li:nth-child(3)) > li[data-place="1"] { grid-area:1/2; }
+.podium:has(> li:nth-child(3)) > li[data-place="2"] { grid-area:1/1; }
+.podium-place { display:block; font-size:.75rem; font-weight:750; margin-block-end:2px; }
+.podium-seller { display:block; font-size:.875rem; line-height:1.2; }
+.podium-seller + .podium-seller { margin-block-start:5px; }
+.podium-seller small { display:block; font-size:.75rem; }
 .order-plan .cards strong { overflow-wrap:anywhere; }
 #daily .plan-top .order-plan { padding:12px; }
 #daily .plan-top .order-plan h2 { font-size:1.16rem; }
@@ -791,24 +792,14 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   </section>
 
 </div>
-<details id="seller-ranking">
-  <summary><strong id="ranking-title">Ranking</strong><span id="ranking-position"></span></summary>
-  <div class="ranking-body">
-    <p id="ranking-group-name" hidden></p>
-    <p id="ranking-salon" hidden></p>
-    <p id="ranking-empty" hidden>Brak zapisanych wyników sprzedaży w tym okresie.</p>
-    <table id="ranking-table" aria-label="Czołówka rankingu" hidden>
-      <thead><tr>
-        <th scope="col">Handlowiec</th>
-        <th scope="col" aria-label="Zamówienia">Zam.</th>
-        <th scope="col" aria-label="Rejestracje">Rej.</th>
-        <th scope="col" aria-label="Faktury">Fakt.</th>
-        <th scope="col" aria-label="Opinie Google">Google</th>
-      </tr></thead>
-      <tbody id="ranking-podium"></tbody>
-    </table>
+<section id="seller-ranking" aria-labelledby="ranking-title">
+  <div class="ranking-heading">
+    <h2 id="ranking-title">Ranking</h2>
+    <p id="ranking-position" hidden></p>
   </div>
-</details>
+  <ol id="ranking-podium" class="podium" aria-label="Podium" hidden></ol>
+  <p id="ranking-empty" hidden>Brak zapisanych wyników sprzedaży w tym okresie.</p>
+</section>
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
   <div id="pace-items"></div>

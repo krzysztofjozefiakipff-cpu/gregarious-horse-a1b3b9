@@ -637,7 +637,7 @@ async function handle(request, env, buildDailyReport=false) {
           groupName:groupName??null,
           podium:(groupRanks??salonRanks).filter(row=>row.place<=3).map(row=>({
             place:row.place, name:row.name?.trim().split(/\s+/)[0]||'Handlowiec',
-            salon:row.salon, counts:row.counts, self:row.id===user.id
+            salon:row.salon, self:row.id===user.id
           }))
         };
       }
