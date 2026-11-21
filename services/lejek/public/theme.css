@@ -191,3 +191,16 @@ body:has(.persistent-panel-nav:not([hidden])) { padding-bottom:calc(80px + env(s
 @media(max-width:370px) {
   .activity-entry-table tr.mobile-entry-active { grid-template-columns:minmax(0,1fr); }
 }
+
+/* Keep touch scrolling available without letting repeated taps zoom the app. */
+html.lejek-app, .lejek-app * {
+  touch-action: manipulation;
+  touch-action: pan-x pan-y;
+}
+
+@media (pointer: coarse) {
+  /* iOS can zoom on focus when a text field is smaller than 16px. */
+  .lejek-app :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"]), select, textarea) {
+    font-size: max(16px, 1em) !important;
+  }
+}

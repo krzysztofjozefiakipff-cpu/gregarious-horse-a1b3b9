@@ -81,10 +81,10 @@ const publicPages = new Map([
   ['/theme.css', ['text/css', readFileSync('public/theme.css', 'utf8')]]
 ]);
 const loginPage = `<!doctype html>
-<html lang="pl">
+<html lang="pl" class="lejek-app">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#52294f">
   <title>AUTH_TITLE</title>
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
