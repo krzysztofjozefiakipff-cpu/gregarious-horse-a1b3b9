@@ -600,6 +600,9 @@ const briefingPdfDialog=briefingHost.querySelector('#briefing-pdf-dialog');
 const briefingPdfShare=briefingPdfDialog.querySelector('#briefing-pdf-share');
 const briefingPdfDownload=briefingPdfDialog.querySelector('#briefing-pdf-download');
 const briefingPdfStatus=briefingPdfDialog.querySelector('#briefing-pdf-status');
+const briefingPdfOptions=briefingPdfDialog.querySelector('#briefing-pdf-options');
+const briefingPdfPreview=briefingPdfDialog.querySelector('#briefing-pdf-preview');
+const briefingPdfView=briefingPdfDialog.querySelector('#briefing-pdf-view');
 let briefingPdfAddress;
 
 briefingPdfDialog.onclose=()=>{
@@ -607,6 +610,11 @@ briefingPdfDialog.onclose=()=>{
   briefingPdfAddress=undefined;
   briefingPdfDownload.removeAttribute('href');
   briefingPdfShare.onclick=null;
+  briefingPdfPreview.onclick=null;
+  briefingPdfView.querySelector('iframe')?.remove();
+  briefingPdfDialog.classList.remove('previewing');
+  briefingPdfOptions.hidden=false;
+  briefingPdfView.hidden=true;
 };
 
 briefingPdf.onclick=async()=>{
@@ -630,7 +638,16 @@ briefingPdf.onclick=async()=>{
     briefingPdfAddress=URL.createObjectURL(file);
     briefingPdfDownload.href=briefingPdfAddress;
     briefingPdfDownload.download=filename;
-    briefingPdfDialog.querySelector('#briefing-pdf-preview').href=endpoint+'&disposition=inline';
+    briefingPdfPreview.onclick=()=>{
+      const frame=reportElement('iframe');
+      frame.title='Podgląd raportu odprawy';
+      frame.src=endpoint+'&disposition=inline';
+      briefingPdfOptions.hidden=true;
+      briefingPdfView.hidden=false;
+      briefingPdfDialog.classList.add('previewing');
+      briefingPdfView.append(frame);
+      briefingPdfView.querySelector('button').focus();
+    };
     briefingPdfDialog.querySelector('#briefing-pdf-scope').textContent=salon||'Wszystkie salony';
     briefingPdfShare.hidden=!(navigator.share&&navigator.canShare?.(shareData));
     briefingPdfShare.onclick=async()=>{
