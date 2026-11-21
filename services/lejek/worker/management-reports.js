@@ -270,7 +270,8 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
     });
     const summary={salon,totals,targets:salonTargets,people,sources,
       recommendations:type==='marketing'?recommendLeadSources(people,sellerPlans,nextBySalon.get(salon)?.team??[]):[]};
-    if (type==='monthly') summary.expected=reportSalonExpected(summary,days.length,elapsedThrough);
+    if (type==='monthly') return {salon,totals,targets:salonTargets,sources,
+      expected:reportSalonExpected(summary,days.length,elapsedThrough)};
     if (type==='daily') return completeDailySalon({...summary,dailyGoals},month,through,sourceGoals.map((source,index)=>({
       ...source,rate:Math.max(sourceAssumptions[index][0],source.leads?source.orders/source.leads:0)
     })));

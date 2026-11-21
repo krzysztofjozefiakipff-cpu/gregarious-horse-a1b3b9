@@ -264,28 +264,30 @@ def monthly_overview(salons):
     ]
 
 
+def source_conversion_rows(salon):
+    return [(SOURCES[i], source['leads'], source['orders']) for i, source in enumerate(salon['sources'])]
+
+
+def source_conversion_table(rows, *, header_color=INK):
+    return table(['Źródło leadów', 'Leady', 'Zamówienia', 'Konwersja'],
+                 [[name, leads, orders, percent(orders, leads)] for name, leads, orders in rows],
+                 [.46, .16, .19, .19], header_color=header_color)
+
+
 def monthly_report(salon):
-    actuals, targets = salon['totals'], salon['targets']
-    people = salon['people']
-    names = [person['name'] + (' · archiwum' if person['archived'] else '') for person in people]
-    story = [sales_progress(salon)]
-    if people:
-        story.extend([
-            p('Realizacja sprzedaży handlowców', 'section'),
-            table(['Handlowiec (wynik / plan)', *SALES_LABELS.values()], [
-                [name, *[daily_sales_cell(person['actuals'][i], person['targets'][i], person['expected'][i])
-                         for i in SALES]]
-                for name, person in zip(names, people)
-            ], [.32, .17, .17, .17, .17], header_color=PLUM),
-        ])
-    story.extend([p('Aktywności salonu', 'section'), activities(actuals, targets, salon['expected'], range(6))])
-    for name, person in zip(names, people):
-        story.extend([p(name, 'section'), activities(person['actuals'], person['targets'], person['expected'], range(6))])
-    return story
+    return [
+        sales_progress(salon),
+        p('Aktywności salonu', 'section'),
+        activities(salon['totals'], salon['targets'], salon['expected'], range(6)),
+        p('Konwersja według źródła pozyskania', 'section'),
+        p('Konwersja to zamówienia podzielone przez leady z danego źródła w wybranym okresie. '
+          'Bez leadów pokazujemy kreskę.', 'hint'),
+        source_conversion_table(source_conversion_rows(salon), header_color=PLUM),
+    ]
 
 
 def marketing_report(salon):
-    rows = [(SOURCES[i], s['leads'], s['orders']) for i, s in enumerate(salon['sources'])]
+    rows = source_conversion_rows(salon)
     ranked = sorted((row for row in rows if row[1] > 0), key=lambda row: row[2] / row[1], reverse=True)[:7]
     story = []
     if ranked:
@@ -293,9 +295,7 @@ def marketing_report(salon):
         story.append(KeepTogether([p('Najwyższa konwersja według źródła', 'section'),
                                   bars(chart, max(0.01, *(row[1] for row in chart)))]))
     story.append(p('Konwersja źródeł', 'section'))
-    story.append(table(['Źródło leadów', 'Leady', 'Zamówienia', 'Konwersja'],
-                       [[name, leads, orders, percent(orders, leads)] for name, leads, orders in rows],
-                       [.46, .16, .19, .19]))
+    story.append(source_conversion_table(rows))
     story.append(p('Rekomendowane dodatkowe leady', 'section'))
     if salon['recommendations']:
         story.append(table(['Handlowiec', 'Źródło', 'Więcej leadów', 'Konwersja', 'Podstawa'], [
