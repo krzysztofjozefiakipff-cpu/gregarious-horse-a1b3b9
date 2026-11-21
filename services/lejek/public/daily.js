@@ -2731,6 +2731,7 @@ const userSearchName=$('#user-search-name');
 const userSearchPhone=$('#user-search-phone');
 const userSearchResults=$('#user-search-results');
 let managedUsers=[];
+const restoringUsers=new Set();
 let fixedUserGroup='';
 let userEditorRole='';
 let selectedUserEmail='';
@@ -2792,6 +2793,15 @@ function renderUserSearch() {
         arrow.setAttribute('aria-hidden','true');
         arrow.textContent='›';
         result.append(arrow);
+      } else if (!previewTarget&&!managerPreviewSalon&&!groupPreviewName) {
+        const restore=document.createElement('button');
+        restore.type='button';
+        restore.className='secondary user-restore';
+        restore.dataset.restoreEmail=user.email;
+        restore.disabled=restoringUsers.has(user.email);
+        restore.textContent='Przywróć';
+        restore.setAttribute('aria-label','Przywróć konto: '+user.name);
+        result.append(restore);
       }
       item.append(result);
       list.append(item);
@@ -2804,12 +2814,41 @@ function renderUserSearch() {
 userSearchSalon.onchange=renderUserSearch;
 userSearchName.oninput=userSearchPhone.oninput=renderUserSearch;
 userSearchResults.onclick=event=>{
+  const restore=event.target.closest('button[data-restore-email]');
+  if (restore) {
+    void restoreUser(restore);
+    return;
+  }
   const button=event.target.closest('button[data-email]');
   if (!button) return;
   selectedUserEmail=button.dataset.email;
   loadUserEditor();
   $('#user-edit-heading').focus();
 };
+async function restoreUser(button) {
+  const email=button.dataset.restoreEmail;
+  const user=managedUsers.find(user=>user.email===email&&user.archived);
+  if (!user||restoringUsers.has(email)) return;
+  if (!confirm('Przywrócić dostęp do Lejka użytkownikowi „'+user.name+'”?')) return;
+  restoringUsers.add(email);
+  button.disabled=true;
+  const status=$('#user-search-status');
+  status.textContent='Przywracam konto…';
+  try {
+    await api('/api/users/archive',{email,archived:false});
+    await refresh();
+    status.textContent='Przywrócono konto: '+user.name+'.';
+    const active=[...userSearchResults.querySelectorAll('button[data-email]')].find(result=>result.dataset.email===email);
+    active?.focus();
+  } catch(error) {
+    status.textContent=error.message;
+    const current=[...userSearchResults.querySelectorAll('button[data-restore-email]')].find(result=>result.dataset.restoreEmail===email);
+    if (current) current.disabled=false;
+  } finally {
+    restoringUsers.delete(email);
+  }
+}
+
 $('#user-back-to-search').onclick=()=>{
   const previous=selectedUserEmail;
   selectedUserEmail='';
