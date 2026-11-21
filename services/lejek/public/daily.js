@@ -2849,13 +2849,14 @@ async function restoreUser(button) {
   }
 }
 
-$('#user-back-to-search').onclick=()=>{
+function returnToUserSearch() {
   const previous=selectedUserEmail;
   selectedUserEmail='';
   loadUserEditor();
   const result=[...userSearchResults.querySelectorAll('button')].find(button=>button.dataset.email===previous);
   (result??userSearchSalon).focus();
-};
+}
+$('#user-back-to-search').onclick=returnToUserSearch;
 
 function updateUserRoleFields() {
   const groupRole=$('#user-group-role');
@@ -2949,11 +2950,17 @@ userEditor.onsubmit=async event=>{
   try {
     const fields=Object.fromEntries(values);
     const result=await api('/api/users',{...fields,roles,createOnly:!editing});
+    if (editing) {
+      const refreshed=await refresh().then(()=>true,()=>false);
+      alert('Zapisano zmiany użytkownika.');
+      returnToUserSearch();
+      if (!refreshed) $('#user-search-status').textContent='Nie udało się odświeżyć listy. Odśwież stronę, aby zobaczyć aktualne dane.';
+      return;
+    }
     await refresh();
     const retryInvite=data.role==='group'&&roles.includes('group')
       ?'Ponowną wysyłkę może wykonać administrator.':'Możesz ją ponowić w „Zarządzaj użytkownikami”.';
-    $('#user-status').textContent=editing?'Zapisano zmiany użytkownika.'
-      :result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
+    $('#user-status').textContent=result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
       :'Dodano użytkownika. Wysyłka zaproszenia się nie udała. '+retryInvite;
   } catch(error) {
     $('#user-status').textContent=error.message;
