@@ -10,6 +10,9 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -24,6 +27,15 @@ jobs:
           cp www/index.html www/login
           npm install --save-exact @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/ios@8.6.2
           npx cap add ios
+          iconset=ios/App/App/Assets.xcassets/AppIcon.appiconset
+          cp "$GITHUB_WORKSPACE/services/lejek/ios/AppIcon.png" "$iconset/AppIcon.png"
+          node --input-type=module - "$iconset/Contents.json" <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const file=process.argv[2];
+          const catalog=JSON.parse(readFileSync(file,'utf8'));
+          catalog.images=[{filename:'AppIcon.png',idiom:'universal',platform:'ios',size:'1024x1024'}];
+          writeFileSync(file,JSON.stringify(catalog,null,2)+'\n');
+          JS
           /usr/libexec/PlistBuddy -c 'Add :ITSAppUsesNonExemptEncryption bool false' ios/App/App/Info.plist
       - name: Sign and upload to internal TestFlight
         env:
@@ -116,7 +128,9 @@ jobs:
             -destination 'generic/platform=iOS' -archivePath "$archive" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" archive
           test -s "$archive/Products/Applications/App.app/public/login"
-          echo "Verified login startup file in the signed application archive."
+          app="$archive/Products/Applications/App.app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$app/Info.plist")" = AppIcon
+          echo "Verified startup file and native icon in the signed archive."
           export_options="$RUNNER_TEMP/BiegWyzejExport.plist"
           plutil -create xml1 "$export_options"
           plutil -insert method -string app-store-connect "$export_options"
