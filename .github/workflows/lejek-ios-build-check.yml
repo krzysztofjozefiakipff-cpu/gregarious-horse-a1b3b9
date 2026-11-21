@@ -1,4 +1,4 @@
-name: Bieg Wyżej iOS build check
+name: Bieg Wyżej iOS TestFlight
 on:
   push:
     branches: [lejek/ios-build-check]
