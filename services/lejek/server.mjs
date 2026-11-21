@@ -90,6 +90,9 @@ const loginPage = `<!doctype html>
     label { font-weight: 700; }
     input, button { min-width: 0; min-height: 48px; border-radius: 8px; padding: 10px 12px; font: inherit; }
     input { background: white; border: 1px solid var(--muted); color: var(--ink); }
+    .remember-device { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+    .remember-device input { min-height: 0; width: 20px; height: 20px; flex-shrink: 0; margin: 0; }
+    .remember-device small { display: block; font-weight: 400; }
     button { background: var(--blue); color: white; border: 0; font-weight: 750; cursor: pointer; }
     button:hover { background: var(--accent-ink); }
     [role="alert"] { color: var(--error); margin: 0; }
@@ -117,10 +120,11 @@ const redirect=(to,extra={})=>reply(null,303,{Location:to,...extra});
 const loginCsrfCookie='__Host-lejek-login';
 const emailField='<label>E-mail<input name="email" type="email" autocomplete="username" maxlength="254" required></label>';
 const currentField='<label>Obecne hasło<input name="password" type="password" autocomplete="current-password" maxlength="512" required></label>';
+const rememberField='<label class="remember-device"><input type="checkbox" name="remember" value="1"><span>Pozostań zalogowany przez 30 dni<small>Zaznacz tylko na swoim urządzeniu.</small></span></label>';
 const newFields='<label>Nowe hasło (min. 8 znaków)<input name="new_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>'+
   '<label>Powtórz nowe hasło<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>';
 const forms={
-  '/login':['Zaloguj się do Bieg Wyżej','Zaloguj się',emailField+currentField.replace('Obecne hasło','Hasło')],
+  '/login':['Zaloguj się do Bieg Wyżej','Zaloguj się',emailField+currentField.replace('Obecne hasło','Hasło')+rememberField],
   '/change-password':['Zmień hasło','Zapisz nowe hasło',emailField+currentField+newFields],
   '/forgot-password':['Nie pamiętam hasła','Wyślij link do resetu',emailField],
   '/reset-password':['Ustaw nowe hasło','Zapisz nowe hasło',newFields]
@@ -313,9 +317,9 @@ async function handle(request) {
         return await identity.changePassword(email,password,newPassword)
           ?changed():render('Sprawdź e-mail i obecne hasło.',401);
       }
-      const session=await identity.authenticate(email,password);
+      const session=await identity.authenticate(email,password,form.get('remember')==='1');
       if (!session) return render('Sprawdź e-mail i hasło.',401);
-      return redirect('/daily.html',{'Set-Cookie':cookie+'='+session+cookieOptions+'; Max-Age=28800'});
+      return redirect('/daily.html',{'Set-Cookie':cookie+'='+session.token+cookieOptions+'; Max-Age='+session.maxAge});
     }
     const result=await accountsPost('/api/auth/login',{email,password});
     if (result.status===429) return render('Zbyt wiele prób. Spróbuj później.',429);
