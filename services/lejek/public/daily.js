@@ -1340,7 +1340,7 @@ function draftStatus(day) {
 }
 
 function renderToday(records,metrics) {
-  const {today,personal,ranking}=data;
+  const {today,personal}=data;
   const next=personal.missing[0];
   const exception=personal.exceptions[today];
   const holiday=polishHoliday(today);
@@ -1375,11 +1375,6 @@ function renderToday(records,metrics) {
   }
 
   renderResultsCard(todayResults,metrics,'Brak planu na ten miesiąc');
-
-  const rank=ranking?.groupName?ranking.group:ranking?.salon;
-  $('#today-rank').hidden=!rank;
-  $('#today-rank-label').textContent=ranking?.groupName?'Ranking grupy':'Ranking salonu';
-  $('#today-rank-value').textContent=rank?rank.place+'. miejsce ›':'';
 }
 
 function renderSeller() {
