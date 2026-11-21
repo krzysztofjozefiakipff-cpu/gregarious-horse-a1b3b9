@@ -94,28 +94,29 @@ a { color: var(--ink); }
   box-shadow: 0 2px 0 var(--accent);
 }
 .panel-header .product-brand, .panel-header a { color: white; }
-.panel-header #salon { color: var(--on-plum-muted); }
-
-.header-account { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; min-width:0; }
-.panel-header .signed-in {
-  padding:4px 8px; border:1px solid #ffffff45; border-radius:6px;
-  color:var(--on-plum-muted); font-size:.875rem; min-width:0; overflow-wrap:anywhere;
+header.account-header {
+  display:block; width:100%; max-width:1720px; margin:0 auto; border-bottom:0;
+  padding:calc(env(safe-area-inset-top) + 8px) clamp(12px,2.4vw,40px) 8px;
 }
-.panel-header .signed-in strong { color:white; font-size:inherit; letter-spacing:normal; }
-
-.panel-signout { margin:0; margin-inline-start:auto; }
-.panel-signout button {
-  min-height:44px;
-  padding:5px 10px;
-  background:transparent;
-  border:1px solid #ffffff59;
-  border-radius:8px;
-  color:white;
-  font:inherit;
-  font-size:.875rem;
-  cursor:pointer;
+.account-header-inner {
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px 16px;
 }
-.panel-signout button:hover { background:#ffffff18; }
+.account-brand, .account-controls { display:flex; align-items:center; flex-wrap:wrap; gap:5px 10px; min-width:0; }
+.account-header .dealer-logo { max-height:27px; max-width:120px; padding:4px 6px; border:0; }
+.account-header #account-greeting { font-size:1rem; line-height:1.3; letter-spacing:normal; overflow-wrap:anywhere; }
+.account-header #account-role, .account-header .panel-signout button {
+  background:transparent; color:white; border:1px solid #ffffff65; border-radius:8px;
+  min-height:44px; font:inherit;
+}
+.account-header #account-role { width:auto; max-width:100%; padding:4px 6px; }
+.account-header #account-role option { color:var(--ink); background:white; }
+.account-header .panel-signout { margin:0; display:block; }
+.account-header .panel-signout button { display:grid; place-items:center; width:44px; padding:0; cursor:pointer; }
+.account-header .panel-signout button:hover { background:#ffffff18; }
+@media(max-width:520px) {
+  .account-controls { flex:1 1 100%; }
+  .account-controls #account-greeting { flex:1 1 70px; }
+}
 .panel-return-link {
   display:inline-flex;
   align-items:center;

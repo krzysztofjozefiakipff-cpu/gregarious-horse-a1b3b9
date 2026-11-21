@@ -1247,21 +1247,8 @@ $('#entry').addEventListener('invalid',event=>{
   if (event.target===firstInvalid) showEntrySource(Number(row.dataset.source));
 },true);
 
-function labelPanel(role,scope='',preview=false) {
-  const title=panelNames[role];
-  $('#dealer').textContent=title;
-  $('#mobile-account-role').textContent=shortPanelNames[role];
-  $('#salon').textContent=[preview?'Podgląd':'',scope].filter(Boolean).join(' · ');
-  document.title=title+' · Bieg Wyżej';
-}
-
-function showPanelLogo(src,alt='') {
-  const logo=$('#logo');
-  logo.hidden=!src;
-  if (src) {
-    logo.src=src;
-    logo.alt=alt;
-  } else logo.removeAttribute('src');
+function labelPanel(role) {
+  document.title=panelNames[role]+' · Bieg Wyżej';
 }
 
 function renderRanking(ranking) {
@@ -1379,10 +1366,8 @@ function renderToday(records,metrics) {
 }
 
 function renderSeller() {
-  const {brand,personal,cause}=data;
-  const salon=data.sellers[0].salon;
-  labelPanel('seller',brand?.name??salon);
-  showPanelLogo(brand?.logo);
+  const {personal,cause}=data;
+  labelPanel('seller');
   const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
   const next=personal.missing[0];
   const day=showTodayEntry?data.today:next??data.today;
@@ -2538,63 +2523,6 @@ salonPlans.addEventListener('toggle',()=>{
 });
 
 const mobilePanel=matchMedia('(max-width:850px)');
-const shortPanelNames={seller:'Handlowiec',manager:'Kierownik',group:'Szef grupy',admin:'Administrator',staff:'Pracownik'};
-const mobileAccount=$('#mobile-account');
-const mobileAccountToggle=$('#mobile-account-open');
-const panelHeader=$('.panel-header');
-const panelAccount=panelHeader.querySelector('.header-account');
-const signout=panelAccount.querySelector('.panel-signout');
-
-function showMobileAccount(open) {
-  mobileAccount.hidden=!open;
-  mobileAccountToggle.setAttribute('aria-expanded',String(open));
-}
-
-function placeAccountControls() {
-  panelHeader.classList.toggle('mobile-account-ready',mobilePanel.matches);
-  if (mobilePanel.matches) {
-    mobileAccount.append(signout);
-  } else {
-    showMobileAccount(false);
-    panelAccount.append(signout);
-  }
-}
-
-function renderMobileAccount() {
-  const logo=$('#mobile-account-logo');
-  const groupLogo=data.groupBrand?.logo;
-  const logoSource=groupLogo||data.brand?.logo;
-  logo.hidden=!logoSource;
-  if (logoSource) {
-    logo.src=logoSource;
-    logo.alt=(groupLogo?data.groupBrand.name:data.brand.name)||'Logo dealera';
-  } else {
-    logo.removeAttribute('src');
-  }
-
-  const roles=detailSeller?[]:data.roles.filter(role=>role!==data.role);
-  $('#mobile-account-roles').replaceChildren(...roles.map(role=>{
-    const button=document.createElement('button');
-    button.type='button';
-    button.textContent=shortPanelNames[role];
-    button.onclick=()=>switchAccountRole(role);
-    return button;
-  }));
-}
-
-mobileAccountToggle.onclick=()=>showMobileAccount(mobileAccount.hidden);
-document.addEventListener('click',event=>{
-  if (!mobileAccount.hidden&&!event.target.closest('.mobile-account-switcher')) showMobileAccount(false);
-});
-document.addEventListener('keydown',event=>{
-  if (event.key==='Escape'&&!mobileAccount.hidden) {
-    event.preventDefault();
-    showMobileAccount(false);
-    mobileAccountToggle.focus();
-  }
-});
-placeAccountControls();
-mobilePanel.addEventListener('change',placeAccountControls);
 const mobileTabs={
   seller:[['dzisiaj','Dzisiaj','calendar'],['plan','Wyniki','bars'],['kalendarz-pracy','Kalendarz','clock']],
   manager:[['odprawa-dzienna','Odprawa','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
@@ -3116,7 +3044,7 @@ function renderAdmin() {
 
   $('#manager-preview-note').hidden=!readOnlyPreview;
   $('#manager-preview-note').textContent=(groupPreview?'Podgląd szefa grupy.':'Podgląd kierownika.')+' Możesz wypróbować pola formularza. Dane salonu nie zostaną zapisane.';
-  labelPanel(view.role,group?(selected||view.dealerGroup):manager?(selected||view.salon):'',readOnlyPreview);
+  labelPanel(view.role);
   $('#management-nav').setAttribute('aria-label',panelNames[view.role]);
   $('#performance-title').textContent=teamDashboard?'Realizacja planów salonów':'Wykonanie planu';
   $('#management-performance').textContent=teamDashboard?'Realizacja planów':'Wykonanie planu';
@@ -3370,7 +3298,7 @@ function renderSellerDetail() {
     return;
   }
   const [person]=renderManagerDashboard({...data,sellers:[seller]},true);
-  labelPanel(data.role,seller.salon);
+  labelPanel(data.role);
   $('#seller-detail-heading').textContent=seller.name+' · praca na lejku';
   $('#seller-detail-period').textContent=seller.salon+' · '+monthLabel(data.today.slice(0,7))+' · '+person.status;
   const tbody=$('#seller-detail-metrics');
@@ -3505,7 +3433,6 @@ backfillForm.onsubmit=async event=>{
 function showView() {
   $('#daily').hidden=true;
   $('#admin').hidden=true;
-  showPanelLogo(data.groupBrand?.logo,data.groupBrand?.name);
   if (detailSeller) {
     renderSellerDetail();
     return;
@@ -3571,18 +3498,6 @@ $('#manager-preview-salon').onchange=event=>{
   history.replaceState({...history.state,managerPreviewSalon},'');
   showView();
 };
-function switchAccountRole(role) {
-  if (previewTarget) {
-    location.assign('/daily.html?'+new URLSearchParams({podglad:previewTarget,role:role}));
-    return;
-  }
-  const previous=new URL(location.href);
-  previous.searchParams.set('role',data.role);
-  history.replaceState(history.state,'',previous);
-  sessionStorage.setItem('lejek-active-role',role);
-  location.assign('/daily.html?'+new URLSearchParams({role:role}));
-}
-$('#account-role').onchange=event=>switchAccountRole(event.target.value);
 let restoredNavigation=false;
 let refreshRevision=0;
 let explicitRefreshes=0;
@@ -3608,6 +3523,7 @@ async function applyDailySnapshot(snapshot) {
     return;
   }
   data=snapshot;
+  renderAccountHeader(data,previewTarget);
   const lifeParams=new URLSearchParams({role:data.role});
   if (previewTarget) lifeParams.set('podglad',previewTarget);
   for (const link of document.querySelectorAll('[data-life-link]')) link.href='/z-zycia-salonu.html?'+lifeParams;
@@ -3620,23 +3536,14 @@ async function applyDailySnapshot(snapshot) {
   }
   $('#management-plan-period').textContent='Okres · '+monthLabel(month);
 
-  const signedIn=$('#signed-in');
-  signedIn.querySelector('strong').textContent=data.previewUser?.viewer??data.signedInAs??'';
-  signedIn.hidden=!data.signedInAs;
   $('#user-preview-banner').hidden=!data.previewUser;
   $('#user-preview-name').textContent=data.previewUser?.name??'';
   if (!detailSeller&&data.role!=='seller') {
     data.salonPerformance=await api('/api/salon-plans?month='+data.today.slice(0,7))
       .then(({plans})=>plans).catch(()=>null);
   }
-  const roleSelect=$('#account-role');
-  $('#account-role-bar').hidden=Boolean(detailSeller)||data.roles.length<2;
-  roleSelect.replaceChildren(...data.roles.map(role=>new Option(panelNames[role],role)));
-  roleSelect.value=data.role;
-  renderMobileAccount();
   if (!previewTarget) sessionStorage.setItem('lejek-active-role',data.role);
   $('#load').textContent='';
-  $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
   showView();
   if (!restoredNavigation) {
     restoredNavigation=true;
@@ -3942,7 +3849,6 @@ $('#charity').onsubmit=event=>{
 };
 if (previewTarget) {
   $('#user-preview-banner').hidden=false;
-  $('.panel-signout').hidden=true;
 }
 const sellerRefreshInterval=30_000;
 let sellerRefreshInFlight=false;

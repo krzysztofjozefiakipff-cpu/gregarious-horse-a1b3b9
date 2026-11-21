@@ -95,7 +95,7 @@ function showWall() {
   scopePicker.disabled=scopes.length<2;
   const panelRole=wall.role==='staff'?wall.roles.find(item=>item!=='staff'):wall.role;
   life('#return-panel').hidden=!panelRole;
-  life('#staff-brand').hidden=Boolean(panelRole);
+  renderAccountHeader(wall,preview);
   const returnParams=new URLSearchParams(panelRole?{role:panelRole}:{});
 
   if (preview) returnParams.set('podglad',preview);
