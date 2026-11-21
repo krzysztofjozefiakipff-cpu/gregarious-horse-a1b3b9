@@ -11,11 +11,11 @@ let briefingDownloading=false;
 const briefingDisplay=value=>value??'—';
 const briefingEnd=(actual,forecast)=>forecast==null?null:actual+forecast;
 
-function briefingTable(headers,rows,compact=false) {
+function briefingTable(headers,rows,showCellLabels=false) {
   const region=reportElement('div');
   region.className='briefing-scroll';
   const table=reportElement('table');
-  table.className=compact?'briefing-table briefing-table-compact':'briefing-table';
+  table.className='briefing-table';
   const header=table.createTHead().insertRow();
   for (const label of headers) {
     const cell=reportElement('th',label);
@@ -27,7 +27,7 @@ function briefingTable(headers,rows,compact=false) {
     const tr=body.insertRow();
     for (const [index,value] of row.entries()) {
       const td=tr.insertCell();
-      if (compact) td.dataset.label=headers[index];
+      if (showCellLabels) td.dataset.label=headers[index];
       if (value instanceof HTMLElement) td.append(value);
       else td.textContent=briefingDisplay(value);
     }
@@ -67,7 +67,6 @@ function briefingResultCorrection(person,report) {
   const status=reportElement('p');
   status.setAttribute('role','status');
   const entry=briefingTable(['Źródło',...columns.map(([,label])=>label)],sources.map((source,i)=>[source,...fields[i]]),true);
-  entry.querySelector('table').classList.remove('briefing-table-compact');
   entry.classList.add('activity-entry-table');
   const rows=[...entry.querySelectorAll('tbody tr')];
   rows[0].cells[2].classList.add('mobile-automatic-field');
@@ -262,29 +261,40 @@ function briefingTodayStep(person,report,canEdit,onDraftChange) {
   return step;
 }
 
-function briefingForecast(person,report,canEdit) {
-  const section=reportElement('details');
-  section.className='briefing-extra';
+function briefingMonthSummary(month) {
+  const table=briefingOverview(['Wskaźnik','Wyk. / plan','Na koniec'],
+    briefingSalesLabels.map((label,i)=>[
+      label,month.actual[i]+' / '+briefingDisplay(month.plan[i]),
+      briefingEnd(month.actual[i],month.forecast[i])
+    ]));
+  table.classList.add('briefing-month-summary');
+  table.querySelector('table').setAttribute('aria-label','Realizacja i prognoza miesiąca');
+  return table;
+}
+
+function briefingForecast(person,report,canEdit,onDraftChange=()=>{}) {
+  const section=reportElement('div');
+  section.className='briefing-month';
+  section.append(briefingMonthSummary(person));
+  if (!canEdit) return section;
+
+  const editor=briefingFold('Zmień prognozę');
   const form=reportElement('form');
   const fields=briefingSalesLabels.map((label,i)=>briefingNumberField('Jeszcze w tym miesiącu · '+label,person.manual[i],person.automaticForecast[i]));
-  form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
-    briefingSalesLabels.map((label,i)=>{
-      const total=reportElement('span',briefingDisplay(briefingEnd(person.actual[i],person.forecast[i])));
-      if (canEdit) {
-        const field=fields[i];
-        field.oninput=()=>{
-          const remaining=!field.validity.valid?null:field.value===''?person.automaticForecast[i]:field.valueAsNumber;
-          total.textContent=briefingDisplay(briefingEnd(person.actual[i],remaining));
-        };
-      }
-      return [label,person.actual[i],person.plan[i],canEdit?fields[i]:person.forecast[i],total];
-    }),true));
-  if (canEdit) {
-    form.append(reportElement('p','Puste pole korzysta z prognozy automatycznej.'));
-    addNumberControlsIn(form);
-    briefingSave(form,'Zapisz prognozę',person,report,fields,'forecast');
-  }
-  section.append(reportElement('summary','Realizacja i prognoza miesiąca'),form);
+  const baseline=fields.map(field=>field.value);
+  form.append(briefingOverview(['Wskaźnik','Jeszcze w tym miesiącu'],briefingSalesLabels.map((label,i)=>[label,fields[i]])),
+    reportElement('p','Wpisz dodatkowy wynik do końca miesiąca. Puste pole korzysta z prognozy automatycznej.'));
+  addNumberControlsIn(form);
+  const save=briefingSave(form,'Zapisz prognozę',person,report,fields,'forecast');
+  const update=()=>{
+    const dirty=fields.some((field,i)=>field.value!==baseline[i]||field.validity.badInput);
+    save.disabled=!dirty;
+    onDraftChange(dirty);
+  };
+  fields.forEach(field=>field.oninput=update);
+  update();
+  editor.append(form);
+  section.append(editor);
   return section;
 }
 
@@ -321,9 +331,14 @@ function renderBriefingSeller(person,report,open,salon) {
     if (stage===1) {
       active=briefingReviewStep(person,report,canEdit);
     } else {
-      const final=briefingStep(3,'Podsumowanie odprawy',signoff.completed?'Zatwierdzona':'Gotowa');
-      let finish;
+      const final=briefingStep(3,'Realizacja i prognoza miesiąca',signoff.completed?'Zatwierdzona':'Do sprawdzenia');
+      let finish, dirtyGoals=false, dirtyForecast=false;
+      const updateFinish=()=>{if (finish) finish.disabled=dirtyGoals||dirtyForecast;};
       if (stage===3) {
+        final.append(briefingForecast(person,report,canEdit,dirty=>{
+          dirtyForecast=dirty;
+          updateFinish();
+        }));
         if (signoff.completed) {
           final.append(reportElement('p','Odprawa została zapisana.'));
           const next=reportElement('button','Następna odprawa');
@@ -333,12 +348,14 @@ function renderBriefingSeller(person,report,open,salon) {
           next.onclick=openNextBriefing;
           final.append(next);
         } else {
-          final.append(reportElement('p','Wykonanie potwierdzone. '+(person.workday?'Plan na dziś zaakceptowany.':'Dzień wolny zaakceptowany.')));
           if (canEdit) finish=briefingAction(final,'Zatwierdź odprawę',person,report,
             {action:'complete',version:signoff.completionVersion},'Zatwierdzono odprawę · '+person.name);
         }
       }
-      const today=briefingTodayStep(person,report,canEdit,dirty=>{if (finish) finish.disabled=dirty;});
+      const today=briefingTodayStep(person,report,canEdit,dirty=>{
+        dirtyGoals=dirty;
+        updateFinish();
+      });
       active=stage===2?today:final;
       const previous=briefingReviewStep(person,report,canEdit);
       workflow.append(active,briefingFold('Poprzedni dzień pracy',previous));
@@ -350,7 +367,8 @@ function renderBriefingSeller(person,report,open,salon) {
     heading.tabIndex=-1;
     details.append(workflow);
   }
-  details.append(briefingForecast(person,report,(person.editable||person.ownForecast)&&!previewTarget));
+  if (!person.editable) details.append(briefingFold('Realizacja i prognoza miesiąca',
+    briefingForecast(person,report,person.ownForecast&&!previewTarget)));
   if (person.remainingPlan.length) {
     const schedule=reportElement('details');
     schedule.className='briefing-extra';
