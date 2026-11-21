@@ -1673,7 +1673,6 @@ function renderSalonSummary(view,team=[],period=null) {
   results.replaceChildren();
   if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
   if (!period&&!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
-  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
   const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
   const [year,month]=view.today.split('-').map(Number);
   const first=monthStart(year,month-1);
@@ -1726,41 +1725,36 @@ function renderSalonSummary(view,team=[],period=null) {
     const title=document.createElement('h3');
     title.id='salon-performance-'+slot;
     title.textContent=plan.salon;
-    const grid=document.createElement('span');
-    grid.className='salon-progress-grid';
-    for (const [index,label] of salonPlanMetrics.entries()) {
-      const indicator=document.createElement('span');
-      const name=document.createElement('span');
-      name.textContent=label;
-      const values=document.createElement('strong');
-      const actual=plan.actuals[index];
-      const target=plan.targets[index];
-      const configured=plan.configured[index];
-      const ratio=configured&&target>0?actual/target:null;
-      const pace=ratio===null||plan.partial?.[index]?null:salonPace(actual,target,elapsed,total,plan.expected?.[index],completed);
-      values.textContent=actual+' / '+(configured?target:'—')+
-        (plan.partial?.[index]?' · cel dostępny dla części miesięcy':ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
-      if (pace) values.className=pace.tone;
-      indicator.append(name,values);
-      if (pace) {
-        const progress=document.createElement('progress');
-        progress.max=target;
-        progress.value=Math.min(actual,target);
-        progress.setAttribute('aria-label',plan.salon+' · '+label);
-        progress.setAttribute('aria-valuetext',values.textContent);
-        progress.style.setProperty('--plan-progress',pace.tone==='behind'?'#a12626':pace.tone==='ahead'?'#12633b':'var(--muted)');
-        const status=document.createElement('strong');
-        status.className=pace.tone;
-        status.textContent=pace.status;
-        const note=document.createElement('small');
-        note.textContent=completed?'Okres zakończony':'Tempo na dziś: '+number.format(pace.expected)
-          +' · Prognoza na koniec: '+(pace.forecast===null?'—':number.format(pace.forecast));
-        indicator.append(progress,status,note);
-      }
-      grid.append(indicator);
+    const paces=plan.targets.map((target,index)=>plan.configured[index]&&target>0&&!plan.partial?.[index]
+      ?salonPace(plan.actuals[index],target,elapsed,total,plan.expected?.[index],completed):null);
+    const table=reportElement('table');
+    table.className='salon-forecast-table';
+    table.setAttribute('aria-labelledby',title.id);
+    const columnsHeader=table.createTHead().insertRow();
+    for (const label of ['Wskaźnik',completed?'Plan okresu':'Dziś powinno być',
+      managementPeriodType.value==='month'?'Prognoza na koniec miesiąca':'Prognoza na koniec okresu']) {
+      const heading=reportElement('th',label);
+      heading.scope='col';
+      columnsHeader.append(heading);
     }
-    const assessed=plan.targets.map((target,index)=>plan.configured[index]&&target>0&&!plan.partial?.[index]
-      ?salonPace(plan.actuals[index],target,elapsed,total,plan.expected?.[index],completed):null).filter(Boolean);
+    const body=table.createTBody();
+    for (const index of [0,2,1,3]) {
+      const row=body.insertRow();
+      const metric=reportElement('th',index===2?'Faktury':salonPlanMetrics[index]);
+      metric.scope='row';
+      row.append(metric);
+      const pace=paces[index];
+      const expected=row.insertCell();
+      expected.textContent=pace?number.format(pace.expected):'—';
+      const forecast=row.insertCell();
+      forecast.textContent=pace?.forecast!=null?number.format(pace.forecast):'—';
+      if (pace?.forecast!=null) forecast.className=pace.tone;
+      if (!pace) {
+        const reason=plan.partial?.[index]?'Cel dostępny dla części miesięcy':plan.configured[index]?'Cel zerowy':'Brak celu';
+        expected.title=forecast.title=reason;
+      }
+    }
+    const assessed=paces.filter(Boolean);
     const risky=assessed.some(metric=>metric.tone==='behind');
     const status=document.createElement('span');
     status.className='salon-pace-status '+(risky?'behind':assessed.some(metric=>metric.tone==='ahead')?'ahead':'');
@@ -1769,10 +1763,9 @@ function renderSalonSummary(view,team=[],period=null) {
       :assessed.some(metric=>metric.forecast===null)?'Za wcześnie na prognozę':'Zgodnie z tempem';
     const time=document.createElement('p');
     time.className='salon-pace-time';
-    time.textContent=elapsed+' z '+total+' dni pracy '+(period?'w okresie':'w miesiącu')+' · '+percent.format(elapsed/total)
-      +(completed?' · Okres zakończony.':' · Prognoza zakłada utrzymanie dotychczasowego tempa.');
+    time.textContent=elapsed+' z '+total+' dni pracy'+(completed?' · Okres zakończony':'');
     header.append(title,status);
-    details.append(summary,time,grid);
+    details.append(summary,time,table);
     card.append(header,salonQuickTotals(plan,title.id,elapsed,total,number,completed),details);
     results.append(card);
     if (period) continue;

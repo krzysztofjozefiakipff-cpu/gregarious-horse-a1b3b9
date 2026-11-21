@@ -326,13 +326,13 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .planning-actions{padding:10px 12px;background:var(--tint);border-radius:9px;margin-top:8px}
 #salon-plan-status:empty{display:none}
 @media(max-width:540px){.planning-actions button,.planning-toolbar>label{width:100%}.planning-seller summary .planning-badge{margin-inline-start:4px}}
-.salon-progress-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0 2px}
-.salon-progress-grid>span{min-width:0;padding:10px;background:var(--tint);border-radius:8px;font-size:.9rem}
-.salon-progress-grid strong{display:block;margin:4px 0;font-variant-numeric:tabular-nums}
-.salon-progress-grid progress{display:block;appearance:none;width:100%;height:8px;border:0;border-radius:5px;background:var(--line);overflow:hidden}
-.salon-progress-grid progress::-webkit-progress-bar{background:var(--line)}
-.salon-progress-grid progress::-webkit-progress-value{background:var(--plan-progress)}
-.salon-progress-grid progress::-moz-progress-bar{background:var(--plan-progress)}
+.salon-forecast-table { width:100%; table-layout:fixed; border-collapse:collapse; margin:4px 0 10px; font-size:clamp(.75rem,3vw,.9rem); line-height:1.25; }
+.salon-forecast-table :is(th,td) { padding:6px 4px; vertical-align:middle; border-bottom:1px solid var(--panel-border); overflow-wrap:anywhere; }
+.salon-forecast-table thead { background:var(--panel-lilac); color:var(--panel-plum); }
+.salon-forecast-table th:first-child { width:40%; text-align:left; }
+.salon-forecast-table thead th:not(:first-child), .salon-forecast-table td { text-align:right; }
+.salon-forecast-table td { font-weight:650; font-variant-numeric:tabular-nums; }
+
 
 [data-seller-panel] > *, #administration-view > *, #salon-results > *, #manager-team-list > * { min-width: 0; }
 #salon-results, #manager-team-list { display:grid; gap:12px; }
@@ -469,7 +469,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #salon-results [data-pace="behind"] { color:#a12528; background:#fff1f1; }
 .salon-pace-symbol { margin-inline-end:3px; font-size:.8em; }
 #salon-pace-key { display:flex; flex-wrap:wrap; gap:2px 12px; margin-top:10px; color:var(--muted); font-size:.8rem; }
-.salon-pace-time { color:var(--muted); font-size:.875rem; margin-top:5px; }
+.salon-pace-time { color:var(--panel-muted); font-size:.8rem; margin:0 0 6px; }
 #salon-results h3 { margin:10px 0 4px; font-size:1rem; }
 #salon-results li+li { margin-top:5px; }
 .salon-coaching { display:grid; gap:12px; margin-top:12px; }
