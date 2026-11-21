@@ -1,15 +1,26 @@
 /* Shared visual identity of Bieg Wyżej. */
 :root {
-  --paper: #f4f7fb;
-  --ink: #0b1522;
-  --muted: #425269;
-  --blue: #1359e8;
-  --line: #d8e1ed;
-  --accent: #1359e8;
-  --yellow: #eaf2ff;
-  --tint: #edf3fb;
-  --accent-ink: #1046b2;
+  --panel-plum: #52294f;
+  --panel-orange: #ffc184;
+  --panel-paper: #fbf9f8;
+  --panel-ink: #2d2031;
+  --panel-muted: #635563;
+  --panel-lilac: #f6edf4;
+  --panel-border: #e3d7e0;
+  --paper: var(--panel-paper);
+  --ink: var(--panel-ink);
+  --muted: var(--panel-muted);
+  --primary: var(--panel-plum);
+  --line: var(--panel-border);
+  --accent: var(--panel-orange);
+  --highlight: #fff0e2;
+  --tint: var(--panel-lilac);
+  --accent-ink: #43213b;
+  --input-border: #a998a6;
+  --on-plum-muted: #f3d8eb;
+  --focus-ring: #a44d1e;
   --error: #a12528;
+  accent-color: var(--primary);
 }
 * { box-sizing: border-box; }
 body {
@@ -21,27 +32,28 @@ body {
 h1, h2 { letter-spacing: -.045em; line-height: 1.12; }
 a { color: var(--ink); }
 :where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid #4285ff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 .product-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: var(--ink);
+  gap: 7px;
+  color: var(--primary);
+  white-space: nowrap;
 }
-.product-mark { width: 24px; height: 21px; position: relative; }
+.product-mark { position:relative; flex:none; width:27px; height:22px; }
 .product-mark::before, .product-mark::after {
-  content: "";
-  position: absolute;
-  width: 19px;
-  height: 5px;
-  background: var(--ink);
-  transform: skewY(-26deg);
-  left: 0;
-  bottom: 4px;
+  content:""; position:absolute; inset:0;
+  background:var(--brand-mark-color, #a65320);
 }
-.product-mark::after { background: var(--accent); left: 5px; bottom: 12px; }
+.product-mark::before { clip-path:polygon(15% 40%,48% 20%,64% 2%,94% 2%,100% 12%,90% 31%,66% 31%,11% 63%); }
+.product-mark::after { clip-path:polygon(4% 74%,51% 51%,64% 39%,94% 39%,100% 50%,89% 70%,66% 70%,0 98%); }
+.product-wordmark { font-size:1em; line-height:1; font-weight:850; letter-spacing:.025em; transform:skewX(-9deg); }
+.panel-header, .site-header {
+  --brand-mark-color:var(--accent);
+  --focus-ring:var(--accent);
+}
 
 .panel-nav {
   display: flex;
@@ -64,7 +76,7 @@ a { color: var(--ink); }
   text-decoration: none;
   font-weight: 750;
 }
-.panel-nav a[aria-current="page"] { background: var(--blue); color: white; }
+.panel-nav a[aria-current="page"] { background: var(--primary); color: white; }
 
 .status-badge {
   display: inline-block;
@@ -77,18 +89,17 @@ a { color: var(--ink); }
 .status-negative { color: #a12528; background: #fcebec; }
 
 .panel-header {
-  background: var(--ink);
+  background: var(--primary);
   color: white;
-  box-shadow: 0 2px 0 var(--blue);
+  box-shadow: 0 2px 0 var(--accent);
 }
 .panel-header .product-brand, .panel-header a { color: white; }
-.panel-header .product-mark::before { background: white; }
-.panel-header #salon { color: #c9d8ed; }
+.panel-header #salon { color: var(--on-plum-muted); }
 
 .header-account { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; min-width:0; }
 .panel-header .signed-in {
   padding:4px 8px; border:1px solid #ffffff45; border-radius:6px;
-  color:#c9d8ed; font-size:.875rem; min-width:0; overflow-wrap:anywhere;
+  color:var(--on-plum-muted); font-size:.875rem; min-width:0; overflow-wrap:anywhere;
 }
 .panel-header .signed-in strong { color:white; font-size:inherit; letter-spacing:normal; }
 
@@ -121,7 +132,7 @@ a { color: var(--ink); }
   object-fit: contain;
   padding: 6px 8px;
   background: white;
-  border: 1px solid #dce2eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 .dealer-logo[hidden] { display: none; }

@@ -19,11 +19,12 @@ FONT_DIR = '/usr/share/fonts/truetype/dejavu'
 pdfmetrics.registerFont(TTFont('DejaVu', FONT_DIR + '/DejaVuSans.ttf'))
 pdfmetrics.registerFont(TTFont('DejaVuBold', FONT_DIR + '/DejaVuSans-Bold.ttf'))
 
-INK = colors.HexColor('#101e32')
-MUTED = colors.HexColor('#526582')
-BLUE = colors.HexColor('#214fd6')
-RULE = colors.HexColor('#dbe4f1')
-LIGHT = colors.HexColor('#edf3ff')
+INK = colors.HexColor('#2d2031')
+MUTED = colors.HexColor('#635563')
+PLUM = colors.HexColor('#52294f')
+ORANGE = colors.HexColor('#ffc184')
+RULE = colors.HexColor('#e3d7e0')
+LIGHT = colors.HexColor('#f6edf4')
 GREEN = colors.HexColor('#14745b')
 RED = colors.HexColor('#9a3025')
 WIDTH = A4[0] - 76
@@ -47,8 +48,8 @@ STYLES = {
     'cell': ParagraphStyle('cell', fontName='DejaVu', fontSize=8, leading=11, textColor=INK, splitLongWords=True),
     'total': ParagraphStyle('total', fontName='DejaVuBold', fontSize=8, leading=11, textColor=INK),
     'header': ParagraphStyle('header', fontName='DejaVuBold', fontSize=8, leading=11, textColor=colors.white),
-    'action': ParagraphStyle('action', fontName='DejaVuBold', fontSize=9, leading=13, textColor=BLUE, spaceAfter=2),
-    'priority': ParagraphStyle('priority', fontName='DejaVuBold', fontSize=11, leading=15, textColor=BLUE, spaceAfter=3),
+    'action': ParagraphStyle('action', fontName='DejaVuBold', fontSize=9, leading=13, textColor=PLUM, spaceAfter=2),
+    'priority': ParagraphStyle('priority', fontName='DejaVuBold', fontSize=11, leading=15, textColor=PLUM, spaceAfter=3),
     'instruction': ParagraphStyle('instruction', fontName='DejaVu', fontSize=10, leading=14, textColor=INK, spaceAfter=4),
     'evidence': ParagraphStyle('evidence', fontName='DejaVu', fontSize=8, leading=11, textColor=MUTED),
     'task_number': ParagraphStyle('task_number', fontName='DejaVuBold', fontSize=12, leading=15,
@@ -93,7 +94,7 @@ def table(headers, rows, fractions=None):
     return grid
 
 
-def bars(rows, scale, paint=BLUE, goal_marker=False):
+def bars(rows, scale, paint=PLUM, goal_marker=False):
     """Draw aligned horizontal bars with the exact value beside each bar."""
     height = len(rows) * 22 + 16
     chart = Drawing(WIDTH, height)
@@ -188,7 +189,7 @@ def action_card(index, action):
         p(action['title'], 'priority'), p(action['instruction'], 'instruction'), p(action['evidence'], 'evidence')
     ]]], colWidths=[30, WIDTH - 30], hAlign='LEFT')
     card.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), BLUE),
+        ('BACKGROUND', (0, 0), (0, 0), PLUM),
         ('BACKGROUND', (1, 0), (1, 0), LIGHT),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING', (0, 0), (-1, -1), 8),
@@ -306,11 +307,27 @@ def briefing_report(salon):
 
 def header_footer(canvas, doc):
     width, height = A4
-    canvas.setFillColor(INK)
+    canvas.setFillColor(PLUM)
     canvas.rect(0, height - 46, width, 46, stroke=0, fill=1)
+    canvas.saveState()
+    canvas.translate(38, height - 31)
+    canvas.scale(.18, .16)
+    canvas.setFillColor(ORANGE)
+    for points in (
+        [(15, 40), (48, 20), (64, 2), (94, 2), (100, 12), (90, 31), (66, 31), (11, 63)],
+        [(4, 74), (51, 51), (64, 39), (94, 39), (100, 50), (89, 70), (66, 70), (0, 98)],
+    ):
+        path = canvas.beginPath()
+        x, y = points[0]
+        path.moveTo(x, 100 - y)
+        for x, y in points[1:]:
+            path.lineTo(x, 100 - y)
+        path.close()
+        canvas.drawPath(path, stroke=0, fill=1)
+    canvas.restoreState()
     canvas.setFillColor(colors.white)
     canvas.setFont('DejaVuBold', 11)
-    canvas.drawString(38, height - 28, 'BIEG WYŻEJ')
+    canvas.drawString(61, height - 28, 'biegwyzej.pl')
     canvas.setFont('DejaVu', 9)
     canvas.drawRightString(width - 38, height - 28, 'Raporty zarządcze')
     canvas.setStrokeColor(RULE)
