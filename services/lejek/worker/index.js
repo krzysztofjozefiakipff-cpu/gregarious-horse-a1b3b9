@@ -689,7 +689,7 @@ async function handle(request, env, buildDailyReport=false) {
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
   if (path==='/api/daily-briefing') {
-    const {person,day,action,actual,goals,forecast,rows,previousRows}=body;
+    const {person,day,action,actual,goals,forecast,rows,previousRows,version,part}=body;
     const today=localDay();
     const seller=sellers.find(row=>row.id===person&&row.accountStatus!=='inactive');
     const ownForecast=person===user.id&&action==='save';
@@ -700,22 +700,40 @@ async function handle(request, env, buildDailyReport=false) {
     const current=briefing.salons[0].people[0];
     const timestamp=new Date().toISOString();
     if (action==='confirm') {
-      const saved=JSON.stringify(current.review.actual);
-      if (!current.review.actual||saved!==JSON.stringify(actual))
+      if (!current.review.actual||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
+          (version!==undefined&&version!==current.review.version))
         return json({error:'Wynik jest niezatwierdzony lub zmienił się po otwarciu odprawy. Odśwież dane.'},409);
       await db.prepare(`INSERT INTO daily_briefing_reviews VALUES (?,?,?,?,?,?)
         ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,actuals=excluded.actuals,
-          goals=excluded.goals,reviewed_at=excluded.reviewed_at`)
-        .bind(person,briefing.yesterday,user.id,saved,JSON.stringify(current.review.goals),timestamp).run();
+          goals=excluded.goals,reviewed_at=excluded.reviewed_at
+          WHERE daily_briefing_reviews.actuals<>excluded.actuals`)
+        .bind(person,current.review.day,user.id,current.review.version,JSON.stringify(current.review.goals),timestamp).run();
+    } else if (action==='accept-today') {
+      if (!current.signoff.previousReady) return json({error:'Najpierw potwierdź wykonanie z poprzedniego dnia pracy.'},409);
+      if (current.pendingToday) return json({error:'Najpierw rozpatrz zgłoszenie w kalendarzu pracy.'},409);
+      if (version!==current.signoff.planVersion) return json({error:'Plan lub grafik zmienił się. Odśwież odprawę.'},409);
+      await db.prepare(`INSERT INTO daily_briefing_signoffs (person,day,manager,accepted_plan,accepted_at)
+        VALUES (?,?,?,?,?) ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,accepted_plan=excluded.accepted_plan,
+          accepted_at=excluded.accepted_at,completed_version=NULL,completed_at=NULL
+          WHERE daily_briefing_signoffs.accepted_plan<>excluded.accepted_plan`).bind(person,today,user.id,version,timestamp).run();
+    } else if (action==='complete') {
+      if (!current.signoff.previousReady||!current.signoff.accepted)
+        return json({error:'Potwierdź poprzedni dzień pracy i zaakceptuj dzisiejszy plan lub dzień wolny.'},409);
+      if (version!==current.signoff.completionVersion) return json({error:'Dane odprawy zmieniły się. Odśwież panel.'},409);
+      if (current.signoff.completed) return json({ok:true});
+      const written=await db.prepare(`UPDATE daily_briefing_signoffs SET manager=?,completed_version=?,completed_at=?
+        WHERE person=? AND day=? AND accepted_plan=?`).bind(user.id,version,timestamp,person,today,current.signoff.planVersion).run();
+      if (!written.meta.changes) return json({error:'Dane odprawy zmieniły się. Odśwież panel.'},409);
     } else if (action==='correct') {
       if (!current.review.rows) return json({error:'Możesz skorygować zatwierdzony wpis, który ma podział na źródła.'},409);
-      if (JSON.stringify(current.review.rows)!==JSON.stringify(previousRows))
+      if (JSON.stringify(current.review.rows)!==JSON.stringify(previousRows)||
+          (version!==undefined&&version!==current.review.version))
         return json({error:'Wpis zmienił się od otwarcia formularza. Odśwież dane odprawy.'},409);
       if (!validDailyRows(rows)||rows.length!==sourceCount||rows.some(row=>row.length!==11))
         return json({error:'Wpisz poprawne liczby w tabeli wykonania.'},400);
       normalizeWalkIn(rows);
       const next=dailyCounters(rows);
-      const dayBefore=briefing.yesterday;
+      const dayBefore=current.review.day;
       const existing=await db.prepare('SELECT counters FROM daily_results WHERE person=? AND day=?').bind(person,dayBefore).first();
       if (!existing||JSON.stringify(JSON.parse(existing.counters)[5])!==JSON.stringify(previousRows))
         return json({error:'Wpis zmienił się albo został odblokowany. Odśwież dane odprawy.'},409);
@@ -725,20 +743,36 @@ async function handle(request, env, buildDailyReport=false) {
           .bind(next,person,dayBefore,existing.counters),
         db.prepare(`INSERT INTO daily_briefing_result_corrections
           (person,day,manager,previous_counters,corrected_counters,corrected_at)
-          SELECT ?,?,?,?,?,? WHERE changes()=1`).bind(person,dayBefore,user.id,existing.counters,next,timestamp)
+          SELECT ?,?,?,?,?,? WHERE changes()=1`).bind(person,dayBefore,user.id,existing.counters,next,timestamp),
+        db.prepare('DELETE FROM daily_briefing_reviews WHERE person=? AND day=? AND changes()=1').bind(person,dayBefore)
       ]);
       if (!updated.meta.changes) return json({error:'Wpis zmienił się albo został odblokowany. Odśwież dane odprawy.'},409);
     } else if (action==='save') {
       const valid=(values,length)=>Array.isArray(values)&&values.length===length&&values.every(value=>value===null||countValid(value));
-      if (!valid(goals,10)||!valid(forecast,4)) return json({error:'Wpisz liczby całkowite od 0 albo pozostaw pole puste.'},400);
-      if (ownForecast&&goals.some(value=>value!==null))
+      const saveGoals=part!=='forecast', saveForecast=part!=='goals';
+      if ((part!==undefined&&!['goals','forecast'].includes(part))||
+          (saveGoals&&!valid(goals,10))||(saveForecast&&!valid(forecast,4)))
+        return json({error:'Wpisz liczby całkowite od 0 albo pozostaw pole puste.'},400);
+      if (ownForecast&&(!saveForecast||saveGoals&&goals.some(value=>value!==null)))
         return json({error:'W swoim wierszu możesz zmienić prognozę wykonania.'},403);
-      if (!current.workday&&goals.some(value=>value!==null))
+      if (saveGoals&&!current.workday&&goals.some(value=>value!==null))
         return json({error:'Handlowiec ma dziś dzień wolny. Możesz zapisać prognozę.'},409);
-      await db.prepare(`INSERT INTO daily_briefing_settings VALUES (?,?,?,?,?,?,?)
-        ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,goals=excluded.goals,
-          forecast=excluded.forecast,baseline=excluded.baseline,updated_at=excluded.updated_at`)
-        .bind(person,today,user.id,JSON.stringify(ownForecast?current.correction:goals),JSON.stringify(forecast),JSON.stringify(current.actual),timestamp).run();
+      const latest=!saveForecast?await db.prepare(`SELECT forecast,baseline FROM daily_briefing_settings
+        WHERE person=? AND day BETWEEN ? AND ? ORDER BY day DESC LIMIT 1`).bind(person,today.slice(0,7)+'-01',today).first():null;
+      const writeGoals=saveGoals&&!ownForecast;
+      const nextGoals=JSON.stringify(writeGoals?goals:current.correction);
+      const nextForecast=saveForecast?JSON.stringify(forecast):latest?.forecast??'[]';
+      const baseline=saveForecast?JSON.stringify(current.actual):latest?.baseline??'[]';
+      const statements=[db.prepare(`INSERT INTO daily_briefing_settings VALUES (?1,?2,?3,?4,?5,?6,?7)
+        ON CONFLICT(person,day) DO UPDATE SET manager=excluded.manager,
+          goals=CASE WHEN ?8 THEN excluded.goals ELSE daily_briefing_settings.goals END,
+          forecast=CASE WHEN ?9 THEN excluded.forecast ELSE daily_briefing_settings.forecast END,
+          baseline=CASE WHEN ?9 THEN excluded.baseline ELSE daily_briefing_settings.baseline END,updated_at=excluded.updated_at`)
+        .bind(person,today,user.id,nextGoals,nextForecast,baseline,timestamp,Number(writeGoals),Number(saveForecast))];
+      if (writeGoals&&current.workday&&goals.some((goal,i)=>(goal??current.defaultTodayGoals[i])!==current.todayGoals[i])) {
+        statements.push(db.prepare('DELETE FROM daily_briefing_signoffs WHERE person=? AND day=?').bind(person,today));
+      }
+      await db.batch(statements);
     } else return json({error:'Wybierz działanie odprawy.'},400);
     return json({ok:true});
   }

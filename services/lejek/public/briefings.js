@@ -11,11 +11,11 @@ let briefingDownloading=false;
 const briefingDisplay=value=>value??'—';
 const briefingEnd=(actual,forecast)=>forecast==null?null:actual+forecast;
 
-function briefingTable(headers,rows) {
+function briefingTable(headers,rows,compact=false) {
   const region=reportElement('div');
   region.className='briefing-scroll';
   const table=reportElement('table');
-  table.className='briefing-table';
+  table.className=compact?'briefing-table briefing-table-compact':'briefing-table';
   const header=table.createTHead().insertRow();
   for (const label of headers) {
     const cell=reportElement('th',label);
@@ -25,8 +25,9 @@ function briefingTable(headers,rows) {
   const body=table.createTBody();
   for (const row of rows) {
     const tr=body.insertRow();
-    for (const value of row) {
+    for (const [index,value] of row.entries()) {
       const td=tr.insertCell();
+      if (compact) td.dataset.label=headers[index];
       if (value instanceof HTMLElement) td.append(value);
       else td.textContent=briefingDisplay(value);
     }
@@ -50,7 +51,7 @@ function briefingNumberField(label,value,placeholder) {
 
 function briefingResultCorrection(person,report) {
   const editor=reportElement('details');
-  editor.append(reportElement('summary','Skoryguj wczorajsze wykonanie'));
+  editor.append(reportElement('summary','Skoryguj wykonanie według źródeł'));
   const form=reportElement('form');
   const original=person.review.rows;
   const fields=sources.map((source,row)=>columns.map(([index,label])=>
@@ -76,7 +77,7 @@ function briefingResultCorrection(person,report) {
         columns.forEach(([index],i)=>{values[index]=Number(inputs[i].value);});
         return values;
       });
-      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'correct',rows,previousRows:original});
+      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'correct',rows,previousRows:original,version:person.review.version});
       await loadBriefingPanel('Zapisano korektę wykonania i przeliczono pozostały plan dla '+person.name+'.');
     } catch(error) {
       status.textContent=error.message;
@@ -87,111 +88,192 @@ function briefingResultCorrection(person,report) {
   return editor;
 }
 
+function briefingStep(number,title,state) {
+  const section=reportElement('section');
+  section.className='briefing-step';
+  const heading=reportElement('div');
+  heading.className='briefing-step-heading';
+  const index=reportElement('span',String(number));
+  index.className='briefing-step-number';
+  index.setAttribute('aria-hidden','true');
+  const badge=reportElement('span',state);
+  badge.className='briefing-step-badge';
+  heading.append(index,reportElement('h3',title),badge);
+  section.append(heading);
+  return section;
+}
+
+function briefingStatusLine() {
+  const status=reportElement('p');
+  status.className='briefing-action-status';
+  status.setAttribute('role','status');
+  return status;
+}
+
+function briefingAction(parent,label,person,report,payload,message) {
+  const button=reportElement('button',label);
+  button.type='button';
+  const status=briefingStatusLine();
+  button.onclick=async()=>{
+    button.disabled=true;
+    try {
+      await api('/api/daily-briefing',{person:person.id,day:report.today,...payload});
+      await loadBriefingPanel(message);
+    } catch(error) {
+      status.textContent=error.message;
+      button.disabled=false;
+    }
+  };
+  parent.append(button,status);
+  return button;
+}
+
+function briefingSave(form,label,person,report,fields,part) {
+  const submit=reportElement('button',label);
+  submit.type='submit';
+  const status=briefingStatusLine();
+  form.append(submit,status);
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    submit.disabled=true;
+    try {
+      const values=fields.map(input=>input.value===''?null:input.valueAsNumber);
+      await api('/api/daily-briefing',{person:person.id,day:report.today,action:'save',part,[part]:values});
+      await loadBriefingPanel('Zapisano '+(part==='goals'?'cele':'prognozę')+' · '+person.name);
+    } catch(error) {
+      status.textContent=error.message;
+      submit.disabled=false;
+    }
+  };
+  return submit;
+}
+
+function briefingReviewStep(person,report,canEdit) {
+  const {review}=person;
+  const title=review.day?'Poprzedni dzień pracy · '+dateLabel(review.day):'Poprzedni dzień pracy';
+  const state=review.confirmed?'Potwierdzony':review.status==='none'?'Nie dotyczy':review.status==='missing'?'Brak wpisu':'Do potwierdzenia';
+  const step=briefingStep(1,title,state);
+  if (review.day&&review.day!==report.yesterday) step.append(reportElement('p','Kalendarz pominął dni wolne.'));
+  if (review.status==='none') step.append(reportElement('p','Ewidencja handlowca nie obejmuje wcześniejszego dnia pracy.'));
+  if (review.status==='missing') step.append(reportElement('p','Poczekaj na zatwierdzenie wpisu handlowca lub rozpatrz jego zgłoszenie w kalendarzu.'));
+  if (review.stale) step.append(reportElement('p','Wyniki zmieniły się od potwierdzenia. Sprawdź je ponownie.'));
+  if (!review.actual) return step;
+  if (review.confirmed) step.append(reportElement('p','Potwierdził: '+review.confirmed.by));
+  step.append(briefingTable(['Aktywność','Plan','Wykonanie','Status'],
+    columns.map(([,label],i)=>[label,review.goals[i],review.actual[i],
+      review.goals[i]==null?'—':review.actual[i]>=review.goals[i]?'Wykonany':'Poniżej celu']),true));
+  if (canEdit&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
+    {action:'confirm',actual:review.actual,version:review.version},'Potwierdzono poprzedni dzień pracy · '+person.name);
+  if (canEdit&&review.rows) step.append(briefingResultCorrection(person,report));
+  return step;
+}
+
+function briefingTodayStep(person,report,canEdit,onDraftChange) {
+  const {signoff}=person;
+  const state=signoff.accepted?'Zaakceptowany':person.pendingToday?'Zgłoszenie w toku':person.workday?'Do akceptacji':'Dzień wolny';
+  const step=briefingStep(2,'Dzisiaj · '+dateLabel(report.today),state);
+  if (person.pendingToday) {
+    const link=reportElement('a','Otwórz kalendarz pracy');
+    link.href='#kalendarz-pracy';
+    link.dataset.panelRoute='';
+    step.append(reportElement('p','Rozpatrz zgłoszenie na dziś przed zaakceptowaniem dnia.'),link);
+    return step;
+  }
+
+  let fields=[],save,accept;
+  if (person.workday) {
+    const form=reportElement('form');
+    fields=columns.map(([,label],i)=>briefingNumberField('Korekta · '+label,person.correction[i],person.todayGoals[i]));
+    form.append(briefingTable(['Aktywność','Cel na dziś',...(canEdit?['Korekta']:[])],
+      columns.map(([,label],i)=>[label,person.todayGoals[i],...(canEdit?[fields[i]]:[])]),true));
+    if (canEdit) save=briefingSave(form,'Zapisz korektę celów',person,report,fields,'goals');
+    step.append(form);
+  } else {
+    const reason=calendarKinds[person.dayOff]??(person.dayOff==='off'?'Zgodnie z grafikiem':person.dayOff);
+    step.append(reportElement('p',reason+' · bez celów na dziś.'));
+  }
+  if (!signoff.previousReady) step.append(reportElement('p','Najpierw potwierdź wykonanie z poprzedniego dnia pracy.'));
+  if (canEdit&&signoff.previousReady&&!signoff.accepted) {
+    accept=briefingAction(step,person.workday?'Zaakceptuj plan na dziś':'Zaakceptuj dzień wolny',person,report,
+      {action:'accept-today',version:signoff.planVersion},'Zaakceptowano dzisiejszy dzień · '+person.name);
+  }
+  if (save) {
+    const baseline=fields.map(field=>field.value);
+    const update=()=>{
+      const dirty=fields.some((field,i)=>field.value!==baseline[i]||field.validity.badInput);
+      save.disabled=!dirty;
+      if (accept) accept.disabled=dirty;
+      onDraftChange(dirty);
+    };
+    fields.forEach(field=>field.oninput=update);
+    update();
+  }
+  return step;
+}
+
+function briefingForecast(person,report,canEdit) {
+  const section=reportElement('details');
+  section.className='briefing-extra';
+  const form=reportElement('form');
+  const fields=briefingSalesLabels.map((label,i)=>briefingNumberField('Jeszcze w tym miesiącu · '+label,person.manual[i],person.automaticForecast[i]));
+  form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
+    briefingSalesLabels.map((label,i)=>{
+      const total=reportElement('span',briefingDisplay(briefingEnd(person.actual[i],person.forecast[i])));
+      if (canEdit) {
+        const field=fields[i];
+        field.oninput=()=>{
+          const remaining=!field.validity.valid?null:field.value===''?person.automaticForecast[i]:field.valueAsNumber;
+          total.textContent=briefingDisplay(briefingEnd(person.actual[i],remaining));
+        };
+      }
+      return [label,person.actual[i],person.plan[i],canEdit?fields[i]:person.forecast[i],total];
+    }),true));
+  if (canEdit) {
+    form.append(reportElement('p','Puste pole korzysta z prognozy automatycznej.'));
+    briefingSave(form,'Zapisz prognozę',person,report,fields,'forecast');
+  }
+  section.append(reportElement('summary','Realizacja i prognoza miesiąca'),form);
+  return section;
+}
+
 function renderBriefingSeller(person,report,open,salon) {
   const details=reportElement('details');
   details.className='briefing-seller';
   details.dataset.seller=person.id;
   details.setAttribute('name','briefing-seller-'+salon);
   details.open=open;
-  const review=person.review;
   const summary=reportElement('summary');
   const name=reportElement('span',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':''));
   name.className='briefing-seller-name';
-  const completed=reportElement('span',review.confirmed?'Wykonana'
-    :review.status==='off'?'Dzień wolny':review.status==='missing'?'Brak wpisu':'Do odprawy');
-  completed.className='briefing-completed-badge';
-  completed.dataset.complete=String(Boolean(review.confirmed));
-  completed.hidden=!person.editable;
-  if (person.editable&&review.status!=='off') details.dataset.reviewComplete=String(Boolean(review.confirmed));
-  summary.append(name,completed);
+  const {signoff,review}=person;
+  if (person.editable) {
+    const state=signoff.completed?'Zatwierdzona':signoff.accepted?'Do zatwierdzenia':person.pendingToday?'Zgłoszenie w toku'
+      :signoff.previousReady?'Plan na dziś':review.status==='missing'?'Brak wpisu':'Sprawdź wykonanie';
+    const badge=reportElement('span',state);
+    badge.className='briefing-completed-badge';
+    badge.dataset.complete=details.dataset.reviewComplete=String(signoff.completed);
+    summary.append(name,badge);
+  } else summary.append(name);
   details.append(summary);
-  if (person.editable) {
-    const section=reportElement('h3','Wczoraj · '+dateLabel(report.yesterday));
-    const message=reportElement('p',review.confirmed?'Omówiono z handlowcem · '+review.confirmed.by
-      :review.stale?'Wynik zmienił się od potwierdzenia. Omów go ponownie.'
-      :review.status==='off'?'Dzień wolny.'
-      :review.status==='missing'?'Handlowiec nie zatwierdził jeszcze wyniku.'
-      :'Porównaj wykonanie z planem i potwierdź po rozmowie.');
-    message.setAttribute('role','status');
-    details.append(section,message);
-    if (review.actual) {
-      details.append(briefingTable(['Cel','Plan na dzień','Wykonanie','Status'],
-        columns.map(([,label],i)=>[label,review.goals[i],review.actual[i],
-          review.goals[i]==null?'—':review.actual[i]>=review.goals[i]?'Wykonany':'Poniżej celu'])));
-      if (!review.confirmed&&!data.previewUser) {
-        const confirm=reportElement('button','Potwierdź wykonanie po rozmowie');
-        confirm.type='button';
-        confirm.onclick=async()=>{
-          confirm.disabled=true;
-          try {
-            await api('/api/daily-briefing',{person:person.id,day:report.today,action:'confirm',actual:review.actual});
-            completed.textContent='Wykonana';
-            completed.dataset.complete=details.dataset.reviewComplete='true';
-            updateBriefingProgress();
-            message.textContent='Zapisano potwierdzenie rozmowy i wyniku.';
-          } catch(error) {
-            message.textContent=error.message;
-            confirm.disabled=false;
-          }
-        };
-        details.append(confirm);
-      }
-      if (review.rows&&!data.previewUser) details.append(briefingResultCorrection(person,report));
-    }
-  }
 
-  const form=reportElement('form');
-  const editable=person.editable&&!data.previewUser;
-  const forecastEditable=(person.editable||person.ownForecast)&&!data.previewUser;
-  const goals=columns.map(([,label],i)=>briefingNumberField('Dzisiejsza korekta · '+label,person.correction[i],person.todayGoals[i]));
-  const forecast=briefingSalesLabels.map((label,i)=>briefingNumberField('Jeszcze w tym miesiącu · '+label,person.manual[i],person.automaticForecast[i]));
+  const canEdit=person.editable&&!previewTarget;
   if (person.editable) {
-    form.append(reportElement('h3','Dzisiaj · '+dateLabel(report.today)));
-    if (person.workday) {
-      form.append(briefingTable(['Cel','Na dziś',...(editable?['Korekta']:[])],
-        columns.map(([,label],i)=>[label,person.todayGoals[i],...(editable?[goals[i]]:[])])));
-    } else form.append(reportElement('p','Dzień wolny.'));
+    const workflow=reportElement('div');
+    workflow.className='briefing-workflow';
+    const previous=briefingReviewStep(person,report,canEdit);
+    const final=briefingStep(3,'Podsumowanie odprawy',signoff.completed?'Zatwierdzona':signoff.accepted?'Gotowa':'Oczekuje');
+    if (!signoff.accepted) final.append(reportElement('p','Zakończ dwa wcześniejsze kroki, aby zatwierdzić odprawę.'));
+    const finish=canEdit&&signoff.accepted&&!signoff.completed?briefingAction(final,'Zatwierdź odprawę',person,report,
+      {action:'complete',version:signoff.completionVersion},'Zatwierdzono odprawę · '+person.name):null;
+    const today=briefingTodayStep(person,report,canEdit,dirty=>{if (finish) finish.disabled=dirty;});
+    workflow.append(previous,today,final);
+    details.append(workflow);
   }
-  form.append(reportElement('h3','Realizacja i prognoza do końca miesiąca'));
-  form.append(briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
-    briefingSalesLabels.map((label,i)=>{
-      const total=reportElement('span',briefingDisplay(briefingEnd(person.actual[i],person.forecast[i])));
-      if (forecastEditable) {
-        const field=forecast[i];
-        field.oninput=()=>{
-          const remaining=!field.validity.valid?null:field.value===''?person.automaticForecast[i]:field.valueAsNumber;
-          total.textContent=briefingDisplay(briefingEnd(person.actual[i],remaining));
-        };
-      }
-      return [label,person.actual[i],person.plan[i],forecastEditable?forecast[i]:person.forecast[i],total];
-    })));
-  if (forecastEditable) {
-    const submit=reportElement('button',editable?'Zapisz korekty':'Zapisz prognozę');
-    submit.type='submit';
-    const status=reportElement('p');
-    status.setAttribute('role','status');
-    form.append(reportElement('p','Wpisz przewidywany dodatkowy wynik w kolumnie „Jeszcze w tym miesiącu”. Puste pole używa prognozy automatycznej.'),
-      submit,status);
-    form.onsubmit=async event=>{
-      event.preventDefault();
-      const read=input=>input.value===''?null:Number(input.value);
-      submit.disabled=true;
-      try {
-        await api('/api/daily-briefing',{person:person.id,day:report.today,action:'save',
-          goals:editable&&person.workday?goals.map(read):goals.map(()=>null),forecast:forecast.map(read)});
-        await loadBriefingPanel('Zapisano korekty dla '+person.name+'.');
-      } catch(error) {
-        status.textContent=error.message;
-      } finally {
-        submit.disabled=false;
-      }
-    };
-  }
-  details.append(form);
+  details.append(briefingForecast(person,report,(person.editable||person.ownForecast)&&!previewTarget));
   if (person.remainingPlan.length) {
     const schedule=reportElement('details');
-    schedule.append(reportElement('summary','Plan na pozostałe dni pracy w miesiącu'),
-      reportElement('p','Rozkład zakłada wykonanie pokazanych celów i aktualizuje się po każdym zapisanym dniu.'),
+    schedule.className='briefing-extra';
+    schedule.append(reportElement('summary','Plan na pozostałe dni pracy'),
       briefingTable(['Dzień',...columns.map(([,label])=>label)],
         person.remainingPlan.map(({day,goals})=>[dateLabel(day),...goals])));
     details.append(schedule);
@@ -208,7 +290,7 @@ async function loadBriefingPanel(message='') {
   try {
     const report=await api('/api/daily-briefing');
     if (version!==briefingLoadVersion||briefingHost.hidden) return;
-    briefingHost.querySelector('#briefing-dates').textContent=dateLabel(report.today)+' · Wyniki za '+dateLabel(report.yesterday);
+    briefingHost.querySelector('#briefing-dates').textContent=dateLabel(report.today,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const previous=briefingSalon.selectedIndex<0?null:briefingSalon.value;
     const salons=report.salons.map(row=>row.salon);
     briefingSalon.replaceChildren(...salons.map(salon=>new Option(salon,salon)));
@@ -239,7 +321,7 @@ async function loadBriefingPanel(message='') {
     filterBriefingSalons();
     briefingReady=Boolean(report.salons.length);
     briefingPdf.disabled=!briefingReady||briefingDownloading;
-    briefingStatus.textContent=message||'Prognoza automatyczna korzysta z tempa z zakończonych dni pracy i aktualnego wykonania.';
+    briefingStatus.textContent=message;
   } catch(error) {
     if (version===briefingLoadVersion) briefingStatus.textContent=error.message;
   }
@@ -258,7 +340,7 @@ function updateBriefingProgress() {
   }
   const box=briefingHost.querySelector('#briefing-progress');
   box.hidden=!total;
-  box.querySelector('strong').textContent='Ukończone rozmowy · '+done+' z '+total;
+  box.querySelector('strong').textContent='Zatwierdzone odprawy · '+done+' z '+total;
   const progress=box.querySelector('progress');
   progress.max=total||1;
   progress.value=done;
