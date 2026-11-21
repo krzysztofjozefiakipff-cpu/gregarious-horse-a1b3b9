@@ -373,7 +373,8 @@ const calendarStatuses={pending:'Czeka na zatwierdzenie',approved:'Zatwierdzony'
 function renderCalendar(host,sellers,role) {
   const seller=role==='seller';
   const manager=role==='manager';
-  const canEdit=seller||manager;
+  const canWrite=!previewTarget&&!managerPreviewSalon&&!groupPreviewName;
+  const canReview=canWrite&&['manager','group','admin'].includes(role);
   const draftDay=host.dataset.calendarDraftDay;
   delete host.dataset.calendarDraftDay;
   const currentPerson=host.querySelector('[data-calendar-person] select')?.value;
@@ -393,14 +394,12 @@ function renderCalendar(host,sellers,role) {
   const detail=host.querySelector('[data-calendar-detail]');
   const save=host.querySelector('[data-calendar-save]');
   const editor=save.closest('.calendar-fields');
-  const legend=host.querySelector('.calendar-legend');
-  person.replaceChildren(...sellers.map(seller=>new Option(seller.name,seller.id)));
-  if (sellers.some(seller=>String(seller.id)===currentPerson)) person.value=currentPerson;
+  const daysSummary=host.querySelector('[data-calendar-days]');
+  const storedPendingOpen=host.dataset.calendarPendingOpen==='true';
   person.parentElement.hidden=seller;
-  host.querySelector('[data-calendar-kind-label]').hidden=!canEdit;
-  host.querySelector('[data-calendar-editor-fields]').hidden=!canEdit;
-  kind.querySelector('[value="noActivity"]').disabled=!seller;
-  kind.querySelector('[value="noActivity"]').hidden=!seller;
+  person.replaceChildren(...sellers.map(({id,name,salon})=>new Option([name,!seller&&salon].filter(Boolean).join(' · '),id)));
+  if (sellers.some(seller=>String(seller.id)===currentPerson)) person.value=currentPerson;
+  if (!seller) kind.querySelector('[value="noActivity"]').remove();
   month.value=draftDay?.slice(0,7)||currentMonth||data.today.slice(0,7);
   if (seller) {
     date.min=data.personal.missing[0]??data.today;
@@ -419,48 +418,39 @@ function renderCalendar(host,sellers,role) {
       ?'Rozlicz dzień':'Zgłoś do zatwierdzenia';
   };
   const closeEditor=()=>{
-    if (!seller) return;
     editor.hidden=true;
     date.value=endDate.value=reason.value=kind.value='';
+    updateRange();
+  };
+  const updateKinds=()=>{
+    for (const option of kind.options) {
+      option.disabled=Boolean(option.value)&&(
+        seller&&date.value<data.today&&!['leave','training','noActivity'].includes(option.value)||
+        date.value>data.today&&option.value==='noActivity'||
+        option.value==='saturday'&&new Date(date.value+'T12:00:00Z').getUTCDay()!==6);
+    }
+    if (kind.selectedOptions[0]?.disabled) kind.value='';
     updateRange();
   };
   const openEditor=(day,selectedKind='')=>{
     date.value=day;
     endDate.value=reason.value='';
     kind.value=selectedKind;
-    for (const option of kind.options) {
-      option.disabled=Boolean(option.value)&&(
-        day<data.today&&!['leave','training','noActivity'].includes(option.value)||
-        day>data.today&&option.value==='noActivity'||
-        option.value==='saturday'&&new Date(day+'T12:00:00Z').getUTCDay()!==6);
-    }
     editor.hidden=false;
-    updateRange();
+    updateKinds();
     kind.focus();
   };
-  if (seller) {
-    host.append($('#seller-calendar-layout').content.cloneNode(true));
-    const monthCard=host.querySelector('.seller-calendar-month');
-    const side=host.querySelector('.seller-calendar-side');
-    monthCard.append(grid,legend);
-    legend.querySelector('[data-status="approved"]').textContent='Zatwierdzone / rozliczone';
-    side.append(detail,editor,status);
-    month.closest('label').hidden=true;
-    date.readOnly=true;
-    const cancel=document.createElement('button');
-    cancel.type='button';
-    cancel.className='secondary';
-    cancel.textContent='Anuluj';
-    cancel.onclick=()=>{closeEditor();detail.querySelector('button')?.focus();};
-    save.after(cancel);
+  date.readOnly=seller;
+  host.querySelector('[data-calendar-cancel]').onclick=()=>{
     closeEditor();
-  }
+    detail.querySelector('button')?.focus();
+  };
   kind.onchange=()=>{endDate.value='';updateRange();};
-  date.onchange=updateRange;
+  date.onchange=updateKinds;
   updateRange();
   let revision=0;
   const showDetails=(entry,focus=false)=>{
-    if (seller&&date.value!==entry.day) closeEditor();
+    closeEditor();
     host.dataset.calendarSelection=person.value+'/'+entry.day;
     detail.hidden=false;
     for (const button of grid.querySelectorAll('button')) {
@@ -472,35 +462,34 @@ function renderCalendar(host,sellers,role) {
     const info=document.createElement('p');
     const automatic=entry.status==='automatic';
     const type=automatic?(entry.holiday??'Dzień wolny'):calendarKinds[entry.kind];
-    if (seller) {
-      const header=document.createElement('div');
-      header.className='seller-calendar-detail-top';
-      const badge=document.createElement('span');
-      badge.className='calendar-status seller-calendar-status';
-      badge.dataset.status=entry.status??'';
-      badge.textContent=automatic?'Wolne':calendarStatuses[entry.status]??(entry.day===data.today?'Dzisiaj':'Dzień pracy');
-      header.append(title,badge);
-      info.textContent=type??'';
-      detail.replaceChildren(header);
-      if (type) detail.append(info);
-      const rejectedDay=entry.status==='rejected'&&entry.kind==='noActivity';
-      if (!previewTarget&&(!entry.status||rejectedDay)&&(entry.day>=data.today||entry.day===data.personal.missing[0])) {
-        const action=document.createElement('button');
-        action.type='button';
-        action.textContent='Zgłoś dzień bez aktywności';
-        action.onclick=()=>openEditor(entry.day,rejectedDay?'noActivity':'');
-        detail.append(action);
-      }
-    } else {
-      info.textContent=type+' · '+(entry.holiday?'Bez aktywności · ':automatic?'':'Ręcznie · ')+calendarStatuses[entry.status];
-      detail.replaceChildren(title,info);
+    const header=document.createElement('div');
+    header.className='calendar-detail-top';
+    const badge=document.createElement('span');
+    badge.className='calendar-status';
+    badge.dataset.status=entry.status??'';
+    badge.textContent=automatic?'Wolne':calendarStatuses[entry.status]??(entry.day===data.today?'Dzisiaj':'Dzień pracy');
+    header.append(title,badge);
+    detail.replaceChildren(header);
+    if (type) {
+      info.textContent=type;
+      detail.append(info);
+    }
+    const rejectedDay=entry.status==='rejected'&&entry.kind==='noActivity';
+    const sellerCanReport=seller&&(!entry.status||rejectedDay)&&
+      (entry.day>=data.today||entry.day===data.personal.missing[0]);
+    if (canWrite&&(sellerCanReport||manager&&!entry.status)) {
+      const action=document.createElement('button');
+      action.type='button';
+      action.textContent=manager?'Dodaj nieobecność':'Zgłoś dzień bez aktywności';
+      action.onclick=()=>openEditor(entry.day,rejectedDay?'noActivity':'');
+      detail.append(action);
     }
     if (entry.reason) {
       const explanation=document.createElement('p');
       explanation.textContent='Powód · '+entry.reason;
       detail.append(explanation);
     }
-    if (!seller&&entry.kind==='noActivity'&&['pending','approved'].includes(entry.status)) {
+    if (canReview&&entry.kind==='noActivity'&&['pending','approved'].includes(entry.status)) {
       const actions=document.createElement('div');
       actions.className='calendar-entry-actions';
       const decisions=entry.status==='approved'?[['revoke','Cofnij zgodę']]:[['approve','Zatwierdź'],['reject','Odrzuć']];
@@ -517,7 +506,7 @@ function renderCalendar(host,sellers,role) {
       }
       detail.append(actions);
     }
-    if (!automatic&&entry.kind!=='noActivity'&&entry.status!=='recorded'&&
+    if (canWrite&&entry.kind&&entry.kind!=='noActivity'&&entry.status!=='recorded'&&
         (manager||(seller&&entry.status!=='approved'&&entry.day>=data.today))) {
       const actions=document.createElement('div');
       actions.className='calendar-entry-actions';
@@ -525,10 +514,7 @@ function renderCalendar(host,sellers,role) {
       edit.type='button';
       edit.className='secondary';
       edit.textContent='Edytuj wpis';
-      edit.onclick=()=>{
-        if (seller) openEditor(entry.day,entry.kind);
-        else {date.value=entry.day;endDate.value='';kind.value=entry.kind;updateRange();date.focus();}
-      };
+      edit.onclick=()=>openEditor(entry.day,entry.kind);
       actions.append(edit);
       const decisions=entry.status==='approved'?[['revoke','Cofnij zgodę']]
         :manager&&entry.status==='pending'?[['approve','Zatwierdź'],['reject','Odrzuć'],['remove','Usuń zgłoszenie']]
@@ -558,28 +544,22 @@ function renderCalendar(host,sellers,role) {
     if (!month.value) return;
     const first=month.value+'-01';
     const [year,monthNumber]=month.value.split('-').map(Number);
-    if (seller) {
-      host.querySelector('[data-seller-calendar-month]').textContent=dateLabel(first,{month:'long',year:'numeric'});
-      host.querySelector('#seller-calendar-days').hidden=true;
-    }
+    daysSummary.hidden=true;
     grid.setAttribute('aria-busy','true');
     try {
-      const {entries,automaticDays=[]}=await api('/api/work-calendar?person='+person.value+'&month='+month.value);
+      const {entries,automaticDays=[],recordedDays=[]}=await api('/api/work-calendar?person='+person.value+'&month='+month.value);
       if (request!==revision||!grid.isConnected) return;
       const calendar=new Map(automaticDays.map(day=>[day,{day,status:'automatic',holiday:polishHoliday(day)}]));
       for (const entry of entries) calendar.set(entry.day,entry);
-      if (seller) {
-        for (const {day} of data.daily) {
-          if (day.startsWith(month.value)&&!calendar.has(day)) calendar.set(day,{day,status:'recorded'});
-        }
-        if (month.value===data.today.slice(0,7)) {
-          const isScheduled=day=>isSalonWorkday(day)&&calendar.get(day)?.status!=='approved'&&
-            !['leave','training','zero'].includes(data.personal.exceptions[day]);
-          const count=remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
-          const summary=host.querySelector('#seller-calendar-days');
-          summary.textContent='Dni pracy do końca miesiąca: '+count;
-          summary.hidden=false;
-        }
+      for (const day of recordedDays) {
+        if (!calendar.has(day)) calendar.set(day,{day,status:'recorded'});
+      }
+      if (seller&&month.value===data.today.slice(0,7)) {
+        const isScheduled=day=>isSalonWorkday(day)&&calendar.get(day)?.status!=='approved'&&
+          !['leave','training','zero'].includes(data.personal.exceptions[day]);
+        const count=remainingDays(data.today,monthStart(year,monthNumber),isScheduled);
+        daysSummary.textContent='Dni pracy do końca miesiąca: '+count;
+        daysSummary.hidden=false;
       }
       const offset=(new Date(first+'T12:00:00Z').getUTCDay()+6)%7;
       for (const day of ['Pon','Wt','Śr','Czw','Pt','Sob','Nd']) {
@@ -598,31 +578,28 @@ function renderCalendar(host,sellers,role) {
         const day=month.value+'-'+String(n).padStart(2,'0');
         const entry=calendar.get(day);
         const cell=document.createElement('li');
-        const marker=document.createElement(entry||seller?'button':'span');
+        const marker=document.createElement('button');
         marker.className='calendar-day';
         marker.textContent=n;
         if (day===data.today) marker.setAttribute('aria-current','date');
-        if (entry||seller) {
-          marker.type='button';
-          marker.dataset.day=day;
-          if (entry) marker.dataset.status=entry.status;
-          marker.setAttribute('aria-pressed','false');
-          const label=entry?.holiday??calendarKinds[entry?.kind]??(entry?.status==='automatic'?'Dzień wolny':calendarStatuses[entry?.status]??'Dzień pracy');
-          const state=entry?.kind?calendarStatuses[entry.status]:null;
-          marker.setAttribute('aria-label',[dateLabel(day),label,state].filter(Boolean).join(' · '));
-          marker.onclick=()=>{
-            if (seller) status.textContent='';
-            showDetails(entry??{day},!seller);
-          };
-        }
+        marker.type='button';
+        marker.dataset.day=day;
+        if (entry) marker.dataset.status=entry.status;
+        marker.setAttribute('aria-pressed','false');
+        const label=entry?.holiday??calendarKinds[entry?.kind]??(entry?.status==='automatic'?'Dzień wolny':calendarStatuses[entry?.status]??'Dzień pracy');
+        const state=entry?.kind?calendarStatuses[entry.status]:null;
+        marker.setAttribute('aria-label',[dateLabel(day),label,state].filter(Boolean).join(' · '));
+        marker.onclick=()=>{
+          status.textContent='';
+          showDetails(entry??{day},true);
+        };
         cell.append(marker);
         grid.append(cell);
       }
       const [selectedPerson,storedDay]=host.dataset.calendarSelection?.split('/')??[];
       const stored=selectedPerson===person.value?storedDay:null;
       const day=stored?.startsWith(month.value)?stored:data.today.startsWith(month.value)?data.today:first;
-      const selected=seller?(calendar.get(day)??{day}):calendar.get(stored);
-      if (selected) showDetails(selected,focusSelection);
+      showDetails(calendar.get(day)??{day},focusSelection);
     } catch (error) {
       if (request===revision) status.textContent=error.message;
     } finally {
@@ -667,32 +644,34 @@ function renderCalendar(host,sellers,role) {
     load();
   };
   person.onchange=month.onchange=resetSelection;
-  if (seller) {
-    for (const button of host.querySelectorAll('[data-month-offset]')) {
-      button.onclick=()=>{
-        const [year,number]=month.value.split('-').map(Number);
-        month.value=monthStart(year,number-1+Number(button.dataset.monthOffset)).slice(0,7);
-        resetSelection();
-      };
-    }
-    $('#seller-calendar-today').onclick=()=>{
-      month.value=data.today.slice(0,7);
+  for (const button of host.querySelectorAll('[data-month-offset]')) {
+    button.onclick=()=>{
+      const [year,number]=(month.value||data.today.slice(0,7)).split('-').map(Number);
+      month.value=monthStart(year,number-1+Number(button.dataset.monthOffset)).slice(0,7);
       resetSelection();
     };
   }
-  if (!seller) {
+  host.querySelector('[data-calendar-today]').onclick=()=>{
+    month.value=data.today.slice(0,7);
+    resetSelection();
+  };
+  if (canReview) {
     const requests=[...(data.approvals??[]),...(manager?(data.calendar??[]).filter(row=>row.status==='pending'):[])]
       .filter(row=>sellers.some(person=>person.id===row.person));
     if (requests.length) {
-      const title=document.createElement('strong');
-      title.textContent='Oczekujące zgłoszenia';
-      pending.append(title);
+      const list=pending.closest('details');
+      list.querySelector('summary').textContent='Oczekujące zgłoszenia ('+requests.length+')';
+      list.open=storedPendingOpen;
+      list.ontoggle=()=>{host.dataset.calendarPendingOpen=String(list.open);};
+      list.hidden=false;
       for (const request of requests) {
         const button=document.createElement('button');
         button.type='button';
         button.className='secondary';
         button.textContent=sellers.find(seller=>seller.id===request.person).name+' · '+dateLabel(request.day);
         button.onclick=()=>{
+          closeEditor();
+          status.textContent='';
           person.value=String(request.person);
           month.value=request.day.slice(0,7);
           host.dataset.calendarSelection=person.value+'/'+request.day;
@@ -700,7 +679,6 @@ function renderCalendar(host,sellers,role) {
         };
         pending.append(button);
       }
-      pending.hidden=false;
     }
   }
   load();
@@ -2688,6 +2666,7 @@ function selectRoleFunction(routes) {
   $('#user-accounts-view').hidden=active!=='konta-uzytkownikow';
   $('#administration-view').hidden=!blockId;
   $('#administration-title').textContent=label??'Administracja';
+  $('#administration-view').classList.toggle('calendar-screen',blockId==='admin-absence-block');
   for (const block of document.querySelectorAll('#administration-view > .admin-block')) {
     block.hidden=block.id!==blockId;
     block.open=!block.hidden;
@@ -2757,6 +2736,7 @@ function selectManagementView() {
   }
   if (adminBlock) $('#'+adminBlock).open=true;
   $('#administration-title').textContent=adminBlock?moduleLabel:'Administracja';
+  $('#administration-view').classList.toggle('calendar-screen',adminBlock==='admin-absence-block');
   if (!preview) {
     delete $('#admin').dataset.function;
     const history=route==='historia-planow';

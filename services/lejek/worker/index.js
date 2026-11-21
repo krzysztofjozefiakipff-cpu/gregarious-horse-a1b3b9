@@ -511,7 +511,13 @@ async function handle(request, env, buildDailyReport=false) {
         e.reason FROM daily_exceptions e WHERE e.person=?1 AND substr(e.day,1,7)=?2
           AND (e.kind='pending' OR NOT EXISTS (SELECT 1 FROM work_calendar c WHERE c.person=e.person AND c.day=e.day))
       ORDER BY day`,person,month);
-    return json({entries:entries.filter(entry=>!polishHoliday(entry.day)).map(({reason,...entry})=>reason?{...entry,reason}:entry),automaticDays:calendarMonthDays(month).filter(day=>!isSalonWorkday(day))});
+    const recordedDays=(await list(db,'SELECT day FROM daily_results WHERE person=? AND substr(day,1,7)=? ORDER BY day',person,month))
+      .map(({day})=>day);
+    return json({
+      entries:entries.filter(entry=>!polishHoliday(entry.day)).map(({reason,...entry})=>reason?{...entry,reason}:entry),
+      automaticDays:calendarMonthDays(month).filter(day=>!isSalonWorkday(day)),
+      recordedDays
+    });
   }
   if (request.method==='GET' && path==='/api/daily/reopen') {
     const person=Number(url.searchParams.get('person'));
