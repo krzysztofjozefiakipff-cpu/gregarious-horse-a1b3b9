@@ -66,8 +66,16 @@ function briefingResultCorrection(person,report) {
   save.type='submit';
   const status=reportElement('p');
   status.setAttribute('role','status');
+  const entry=briefingTable(['Źródło',...columns.map(([,label])=>label)],sources.map((source,i)=>[source,...fields[i]]),true);
+  entry.querySelector('table').classList.remove('briefing-table-compact');
+  entry.classList.add('activity-entry-table');
+  const rows=[...entry.querySelectorAll('tbody tr')];
+  rows[0].cells[2].classList.add('mobile-automatic-field');
+  rows[0].cells[3].classList.add('mobile-automatic-field');
+  addNumberControlsIn(entry);
+  addMobileEntryPicker(entry,rows,sources);
   form.append(reportElement('p','Wpisz rzeczywiste wyniki według źródeł. Po zapisie plan na pozostałe dni przeliczy się automatycznie.'),
-    briefingTable(['Źródło',...columns.map(([,label])=>label)],sources.map((source,i)=>[source,...fields[i]])),save,status);
+    entry,save,status);
   form.onsubmit=async event=>{
     event.preventDefault();
     save.disabled=true;
@@ -226,6 +234,7 @@ function briefingTodayStep(person,report,canEdit,onDraftChange) {
       const form=reportElement('form');
       fields=columns.map(([,label],i)=>briefingNumberField('Korekta · '+label,person.correction[i],person.todayGoals[i]));
       form.append(briefingOverview(['Aktywność','Korekta'],columns.map(([,label],i)=>[label,fields[i]])));
+      addNumberControlsIn(form);
       save=briefingSave(form,'Zapisz korektę celów',person,report,fields,'goals');
       editor.append(form);
       step.append(editor);
@@ -272,6 +281,7 @@ function briefingForecast(person,report,canEdit) {
     }),true));
   if (canEdit) {
     form.append(reportElement('p','Puste pole korzysta z prognozy automatycznej.'));
+    addNumberControlsIn(form);
     briefingSave(form,'Zapisz prognozę',person,report,fields,'forecast');
   }
   section.append(reportElement('summary','Realizacja i prognoza miesiąca'),form);
