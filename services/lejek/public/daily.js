@@ -753,17 +753,26 @@ function renderPlans(snapshot,month,type) {
     :null;
   const stars=average===null?null:Math.min(5,average*5);
   const format=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
+  $('#seller-goal-rating').hidden=false;
   $('#rating-stars').hidden=stars===null;
   $('#rating-stars').style.setProperty('--rating-fill',((stars??0)*20)+'%');
   $('#seller-rating').textContent=stars===null?'Brak celów do oceny'
     :format.format(stars)+' / 5 · '+format.format(average*100)+'% realizacji';
   $('#pace').hidden=false;
-  $('#pace-items').innerHTML=metrics.map(({label,actual,target,goal,delta})=>{
-    const style=delta<0?'behind':delta>0?'ahead':'';
-    const status=delta==null?'Brak celu':delta<0?'Brakuje '+(-delta):delta>0?'Ponad planem o '+delta:'Zgodnie z planem';
-    return '<div class="pace-item"><span>'+label+'</span><strong class="pace-count">'+actual+' / '+(goal??'—')+'</strong>'+
-      '<strong class="'+style+'">'+status+'</strong>'+(target==null?'':'<small class="pace-month">Cel okresu · '+target+'</small>')+'</div>';
-  }).join('');
+  $('#pace-items').replaceChildren(...metrics.map(({index,label,actual,target,goal,delta})=>{
+    const row=document.createElement('tr');
+    const name=document.createElement('th');
+    name.scope='row';
+    name.textContent=index===10?'Faktury':label;
+    const progress=row.insertCell();
+    progress.textContent=actual+' / '+(goal??'—');
+    const difference=row.insertCell();
+    difference.className=delta<0?'behind':delta>0?'ahead':'';
+    difference.textContent=delta==null?'—':delta<0?'−'+(-delta):delta>0?'+'+delta:'0';
+    row.insertCell().textContent=target??'—';
+    row.prepend(name);
+    return row;
+  }));
   renderMotivator(metrics,snapshot.today);
 }
 

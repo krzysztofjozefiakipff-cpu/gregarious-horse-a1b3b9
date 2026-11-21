@@ -14,7 +14,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 .eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}
 .quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
 .task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--primary);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
-.behind{color:#a12528}.ahead{color:#12633b}#pace{display:flex;gap:16px;flex-wrap:wrap;padding:10px 0;border-block:1px solid var(--line);margin:0 0 20px}
+.behind{color:#a12528}.ahead{color:#12633b}
 #meme{background:var(--highlight);color:var(--ink);padding:22px;border-radius:16px;margin-bottom:14px}#giphy-card{margin-top:12px}#giphy-image{display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:10px}#giphy-credit{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem}#giphy-credit img{width:18px;height:18px}#meme h2{margin-top:10px}#meme-icon{font-size:2.4rem;margin:10px 0}#meme-caption{font-weight:750;font-size:1.15rem}#meme-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#meme-form label,#story-queue label{display:grid;gap:4px;margin:8px 0}textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}#meme-status{margin-top:8px}#sidebar-feature{order:2}#cause{color:white;background:var(--primary);padding:22px;border-radius:16px;margin-bottom:14px}#cause h2{font-size:clamp(1.4rem,2.8vw,2.8rem);margin:10px 0}#cause p{margin:10px 0}#cause details{margin-top:14px}progress{width:100%;accent-color:var(--highlight)}#cookie{padding:18px;border:1px solid var(--line);border-radius:14px}#cookie[open]{background:#fff0b9}#cookie summary{cursor:pointer;font-weight:700}#fortune{font:italic 1.25rem Georgia,serif;margin-top:10px}
 .plan-tools { display:grid; gap:10px; }
 .plan-tools summary { padding:4px 0; color:var(--ink); }
@@ -58,8 +58,7 @@ button.calendar-day[aria-pressed="true"] { border-color:var(--primary); box-shad
 .entry-actions{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:560px){.entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}}
 a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--line);padding:14px;border-radius:12px;margin:12px 0}#admin form label{display:grid;gap:4px}#admin form button{justify-self:start}
-@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#pace,#entry,#cause,#cookie{margin:0}.actions{order:1}#cause{order:2}#pace{order:4}#entry{order:5}#cookie{order:6}}
-#pace{display:block;border:1px solid var(--line);border-radius:14px;padding:14px 16px}.pace-intro h2{margin:0 0 4px}.pace-intro p{font-size:.9rem;color:var(--muted)}#pace-items{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:10px}#pace-items span{font-size:.95rem}
+@media(max-width:850px){.layout{display:flex;flex-direction:column}.sidebar{display:contents}.layout article.main{display:contents}.actions,#entry,#cause,#cookie{margin:0}.actions{order:1}#cause{order:2}#entry{order:5}#cookie{order:6}}
 .pace-item{flex:1 1 170px;min-width:0}.pace-note{display:block;margin-top:6px;padding:6px 9px;border-radius:7px;background:#e7f5eb;color:#194d30;font-size:.87rem;line-height:1.35}
 .pace-note-behind{background:#fff0df;color:#743b18}
 .mobile-entry,.entry-field-label{display:none}
@@ -70,10 +69,9 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 @media(max-width:850px){#daily-lesson{margin:0}}
 #salon-summary{margin:20px 0}#salon-results details{padding:10px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px}#salon-results summary{cursor:pointer;font-weight:750}#salon-results ul{margin:6px 0;padding-inline-start:20px}
 .management-nav+section h1,#administration-view h1{margin-bottom:9px}
-#pace-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}#pace-items .pace-item{display:grid;align-content:start;gap:3px;padding:10px;border:1px solid var(--line);border-radius:8px;background:white}#pace-items .pace-count{font-size:1.2rem}.pace-month{color:var(--muted)}
 #motivation{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}#motivation h3{margin:0 0 8px;font-size:1.08rem}#motivation ol{margin:10px 0;padding-inline-start:23px}#motivation ol:empty{display:none}#motivation li+li{margin-top:6px}#motivation-message{margin-top:8px}
 #performance-view,#manager-team-view{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
-#daily-lesson,#daily .actions,#entry,#daily #pace{margin:0 0 14px}
+#daily-lesson,#daily .actions,#entry{margin:0 0 14px}
 #daily-lesson,#daily .actions{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}
 #daily .eyebrow{color:var(--accent-ink)}
 #daily #cause .eyebrow{color:var(--accent)}
@@ -288,7 +286,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .task-action { padding-block:3px; }
 }
 [data-seller-panel="plan"] { display:grid; gap:14px; }
-#daily [data-seller-panel="plan"] #pace,
 #daily [data-seller-panel="plan"] #motivation { margin:0; min-width:0; }
 #seller-ranking {
   min-width:0; padding:10px 12px 12px; border-radius:12px;
@@ -314,11 +311,20 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .podium-seller { display:block; font-size:.875rem; line-height:1.2; }
 .podium-seller + .podium-seller { margin-block-start:5px; }
 .podium-seller small { display:block; font-size:.75rem; }
-.rating {
-  display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; padding-block-start:8px;
-  border-block-start:1px solid var(--line); margin-block-start:10px;
+#pace, #seller-goal-rating {
+  min-width:0; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px;
 }
-.rating h3 { margin:0; font-size:.95rem; }
+#pace-title, #seller-goal-rating h2 { margin:0; font-size:1.05rem; }
+#pace table { table-layout:fixed; margin-block:7px 5px; font-size:.875rem; }
+#pace th, #pace td { border-bottom:1px solid var(--line); padding:5px 3px; overflow-wrap:anywhere; line-height:1.2; }
+#pace thead th { background:var(--tint); color:var(--accent-ink); font-size:.75rem; }
+#pace tr > :first-child { width:40%; text-align:start; }
+#pace tr > :not(:first-child) { text-align:end; font-variant-numeric:tabular-nums; }
+#pace tbody th { font-size:inherit; font-weight:600; }
+#pace tbody td:nth-child(2), #pace tbody td:nth-child(3) { font-weight:700; }
+#pace tbody tr:last-child > * { border-bottom:0; }
+#pace-description { color:var(--muted); font-size:.8rem; }
+#seller-goal-rating { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; }
 .rating-stars { white-space:nowrap; font-size:1rem; letter-spacing:.08em; color:var(--accent-ink); }
 @supports (background-clip:text) {
   .rating-stars { background:linear-gradient(90deg,var(--accent-ink) var(--rating-fill,0%),#967f93 var(--rating-fill,0%)); background-clip:text; color:transparent; }
@@ -731,14 +737,23 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <p id="ranking-empty" hidden>Brak zapisanych wyników sprzedaży w tym okresie.</p>
   <p id="ranking-position" hidden></p>
 </section>
+<section id="seller-goal-rating" aria-labelledby="seller-goal-rating-title" hidden>
+  <h2 id="seller-goal-rating-title">Ocena realizacji celów</h2>
+  <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
+  <p id="seller-rating"></p>
+</section>
 <section id="pace" aria-labelledby="pace-title" hidden>
-  <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
-  <div id="pace-items"></div>
-  <div class="rating">
-    <h3>Ocena realizacji celów</h3>
-    <span class="rating-stars" id="rating-stars" aria-hidden="true" hidden>★★★★★</span>
-    <p id="seller-rating"></p>
-  </div>
+  <h2 id="pace-title">Realizacja działań</h2>
+  <table aria-labelledby="pace-title" aria-describedby="pace-description">
+    <thead><tr>
+      <th scope="col">Działanie</th>
+      <th scope="col" aria-label="Wykonano i cel narastająco">Wyk. / cel</th>
+      <th scope="col">Różnica</th>
+      <th scope="col">Plan</th>
+    </tr></thead>
+    <tbody id="pace-items"></tbody>
+  </table>
+  <p id="pace-description">Cel i różnica narastająco. Plan na cały okres.</p>
 </section>
 <section id="motivation" aria-labelledby="motivation-title">
   <h3 id="motivation-title">Podsumowanie i następny krok</h3>
