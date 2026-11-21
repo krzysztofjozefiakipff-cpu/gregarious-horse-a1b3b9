@@ -706,11 +706,15 @@ function renderCalendar(host,sellers,role) {
   load();
 }
 
+function createResultsCard(titleId) {
+  const card=$('#sales-results-card').content.cloneNode(true);
+  card.querySelector('table').setAttribute('aria-labelledby',titleId);
+  return card;
+}
+
 function mountResultsCard(containerId) {
-  const card=$('#seller-results-card').content.cloneNode(true);
-  card.querySelector('table').setAttribute('aria-labelledby',containerId+'-title');
   const container=$('#'+containerId);
-  container.append(card);
+  container.append(createResultsCard(containerId+'-title'));
   return container;
 }
 
@@ -1516,33 +1520,29 @@ function coachingSellerLink(seller) {
   return link;
 }
 
-function salonQuickTotals(plan,elapsed,total,number,completed=false) {
-  const quickTotals=document.createElement('span');
-  quickTotals.className='salon-quick-totals';
-  for (const [index,label] of salonPlanMetrics.entries()) {
+function salonQuickTotals(plan,titleId,elapsed,total,number,completed) {
+  const card=createResultsCard(titleId);
+  for (const cell of card.querySelectorAll('[data-seller-result]')) {
+    const index=[7,8,10,9].indexOf(Number(cell.dataset.sellerResult));
     const actual=plan.actuals[index];
     const target=plan.targets[index];
     const configured=plan.configured[index];
     const partial=plan.partial?.[index];
     const pace=configured&&target>0&&!partial?salonPace(actual,target,elapsed,total,plan.expected?.[index],completed):null;
-    const quickTotal=document.createElement('span');
     const tone=pace?.tone||'neutral';
-    quickTotal.dataset.pace=tone;
     const paceLabel=pace?.status??(partial?'Plan obejmuje część danych':configured?'Cel zerowy':'Brak planu');
-    quickTotal.title=label+' · '+paceLabel;
-    const icon=document.createElement('span');
-    icon.setAttribute('aria-hidden','true');
-    icon.textContent=salonPaceIcons[tone];
-    const shortLabel=document.createElement('abbr');
-    shortLabel.title=label;
-    shortLabel.textContent=salonPlanAbbreviations[index];
-    const accessiblePace=document.createElement('span');
-    accessiblePace.className='salon-pace-description';
-    accessiblePace.textContent=' · '+paceLabel;
-    quickTotal.append(icon,' ',shortLabel,': '+number.format(actual)+'/'+(configured?number.format(target):'—')+(partial?'*':''),accessiblePace);
-    quickTotals.append(quickTotal);
+    cell.dataset.pace=tone;
+    cell.title=salonPlanMetrics[index]+' · '+paceLabel;
+    const symbol=document.createElement('span');
+    symbol.className='salon-pace-symbol';
+    symbol.setAttribute('aria-hidden','true');
+    symbol.textContent=salonPaceIcons[tone];
+    const description=document.createElement('span');
+    description.className='entry-visually-hidden';
+    description.textContent=' · '+paceLabel;
+    cell.append(symbol,number.format(actual)+'/'+(configured?number.format(target):'—')+(partial?'*':''),description);
   }
-  return quickTotals;
+  return card;
 }
 
 function aggregateSalonPerformance(months,now) {
@@ -1705,8 +1705,9 @@ function renderSalonSummary(view,team=[],period=null) {
     const card=document.createElement('div');
     card.className='salon-overall-totals';
     const heading=document.createElement('strong');
+    heading.id='salon-performance-total';
     heading.textContent='Wszystkie salony · razem';
-    card.append(heading,salonQuickTotals(overall,elapsed,total,number,completed));
+    card.append(heading,salonQuickTotals(overall,heading.id,elapsed,total,number,completed));
     if (overall.partial.some(Boolean)) {
       const note=document.createElement('p');
       note.textContent=period?'* Cele są dostępne dla części salonów lub miesięcy.':'* Plan obejmuje część salonów';
@@ -1714,11 +1715,17 @@ function renderSalonSummary(view,team=[],period=null) {
     }
     results.append(card);
   }
-  for (const plan of plans) {
-    const card=document.createElement('details');
-    card.dataset.salon=plan.salon;
+  for (const [slot,plan] of plans.entries()) {
+    const card=document.createElement('article');
+    card.className='salon-result-card';
+    const details=document.createElement('details');
+    details.dataset.salon=plan.salon;
+    details.open=expanded.get(plan.salon)??false;
     const summary=document.createElement('summary');
-    const title=document.createElement('strong');
+    summary.textContent='Szczegóły realizacji';
+    const header=document.createElement('header');
+    const title=document.createElement('h3');
+    title.id='salon-performance-'+slot;
     title.textContent=plan.salon;
     const grid=document.createElement('span');
     grid.className='salon-progress-grid';
@@ -1736,7 +1743,7 @@ function renderSalonSummary(view,team=[],period=null) {
         (plan.partial?.[index]?' · cel dostępny dla części miesięcy':ratio===null?(configured?' · cel zerowy':' · brak celu'):' · '+percent.format(ratio));
       if (pace) values.className=pace.tone;
       indicator.append(name,values);
-      if (ratio!==null) {
+      if (pace) {
         const progress=document.createElement('progress');
         progress.max=target;
         progress.value=Math.min(actual,target);
@@ -1765,13 +1772,11 @@ function renderSalonSummary(view,team=[],period=null) {
     time.className='salon-pace-time';
     time.textContent=elapsed+' z '+total+' dni pracy '+(period?'w okresie':'w miesiącu')+' · '+percent.format(elapsed/total)
       +(completed?' · Okres zakończony.':' · Prognoza zakłada utrzymanie dotychczasowego tempa.');
-    summary.append(title,status,salonQuickTotals(plan,elapsed,total,number,completed));
-    if (period) {
-      card.append(summary,time,grid);
-      card.open=expanded.get(plan.salon)??false;
-      results.append(card);
-      continue;
-    }
+    header.append(title,status);
+    details.append(summary,time,grid);
+    card.append(header,salonQuickTotals(plan,title.id,elapsed,total,number,completed),details);
+    results.append(card);
+    if (period) continue;
     const members=new Set([...plan.team,...plan.contributors].map(person=>person.id));
     const metrics=team.filter(person=>members.has(person.seller.id));
     const areas=columns.map(([index,label],column)=>{
@@ -1843,9 +1848,7 @@ function renderSalonSummary(view,team=[],period=null) {
       }
       sections.append(section);
     }
-    card.append(summary,time,grid,sections);
-    card.open=expanded.get(plan.salon)??false;
-    results.append(card);
+    details.append(sections);
   }
 }
 
@@ -1919,7 +1922,6 @@ function renderManagerDashboard(view,detailOnly=false) {
 const salonPlans=$('#salon-plans');
 const salonPlanMonth=$('#salon-plan-month');
 const salonPlanMetrics=['Zamówienia','Rejestracje','Wystawione faktury','Opinie Google'];
-const salonPlanAbbreviations=['Z','R','F','G'];
 const salonPaceIcons={ahead:'✓',behind:'↓',neutral:'○'};
 let salonPlanRevision=0;
 let openPlanningSeller=null;
