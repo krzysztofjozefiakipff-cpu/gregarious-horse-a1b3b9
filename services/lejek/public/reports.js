@@ -183,15 +183,15 @@ function reportDailyChecks(check) {
 
 const dailyReportSales=[6,7,8,9];
 
-function dailySalesTable(salon) {
-  const people=[{name:'Razem salon',actuals:salon.totals,targets:salon.targets,expected:salon.expected},...salon.people];
+function reportSalesTable(salon,people=[]) {
+  const rows=[{name:'Razem salon',actuals:salon.totals,targets:salon.targets,expected:salon.expected},...people];
   const summary=reportTable(['Wynik / plan','Zamówienia','Faktury','Rejestracje','Opinie Google'],
-    people.map(person=>[person.name+(person.archived?' · archiwum':''),...dailyReportSales.map(index=>{
+    rows.map(person=>[person.name+(person.archived?' · archiwum':''),...dailyReportSales.map(index=>{
       const target=person.targets[index];
       return reportNumber.format(person.actuals[index])+' / '+(target==null?'—':reportNumber.format(target));
     })]));
   summary.classList.add('daily-sales-report');
-  for (const [row,person] of people.entries()) {
+  for (const [row,person] of rows.entries()) {
     for (const [column,index] of dailyReportSales.entries()) {
       const target=person.targets[index];
       const actual=person.actuals[index];
@@ -209,7 +209,7 @@ function dailySalesTable(salon) {
 }
 
 function renderDailyManagementSalon(card,salon,csv,closed) {
-  card.append(reportElement('h3','Realizacja planów'),dailySalesTable(salon));
+  card.append(reportElement('h3','Realizacja planów'),reportSalesTable(salon,salon.people));
   const teamMetrics=reportMetrics(salon.totals,salon.targets,salon.expected);
   const peopleMetrics=salon.people.map(person=>reportMetrics(person.actuals,person.targets,person.expected));
   for (const index of dailyReportSales) {
@@ -253,12 +253,41 @@ function renderDailyManagementSalon(card,salon,csv,closed) {
   card.append(activities);
 }
 
+function reportSourceConversionRows(salon) {
+  return salon.sources.map(({leads,orders},index)=>[sources[index],leads,orders,
+    leads?reportPercent.format(orders/leads):'—']);
+}
+
+function renderMonthlyManagementSalon(card,salon,csv) {
+  const metrics=reportMetrics(salon.totals,salon.targets,salon.expected);
+  card.append(reportElement('h3','Realizacja sprzedaży i cele'),reportSalesTable(salon));
+  const details=reportElement('details');
+  details.append(reportElement('summary','Aktywności salonu'),
+    reportTable(['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'],metrics.slice(0,6)));
+  const conversion=reportSourceConversionRows(salon);
+  const table=reportTable(['Źródło','Leady','Zamówienia','Konwersja'],conversion);
+  table.classList.add('report-source-conversion');
+  const orderHeading=table.querySelector('thead th:nth-child(3)');
+  orderHeading.setAttribute('aria-label','Zamówienia');
+  const short=reportElement('abbr','Zam.');
+  short.title='Zamówienia';
+  short.setAttribute('aria-hidden','true');
+  orderHeading.replaceChildren(reportElement('span','Zamówienia'),short);
+  const note=reportElement('p','Konwersja to zamówienia podzielone przez leady z danego źródła w wybranym okresie. Bez leadów pokazujemy kreskę.');
+  note.className='report-conversion-note';
+  card.append(details,reportElement('h3','Konwersja według źródła pozyskania'),note,table);
+  csv.push(...metrics.map(row=>[salon.salon,'Realizacja',...row,'','','']));
+  csv.push(...conversion.map(([source,leads,orders,rate])=>
+    [salon.salon,'Konwersja',source,'','','','',leads,orders,rate]));
+}
+
 function renderManagementReport(report,selectedSalon) {
   const daily=report.type==='daily';
   const marketing=report.type==='marketing';
   const salons=report.salons.filter(row=>!selectedSalon||row.salon===selectedSalon);
   const csv=marketing?[['Salon','Rodzaj','Handlowiec','Źródło','Leady','Zamówienia','Konwersja','Dodatkowe leady','Podstawa']]
-    :[['Salon','Handlowiec','Wskaźnik','Wynik','Plan miesięczny','Realizacja','Plan do daty']];
+    :daily?[['Salon','Handlowiec','Wskaźnik','Wynik','Plan miesięczny','Realizacja','Plan do daty']]
+    :[['Salon','Rodzaj','Wskaźnik lub źródło','Wynik','Plan miesięczny','Realizacja','Plan do daty','Leady','Zamówienia','Konwersja']];
   reportResults.replaceChildren();
   for (const salon of salons) {
     const card=reportElement('article');
@@ -266,7 +295,7 @@ function renderManagementReport(report,selectedSalon) {
     title.className='report-salon-title';
     card.append(title);
     if (marketing) {
-      const sourceRows=salon.sources.map(({leads,orders},index)=>[sources[index],leads,orders,leads?reportPercent.format(orders/leads):'—']);
+      const sourceRows=reportSourceConversionRows(salon);
       card.append(reportTable(['Źródło leadów','Leady','Zamówienia','Zamówienia / leady'],sourceRows));
       csv.push(...sourceRows.map(row=>[salon.salon,'Konwersja','',...row,'','']));
       card.append(reportElement('h3','Rekomendowany przydział dodatkowych leadów'));
@@ -279,23 +308,7 @@ function renderManagementReport(report,selectedSalon) {
       } else card.append(reportElement('p','Brak źródeł spełniających warunki rekomendacji dla handlowców w tym salonie.'));
     } else if (daily) {
       renderDailyManagementSalon(card,salon,csv,report.reportDay?.slice(0,7)>report.month);
-    } else {
-      const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'];
-      const metrics=reportMetrics(salon.totals,salon.targets,salon.expected);
-      card.append(reportElement('h3','Realizacja sprzedaży i cele'),dailySalesTable(salon));
-      const details=reportElement('details');
-      details.append(reportElement('summary','Aktywności salonu'),reportTable(headers,metrics.slice(0,6)));
-      card.append(details);
-      csv.push(...metrics.map(row=>[salon.salon,'Razem',...row]));
-      for (const person of salon.people) {
-        const details=reportElement('details');
-        const name=person.name+(person.archived?' · archiwum':'');
-        const personnelMetrics=reportMetrics(person.actuals,person.targets,person.expected);
-        details.append(reportElement('summary',name),reportTable(headers,personnelMetrics));
-        csv.push(...personnelMetrics.map(row=>[salon.salon,name,...row]));
-        card.append(details);
-      }
-    }
+    } else renderMonthlyManagementSalon(card,salon,csv);
     reportResults.append(card);
   }
   if (report.type==='monthly'&&salons.length>1) reportResults.prepend(monthlyReportOverview(salons));
