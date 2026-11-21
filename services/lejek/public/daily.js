@@ -2458,23 +2458,59 @@ salonPlans.addEventListener('toggle',()=>{
 const mobilePanel=matchMedia('(max-width:850px)');
 const shortPanelNames={seller:'Handlowiec',manager:'Kierownik',group:'Szef grupy',admin:'Administrator'};
 const mobileAccount=$('#mobile-account');
+const mobileAccountToggle=$('#mobile-account-open');
 const panelHeader=$('.panel-header');
-const roleBar=$('#account-role-bar');
-const roleBarAnchor=roleBar.nextElementSibling;
-const panelIdentity=panelHeader.querySelector('.identity');
 const panelAccount=panelHeader.querySelector('.header-account');
+const signout=panelAccount.querySelector('.panel-signout');
+
+function showMobileAccount(open) {
+  mobileAccount.hidden=!open;
+  mobileAccountToggle.setAttribute('aria-expanded',String(open));
+}
 
 function placeAccountControls() {
   panelHeader.classList.toggle('mobile-account-ready',mobilePanel.matches);
   if (mobilePanel.matches) {
-    $('#mobile-account-content').append(panelIdentity,roleBar,panelAccount);
+    mobileAccount.append(signout);
   } else {
-    if (mobileAccount.open) mobileAccount.close();
-    panelHeader.append(panelIdentity,panelAccount);
-    roleBarAnchor.before(roleBar);
+    showMobileAccount(false);
+    panelAccount.append(signout);
   }
 }
-$('#mobile-account-open').onclick=()=>mobileAccount.showModal();
+
+function renderMobileAccount() {
+  const logo=$('#mobile-account-logo');
+  const groupLogo=data.groupBrand?.logo;
+  const logoSource=groupLogo||data.brand?.logo;
+  logo.hidden=!logoSource;
+  if (logoSource) {
+    logo.src=logoSource;
+    logo.alt=(groupLogo?data.groupBrand.name:data.brand.name)||'Logo dealera';
+  } else {
+    logo.removeAttribute('src');
+  }
+
+  const roles=detailSeller?[]:data.roles.filter(role=>role!==data.role);
+  $('#mobile-account-roles').replaceChildren(...roles.map(role=>{
+    const button=document.createElement('button');
+    button.type='button';
+    button.textContent=shortPanelNames[role];
+    button.onclick=()=>switchAccountRole(role);
+    return button;
+  }));
+}
+
+mobileAccountToggle.onclick=()=>showMobileAccount(mobileAccount.hidden);
+document.addEventListener('click',event=>{
+  if (!mobileAccount.hidden&&!event.target.closest('.mobile-account-switcher')) showMobileAccount(false);
+});
+document.addEventListener('keydown',event=>{
+  if (event.key==='Escape'&&!mobileAccount.hidden) {
+    event.preventDefault();
+    showMobileAccount(false);
+    mobileAccountToggle.focus();
+  }
+});
 placeAccountControls();
 mobilePanel.addEventListener('change',placeAccountControls);
 const mobileTabs={
@@ -3402,17 +3438,18 @@ $('#manager-preview-salon').onchange=event=>{
   history.replaceState({...history.state,managerPreviewSalon},'');
   showView();
 };
-$('#account-role').onchange=event=>{
+function switchAccountRole(role) {
   if (previewTarget) {
-    location.assign('/daily.html?'+new URLSearchParams({podglad:previewTarget,role:event.target.value}));
+    location.assign('/daily.html?'+new URLSearchParams({podglad:previewTarget,role:role}));
     return;
   }
   const previous=new URL(location.href);
   previous.searchParams.set('role',data.role);
   history.replaceState(history.state,'',previous);
-  sessionStorage.setItem('lejek-active-role',event.target.value);
-  location.assign('/daily.html?'+new URLSearchParams({role:event.target.value}));
-};
+  sessionStorage.setItem('lejek-active-role',role);
+  location.assign('/daily.html?'+new URLSearchParams({role:role}));
+}
+$('#account-role').onchange=event=>switchAccountRole(event.target.value);
 let restoredNavigation=false;
 async function refresh() {
   data=await api('/api/daily?month='+today.slice(0,7));
@@ -3438,6 +3475,7 @@ async function refresh() {
   $('#account-role-bar').hidden=Boolean(detailSeller)||data.roles.length<2;
   roleSelect.replaceChildren(...data.roles.map(role=>new Option(panelNames[role],role)));
   roleSelect.value=data.role;
+  renderMobileAccount();
   if (!previewTarget) sessionStorage.setItem('lejek-active-role',data.role);
   $('#load').textContent='';
   $('#display-date').textContent=dateLabel(data.today,{day:'numeric',month:'long',year:'numeric'});
