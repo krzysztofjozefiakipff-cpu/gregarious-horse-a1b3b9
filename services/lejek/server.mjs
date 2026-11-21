@@ -132,8 +132,7 @@ const smtpReady=Boolean(process.env.RESET_SMTP_HOST&&process.env.RESET_SMTP_USER
 const inviteReady=Boolean(process.env.INVITE_SMTP_PASSWORD);
 let activeMailJobs=0;
 
-function loginForm(message='',status=200,path='/login',token='') {
-  const csrf=randomBytes(32).toString('hex');
+function loginForm(csrf,message='',status=200,path='/login',token='') {
   const [title,button,fields]=forms[path];
   const link=path==='/login'
     ?'<a href="/change-password">Zmień hasło</a> · <a href="/forgot-password">Nie pamiętam hasła</a>'
@@ -244,7 +243,8 @@ async function handle(request) {
     return response;
   }
   if (Object.hasOwn(forms,path)) {
-    const render=(message='',status=200,token='')=>loginForm(message,status,path,token);
+    const csrf=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek-login=([a-f0-9]{64})(?:;|$)/)?.[1];
+    const render=(message='',status=200,token='')=>loginForm(csrf??randomBytes(32).toString('hex'),message,status,path,token);
     if (request.method==='GET') {
       const params=new URL(request.url).searchParams;
       if (path==='/login'&&params.get('password')==='changed') return render('Hasło zostało zapisane. Zaloguj się ponownie.');
@@ -256,7 +256,6 @@ async function handle(request) {
     }
     if (request.method!=='POST') return reply('Niedozwolone żądanie',405,{Allow:'GET, POST'});
     const form=new URLSearchParams(await request.text());
-    const csrf=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek-login=([a-f0-9]{64})(?:;|$)/)?.[1];
     const source=request.headers.get('Origin');
     const token=form.get('token')??'';
     // Browsers can send Origin: null for form posts under Referrer-Policy: no-referrer.
