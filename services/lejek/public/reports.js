@@ -281,11 +281,74 @@ function renderMonthlyManagementSalon(card,salon,csv) {
     [salon.salon,'Konwersja',source,'','','','',leads,orders,rate]));
 }
 
+function marketingStageValues(source,stage) {
+  const numerator=source.stages[stage.numerator];
+  const denominator=source.stages[stage.denominator];
+  const ratio=denominator?(stage.frequency?reportNumber.format(numerator/denominator):reportPercent.format(numerator/denominator)):'—';
+  return [stage.label,numerator,denominator,ratio];
+}
+
+function renderMarketingBenchmarks(benchmarks,csv) {
+  const panel=reportElement('details');
+  panel.className='marketing-market-reference';
+  panel.append(reportElement('summary','Benchmark rynkowy · '+reportPercent.format(benchmarks.market[0].rows[0][1])+' zakupu z leadów WWW w USA'),
+    reportElement('p',benchmarks.marketNote));
+  for (const {study,sample,url,rows} of benchmarks.market) {
+    const link=reportElement('a',study);
+    link.href=url;
+    panel.append(link,reportElement('p',sample),reportTable(['Wskaźnik','Średnia w badaniu'],
+      rows.map(([label,rate])=>[label,reportPercent.format(rate)])));
+    for (const [label,rate] of rows) csv.push(['','Benchmark USA','',label,'','',reportPercent.format(rate),'','','',study+' · '+sample+' · '+url,'']);
+  }
+  return panel;
+}
+
+function renderMarketingSalon(card,salon,benchmarks,csv) {
+  card.append(reportElement('h3','Wskazówki dla marketingu'));
+  if (!salon.recommendations.length) {
+    card.append(reportElement('p','Brak źródeł, dla których dane i plan wskazują zmianę dopływu lub obsługi.'));
+  } else renderMarketingActions(card,salon,csv);
+  card.append(reportElement('h3','Konwersja według źródła'),
+    reportTable(['Źródło leadów','Leady','Zamówienia','Zamówienia / leady'],reportSourceConversionRows(salon)));
+  const funnel=reportElement('details');
+  funnel.append(reportElement('summary','Etapy lejka według źródła'));
+  for (const [index,source] of salon.sources.entries()) {
+    const stages=benchmarks.stages.map(stage=>marketingStageValues(source,stage));
+    for (const stage of stages) csv.push([salon.salon,'Etap',sources[index],...stage,'','','','','']);
+    if (!source.stages.some(Boolean)) continue;
+    const channel=reportElement('details');
+    channel.append(reportElement('summary',sources[index]),
+      reportTable(['Etap','Licznik','Mianownik','Wskaźnik'],stages));
+    funnel.append(channel);
+  }
+  if (funnel.children.length===1) funnel.append(reportElement('p','Brak aktywności z przypisanym źródłem.'));
+  card.append(funnel);
+}
+
+function renderMarketingActions(card,salon,csv) {
+  const list=reportElement('ul');
+  list.className='marketing-actions';
+  for (const {source,extra,leads,orders,rate,targetRate,plan,basis,action,advice} of salon.recommendations) {
+    const item=reportElement('li');
+    if (extra) item.classList.add('marketing-increase');
+    item.append(reportElement('strong',sources[source]+' · '+(extra?'+'+extra+' leadów':action)),
+      reportElement('p',advice));
+    const observed=rate==null?'—':reportPercent.format(rate);
+    const target=reportPercent.format(targetRate);
+    item.append(reportElement('small',leads+' leadów · '+orders+' zam. · '+observed+' / '+target+' założenia'+
+      (plan?' · '+basis.toLowerCase()+' '+plan+' leadów':'')));
+    list.append(item);
+    csv.push([salon.salon,'Wskazówka',sources[source],'Zamówienia / leady',orders,leads,observed,
+      plan||'',target,extra||'',plan?basis:'',action+'. '+advice]);
+  }
+  card.append(list);
+}
+
 function renderManagementReport(report,selectedSalon) {
   const daily=report.type==='daily';
   const marketing=report.type==='marketing';
   const salons=report.salons.filter(row=>!selectedSalon||row.salon===selectedSalon);
-  const csv=marketing?[['Salon','Rodzaj','Handlowiec','Źródło','Leady','Zamówienia','Konwersja','Dodatkowe leady','Podstawa']]
+  const csv=marketing?[['Salon','Rodzaj','Źródło','Wskaźnik','Licznik','Mianownik','Wartość','Plan leadów','Założenie konwersji','Dodatkowe leady','Podstawa','Działanie']]
     :daily?[['Salon','Handlowiec','Wskaźnik','Wynik','Plan miesięczny','Realizacja','Plan do daty']]
     :[['Salon','Rodzaj','Wskaźnik lub źródło','Wynik','Plan miesięczny','Realizacja','Plan do daty','Leady','Zamówienia','Konwersja']];
   reportResults.replaceChildren();
@@ -295,28 +358,17 @@ function renderManagementReport(report,selectedSalon) {
     title.className='report-salon-title';
     card.append(title);
     if (marketing) {
-      const sourceRows=reportSourceConversionRows(salon);
-      card.append(reportTable(['Źródło leadów','Leady','Zamówienia','Zamówienia / leady'],sourceRows));
-      csv.push(...sourceRows.map(row=>[salon.salon,'Konwersja','',...row,'','']));
-      card.append(reportElement('h3','Rekomendowany przydział dodatkowych leadów'));
-      const proposals=salon.recommendations.map(({seller,source,extra,leads,orders,basis})=>
-        [seller,sources[source],extra,reportPercent.format(orders/leads),basis==='next'?'Plan kolejnego miesiąca':'Plan raportowanego miesiąca']);
-      if (proposals.length) {
-        card.append(reportTable(['Handlowiec','Źródło','Dodatkowe leady','Konwersja','Podstawa'],proposals));
-        csv.push(...salon.recommendations.map(row=>[salon.salon,'Rekomendacja',row.seller,sources[row.source],
-          row.leads,row.orders,reportPercent.format(row.orders/row.leads),row.extra,row.basis==='next'?'Plan kolejnego miesiąca':'Plan raportowanego miesiąca']));
-      } else card.append(reportElement('p','Brak źródeł spełniających warunki rekomendacji dla handlowców w tym salonie.'));
+      renderMarketingSalon(card,salon,report.marketing,csv);
     } else if (daily) {
       renderDailyManagementSalon(card,salon,csv,report.reportDay?.slice(0,7)>report.month);
     } else renderMonthlyManagementSalon(card,salon,csv);
     reportResults.append(card);
   }
   if (report.type==='monthly'&&salons.length>1) reportResults.prepend(monthlyReportOverview(salons));
+  if (marketing) reportResults.prepend(reportElement('p',report.marketing.method),
+    renderMarketingBenchmarks(report.marketing,csv));
   reportCsv={rows:csv,filename:'bieg-wyzej-'+report.type+'-'+(report.reportDay??report.month)+'.csv'};
   reportExport.disabled=!salons.length;
-  if (marketing) {
-    reportResults.prepend(reportElement('p','Konwersja porównuje zamówienia i leady zapisane w tym samym miesiącu. Rekomendacja wymaga planu źródłowego, co najmniej 20 zarejestrowanych leadów, konwersji na poziomie założenia dla źródła oraz luki w liczbie leadów.'));
-  }
 }
 
 function monthlyReportOverview(salons) {
