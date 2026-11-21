@@ -227,9 +227,10 @@ async function downloadReportPdf(response,url) {
     const slug=daily||report.type==='briefing'&&selected.size===1?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
       .replace(/[^\p{ASCII}]/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100):'';
     const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'salon')+'-'+report.reportDay
-      :report.type==='briefing'?'bieg-wyzej-realizacja-i-prognoza-'+(slug?slug+'-':'')+report.today:'bieg-wyzej-'+report.type+'-'+report.month;
-    return reply(pdf,200,{'Content-Type':'application/pdf',
-      'Content-Disposition':'attachment; filename="'+filename+'.pdf"',
+      :report.type==='briefing'?'bieg-wyzej-odprawa-'+(slug?slug+'-':'')+report.today:'bieg-wyzej-'+report.type+'-'+report.month;
+    const disposition=report.type==='briefing'&&url.searchParams.get('disposition')==='inline'?'inline':'attachment';
+    return reply(pdf,200,{'Content-Type':'application/pdf','Content-Length':String(pdf.length),
+      'Content-Disposition':disposition+'; filename="'+filename+'.pdf"',
       ...(daily?{'X-Lejek-Report-Layout':'daily-plans'}:{})});
   } catch (error) {
     console.error('Eksport PDF:',error.message);
