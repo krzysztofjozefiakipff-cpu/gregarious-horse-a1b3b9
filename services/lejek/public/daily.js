@@ -1301,7 +1301,7 @@ function renderToday(records,metrics) {
 }
 
 function renderSeller() {
-  const {personal,cause}=data;
+  const {personal}=data;
   labelPanel('seller');
   const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
   const next=personal.missing[0];
@@ -1381,13 +1381,6 @@ function renderSeller() {
   $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':holiday?holiday+' · dzień bez aktywności.':locked?'Dzień rozliczony.'
     :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
     :data.previewUser?'Podgląd wpisu.':'';
-  $('#cause-title').textContent=cause?.title??'Cel w przygotowaniu';
-  $('#cause-org').textContent=cause?.organization??'';
-  $('#cause-description').textContent=cause?.description??'Organizacja i opis pojawią się po opublikowaniu celu.';
-  const [done,expected]=personal.progress;
-  $('#progress-text').textContent=done+' z '+expected+' dni pracy rozliczonych do dziś';
-  $('#progress').max=expected||1;
-  $('#progress').value=done;
   $('#fortune').textContent=fortunes[dayIndex%fortunes.length];
   selectSellerTab();
   $('#daily').hidden=false;
