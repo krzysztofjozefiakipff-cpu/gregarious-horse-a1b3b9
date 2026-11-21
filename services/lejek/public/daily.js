@@ -1143,28 +1143,68 @@ function renderGif(config) {
   });
 }
 
-const sourceSelect=$('#entry-source');
+const entrySources=$('#entry-sources');
+const entrySourceList=$('#entry-source-list');
+let activeEntrySource=0;
 $('#entry-help-button').onclick=()=>$('#entry-guide').showModal();
-function showEntrySource(index) {
-  sourceSelect.value=String(index);
-  for (const row of $('#rows').rows) row.classList.toggle('active-source',Number(row.dataset.source)===index);
-  $('#entry-prev').disabled=index===0;
-  $('#entry-next').disabled=index===sources.length-1;
-  $('#entry-count').textContent=(index+1)+' z '+sources.length;
-}
+$('#entry-source-open').onclick=()=>{
+  entrySources.showModal();
+  entrySourceList.children[activeEntrySource]?.focus();
+};
 
-function updateSourceStatuses() {
-  for (const [index,row] of Array.from($('#rows').rows).entries()) {
-    const inputs=Array.from(row.querySelectorAll('input'));
-    for (const input of inputs) input.classList.toggle('has-value',input.valueAsNumber>0);
-    const hasResults=inputs.some(input=>input.valueAsNumber>0);
-    sourceSelect.options[index].textContent=sources[index]+(hasResults?' ✓':'');
+function showEntrySource(index) {
+  activeEntrySource=index;
+  $('#entry-source-name').textContent=sources[index];
+  for (const row of $('#rows').rows) row.classList.toggle('active-source',Number(row.dataset.source)===index);
+  for (const [position,button] of Array.from(entrySourceList.children).entries()) {
+    button.setAttribute('aria-pressed',String(position===index));
   }
 }
 
-sourceSelect.onchange=()=>showEntrySource(Number(sourceSelect.value));
-$('#entry-prev').onclick=()=>showEntrySource(Number(sourceSelect.value)-1);
-$('#entry-next').onclick=()=>showEntrySource(Number(sourceSelect.value)+1);
+function entryHasChanges() {
+  return Array.from($('#rows').querySelectorAll('input')).some(field=>field.validity.badInput||field.value!==field.defaultValue);
+}
+
+function updateSourceStatuses() {
+  let filled=0;
+  for (const [index,row] of Array.from($('#rows').rows).entries()) {
+    const inputs=Array.from(row.querySelectorAll('input'));
+    for (const input of inputs) {
+      input.classList.toggle('has-value',input.valueAsNumber>0);
+      const button=input.nextElementSibling;
+      if (button) button.disabled=!input.validity.valid||input.valueAsNumber>=Number(input.max);
+    }
+    const hasResults=inputs.some(input=>input.valueAsNumber>0);
+    entrySourceList.children[index].lastElementChild.hidden=!hasResults;
+    if (hasResults) filled++;
+  }
+  $('#entry-count').textContent=filled+' z '+sources.length+' źródeł z wpisami';
+  if (!$('#save').disabled) {
+    const day=$('#entry-date').dateTime;
+    const changed=entryHasChanges();
+    const state=$('#entry-draft-state');
+    state.hidden=!changed&&!data.personal.drafts?.[day];
+    state.dataset.unsaved=String(changed);
+    const label=changed?'Niezapisane zmiany':draftStatus(day);
+    if (state.textContent!==label) state.textContent=label;
+  }
+}
+
+entrySourceList.onclick=event=>{
+  const button=event.target.closest('button[data-source]');
+  if (!button) return;
+  showEntrySource(Number(button.dataset.source));
+  entrySources.close();
+};
+
+$('#rows').addEventListener('click',event=>{
+  const button=event.target.closest('.entry-increment');
+  if (!button||busy) return;
+  const input=button.previousElementSibling;
+  if (input.disabled||input.readOnly||!input.validity.valid||input.valueAsNumber>=Number(input.max)) return;
+  input.value=String((input.valueAsNumber||0)+1);
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+});
 $('#rows').addEventListener('keydown',event=>{
   const input=event.target;
   if (event.key!=='Enter'||event.isComposing||input.type!=='number') return;
@@ -1178,10 +1218,6 @@ $('#rows').addEventListener('keydown',event=>{
   const next=fields[fields.indexOf(input)+1];
   if (next) {
     next.focus();
-  } else if (mobile&&currentRow.nextElementSibling) {
-    const nextRow=currentRow.nextElementSibling;
-    showEntrySource(Number(nextRow.dataset.source));
-    nextRow.querySelector(editable)?.focus();
   } else if (!$('#save').disabled) {
     $('#save').focus();
   }
@@ -1199,7 +1235,10 @@ $('#rows').addEventListener('input',event=>{
 });
 $('#rows').addEventListener('focusout',event=>{
   const input=event.target;
-  if (input.valueAsNumber===0) input.value='';
+  if (input.valueAsNumber===0) {
+    input.value='';
+    updateSourceStatuses();
+  }
 });
 $('#entry').addEventListener('invalid',event=>{
   const row=event.target.closest('[data-source]');
@@ -1396,18 +1435,30 @@ function renderSeller() {
   const draft=personal.drafts?.[day];
   const matrix=records[day]?.[5]??draft;
   const legacy=records[day]&&!records[day][5];
+  $('#entry-draft-state').dataset.unsaved='false';
   $('#entry-draft-state').hidden=!draft||locked||Boolean(blocked);
   $('#entry-draft-state').textContent=draft?draftStatus(day):'';
   $('#columns').innerHTML='<tr><th scope="col">Źródło</th>'+columns.map(([,name])=>'<th scope="col">'+name+'</th>').join('')+'</tr>';
-  const previousSource=$('#entry-grid').dataset.day===day?Number(sourceSelect.value):0;
+  const previousSource=$('#entry-grid').dataset.day===day?activeEntrySource:0;
   $('#entry-grid').dataset.day=day;
+  const readOnly=locked||blocked||data.previewUser;
   $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
-    (sourceDetails[r]?'<small class="source-detail">'+sourceDetails[r]+'</small>':'')+'</th>'+columns.map(([c,label])=>
-    '<td><span class="entry-field-label" aria-hidden="true">'+(c===10?'Faktury':label)+(r===0&&(c===1||c===2)?'<small>Auto</small>':'')+'</span><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+'" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(locked||blocked||data.previewUser?' disabled':'')+(r===0&&(c===1||c===2)?' readonly title="Automatycznie z liczby leadów"':'')+'></td>').join('')+'</tr>').join('');
+    '<small class="source-detail">'+sourceDetails[r]+'</small></th>'+columns.map(([c,label])=>{
+      const automatic=r===0&&(c===1||c===2);
+      const fieldLabel=c===10?'Faktury':label;
+      const group=c===0?'<td class="entry-field-group" aria-hidden="true">Kontakt z klientem'+
+        (r===0?'<small>Próby kontaktu i spotkania liczymy z leadów.</small>':'')+'</td>'
+        :c===7?'<td class="entry-field-group" aria-hidden="true">Wyniki sprzedaży</td>':'';
+      return group+'<td'+(automatic?' class="entry-automatic"':'')+'><span class="entry-field-label" aria-hidden="true">'+fieldLabel+'</span>'+
+        '<div class="entry-value"><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+
+        '" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(readOnly?' disabled':'')+
+        (automatic?' readonly title="Automatycznie z liczby leadów"':'')+'>'+
+        (readOnly||automatic?'':'<button type="button" class="entry-increment" aria-label="Dodaj jedno · '+label+'">+1</button>')+'</div></td>';
+    }).join('')+'</tr>').join('');
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
   if (!legacy) {
-    sourceSelect.replaceChildren(...sources.map((name,i)=>new Option(name,String(i))));
+    entrySourceList.innerHTML=sources.map((name,index)=>'<button type="button" class="secondary" data-source="'+index+'"><span>'+name+'</span><small hidden>Wpisano</small></button>').join('');
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
@@ -3896,8 +3947,7 @@ function canAutoRefreshSeller() {
   if (data?.role!=='seller'||detailSeller||document.visibilityState!=='visible'||busy||pendingWrites||explicitRefreshes) return false;
   if (document.activeElement?.matches('#entry input, #entry select, #seller-calendar input, #seller-calendar select, textarea, [contenteditable="true"]')||
       document.querySelector('dialog[open]')) return false;
-  const entryFields=$('#rows').querySelectorAll('input');
-  if (Array.from(entryFields).some(field=>field.validity.badInput||field.value!==field.defaultValue)) return false;
+  if (entryHasChanges()) return false;
   const calendar=$('#seller-calendar');
   return calendar.hidden||!['start','end','reason'].some(field=>calendar.querySelector('[data-calendar-'+field+']')?.value);
 }
