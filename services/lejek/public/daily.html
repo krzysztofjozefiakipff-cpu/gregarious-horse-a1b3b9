@@ -151,7 +151,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .manager-preview-bar select{min-width:0;max-width:100%}
 .management-filter-panel { margin-bottom:10px; border:1px solid var(--panel-border); border-radius:14px; background:var(--panel-paper); }
 .management-filter-panel > summary { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; min-height:56px; padding:8px 12px; cursor:pointer; color:var(--panel-ink); list-style:none; }
-#management-filters > summary { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto; }
+:is(#management-filters,#management-report-filters) > summary { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto; }
 .management-filter-panel > summary::-webkit-details-marker { display:none; }
 .management-filter-panel > summary::after { content:""; width:8px; height:8px; margin:0 2px 4px; border:solid var(--panel-plum); border-width:0 2px 2px 0; transform:rotate(45deg); }
 .management-filter-panel[open] > summary::after { margin-bottom:0; transform:rotate(225deg); }
@@ -172,8 +172,21 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 }
 
 #management-reports article{background:white;border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
-#report-showrooms>div{display:flex;flex-wrap:wrap;gap:6px 18px}
-#report-showrooms label{display:flex;align-items:center;gap:5px}
+#management-report-picker { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+#management-report-picker > :is(#report-day-field,#report-month-field) { grid-column:1/-1; }
+@media(min-width:660px) {
+  #management-report-picker { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #management-report-picker > :is(#report-day-field,#report-month-field) { grid-column:auto; }
+}
+#management-report-form .user-actions { display:flex; flex-wrap:wrap; gap:6px; }
+#report-monthly-overview { border:1px solid var(--panel-plum); border-radius:14px; padding:12px; background:var(--panel-plum); color:#fff; }
+#report-monthly-overview h2 { margin:0 0 8px; color:var(--panel-orange); font-size:1.15rem; }
+#report-monthly-overview p { color:var(--on-plum-muted); font-size:.85rem; margin-top:8px; }
+#management-report-results #report-monthly-overview .sales-results-card table { min-width:0; }
+#management-report-results #report-monthly-overview .sales-results-card :is(th,td) { text-align:center; }
+#report-monthly-overview .sales-results-card { color:var(--panel-ink); }
+#report-monthly-overview .report-table { background:#fff; color:var(--panel-ink); }
+#management-report-results .report-salon-title { color:var(--panel-plum); background:var(--panel-lilac); border-inline-start:3px solid var(--panel-orange); border-radius:8px; padding:8px 10px; }
 #management-report-results .report-table{overflow:auto;margin:12px 0;border:1px solid var(--line);border-radius:8px}
 #management-report-results table{border-collapse:collapse;width:100%;min-width:32rem}
 #management-report-results th,#management-report-results td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:normal}
@@ -214,6 +227,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #briefing-pdf-view iframe { display:block; width:100%; height:100%; border:1px solid var(--panel-border); border-radius:9px; background:#fff; }
 #briefing-pdf-dialog::backdrop { background:#25162480; }
 #briefing-pdf-dialog h2 { margin:0; }
+#briefing-pdf-dialog button { min-height:44px; }
 #briefing-pdf-dialog nav { display:grid; gap:8px; margin-block:12px; }
 #briefing-pdf-dialog a { display:grid; place-items:center; min-height:44px; border:1px solid var(--panel-border); border-radius:9px; color:var(--panel-plum); font-weight:700; }
 #briefing-pdf-dialog [role="status"]:empty { display:none; }
@@ -1026,6 +1040,33 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
       </button>
     </div>
   </div>
+  <p id="briefing-status" role="status"></p>
+  <div id="briefing-results"></div>
+</section>
+<section id="management-reports" hidden>
+  <h1 class="screen-title">Raporty zarządcze</h1>
+  <form id="management-report-form">
+    <details id="management-report-filters" class="management-filter-panel">
+      <summary>
+        <span><small>Salon</small><strong id="report-filter-salon"></strong></span>
+        <span><small>Okres</small><strong id="report-filter-period"></strong></span>
+      </summary>
+      <div id="management-report-picker" class="management-filter-fields" role="group" aria-label="Filtry raportu">
+        <label>Salon <select name="salon"></select></label>
+        <label>Raport <select name="type"><option value="monthly">Raport miesięczny</option><option value="daily">Raport dzienny</option><option value="marketing">Raport dla marketingu</option></select></label>
+        <label id="report-month-field">Miesiąc <input name="month" type="month" required></label>
+        <label id="report-day-field" hidden>Dzień <input name="day" type="date" disabled required></label>
+      </div>
+    </details>
+    <div class="user-actions">
+      <button type="submit">Pokaż raport</button>
+      <button type="button" id="export-management-report-pdf" class="secondary" aria-haspopup="dialog" disabled>Pobierz PDF</button>
+      <button type="button" id="export-management-report" class="secondary" disabled>Pobierz CSV</button>
+    </div>
+  </form>
+  <p id="management-report-status" role="status"></p>
+  <div id="management-report-results"></div>
+</section>
   <dialog id="briefing-pdf-dialog" aria-label="Raport odprawy">
     <div id="briefing-pdf-options">
       <h2>Raport odprawy</h2>
@@ -1042,28 +1083,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
       <form method="dialog"><button class="secondary">Wróć do odprawy</button></form>
     </div>
   </dialog>
-  <p id="briefing-status" role="status"></p>
-  <div id="briefing-results"></div>
-</section>
-<section id="management-reports" hidden>
-  <h1 class="screen-title">Raporty zarządcze</h1>
-  <form id="management-report-form">
-    <div class="user-search-fields">
-      <label>Raport <select name="type"><option value="monthly">Podsumowanie miesiąca</option><option value="daily">Raport dzienny · 8:00</option><option value="marketing">Raport dla marketingu</option></select></label>
-      <label id="report-month-field">Miesiąc <input name="month" type="month" placeholder="RRRR-MM" required></label>
-      <label id="report-day-field" hidden>Data raportu <input name="day" type="date" disabled required></label>
-      <label id="report-pdf-salon-field" hidden>Salon do PDF <select name="pdfSalon" disabled></select></label>
-    </div>
-    <fieldset id="report-showrooms"><legend>Salony w raporcie</legend><div></div></fieldset>
-    <div class="user-actions">
-      <button type="submit">Pokaż raport</button>
-      <button type="button" id="export-management-report-pdf" class="secondary" disabled>Pobierz PDF</button>
-      <button type="button" id="export-management-report" class="secondary" disabled>Pobierz CSV</button>
-    </div>
-  </form>
-  <p id="management-report-status" role="status"></p>
-  <div id="management-report-results"></div>
-</section>
 <section id="administration-view" hidden>
 <h1 class="screen-title" id="administration-title">Administracja</h1>
 <details id="salon-plans" class="admin-block" hidden>

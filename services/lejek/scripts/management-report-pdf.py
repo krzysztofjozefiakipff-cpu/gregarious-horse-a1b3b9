@@ -29,13 +29,14 @@ GREEN = colors.HexColor('#14745b')
 RED = colors.HexColor('#9a3025')
 WIDTH = A4[0] - 76
 
-TITLES = {'monthly': 'Podsumowanie miesiąca', 'daily': 'Raport dzienny', 'marketing': 'Raport dla marketingu',
+TITLES = {'monthly': 'Raport miesięczny', 'daily': 'Raport dzienny', 'marketing': 'Raport dla marketingu',
           'briefing': 'Raport odprawy dziennej'}
 METRICS = ['Leady', 'Próby kontaktu', 'Spotkania', 'Jazdy próbne', 'Oferty', 'Follow-up', 'Zamówienia',
            'Wystawione faktury', 'Rejestracje', 'Opinie Google']
 SOURCES = ['Walk-in', 'Facebook', 'Strona WWW', 'Kontakt z salonem', 'OTOMOTO', 'Polecenia',
            'Baza retencyjna', 'Importerskie', 'Broker', 'Serwis', 'Galerie', 'Targi', 'Odzyskane przez BDC']
 SALES = [6, 7, 8, 9]
+SALES_LABELS = {6: 'Zamówienia', 7: 'Faktury', 8: 'Rejestracje', 9: 'Opinie Google'}
 
 STYLES = {
     'title': ParagraphStyle('title', fontName='DejaVuBold', fontSize=23, leading=28, textColor=INK, spaceAfter=8),
@@ -243,15 +244,43 @@ def daily_report(salon, closed, goals_day):
     return story
 
 
-def operational_report(salon):
-    actuals, targets = salon['totals'], salon['targets']
-    story = [
-        sales_progress(salon),
-        Spacer(1, 10), activities(actuals, targets),
+def monthly_overview(salons):
+    values = []
+    for index in SALES:
+        actual = sum(salon['totals'][index] for salon in salons)
+        goals = [salon['targets'][index] for salon in salons]
+        target = sum(goals) if all(goal is not None for goal in goals) else None
+        values.append((f'{number(actual)} / {number(target)}', SALES_LABELS[index]))
+    rows = [
+        [salon['salon']] + [
+            f"{number(salon['totals'][i])} / {number(salon['targets'][i])}" for i in SALES
+        ] for salon in salons
     ]
-    for person in salon['people']:
-        caption = person['name'] + (' · archiwum' if person['archived'] else '')
-        story.extend([p(caption, 'section'), activities(person['actuals'], person['targets'])])
+    return [
+        report_tiles(values),
+        p('Wyniki według salonów', 'section'),
+        table(['Salon (wynik / plan)', *SALES_LABELS.values()], rows,
+              [.32, .17, .17, .17, .17], header_color=PLUM),
+    ]
+
+
+def monthly_report(salon):
+    actuals, targets = salon['totals'], salon['targets']
+    people = salon['people']
+    names = [person['name'] + (' · archiwum' if person['archived'] else '') for person in people]
+    story = [sales_progress(salon)]
+    if people:
+        story.extend([
+            p('Realizacja sprzedaży handlowców', 'section'),
+            table(['Handlowiec (wynik / plan)', *SALES_LABELS.values()], [
+                [name, *[daily_sales_cell(person['actuals'][i], person['targets'][i], person['expected'][i])
+                         for i in SALES]]
+                for name, person in zip(names, people)
+            ], [.32, .17, .17, .17, .17], header_color=PLUM),
+        ])
+    story.extend([p('Aktywności salonu', 'section'), activities(actuals, targets, salon['expected'], range(6))])
+    for name, person in zip(names, people):
+        story.extend([p(name, 'section'), activities(person['actuals'], person['targets'], person['expected'], range(6))])
     return story
 
 
@@ -321,12 +350,16 @@ def briefing_progress(salons):
     values = [(str(len(salons)), 'Salony w raporcie'),
               (f'{done} / {done + left}', 'Zatwierdzone odprawy'),
               (str(left), 'Pozostałe odprawy')]
+    return report_tiles(values)
+
+
+def report_tiles(values):
     tiles = Table([[p(value, 'briefing_value') for value, _ in values],
                    [p(label, 'briefing_label') for _, label in values]],
-                  colWidths=[WIDTH / 3] * 3, hAlign='LEFT')
+                  colWidths=[WIDTH / len(values)] * len(values), hAlign='LEFT')
     tiles.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), PLUM),
-        ('LINEAFTER', (0, 0), (1, -1), .5, colors.HexColor('#886482')),
+        ('LINEAFTER', (0, 0), (len(values) - 2, -1), .5, colors.HexColor('#886482')),
         ('LEFTPADDING', (0, 0), (-1, -1), 12),
         ('TOPPADDING', (0, 0), (-1, 0), 9),
         ('TOPPADDING', (0, 1), (-1, 1), 1),
@@ -449,7 +482,12 @@ def render(report, output):
         generated = datetime.fromisoformat(report['generatedAt']).astimezone(ZoneInfo('Europe/Warsaw'))
         date_line += f'   ·   Wygenerowano {generated:%d.%m.%Y o %H:%M}'
     story = [p(TITLES[kind], 'title'), p(date_line, 'hint')]
-    if kind == 'marketing':
+    if kind == 'monthly':
+        story.append(p('Wyniki obejmują zatwierdzone wpisy do wskazanej daty włącznie.', 'hint'))
+        if len(report['salons']) > 1:
+            story.extend(monthly_overview(report['salons']))
+            story.append(PageBreak())
+    elif kind == 'marketing':
         story.append(p('Konwersja to zamówienia podzielone przez leady zapisane w tym samym miesiącu. '
                        'Rekomendacja uwzględnia plan źródłowy, co najmniej 20 leadów i konwersję na poziomie założenia dla źródła.', 'hint'))
     elif kind == 'daily':
@@ -473,7 +511,7 @@ def render(report, output):
         elif kind == 'briefing':
             story.extend(briefing_report(salon))
         else:
-            story.extend(operational_report(salon))
+            story.extend(monthly_report(salon))
     doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
 
 

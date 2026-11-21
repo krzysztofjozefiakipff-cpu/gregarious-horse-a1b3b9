@@ -207,9 +207,6 @@ async function downloadReportPdf(response,url) {
   const report=await response.json();
   const selected=new Set(url.searchParams.getAll('salon'));
   const daily=report.type==='daily';
-  if (daily&&(selected.size>1||(!selected.size&&report.salons.length>1))) {
-    return Response.json({error:'Wybierz jeden salon do pobrania PDF.'},{status:400,headers});
-  }
   if (selected.size) report.salons=report.salons.filter(row=>selected.has(row.salon));
   if (!report.salons.length) return Response.json({error:'Brak salonów do eksportu.'},{status:400,headers});
   if (activeReportPdfs>=4) return Response.json({error:'Eksport jest zajęty. Spróbuj ponownie za chwilę.'},{status:503,headers});
@@ -224,11 +221,11 @@ async function downloadReportPdf(response,url) {
       child.on('close',code=>code===0?resolve(Buffer.concat(chunks)):reject(new Error('Błąd generatora PDF')));
       child.stdin.end(JSON.stringify(report));
     });
-    const slug=daily||report.type==='briefing'&&selected.size===1?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
+    const slug=report.salons.length===1?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
       .replace(/[^\p{ASCII}]/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100):'';
-    const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'salon')+'-'+report.reportDay
-      :report.type==='briefing'?'bieg-wyzej-odprawa-'+(slug?slug+'-':'')+report.today:'bieg-wyzej-'+report.type+'-'+report.month;
-    const disposition=report.type==='briefing'&&url.searchParams.get('disposition')==='inline'?'inline':'attachment';
+    const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'wszystkie-salony')+'-'+report.reportDay
+      :report.type==='briefing'?'bieg-wyzej-odprawa-'+(slug?slug+'-':'')+report.today:'bieg-wyzej-'+report.type+'-'+(slug?slug+'-':'')+report.month;
+    const disposition=url.searchParams.get('disposition')==='inline'?'inline':'attachment';
     return reply(pdf,200,{'Content-Type':'application/pdf','Content-Length':String(pdf.length),
       'Content-Disposition':disposition+'; filename="'+filename+'.pdf"',
       ...(daily?{'X-Lejek-Report-Layout':'daily-plans'}:{})});
