@@ -1,0 +1,86 @@
+name: Verify Bieg Wyżej TestFlight build
+on:
+  push:
+    branches: [lejek/verify-testflight-build]
+    paths: [.github/workflows/lejek-testflight-status.yml]
+permissions:
+  contents: read
+jobs:
+  status:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check internal availability
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$RUNNER_TEMP/asc-key.p8"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$key"
+          unset ASC_PRIVATE_KEY
+          SIGNING_KEY_PATH="$key" node --input-type=module <<'JS'
+          import {createSign} from 'node:crypto';
+          import {readFileSync} from 'node:fs';
+          const {ASC_KEY_ID:kid,ASC_ISSUER_ID:iss,SIGNING_KEY_PATH:key}=process.env;
+          const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+          const iat=Math.floor(Date.now()/1000);
+          const claim=encode({alg:'ES256',kid,typ:'JWT'})+'.'+encode({iss,iat,exp:iat+600,aud:'appstoreconnect-v1'});
+          const signature=createSign('SHA256').update(claim).sign({key:readFileSync(key),dsaEncoding:'ieee-p1363'}).toString('base64url');
+          const token=claim+'.'+signature;
+          async function request(path,data){
+            const response=await fetch('https://api.appstoreconnect.apple.com/v1/'+path,{
+              method:data?'POST':'GET',
+              headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+              body:data?JSON.stringify({data}):undefined
+            });
+            const json=await response.json();
+            if(!response.ok) throw Error(path+': '+response.status+' '+json.errors?.map(e=>e.code+' '+e.detail).join('; '));
+            return json;
+          }
+          const api=async(path,data)=>(await request(path,data)).data;
+          async function listAll(path) {
+            const results=[];
+            while (path) {
+              const page=await request(path);
+              results.push(...page.data);
+              const next=page.links?.next;
+              if (!next) return results;
+              const url=new URL(next);
+              if (url.origin!=='https://api.appstoreconnect.apple.com'||!url.pathname.startsWith('/v1/'))
+                throw Error('Unexpected Apple API pagination URL');
+              path=url.pathname.slice(4)+url.search;
+            }
+            return results;
+          }
+          const id='pl.biegwyzej.pilot';
+          const bundles=await api('bundleIds?'+new URLSearchParams({'filter[identifier]':id}));
+          const bundle=bundles.find(b=>b.attributes.identifier===id);
+          if(!bundle) throw Error('Bundle ID is missing from the Apple team: '+id);
+          const apps=await api('apps?'+new URLSearchParams({'filter[bundleId]':id}));
+          if(apps.length!==1) throw Error('App Store Connect must have one app record for '+id);
+          
+          const buildNumber='15.1';
+          const params=new URLSearchParams({'filter[app]':apps[0].id,'filter[version]':buildNumber,include:'buildBetaDetail,betaGroups'});
+          for(let attempt=0;attempt<30;attempt++){
+            const page=await request('builds?'+params);
+            const build=page.data.find(item=>item.attributes.version===buildNumber);
+            if(build){
+              const details=page.included?.find(item=>item.type==='buildBetaDetails');
+              const state=build.attributes.processingState;
+              const betaState=details?.attributes.internalBuildState;
+              const groups=(page.included??[]).filter(item=>item.type==='betaGroups'&&item.attributes.isInternalGroup);
+              console.log('Build '+buildNumber+': '+state+', internal '+(betaState??'pending')+', internal groups '+groups.length);
+              if(state==='VALID'&&['READY_FOR_BETA_TESTING','IN_BETA_TESTING'].includes(betaState)) process.exit(0);
+              if(['FAILED','INVALID'].includes(state)) throw Error('Apple processing did not succeed.');
+            } else console.log('Build '+buildNumber+' has not appeared yet.');
+            await new Promise(resolve=>setTimeout(resolve,12000));
+          }
+          throw Error('The build did not become ready before the check timed out.');
+          JS
