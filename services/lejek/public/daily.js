@@ -582,6 +582,27 @@ function renderCalendar(host,sellers,role) {
   load();
 }
 
+function mountResultsCard(containerId) {
+  const card=$('#seller-results-card').content.cloneNode(true);
+  card.querySelector('table').setAttribute('aria-labelledby',containerId+'-title');
+  const container=$('#'+containerId);
+  container.append(card);
+  return container;
+}
+
+const todayResults=mountResultsCard('today-results');
+const periodResults=mountResultsCard('period-results');
+
+function renderResultsCard(container,metrics,missingTarget) {
+  for (const cell of container.querySelectorAll('[data-seller-result]')) {
+    const index=Number(cell.dataset.sellerResult);
+    const {actual,target}=metrics.find(metric=>metric.index===index);
+    cell.textContent=actual+'/'+(target??'—');
+    if (target==null) cell.title=missingTarget;
+    else cell.removeAttribute('title');
+  }
+}
+
 const periodType=$('#seller-period-type');
 const periodValue=$('#seller-period-value');
 let periodRevision=0;
@@ -693,6 +714,7 @@ function periodMetrics(snapshot,start,count) {
 
 function renderPlans(snapshot,month,type) {
   const metrics=periodMetrics(snapshot,month,periodLength[type]);
+  renderResultsCard(periodResults,metrics,'Brak planu na ten okres');
   const [year,monthNumber]=month.split('-').map(Number);
   const end=monthStart(year,monthNumber-1+periodLength[type]).slice(0,7);
   const saved=(snapshot.sourcePlans??[]).filter(plan=>plan.month>=month&&plan.month<end);
@@ -1193,8 +1215,8 @@ function renderRanking(ranking) {
   const rank=group?ranking.group:ranking?.salon;
   $('#ranking-title').textContent=group?'Ranking grupy':'Ranking salonu';
   const position=$('#ranking-position');
-  position.hidden=!rank||rank.place<=3;
-  position.textContent=rank?'Twoja pozycja · '+rank.place+'. miejsce z '+rank.total:'';
+  position.hidden=false;
+  position.textContent=rank?'Twoja pozycja · '+rank.place+'. miejsce z '+rank.total:'Brak pozycji w tym okresie.';
 
   const leaders=ranking?.podium??[];
   const podium=$('#ranking-podium');
@@ -1299,13 +1321,7 @@ function renderToday(records,metrics) {
     link.textContent='Wpisz działania';
   }
 
-  for (const cell of document.querySelectorAll('[data-today-result]')) {
-    const index=Number(cell.dataset.todayResult);
-    const {actual,target}=metrics.find(metric=>metric.index===index);
-    cell.textContent=actual+'/'+(target??'—');
-    if (target==null) cell.title='Brak planu na ten miesiąc';
-    else cell.removeAttribute('title');
-  }
+  renderResultsCard(todayResults,metrics,'Brak planu na ten miesiąc');
 
   const rank=ranking?.groupName?ranking.group:ranking?.salon;
   $('#today-rank').hidden=!rank;

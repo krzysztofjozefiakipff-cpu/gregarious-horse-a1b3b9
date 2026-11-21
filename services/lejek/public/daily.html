@@ -302,10 +302,10 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   min-width:0; padding:10px 12px 12px; border-radius:12px;
   background:linear-gradient(120deg,var(--accent-ink),var(--primary)); color:white;
 }
-.ranking-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 12px; }
 #ranking-title { margin:0; font-size:1.05rem; }
 #ranking-position, #ranking-empty { font-size:.875rem; color:var(--on-plum-muted); }
 #ranking-empty { margin-block-start:6px; }
+#ranking-position { margin-block-start:8px; padding-block-start:8px; border-block-start:1px solid #ffffff40; font-weight:700; }
 .podium {
   display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
   gap:5px; margin:8px 0 0; padding:0; list-style:none;
@@ -329,6 +329,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 #daily .plan-top .cards section { padding:7px; font-size:.875rem; }
 #daily .plan-top .cards strong { font-size:clamp(1rem,1.5vw,1.35rem); color:var(--ink); }
 #daily .plan-top .cards small { font-size:.8rem; }
+#seller-plan-details .plan-top { margin-block-start:10px; }
 .rating {
   display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; padding-block-start:8px;
   border-block-start:1px solid var(--line); margin-block-start:10px;
@@ -441,13 +442,13 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .today-rank,.mobile-menu-link { background:white; border:1px solid var(--panel-border); border-radius:14px; padding:13px 15px; }
 .today-rank { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .today-results h2 { font-size:1.16rem; margin-bottom:8px; }
-.today-results-card { background:#fff; border:1px solid var(--panel-border); border-radius:14px; overflow:hidden; }
-.today-results table { width:100%; table-layout:fixed; border-collapse:collapse; }
-.today-results th,.today-results td { text-align:center; padding-inline:3px; }
-.today-results th { padding-block:10px 3px; color:var(--panel-plum); }
-.today-results th svg { display:block; width:28px; height:28px; margin:auto; }
-.today-results td { padding-block:3px 10px; color:var(--panel-ink); font-size:.96rem; font-weight:750; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-.today-results tr > :not(:first-child) { border-inline-start:1px solid var(--panel-border); }
+.seller-results-card { background:#fff; border:1px solid var(--panel-border); border-radius:14px; overflow:hidden; }
+.seller-results-card table { width:100%; table-layout:fixed; border-collapse:collapse; }
+.seller-results-card th,.seller-results-card td { text-align:center; padding-inline:3px; }
+.seller-results-card th { padding-block:10px 3px; color:var(--panel-plum); }
+.seller-results-card th svg { display:block; width:28px; height:28px; margin:auto; }
+.seller-results-card td { padding-block:3px 10px; color:var(--panel-ink); font-size:.96rem; font-weight:750; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.seller-results-card tr > :not(:first-child) { border-inline-start:1px solid var(--panel-border); }
 .briefing-completed-badge { font-size:.82rem; font-weight:750; padding:4px 8px; border-radius:999px; background:#e5f3e9; color:#235a3c; }
 .briefing-completed-badge[data-complete="false"] { background:#fff0df; color:#774019; }
 .today-rank,.mobile-menu-link { color:var(--panel-plum); text-decoration:none; font-weight:700; }
@@ -628,48 +629,8 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
     <a class="entry-link" id="today-entry-link" data-panel-route href="#wyniki">Wpisz działania</a>
   </section>
   <section class="actions"><h2 id="today-tasks-heading">Do zrobienia dziś</h2><p id="tasks-intro" class="task-note" hidden></p><p id="followup-reminder" class="task-note" hidden></p><div id="tasks"></div></section>
-  <section class="today-results">
+  <section class="today-results" id="today-results">
     <h2 id="today-results-title">Twoje wyniki w tym miesiącu</h2>
-    <div class="today-results-card">
-      <table aria-labelledby="today-results-title">
-        <thead><tr>
-          <th scope="col" title="Zamówienia">
-            <span class="entry-visually-hidden">Zamówienia</span>
-            <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10 6H7a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/><rect x="10" y="3" width="8" height="5" rx="1.4"/><path d="m9 16 3 3 7-7"/>
-            </svg>
-          </th>
-          <th scope="col" title="Faktury">
-            <span class="entry-visually-hidden">Faktury</span>
-            <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M7 3h10l5 5v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm10 0v5h5M9 11h8"/>
-              <text x="8.5" y="21" fill="currentColor" stroke="none" font-size="10" font-weight="750">zł</text>
-            </svg>
-          </th>
-          <th scope="col" title="Rejestracje">
-            <span class="entry-visually-hidden">Rejestracje</span>
-            <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 12 7.2 7a2 2 0 0 1 1.8-1.2h10A2 2 0 0 1 20.8 7l2.2 5M5 20v2m18-2v2"/>
-              <rect x="3.5" y="11.5" width="21" height="8.5" rx="2"/><path d="M7 15h1m12 0h1"/><rect x="11" y="15" width="6" height="3" rx=".6"/>
-            </svg>
-          </th>
-          <th scope="col" title="Opinie Google">
-            <span class="entry-visually-hidden">Opinie Google</span>
-            <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M23 13.5V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2v4l4-4h3"/>
-              <text x="8" y="16" fill="currentColor" stroke="none" font-size="11" font-weight="750">G</text>
-              <path d="m21 15 1.4 2.9 3.2.5-2.3 2.2.5 3.2-2.8-1.5-2.8 1.5.5-3.2-2.3-2.2 3.2-.5z" fill="currentColor" stroke-width="1"/>
-            </svg>
-          </th>
-        </tr></thead>
-        <tbody><tr>
-          <td data-today-result="7"></td>
-          <td data-today-result="10"></td>
-          <td data-today-result="8"></td>
-          <td data-today-result="9"></td>
-        </tr></tbody>
-      </table>
-    </div>
   </section>
   <a class="today-rank" id="today-rank" data-panel-route href="#plan">
     <span id="today-rank-label">Ranking</span><strong id="today-rank-value"></strong>
@@ -767,7 +728,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </section>
 <div data-seller-panel="plan" hidden>
 <div class="plan-period">
-  <h1>Wyniki</h1>
+  <h1 id="period-results-title">Wyniki</h1>
   <div class="period-controls">
     <select id="seller-period-type" aria-label="Rodzaj okresu"><option value="month">Miesiąc</option><option value="quarter">Kwartał</option><option value="year">Rok</option></select>
     <select id="seller-period-value" aria-label="Wyświetlany okres"></select>
@@ -779,27 +740,28 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
     <button type="button" class="secondary" id="seller-period-reset">Bieżący miesiąc</button>
   </div>
 </div>
-<div class="plan-top">
-  <section class="order-plan plan-orders" aria-labelledby="order-plan-title">
-    <h2 id="order-plan-title">Realizacja planu zamówień</h2>
-    <p>Zamówienia podpisane / plan na dany okres</p>
-    <div class="cards" id="cards"></div>
-  </section>
-  <section class="order-plan plan-invoices" aria-labelledby="invoice-plan-title">
-    <h2 id="invoice-plan-title">Wystawione faktury</h2>
-    <p>Faktury wystawione / plan na dany okres</p>
-    <div class="cards" id="invoice-cards"></div>
-  </section>
-
-</div>
+<section id="period-results"></section>
 <section id="seller-ranking" aria-labelledby="ranking-title">
-  <div class="ranking-heading">
-    <h2 id="ranking-title">Ranking</h2>
-    <p id="ranking-position" hidden></p>
-  </div>
+  <h2 id="ranking-title">Ranking</h2>
   <ol id="ranking-podium" class="podium" aria-label="Podium" hidden></ol>
   <p id="ranking-empty" hidden>Brak zapisanych wyników sprzedaży w tym okresie.</p>
+  <p id="ranking-position" hidden></p>
 </section>
+<details id="seller-plan-details" class="month-history">
+  <summary>Plan zamówień i faktur</summary>
+  <div class="plan-top">
+    <section class="order-plan plan-orders" aria-labelledby="order-plan-title">
+      <h2 id="order-plan-title">Realizacja planu zamówień</h2>
+      <p>Zamówienia podpisane / plan na dany okres</p>
+      <div class="cards" id="cards"></div>
+    </section>
+    <section class="order-plan plan-invoices" aria-labelledby="invoice-plan-title">
+      <h2 id="invoice-plan-title">Wystawione faktury</h2>
+      <p>Faktury wystawione / plan na dany okres</p>
+      <div class="cards" id="invoice-cards"></div>
+    </section>
+  </div>
+</details>
 <section id="pace" aria-labelledby="pace-title" hidden>
   <div class="pace-intro"><h2 id="pace-title">Realizacja działań w wybranym okresie</h2><p>Wykonano / cel narastająco w wybranym okresie.</p></div>
   <div id="pace-items"></div>
@@ -1093,6 +1055,48 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   </ul>
   <ol data-calendar-grid aria-label="Kalendarz miesiąca"></ol>
   <div data-calendar-detail hidden></div>
+</template>
+<template id="seller-results-card">
+  <div class="seller-results-card">
+    <table>
+      <thead><tr>
+        <th scope="col" title="Zamówienia">
+          <span class="entry-visually-hidden">Zamówienia</span>
+          <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 6H7a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/><rect x="10" y="3" width="8" height="5" rx="1.4"/><path d="m9 16 3 3 7-7"/>
+          </svg>
+        </th>
+        <th scope="col" title="Faktury">
+          <span class="entry-visually-hidden">Faktury</span>
+          <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 3h10l5 5v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm10 0v5h5M9 11h8"/>
+            <text x="8.5" y="21" fill="currentColor" stroke="none" font-size="10" font-weight="750">zł</text>
+          </svg>
+        </th>
+        <th scope="col" title="Rejestracje">
+          <span class="entry-visually-hidden">Rejestracje</span>
+          <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12 7.2 7a2 2 0 0 1 1.8-1.2h10A2 2 0 0 1 20.8 7l2.2 5M5 20v2m18-2v2"/>
+            <rect x="3.5" y="11.5" width="21" height="8.5" rx="2"/><path d="M7 15h1m12 0h1"/><rect x="11" y="15" width="6" height="3" rx=".6"/>
+          </svg>
+        </th>
+        <th scope="col" title="Opinie Google">
+          <span class="entry-visually-hidden">Opinie Google</span>
+          <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M23 13.5V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2v4l4-4h3"/>
+            <text x="8" y="16" fill="currentColor" stroke="none" font-size="11" font-weight="750">G</text>
+            <path d="m21 15 1.4 2.9 3.2.5-2.3 2.2.5 3.2-2.8-1.5-2.8 1.5.5-3.2-2.3-2.2 3.2-.5z" fill="currentColor" stroke-width="1"/>
+          </svg>
+        </th>
+      </tr></thead>
+      <tbody><tr>
+        <td data-seller-result="7"></td>
+        <td data-seller-result="10"></td>
+        <td data-seller-result="8"></td>
+        <td data-seller-result="9"></td>
+      </tr></tbody>
+    </table>
+  </div>
 </template>
 </main>
 <footer><strong class="product-brand"><span class="product-mark" aria-hidden="true"></span><span class="product-wordmark">biegwyzej.pl</span></strong></footer>
