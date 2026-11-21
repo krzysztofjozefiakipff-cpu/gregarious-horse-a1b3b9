@@ -456,8 +456,6 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
   border-radius:14px;
   box-shadow:0 12px 32px #25162429;
 }
-#mobile-account-logo { display:block; width:auto; height:auto; max-width:135px; max-height:44px; object-fit:contain; margin:10px auto 12px; }
-#mobile-account-roles:not(:empty) { border-top:1px solid var(--panel-border); padding-top:4px; }
 #mobile-account button {
   display:block; width:100%; min-height:44px; padding:8px 12px; margin:0;
   border:0; border-radius:8px; background:transparent; color:var(--panel-ink);
@@ -532,7 +530,12 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
     font-weight:850; letter-spacing:.025em; transform:skewX(-9deg);
   }
   .mobile-account-ready > :is(.identity,.header-account),body:has(.mobile-account-ready) #account-role-bar { display:none; }
-  .mobile-account-switcher { position:relative; }
+  .mobile-account-switcher { position:relative; display:grid; justify-items:end; }
+  #mobile-account-logo {
+    display:block; width:auto; height:auto; max-width:112px; max-height:26px;
+    object-fit:contain; padding:3px 5px; margin:3px 0 0;
+    background:#fff; border-radius:5px;
+  }
   #mobile-account-open { display:flex; align-items:center; gap:7px; min-height:44px; padding:4px 6px 4px 10px; background:transparent; color:white; font-size:.86rem; }
   #mobile-account-open::after { content:""; width:6px; height:6px; border-right:2px solid; border-bottom:2px solid; transform:rotate(45deg); margin:-3px 2px 0; }
   #mobile-account-open[aria-expanded="true"]::after { transform:rotate(225deg); margin:3px 2px 0; }
@@ -577,11 +580,11 @@ a{color:var(--blue)}#admin form{display:grid;gap:9px;border:1px solid var(--line
       <span class="mobile-brand-wordmark" aria-hidden="true">biegwyzej.pl</span>
     </span>
     <div class="mobile-account-switcher">
+      <img id="mobile-account-logo" alt="" hidden>
       <button type="button" id="mobile-account-open" aria-expanded="false" aria-controls="mobile-account">
         <span id="mobile-account-role">Konto</span><span class="entry-visually-hidden"> · Opcje konta</span>
       </button>
       <div id="mobile-account" hidden>
-        <img id="mobile-account-logo" alt="" hidden>
         <div id="mobile-account-roles"></div>
       </div>
     </div>
