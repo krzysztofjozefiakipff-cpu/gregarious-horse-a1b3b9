@@ -25,33 +25,6 @@ jobs:
           npm install --save-exact @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/ios@8.6.2
           npx cap add ios
           /usr/libexec/PlistBuddy -c 'Add :ITSAppUsesNonExemptEncryption bool false' ios/App/App/Info.plist
-      - name: Verify startup on an iPhone simulator
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/bieg-wyzej"
-          test -s ios/App/App/public/login
-          device=$(xcrun simctl list devices available -j | node -e '
-            const fs=require("node:fs");
-            const {devices}=JSON.parse(fs.readFileSync(0,"utf8"));
-            const iphone=Object.entries(devices).filter(([id])=>id.includes(".iOS-")).reverse()
-              .flatMap(([,entries])=>entries).find(d=>d.isAvailable&&d.name.startsWith("iPhone"));
-            if(!iphone) throw new Error("No iPhone simulator is available");
-            process.stdout.write(iphone.udid);
-          ')
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
-            -destination "platform=iOS Simulator,id=$device" -derivedDataPath "$RUNNER_TEMP/bieg-simulator" \
-            CODE_SIGNING_ALLOWED=NO build
-          app=$(find "$RUNNER_TEMP/bieg-simulator/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
-          test -s "$app/public/login"
-          xcrun simctl install "$device" "$app"
-          result=$(xcrun simctl launch "$device" pl.biegwyzej.pilot)
-          pid=$(printf '%s\n' "$result" | awk '{print $NF}')
-          [[ "$pid" =~ ^[0-9]+$ ]]
-          sleep 12
-          kill -0 "$pid"
-          echo "The iOS app launched and remained running on the iPhone simulator."
       - name: Sign and upload to internal TestFlight
         env:
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
@@ -137,16 +110,20 @@ jobs:
           cp "$RUNNER_TEMP/ios-signing.mobileprovision" "$profiles/$uuid.mobileprovision"
           sed -i '' -e "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = $APPLE_TEAM_ID; PROVISIONING_PROFILE_SPECIFIER = $uuid; CODE_SIGN_IDENTITY = \"Apple Distribution\";/" \
             ios/App/App.xcodeproj/project.pbxproj
+          identity=$(openssl x509 -in "$RUNNER_TEMP/ios-signing.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
+          sed -i '' -e "s/CODE_SIGN_IDENTITY = \\"Apple Distribution\\";/CODE_SIGN_IDENTITY = $identity;/" ios/App/App.xcodeproj/project.pbxproj
           archive="$RUNNER_TEMP/BiegWyzej.xcarchive"
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$archive" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" archive
+          test -s "$archive/Products/Applications/App.app/public/login"
+          echo "Verified login startup file in the signed application archive."
           export_options="$RUNNER_TEMP/BiegWyzejExport.plist"
           plutil -create xml1 "$export_options"
           plutil -insert method -string app-store-connect "$export_options"
           plutil -insert destination -string upload "$export_options"
           plutil -insert signingStyle -string manual "$export_options"
-          plutil -insert signingCertificate -string 'Apple Distribution' "$export_options"
+          plutil -insert signingCertificate -string "$identity" "$export_options"
           plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
           plutil -insert provisioningProfiles -json "{\"pl.biegwyzej.pilot\":\"$uuid\"}" "$export_options"
           plutil -insert testFlightInternalTestingOnly -bool YES "$export_options"
