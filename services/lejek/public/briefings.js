@@ -89,15 +89,21 @@ function briefingResultCorrection(person,report) {
 
 function renderBriefingSeller(person,report,open,salon) {
   const details=reportElement('details');
+  details.className='briefing-seller';
   details.dataset.seller=person.id;
   details.setAttribute('name','briefing-seller-'+salon);
   details.open=open;
   const review=person.review;
-  const summary=reportElement('summary',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':''));
-  const completed=reportElement('span','Odprawa wykonana');
+  const summary=reportElement('summary');
+  const name=reportElement('span',person.name+(person.archived?' · archiwum':person.ownForecast?' · Twoja prognoza':''));
+  name.className='briefing-seller-name';
+  const completed=reportElement('span',review.confirmed?'Wykonana'
+    :review.status==='off'?'Dzień wolny':review.status==='missing'?'Brak wpisu':'Do odprawy');
   completed.className='briefing-completed-badge';
-  completed.hidden=!review.confirmed;
-  summary.append(completed);
+  completed.dataset.complete=String(Boolean(review.confirmed));
+  completed.hidden=!person.editable;
+  if (person.editable&&review.status!=='off') details.dataset.reviewComplete=String(Boolean(review.confirmed));
+  summary.append(name,completed);
   details.append(summary);
   if (person.editable) {
     const section=reportElement('h3','Wczoraj · '+dateLabel(report.yesterday));
@@ -119,7 +125,9 @@ function renderBriefingSeller(person,report,open,salon) {
           confirm.disabled=true;
           try {
             await api('/api/daily-briefing',{person:person.id,day:report.today,action:'confirm',actual:review.actual});
-            completed.hidden=false;
+            completed.textContent='Wykonana';
+            completed.dataset.complete=details.dataset.reviewComplete='true';
+            updateBriefingProgress();
             message.textContent='Zapisano potwierdzenie rozmowy i wyniku.';
           } catch(error) {
             message.textContent=error.message;
@@ -200,22 +208,30 @@ async function loadBriefingPanel(message='') {
   try {
     const report=await api('/api/daily-briefing');
     if (version!==briefingLoadVersion||briefingHost.hidden) return;
-    briefingHost.querySelector('#briefing-dates').textContent='Odprawa '+dateLabel(report.today)+' · Wykonanie do '+dateLabel(report.today);
+    briefingHost.querySelector('#briefing-dates').textContent=dateLabel(report.today)+' · Wyniki za '+dateLabel(report.yesterday);
     const previous=briefingSalon.selectedIndex<0?null:briefingSalon.value;
     const salons=report.salons.map(row=>row.salon);
     briefingSalon.replaceChildren(...salons.map(salon=>new Option(salon,salon)));
-    if (salons.length>1) briefingSalon.add(new Option('Wszystkie salony',''));
-    briefingSalon.value=previous===''&&salons.length>1||salons.includes(previous)?previous:salons[0]??'';
+    if (salons.length>1) briefingSalon.add(new Option('Wszystkie salony',''),0);
+    briefingSalon.value=salons.includes(previous)?previous:salons.length>1?'':salons[0]??'';
     briefingHost.querySelector('#briefing-salon-filter').hidden=salons.length<2;
     briefingResults.replaceChildren();
     for (const salon of report.salons) {
       const card=reportElement('article');
       card.dataset.salon=salon.salon;
-      card.append(reportElement('h2',salon.salon),
+      const heading=reportElement('div');
+      heading.className='briefing-salon-heading';
+      const count=reportElement('span');
+      count.className='briefing-salon-count';
+      heading.append(reportElement('h2',salon.salon),count);
+      const totals=reportElement('details');
+      totals.className='briefing-salon-totals';
+      totals.append(reportElement('summary','Wyniki i prognoza salonu'),
         briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
           briefingSalesLabels.map((label,i)=>[label,salon.actual[i],salon.plan[i],
             salon.forecast[i]==null?null:salon.forecast[i]+(salon.missing[i]?' (częściowa)':''),
             salon.missing[i]?null:briefingEnd(salon.actual[i],salon.forecast[i])])));
+      card.append(heading,totals);
       if (!salon.people.length) card.append(reportElement('p','Brak handlowców do odprawy.'));
       for (const person of salon.people) card.append(renderBriefingSeller(person,report,open.has(String(person.id)),salon.salon));
       briefingResults.append(card);
@@ -229,9 +245,29 @@ async function loadBriefingPanel(message='') {
   }
 }
 
+function updateBriefingProgress() {
+  let done=0,total=0;
+  for (const card of briefingResults.children) {
+    const count=card.querySelector('.briefing-salon-count');
+    const reviews=card.querySelectorAll('[data-review-complete]');
+    const complete=card.querySelectorAll('[data-review-complete="true"]').length;
+    count.textContent=reviews.length?complete+' z '+reviews.length:'';
+    if (card.hidden) continue;
+    done+=complete;
+    total+=reviews.length;
+  }
+  const box=briefingHost.querySelector('#briefing-progress');
+  box.hidden=!total;
+  box.querySelector('strong').textContent='Ukończone rozmowy · '+done+' z '+total;
+  const progress=box.querySelector('progress');
+  progress.max=total||1;
+  progress.value=done;
+}
+
 function filterBriefingSalons() {
   const selected=briefingSalon.value;
   for (const card of briefingResults.children) card.hidden=Boolean(selected&&card.dataset.salon!==selected);
+  updateBriefingProgress();
 }
 
 briefingSalon.onchange=filterBriefingSalons;

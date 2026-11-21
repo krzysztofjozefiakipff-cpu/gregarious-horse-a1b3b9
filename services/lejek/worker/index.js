@@ -540,9 +540,10 @@ async function handle(request, env, buildDailyReport=false) {
       const sourcePlans=user.role==='seller'?await list(db,'SELECT month,targets FROM seller_source_plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('seller_source_plans','seller_source_plans.month'),...months,...params):[];
       const personal=user.role==='seller'?await tracking(db,user.id,preview):null;
       if (personal) {
-        const drafts=await list(db,'SELECT day,rows FROM daily_drafts WHERE person=? AND day IN (?,?)',
+        const drafts=await list(db,'SELECT day,rows,saved_at FROM daily_drafts WHERE person=? AND day IN (?,?)',
           user.id,localDay(),personal.missing[0]??null);
         personal.drafts=Object.fromEntries(drafts.map(({day,rows})=>[day,JSON.parse(rows)]));
+        personal.draftSavedAt=Object.fromEntries(drafts.map(({day,saved_at})=>[day,saved_at]));
       }
       const brand=personal?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
       const calendar=await list(db,`SELECT person,day,kind,status FROM work_calendar
@@ -1296,13 +1297,13 @@ async function handle(request, env, buildDailyReport=false) {
     if (!validDailyRows(rows)) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
     normalizeWalkIn(rows);
     if (draft) {
-      const written=await db.prepare(`INSERT INTO daily_drafts (person,day,rows)
-        SELECT ?1,?2,?3
+      const written=await db.prepare(`INSERT INTO daily_drafts (person,day,rows,saved_at)
+        SELECT ?1,?2,?3,?4
         WHERE NOT EXISTS (SELECT 1 FROM daily_results WHERE person=?1 AND day=?2)
           AND NOT EXISTS (SELECT 1 FROM daily_exceptions WHERE person=?1 AND day=?2 AND kind!='rejected')
           AND NOT EXISTS (SELECT 1 FROM work_calendar WHERE person=?1 AND day=?2 AND status='approved')
-        ON CONFLICT(person,day) DO UPDATE SET rows=excluded.rows`)
-        .bind(user.id,day,JSON.stringify(rows)).run();
+        ON CONFLICT(person,day) DO UPDATE SET rows=excluded.rows,saved_at=excluded.saved_at`)
+        .bind(user.id,day,JSON.stringify(rows),new Date().toISOString()).run();
       return written.meta.changes?json({ok:true}):json({error:'Ten dzień jest już rozliczony.'},409);
     }
     if (!rows.some(row=>row.some(v=>v>0))) return json({error:'Wpisz co najmniej jedno wykonane działanie.'},400);
