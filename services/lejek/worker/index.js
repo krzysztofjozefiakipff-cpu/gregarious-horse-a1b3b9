@@ -700,7 +700,7 @@ async function handle(request, env, buildDailyReport=false) {
     const current=briefing.salons[0].people[0];
     const timestamp=new Date().toISOString();
     if (action==='confirm') {
-      if (!current.review.actual||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
+      if (current.review.status!=='recorded'||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
           (version!==undefined&&version!==current.review.version))
         return json({error:'Wynik jest niezatwierdzony lub zmienił się po otwarciu odprawy. Odśwież dane.'},409);
       await db.prepare(`INSERT INTO daily_briefing_reviews VALUES (?,?,?,?,?,?)
@@ -725,7 +725,7 @@ async function handle(request, env, buildDailyReport=false) {
         WHERE person=? AND day=? AND accepted_plan=?`).bind(user.id,version,timestamp,person,today,current.signoff.planVersion).run();
       if (!written.meta.changes) return json({error:'Dane odprawy zmieniły się. Odśwież panel.'},409);
     } else if (action==='correct') {
-      if (!current.review.rows) return json({error:'Możesz skorygować zatwierdzony wpis, który ma podział na źródła.'},409);
+      if (current.review.status!=='recorded'||!current.review.rows) return json({error:'Możesz skorygować zatwierdzony wpis, który ma podział na źródła.'},409);
       if (JSON.stringify(current.review.rows)!==JSON.stringify(previousRows)||
           (version!==undefined&&version!==current.review.version))
         return json({error:'Wpis zmienił się od otwarcia formularza. Odśwież dane odprawy.'},409);
