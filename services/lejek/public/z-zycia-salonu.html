@@ -50,7 +50,6 @@
 <body>
 <!-- ACCOUNT_HEADER -->
 <main>
-  <a class="panel-return-link" id="return-panel" href="/daily.html" hidden>← Wróć do panelu</a>
   <h1>Z życia salonu</h1>
   <div class="actions">
     <label>Wybierz ścianę<select id="scope" disabled></select></label>
@@ -97,6 +96,7 @@
     <div class="actions"><button id="cancel-post" type="button" class="secondary">Anuluj</button><button>Opublikuj wpis</button></div>
   </form>
 </dialog>
-<script src="account-header.js"></script><script src="salon-life.js"></script>
+<nav id="life-panel-nav" class="mobile-panel-nav persistent-panel-nav" aria-label="Nawigacja panelu" hidden></nav>
+<script src="panel-navigation.js"></script><script src="account-header.js"></script><script src="salon-life.js"></script>
 </body>
 </html>
