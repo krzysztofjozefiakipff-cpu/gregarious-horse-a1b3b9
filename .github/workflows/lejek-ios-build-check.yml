@@ -8,7 +8,7 @@ permissions:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -29,3 +29,34 @@ jobs:
           cd "$RUNNER_TEMP/bieg-wyzej"
           xcodebuild -version
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/bieg-build" CODE_SIGNING_ALLOWED=NO build
+      - name: Sign and upload to internal TestFlight
+        if: ${{ vars.BW_IOS_TESTFLIGHT == 'true' }}
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          : "${APPLE_TEAM_ID:?Missing APPLE_TEAM_ID}" "${ASC_ISSUER_ID:?Missing ASC_ISSUER_ID}" "${ASC_KEY_ID:?Missing ASC_KEY_ID}" "${ASC_PRIVATE_KEY:?Missing ASC_PRIVATE_KEY}"
+          [[ "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ && "$ASC_KEY_ID" =~ ^[A-Z0-9]{10}$ && "$ASC_ISSUER_ID" =~ ^[a-fA-F0-9-]{36}$ ]]
+          cd "$RUNNER_TEMP/bieg-wyzej"
+          umask 077
+          key="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$key"
+          unset ASC_PRIVATE_KEY
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          archive="$RUNNER_TEMP/BiegWyzej.xcarchive"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$archive" "${auth[@]}" \
+            CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" archive
+          export_options="$RUNNER_TEMP/BiegWyzejExport.plist"
+          plutil -create xml1 "$export_options"
+          plutil -insert method -string app-store-connect "$export_options"
+          plutil -insert destination -string upload "$export_options"
+          plutil -insert signingStyle -string automatic "$export_options"
+          plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
+          plutil -insert testFlightInternalTestingOnly -bool YES "$export_options"
+          xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$export_options" \
+            -exportPath "$RUNNER_TEMP/BiegWyzejExport" "${auth[@]}"
