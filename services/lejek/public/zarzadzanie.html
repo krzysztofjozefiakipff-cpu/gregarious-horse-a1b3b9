@@ -45,6 +45,13 @@ select { max-width:100%; }
   .fields { grid-template-columns:1fr; }
   dialog { padding:16px; }
 }
+#planInputs > * { grid-column:1/-1; }
+.monthly-plan-fields { margin:0; }
+.monthly-plan-fields h3 { grid-column:1/-1; margin:0; }
+@media(max-width:1050px) {
+  #inlineSheet.activity-entry-table table { white-space:normal; }
+  #inlineSheet.activity-entry-table tfoot { display:table; white-space:nowrap; margin-top:8px; }
+}
 </style></head><body>
 <!-- ACCOUNT_HEADER -->
 <main><a class="panel-return-link" id="panel-return" href="/daily.html">← Wróć do panelu</a>
@@ -64,6 +71,6 @@ select { max-width:100%; }
 <section id="sources" hidden><article class="panel"><div class="row"><h2>Wyniki według źródła</h2><button class="action" id="edit">Wpisz wyniki</button></div><div class="table" id="sourceTable"></div><p>Wpisuj zbiorcze wyniki dla wybranego miesiąca, handlowca i źródła.</p></article></section>
 <section id="plan" hidden><article class="panel"><div class="row"><h2>Rozliczenie kwartału</h2><button class="action" id="editPlan">Ustaw cele miesięczne</button></div><p id="quarterNote"></p><div id="quarterCards" class="cards"></div><div class="table" id="quarterTable"></div><p>Tempo liczymy według dni kalendarzowych. Po zamknięciu miesiąca niedobór zwiększa następny cel tego samego handlowca w kwartale. Nadwyżka zwiększa realizację kwartału. Cele kolejnych miesięcy pozostają w wysokości bazowej.</p></article><div class="columns"><article class="panel"><h2>Kalkulator liczby leadów</h2><div class="fields"><label>Cel sprzedaży<input type="number" id="target" min="0" step="1" value="10"></label><label>Zakładana konwersja (%)<input type="number" id="rate" min="0.01" max="100" step="any" value="6"></label></div><div class="card"><small>Wymagana liczba leadów</small><strong id="needed"></strong></div></article><article class="panel"><h2>Cele operacyjne według źródła</h2><div class="table" id="bench"></div><p>Założenia startowe do weryfikacji na danych z CRM.</p></article></div></section>
 </div></main>
-<dialog id="editor"><form id="entry"><h2>Wyniki handlowca</h2><div class="fields"><label>Handlowiec<select id="entrySeller"></select></label><label>Źródło<select id="entrySource"></select></label></div><div class="fields" id="inputs"></div><details id="journeyDetails"><summary>Dodatkowe wskaźniki ścieżki klienta</summary><p>Wpisuj liczby dla tej samej grupy klientów w obrębie każdej pary wskaźników. Puste dodatkowe pola oznaczają brak pomiaru.</p><div class="fields" id="extraInputs"></div></details><p class="error" id="error" role="alert"></p><div class="row"><button type="button" id="cancel">Anuluj</button><button class="action" type="submit">Zapisz</button></div></form></dialog>
+<dialog id="editor"><form id="entry"><h2>Wyniki handlowca</h2><div class="fields"><label>Handlowiec<select id="entrySeller"></select></label><label class="mobile-entry-native-picker">Źródło<select id="entrySource"></select></label></div><div id="entrySourceMobile"></div><div class="fields" id="inputs"></div><details id="journeyDetails"><summary>Dodatkowe wskaźniki ścieżki klienta</summary><p>Wpisuj liczby dla tej samej grupy klientów w obrębie każdej pary wskaźników. Puste dodatkowe pola oznaczają brak pomiaru.</p><div class="fields" id="extraInputs"></div></details><p class="error" id="error" role="alert"></p><div class="row"><button type="button" id="cancel">Anuluj</button><button class="action" type="submit">Zapisz</button></div></form></dialog>
 <dialog id="planEditor"><form id="planForm"><h2>Cele handlowca na kwartał</h2><label>Handlowiec <select id="planPerson"></select></label><div class="fields" id="planInputs"></div><p id="planError" role="alert" class="error"></p><div class="row"><button type="button" id="cancelPlan">Anuluj</button><button class="action" type="submit">Zapisz cele</button></div></form></dialog>
 <script src="panel-navigation.js"></script><script src="quarter.js"></script><script src="workbook-plan.js"></script><script src="account-header.js"></script><script src="management.js"></script></body></html>

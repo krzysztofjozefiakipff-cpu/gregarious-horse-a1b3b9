@@ -1218,8 +1218,6 @@ function updateSourceStatuses() {
     const inputs=Array.from(row.querySelectorAll('input'));
     for (const input of inputs) {
       input.classList.toggle('has-value',input.valueAsNumber>0);
-      const button=input.nextElementSibling;
-      if (button) button.disabled=!input.validity.valid||input.valueAsNumber>=Number(input.max);
     }
     const hasResults=inputs.some(input=>input.valueAsNumber>0);
     entrySourceList.children[index].lastElementChild.hidden=!hasResults;
@@ -1244,14 +1242,6 @@ entrySourceList.onclick=event=>{
   entrySources.close();
 };
 
-$('#rows').addEventListener('click',event=>{
-  const button=event.target.closest('.entry-increment');
-  if (!button||busy) return;
-  const input=button.previousElementSibling;
-  if (input.disabled||input.readOnly||!input.validity.valid||input.valueAsNumber>=Number(input.max)) return;
-  input.value=String((input.valueAsNumber||0)+1);
-  input.dispatchEvent(new Event('input',{bubbles:true}));
-});
 $('#rows').addEventListener('keydown',event=>{
   const input=event.target;
   if (event.key!=='Enter'||event.isComposing||input.type!=='number') return;
@@ -1475,11 +1465,11 @@ function renderSeller() {
         (r===0?'<small>Próby kontaktu i spotkania liczymy z leadów.</small>':'')+'</td>'
         :c===7?'<td class="entry-field-group" aria-hidden="true">Wyniki sprzedaży</td>':'';
       return group+'<td'+(automatic?' class="entry-automatic"':'')+'><span class="entry-field-label" aria-hidden="true">'+fieldLabel+'</span>'+
-        '<div class="entry-value"><input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+
+        '<input type="number" min="0" max="1000000" step="1" inputmode="numeric" enterkeyhint="next" aria-label="'+name+' – '+label+
         '" name="v'+r+'_'+c+'" value="'+(matrix?.[r]?.[c]>0?matrix[r][c]:'')+'"'+(readOnly?' disabled':'')+
-        (automatic?' readonly title="Automatycznie z liczby leadów"':'')+'>'+
-        (readOnly||automatic?'':'<button type="button" class="entry-increment" aria-label="Dodaj jedno · '+label+'">+1</button>')+'</div></td>';
+        (automatic?' readonly title="Automatycznie z liczby leadów"':'')+'></td>';
     }).join('')+'</tr>').join('');
+  addNumberControlsIn($('#rows'));
   $('#mobile-entry').hidden=Boolean(legacy);
   $('#entry-grid').hidden=Boolean(legacy);
   if (!legacy) {
@@ -1948,6 +1938,7 @@ function planTargets(values,max,metrics=salonPlanMetrics) {
     input.value=values[index]??'';
     label.append(name,input);
     fields.append(label);
+    addNumberControls(input,name);
     return input;
   });
   return {fields,inputs};
@@ -2149,6 +2140,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     }));
   }
 
+  const sourcePanels=[];
   const rows=sources.map((source,index)=>{
     const saved=person.sourceTargets?.[index];
     const manual=planTargets(saved?.slice(0,4)??[0,0,0,0],1000000);
@@ -2191,15 +2183,19 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
         +(gap>=0.001?' · do poprawy o '+new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(gap*100)+' p.p.':'');
     }
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
-    sourceDetails.append(panel);
+    sourcePanels.push(panel);
     const inputs=[...manual.inputs,...activity.inputs];
     return {inputs,apply(values,keepActivities=false){
       inputs.forEach((input,i)=>{input.value=values[i];});
       edited.fill(keepActivities);
-      panel.open=false;
+      panel.open=mobileNumberEntry.matches&&panel.classList.contains('mobile-entry-active');
       title.textContent=source+' · zamówienia: '+values[0]+' · leady: '+values[7];
     }};
   });
+  const sourceEntries=document.createElement('div');
+  sourceEntries.append(...sourcePanels);
+  sourceDetails.append(sourceEntries);
+  addMobileEntryPicker(sourceEntries,sourcePanels,sources);
   updateSummary();
   propose.onclick=()=>{
     const shares=profile.getProfile();
@@ -3411,10 +3407,12 @@ adminBackfill.addEventListener('toggle',()=>{
       input.name='backfill-'+row+'-'+index;
       field.append(label,input);
       fields.append(field);
+      addNumberControls(input,label);
     }
     details.append(summary,fields);
     return details;
   }));
+  addMobileEntryPicker(backfillSources,[...backfillSources.children],sources);
 });
 backfillSources.addEventListener('invalid',event=>{event.target.closest('details').open=true;},true);
 

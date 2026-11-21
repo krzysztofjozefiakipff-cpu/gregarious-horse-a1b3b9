@@ -106,3 +106,117 @@ function renderPanelTabs(nav,role,active,hrefForRoute) {
   }
   nav.hidden=false;
 }
+
+const mobileNumberEntry=matchMedia('(max-width:1050px)');
+let numberEntryId=0;
+
+function addNumberControls(input,label) {
+  const field=document.createElement('span');
+  field.className='number-entry';
+  const labelElement=input.closest('label');
+  if (labelElement) {
+    const group=document.createElement('div');
+    group.className='number-entry-labeled';
+    input.id||='number-entry-'+ ++numberEntryId;
+    labelElement.htmlFor=input.id;
+    labelElement.replaceWith(group);
+    group.append(labelElement,field);
+  } else input.replaceWith(field);
+  input.inputMode='numeric';
+  input.enterKeyHint='next';
+  const buttonFor=delta=>{
+    const button=document.createElement('button');
+    button.type='button';
+    button.textContent=delta<0?'−1':'+1';
+    button.setAttribute('aria-label',(delta<0?'Odejmij jedno':'Dodaj jedno')+' · '+label);
+    button.onclick=()=>{
+      if (input.readOnly||input.disabled||!(input.validity.valid||input.validity.valueMissing)) return;
+      const current=input.valueAsNumber||0;
+      const next=current+delta;
+      if (next<Number(input.min||0)||next>Number(input.max||Number.MAX_SAFE_INTEGER)) return;
+      input.value=String(next);
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    };
+    return button;
+  };
+  field.append(buttonFor(-1),input,buttonFor(1));
+}
+
+function addNumberControlsIn(host) {
+  for (const input of host.querySelectorAll('input[type="number"]')) {
+    if (input.readOnly||input.disabled||input.closest('.number-entry')) continue;
+    addNumberControls(input,input.getAttribute('aria-label')||input.closest('label')?.textContent.trim()||'Wartość');
+  }
+}
+
+document.addEventListener('keydown',event=>{
+  const input=event.target;
+  if (event.defaultPrevented||event.key!=='Enter'||event.isComposing||!mobileNumberEntry.matches||
+      input.type!=='number'||!input.closest('.number-entry')||!input.form) return;
+  event.preventDefault();
+  if (!input.reportValidity()) return;
+  const fields=[...input.form.querySelectorAll('.number-entry input:not(:disabled):not([readonly])')]
+    .filter(field=>field.checkVisibility?.()??Boolean(field.getClientRects().length));
+  const next=fields[fields.indexOf(input)+1];
+  const submit=[...input.form.elements].find(field=>field.type==='submit'&&!field.disabled&&(field.checkVisibility?.()??Boolean(field.getClientRects().length)));
+  (next??submit)?.focus();
+});
+
+function addMobileEntryPicker(host,panels,labels,caption='Źródło kontaktu',onSelect) {
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='secondary mobile-entry-picker';
+  button.setAttribute('aria-haspopup','dialog');
+  const subtitle=document.createElement('span');
+  subtitle.textContent=caption;
+  const name=document.createElement('strong');
+  button.append(subtitle,name);
+
+  const dialog=document.createElement('dialog');
+  dialog.className='mobile-entry-dialog';
+  dialog.setAttribute('aria-label',caption);
+  const heading=document.createElement('div');
+  heading.className='mobile-entry-dialog-heading';
+  const title=document.createElement('strong');
+  title.textContent=caption;
+  const close=document.createElement('button');
+  close.type='button';
+  close.className='secondary';
+  close.textContent='Zamknij';
+  close.onclick=()=>dialog.close();
+  heading.append(title,close);
+  const options=document.createElement('div');
+  options.className='mobile-entry-options';
+  let active=0;
+  const select=index=>{
+    active=index;
+    name.textContent=labels[index];
+    panels.forEach((panel,i)=>{
+      panel.classList.toggle('mobile-entry-active',i===index);
+      if (i===index&&panel.tagName==='DETAILS') panel.open=true;
+    });
+    [...options.children].forEach((option,i)=>option.setAttribute('aria-pressed',String(i===index)));
+  };
+  labels.forEach((label,index)=>{
+    const option=document.createElement('button');
+    option.type='button';
+    option.className='secondary';
+    option.textContent=label;
+    option.onclick=()=>{select(index);dialog.close();onSelect?.(index);};
+    options.append(option);
+  });
+  dialog.append(heading,options);
+  button.onclick=()=>{
+    dialog.showModal();
+    options.children[active].focus();
+  };
+  host.prepend(button,dialog);
+  panels.forEach(panel=>panel.classList.add('mobile-entry-panel'));
+  host.addEventListener('invalid',event=>{
+    if (!mobileNumberEntry.matches||event.target!==host.querySelector('input:invalid')) return;
+    const index=panels.findIndex(panel=>panel.contains(event.target));
+    if (index>=0) select(index);
+  },true);
+  select(0);
+  return select;
+}

@@ -208,12 +208,18 @@ function renderInlineSheet(scope,bySource) {
   const rates=['Kontakt / lead','Odbyte / umówione','Sprzedaż / lead'];
   const head='<thead><tr><th scope="col">Źródło</th>'+[...labels,...rates].map(label=>'<th scope="col">'+label+'</th>').join('')+'</tr></thead>';
   const body=bySource.map((row,i)=>'<tr><th scope="row">'+sources[i]+'</th>'+sheetOrder.map((k,j)=>
-    '<td>'+(editable?'<input type="number" min="0" max="1000000" step="1" required data-field="'+k+'" data-source="'+i+'" aria-label="'+sources[i]+' – '+labels[j]+'" value="'+row[k]+'">':row[k])+'</td>').join('')+
-    sheetRates.map(([a,b],j)=>'<td id="sheet-rate-'+i+'-'+j+'">'+pct(row[a],row[b])+'</td>').join('')+'</tr>').join('');
+    '<td data-label="'+labels[j]+'">'+(editable?'<input type="number" min="0" max="1000000" step="1" required data-field="'+k+'" data-source="'+i+'" aria-label="'+sources[i]+' – '+labels[j]+'" value="'+row[k]+'">':row[k])+'</td>').join('')+
+    sheetRates.map(([a,b],j)=>'<td data-label="'+rates[j]+'" id="sheet-rate-'+i+'-'+j+'">'+pct(row[a],row[b])+'</td>').join('')+'</tr>').join('');
   const totals=sum(bySource);
   const foot='<tfoot><tr><th scope="row">Razem</th>'+sheetOrder.map(k=>'<td id="sheet-total-'+k+'">'+totals[k]+'</td>').join('')+
     sheetRates.map(([a,b],j)=>'<td id="sheet-total-rate-'+j+'">'+pct(totals[a],totals[b])+'</td>').join('')+'</tr></tfoot>';
-  get('inlineSheet').innerHTML='<table>'+head+'<tbody>'+body+'</tbody>'+foot+'</table>';
+  const sheet=get('inlineSheet');
+  sheet.innerHTML='<table>'+head+'<tbody>'+body+'</tbody>'+foot+'</table>';
+  sheet.classList.toggle('activity-entry-table',editable);
+  if (editable) {
+    addNumberControlsIn(sheet);
+    addMobileEntryPicker(sheet,[...sheet.querySelectorAll('tbody tr')],sources);
+  }
   get('sheetForm').oninput=drawSheetRates;
   get('sheetForm').onsubmit=async event=>{
     event.preventDefault();
@@ -310,7 +316,10 @@ function renderQuarter(scope) {
 const funnelGoalLabels=['Próby kontaktu','Jazdy próbne','Oferty','Leady','Spotkania','Follow-up','Wystawione faktury','Rejestracje'];
 function loadPlanInputs() {
   const months=quarterMonths(get('month').value);
-  get('planInputs').innerHTML=months.map((month,i)=>'<label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+funnelGoalLabels.map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')).join('');
+  const fields=get('planInputs');
+  fields.innerHTML=months.map((month,i)=>'<section class="monthly-plan-fields fields"><h3>'+month+'</h3><label>'+month+' · zamówienia<input id="goal'+i+'" type="number" min="0" max="1000000" step="1" required></label><label>'+month+' · opinie Google<input id="review-goal'+i+'" type="number" min="0" max="1000000" step="1"></label>'+funnelGoalLabels.map((label,j)=>'<label>'+month+' · '+label+'<input id="funnel-'+i+'-'+j+'" type="number" min="0" max="1000000" step="1"></label>').join('')+'</section>').join('');
+  addNumberControlsIn(fields);
+  addMobileEntryPicker(fields,[...fields.querySelectorAll('.monthly-plan-fields')],months,'Miesiąc planu');
   const seller=+get('planPerson').value;
   months.forEach((m,i)=>{
     get('goal'+i).value=basePlanFor(seller,m)??'';
@@ -395,6 +404,8 @@ const calc=()=>{
 ['target','rate'].forEach(id=>get(id).addEventListener('input',calc));
 get('inputs').innerHTML=fields.map((label,i)=>'<label>'+label+'<input id="value'+i+'" type="number" min="0" max="1000000" step="1" required></label>').join('');
 get('extraInputs').innerHTML=extras.map((label,i)=>'<label>'+label+'<input id="extra'+i+'" type="number" min="0" max="1000000" step="1"></label>').join('');
+addNumberControlsIn(get('inputs'));
+addNumberControlsIn(get('extraInputs'));
 function loadEntry() {
   const row=record(+get('entrySeller').value,+get('entrySource').value);
   fields.forEach((_,i)=>{get('value'+i).value=row[i];});
@@ -409,6 +420,13 @@ function openEntry(showExtras) {
   options(get('entrySeller'),entryPeople.map(i=>[i,people[i].name]));
   if(entryPeople.some(i=>String(i)===selected)) get('entrySeller').value=selected;
   options(get('entrySource'),sources.map((s,i)=>[i,s]));
+  const mobilePicker=get('entrySourceMobile');
+  mobilePicker.replaceChildren();
+  const select=addMobileEntryPicker(mobilePicker,[],sources,'Źródło kontaktu',index=>{
+    get('entrySource').value=String(index);
+    loadEntry();
+  });
+  get('entrySource').onchange=()=>{select(Number(get('entrySource').value));loadEntry();};
   loadEntry();
   get('journeyDetails').open=showExtras;
   get('editor').showModal();
@@ -416,7 +434,6 @@ function openEntry(showExtras) {
 get('edit').onclick=()=>openEntry(false);
 get('journeyEdit').onclick=()=>openEntry(true);
 get('entrySeller').onchange=loadEntry;
-get('entrySource').onchange=loadEntry;
 get('cancel').onclick=()=>get('editor').close();
 get('entry').onsubmit=event=>saveForm(event,'/api/results',{
   month:get('month').value,person:people[+get('entrySeller').value].id,
