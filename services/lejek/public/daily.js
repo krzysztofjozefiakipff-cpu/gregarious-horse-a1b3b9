@@ -2638,14 +2638,14 @@ const adminModules=[
 ];
 const adminPreviewBars=['manager-preview-bar','group-preview-bar','seller-preview-bar'];
 
-function placeManagementScope(inResults) {
+function placeManagementScope(route) {
   const scope=$('#manager-scope-bar');
-  const picker=$('#management-period-picker');
-  if (inResults&&scope.parentElement!==picker) picker.prepend(scope);
-  if (!inResults&&scope.parentElement===picker) {
-    $('#manager-scope-anchor').after(scope);
-    $('#management-filters').open=false;
-  }
+  const picker=route==='wykonanie'?$('#management-period-picker'):route==='zespol'?$('#team-salon-picker'):null;
+  if (scope.parentElement===picker) return;
+  const previous=scope.closest('.management-filter-panel');
+  if (previous) previous.open=false;
+  if (picker) picker.prepend(scope);
+  else if (previous) $('#manager-scope-anchor').after(scope);
 }
 
 function selectRoleFunction(routes) {
@@ -2677,7 +2677,7 @@ function selectRoleFunction(routes) {
   }
   select.value=active;
   $('#admin').dataset.function=active;
-  placeManagementScope(active==='wykonanie');
+  placeManagementScope(active);
   $('#management-reports').hidden=active!=='raporty';
   if (active==='raporty') renderReportPicker(data);
   $('#daily-briefing').hidden=active!=='odprawa-dzienna';
@@ -2727,7 +2727,7 @@ function selectManagementView() {
   const preview=Boolean(managerPreviewSalon||groupPreviewName);
   const primaryAdmin=mobilePanel.matches&&!preview;
   const route=location.hash.slice(1)||(primaryAdmin?'konta-uzytkownikow':'wykonanie');
-  placeManagementScope(route==='wykonanie');
+  placeManagementScope(route);
   const [,moduleLabel,,adminBlock,settingId]=adminModules.find(([id])=>id===route)??[];
   const more=route==='wiecej';
   const administration=route==='administracja'||Boolean(adminBlock);
@@ -3115,10 +3115,12 @@ function renderAdmin() {
   const group=baseView.role==='group';
   const multiple=(baseView.role==='manager'||group)&&baseView.salons.length>1;
   $('#manager-scope-bar').hidden=!multiple;
+  $('#team-salon-filter').hidden=!multiple;
   if (multiple) {
     managerScope.replaceChildren(new Option('Wszystkie salony',''),...baseView.salons.map(({salon})=>new Option(salon,salon)));
     if (baseView.salons.some(({salon})=>salon===picked)) managerScope.value=picked;
   }
+  $('#team-filter-salon').textContent=managerScope.selectedOptions[0]?.textContent??'';
   const selected=managerPreview?(managerPreviewSalon===allPreviewSalons?'':managerPreviewSalon):multiple?managerScope.value:'';
   const people=selected?baseView.sellers.filter(seller=>seller.salon===selected):baseView.sellers;
   const view=selected?{...baseView,role:managerPreview?'manager':baseView.role,salon:selected,sellers:people,
