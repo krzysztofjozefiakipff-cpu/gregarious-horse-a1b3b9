@@ -269,6 +269,7 @@ function renderDailyManagementSalon(card,salon,csv,closed) {
   const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'];
   const activities=reportElement('details');
   activities.setAttribute('name','daily-report-salons');
+  activities.setAttribute('data-scroll-to-card','');
   activities.append(reportElement('summary','Aktywności i rozliczenie dni pracy'),
     reportTable(headers,teamMetrics.slice(0,6)));
   csv.push(...teamMetrics.slice(0,6).map(row=>[salon.salon,'Razem',...row]));
@@ -299,6 +300,7 @@ function renderMonthlyManagementSalon(card,salon,csv) {
   card.append(reportElement('h3','Realizacja sprzedaży i cele'),reportSalesTable(salon));
   const details=reportElement('details');
   details.setAttribute('name','monthly-report-salons');
+  details.setAttribute('data-scroll-to-card','');
   details.append(reportElement('summary','Aktywności salonu'),
     reportTable(['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'],metrics.slice(0,6)));
   const conversion=reportSourceConversionRows(salon);
@@ -349,6 +351,7 @@ function renderMarketingSalon(card,salon,benchmarks,csv) {
     reportTable(['Źródło leadów','Leady','Zamówienia','Zamówienia / leady'],reportSourceConversionRows(salon)));
   const funnel=reportElement('details');
   funnel.setAttribute('name','marketing-report-funnels');
+  funnel.setAttribute('data-scroll-to-card','');
   funnel.append(reportElement('summary','Etapy lejka według źródła'));
   for (const [index,source] of salon.sources.entries()) {
     const stages=benchmarks.stages.map(stage=>marketingStageValues(source,stage));

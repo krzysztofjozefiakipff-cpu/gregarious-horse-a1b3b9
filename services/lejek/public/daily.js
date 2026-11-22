@@ -1793,6 +1793,7 @@ function renderSalonSummary(view,team=[],period=null) {
     const details=document.createElement('details');
     details.dataset.salon=plan.salon;
     details.setAttribute('name','salon-performance-details');
+    details.setAttribute('data-scroll-to-card','');
     details.open=expanded.get(plan.salon)??false;
     const summary=document.createElement('summary');
     summary.textContent='Szczegóły realizacji';
@@ -3976,6 +3977,7 @@ async function loadLessonPacks() {
       };
       const preview=document.createElement('details');
       preview.setAttribute('name','lesson-pack-previews');
+      preview.setAttribute('data-scroll-to-card','');
       const summary=document.createElement('summary');
       summary.textContent=pack.count+' lekcji · '+(pack.active?'Wyświetlana':'Wyłączona');
       const list=document.createElement('ol');

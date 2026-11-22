@@ -544,6 +544,7 @@ async function loadBriefingPanel(message='',focusSeller,{silent=false,current}={
       const totals=reportElement('details');
       totals.className='briefing-salon-totals';
       totals.setAttribute('name','briefing-salon-totals');
+      totals.setAttribute('data-scroll-to-card','');
       totals.open=openTotals.has(salon.salon);
       totals.append(reportElement('summary','Wyniki i prognoza salonu'),
         briefingTable(['Wskaźnik','Wykonano','Plan','Jeszcze w tym miesiącu','Razem na koniec'],
