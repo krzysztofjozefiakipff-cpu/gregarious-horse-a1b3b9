@@ -27,7 +27,10 @@
   <form id="fox-assistant-form">
     <label for="fox-assistant-question">Twoje pytanie</label>
     <textarea id="fox-assistant-question" rows="2" maxlength="500" required placeholder="W czym Lisek może pomóc?"></textarea>
-    <button type="submit">Wyślij pytanie</button>
+    <div class="fox-assistant-actions">
+      <button type="button" id="fox-assistant-mic" hidden>🎙️ Zadaj głosowo</button>
+      <button type="submit">Wyślij pytanie</button>
+    </div>
   </form>
 </dialog>
 <style>
@@ -42,5 +45,7 @@
   #fox-assistant-messages p { margin: .6rem 0; padding: .65rem; border-radius: 8px; background: #f5eef6; white-space: pre-wrap; }
   #fox-assistant-messages p[data-speaker="Ty"] { background: #fff1e5; }
   #fox-assistant-form { display: grid; gap: .45rem; margin-top: .75rem; }
+  .fox-assistant-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+  #fox-assistant-messages button { display: block; margin-top: .5rem; }
   #fox-assistant-question { box-sizing: border-box; width: 100%; font-size: 1rem; }
 </style>
