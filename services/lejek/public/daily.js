@@ -367,7 +367,7 @@ async function api(path,body) {
   }
 }
 
-function assistantControl(label,request,{question=false}={}) {
+function assistantControl(label,request) {
   const control=document.createElement('div');
   control.className='assistant-control';
   control.hidden=Boolean(previewTarget);
@@ -378,22 +378,12 @@ function assistantControl(label,request,{question=false}={}) {
   const output=document.createElement('p');
   output.setAttribute('role','status');
   output.style.whiteSpace='pre-wrap';
-  let input;
-  if (question) {
-    input=document.createElement('input');
-    input.type='text';
-    input.maxLength=500;
-    const field=document.createElement('label');
-    field.append('Pytanie o wyniki',input);
-    control.append(field);
-  }
   control.append(button,output);
   button.onclick=async()=>{
-    if (input&&!input.value.trim()) {input.focus();return;}
     button.disabled=true;
     output.textContent='Asystent przygotowuje odpowiedź…';
     try {
-      const result=await api('/api/assistant',{...request(),...(input?{question:input.value.trim()}:{})});
+      const result=await api('/api/assistant',request());
       output.textContent=result.text;
     } catch (error) {output.textContent=error.message;}
     finally {button.disabled=false;}
