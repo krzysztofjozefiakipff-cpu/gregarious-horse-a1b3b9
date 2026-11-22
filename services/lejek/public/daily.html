@@ -163,7 +163,8 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   #management-report-picker { grid-template-columns:repeat(3,minmax(0,1fr)); }
   #management-report-picker > :is(#report-day-field,#report-month-field) { grid-column:auto; }
 }
-#management-report-form .user-actions { display:flex; flex-wrap:wrap; gap:6px; }
+#management-report-form .user-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+#management-report-form .report-download { min-inline-size:44px; min-block-size:44px; padding:4px 9px; font-size:.8rem; line-height:1.2; }
 #report-monthly-overview { border:1px solid var(--panel-plum); border-radius:14px; padding:12px; background:var(--panel-plum); color:#fff; }
 #report-monthly-overview h2 { margin:0 0 8px; color:var(--panel-orange); font-size:1.15rem; }
 #report-monthly-overview p { color:var(--on-plum-muted); font-size:.85rem; margin-top:8px; }
@@ -1069,8 +1070,8 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
     </details>
     <div class="user-actions">
       <button type="submit">Pokaż raport</button>
-      <button type="button" id="export-management-report-pdf" class="secondary" aria-haspopup="dialog" disabled>Pobierz PDF</button>
-      <button type="button" id="export-management-report" class="secondary" disabled>Pobierz CSV</button>
+      <button type="button" id="export-management-report-pdf" class="secondary report-download" aria-label="Pobierz PDF" aria-haspopup="dialog" disabled>PDF</button>
+      <button type="button" id="export-management-report" class="secondary report-download" aria-label="Pobierz CSV" disabled>CSV</button>
     </div>
   </form>
   <p id="management-report-status" role="status"></p>
