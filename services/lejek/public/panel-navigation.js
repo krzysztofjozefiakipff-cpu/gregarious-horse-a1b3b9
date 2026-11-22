@@ -5,7 +5,9 @@ document.addEventListener('click',event=>{
   const details=summary.parentElement;
   if (details.open) return;
   requestAnimationFrame(()=>{
-    if (summary.isConnected&&details.open) summary.scrollIntoView({block:'start'});
+    if (!summary.isConnected||!details.open) return;
+    const card=details.parentElement.closest('.salon-result-card');
+    (card??summary).scrollIntoView({block:'start'});
   });
 });
 
