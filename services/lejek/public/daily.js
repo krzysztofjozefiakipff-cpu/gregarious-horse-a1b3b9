@@ -2622,7 +2622,10 @@ async function loadSalonPlans() {
   status.textContent=month?'Wczytywanie planów…':'Wybierz miesiąc.';
   if (!month) return;
   try {
-    const {plans,pendingChanges=[]}=await api('/api/salon-plans?month='+encodeURIComponent(month));
+    const response=await api('/api/salon-plans?month='+encodeURIComponent(month));
+    const selected=$('#manager-scope').value;
+    const plans=response.plans.filter(({salon})=>!selected||salon===selected);
+    const pendingChanges=(response.pendingChanges??[]).filter(({salon})=>!selected||salon===selected);
     if (revision!==salonPlanRevision) return;
     if (pendingChanges.length) {
       const inbox=document.createElement('div');
@@ -2818,12 +2821,22 @@ const adminPreviewBars=['manager-preview-bar','group-preview-bar','seller-previe
 
 function placeManagementScope(route) {
   const scope=$('#manager-scope-bar');
-  const picker=route==='wykonanie'?$('#management-period-picker'):route==='zespol'?$('#team-salon-picker'):null;
+  const pickers={
+    wykonanie:'#management-period-picker',
+    zespol:'#team-salon-picker',
+    'historia-planow':'#history-salon-picker',
+    'plany-salonow':'#plan-salon-picker',
+    'kalendarz-pracy':'#calendar-salon-picker'
+  };
+  const picker=pickers[route]?$(pickers[route]):null;
+  scope.hidden=!picker||$('#manager-scope').options.length<2;
+  $('#calendar-salon-filter').hidden=route!=='kalendarz-pracy'||scope.hidden;
+  $('#calendar-filter-salon').textContent=$('#manager-scope').selectedOptions[0]?.textContent??'';
   if (scope.parentElement===picker) return;
   const previous=scope.closest('.management-filter-panel');
   if (previous) previous.open=false;
   if (picker) picker.prepend(scope);
-  else if (previous) $('#manager-scope-anchor').after(scope);
+  else $('#manager-scope-anchor').after(scope);
 }
 
 function selectRoleFunction(routes) {
@@ -3010,7 +3023,10 @@ $('#manager-assignments').onsubmit=event=>{
   const salons=[...$('#assignment-salons').querySelectorAll('input:checked')].map(input=>input.value);
   run(()=>api('/api/manager-salons',{manager:Number($('#assignment-manager').value),salons}));
 };
-$('#manager-scope').onchange=()=>renderAdmin();
+$('#manager-scope').onchange=()=>{
+  renderAdmin();
+  if ($('#plan-salon-picker').contains($('#manager-scope'))) loadSalonPlans();
+};
 
 const userEditor=$('#user-editor');
 const addUserBlock=$('#admin-users-block');
@@ -3303,7 +3319,7 @@ function renderAdmin() {
   const picked=managerScope.options.length?managerScope.value:detailParams.get('salon');
   const group=baseView.role==='group';
   const multiple=(baseView.role==='manager'||group)&&baseView.salons.length>1;
-  $('#manager-scope-bar').hidden=!multiple;
+  if (!multiple) managerScope.replaceChildren();
   $('#team-salon-filter').hidden=!multiple;
   if (multiple) {
     managerScope.replaceChildren(new Option('Wszystkie salony',''),...baseView.salons.map(({salon})=>new Option(salon,salon)));
@@ -3335,7 +3351,7 @@ function renderAdmin() {
   }
   historySalons=new Set(view.salons.map(({salon})=>salon));
   $('[data-history="management"]').reloadHistory();
-  renderUserEditor(view);
+  renderUserEditor({...view,salons:baseView.salons,sellers:baseView.sellers});
   $('#group-add-salon-block').hidden=!group;
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
@@ -3358,7 +3374,7 @@ function renderAdmin() {
   ]) $('#' + block).hidden=$('#' + content).hidden;
   const lessonSalon=$('#lesson-salon');
   const selectedSalon=lessonSalon.value;
-  const lessonSalons=view.salons.map(({salon})=>salon);
+  const lessonSalons=baseView.salons.map(({salon})=>salon);
   lessonSalon.replaceChildren(...(lessonSalons.length>1?[new Option('Wybierz salon','')]:[]),...lessonSalons.map(salon=>new Option(salon,salon)));
   if (lessonSalons.includes(selectedSalon)) lessonSalon.value=selectedSalon;
   $('#lesson-salon-label').hidden=view.role!=='admin'&&lessonSalons.length<=1;
@@ -3370,8 +3386,8 @@ function renderAdmin() {
     form.elements.name.required=!optionalName;
     $('#dealer-name-optional').hidden=!optionalName;
     const selected=form.elements.salon.value;
-    form.elements.salon.replaceChildren(...view.salons.map(({salon})=>new Option(salon,salon)));
-    if (view.salons.some(({salon})=>salon===selected)) form.elements.salon.value=selected;
+    form.elements.salon.replaceChildren(...baseView.salons.map(({salon})=>new Option(salon,salon)));
+    if (baseView.salons.some(({salon})=>salon===selected)) form.elements.salon.value=selected;
   }
   if (view.role==='admin') {
     $('#charity').elements.month.value ||= view.today.slice(0,7);

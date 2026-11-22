@@ -582,7 +582,7 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 @media(min-width:420px) { .module-menu { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(min-width:760px) { .module-menu { grid-template-columns:repeat(5,minmax(0,1fr)); gap:20px 12px; } }
 #admin:has(#management-more:not([hidden])) > :is(.manager-preview-bar,#admin-backfill) { display:none; }
-#admin:is([data-function="odprawa-dzienna"],[data-function="raporty"]) > #manager-scope-bar { display:none; }
+#brand, #brand label, #brand :is(select,input) { min-width:0; max-width:100%; }
 .today-results h2 { font-size:1.16rem; margin-bottom:8px; }
 .sales-results-card { background:#fff; border:1px solid var(--panel-border); border-radius:14px; overflow:hidden; }
 .sales-results-card table { width:100%; table-layout:fixed; border-collapse:collapse; }
@@ -938,7 +938,12 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
   <p id="management-plan-period"></p>
   <details class="month-history" data-history="management">
   <summary>Historia planów i aktywności</summary>
-  <label>Miesiąc <input type="month"></label>
+  <details class="management-filter-panel">
+    <summary><span><strong>Filtry historii</strong></span></summary>
+    <div class="management-filter-fields" id="history-salon-picker">
+      <label>Miesiąc <input type="month"></label>
+    </div>
+  </details>
   <p class="history-status" role="status"></p>
   <div class="history-results"></div>
 </details>
@@ -1099,14 +1104,17 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 <details id="salon-plans" class="admin-block" hidden>
   <summary>Plany salonów</summary>
   <div>
-    <div class="planning-toolbar">
-      <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
-      <div class="planning-month-actions">
-        <button type="button" class="secondary" id="salon-plan-prev" aria-label="Poprzedni miesiąc">‹</button>
-        <button type="button" class="secondary" id="salon-plan-current">Bieżący miesiąc</button>
-        <button type="button" class="secondary" id="salon-plan-next" aria-label="Następny miesiąc">›</button>
+    <details class="management-filter-panel">
+      <summary><span><strong>Filtry planów</strong></span></summary>
+      <div id="plan-salon-picker" class="management-filter-fields planning-toolbar">
+        <label>Miesiąc planu <input id="salon-plan-month" type="month" required></label>
+        <div class="planning-month-actions">
+          <button type="button" class="secondary" id="salon-plan-prev" aria-label="Poprzedni miesiąc">‹</button>
+          <button type="button" class="secondary" id="salon-plan-current">Bieżący miesiąc</button>
+          <button type="button" class="secondary" id="salon-plan-next" aria-label="Następny miesiąc">›</button>
+        </div>
       </div>
-    </div>
+    </details>
     <p id="salon-plan-status" role="status"></p>
     <div id="salon-plan-results"></div>
   </div>
@@ -1137,7 +1145,12 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 </details>
 <details id="admin-absence-block" class="admin-block" hidden>
 <summary>Kalendarz pracy</summary>
-<div id="absence-panel"><p id="manager-calendar-empty" hidden>Brak aktywnych handlowców w wybranym salonie.</p><div id="manager-calendar-editor" hidden></div></div>
+<div id="absence-panel">
+<details id="calendar-salon-filter" class="management-filter-panel" hidden>
+  <summary><span><small>Salon</small><strong id="calendar-filter-salon"></strong></span></summary>
+  <div id="calendar-salon-picker" class="management-filter-fields"></div>
+</details>
+<p id="manager-calendar-empty" hidden>Brak aktywnych handlowców w wybranym salonie.</p><div id="manager-calendar-editor" hidden></div></div>
 </details>
 <details id="admin-lessons-block" class="admin-block" hidden>
 <summary>Lekcja na dziś</summary>
