@@ -3383,6 +3383,18 @@ function renderAdmin() {
     const form=$('#brand');
     const optionalName=view.role==='group';
     $('#group-brand').hidden=!optionalName;
+    if (optionalName) {
+      const groupForm=$('#group-brand');
+      const theme=data.groupBrand?.theme??null;
+      const saved=JSON.stringify(theme);
+      if (groupForm.dataset.savedTheme!==saved) {
+        groupForm.dataset.savedTheme=saved;
+        groupForm.elements.themeMode.value=theme?'group':'default';
+        groupForm.elements.primaryColor.value=theme?.primary??'#52294f';
+        groupForm.elements.accentColor.value=theme?.accent??'#ffc184';
+        renderGroupThemePreview();
+      }
+    }
     form.elements.name.required=!optionalName;
     $('#dealer-name-optional').hidden=!optionalName;
     const selected=form.elements.salon.value;
@@ -3883,23 +3895,34 @@ function readBrandLogo(file) {
   });
 }
 
+function renderGroupThemePreview() {
+  const {themeMode,primaryColor,accentColor}=$('#group-brand').elements;
+  $('#group-theme-colors').hidden=themeMode.value!=='group';
+  const preview=$('#group-theme-preview');
+  preview.style.backgroundColor=primaryColor.value;
+  preview.style.color=accentColor.value;
+}
+
+$('#group-brand').addEventListener('input',renderGroupThemePreview);
 $('#group-brand').onsubmit=async event=>{
   event.preventDefault();
   const form=event.currentTarget;
-  const {logo,removeLogo}=form.elements;
+  const {logo,removeLogo,themeMode,primaryColor,accentColor}=form.elements;
   const file=logo.files[0];
   const status=$('#group-brand-status');
-  if (file?.size>40960||!file&&!removeLogo.checked||file&&removeLogo.checked) {
+  if (file?.size>40960||file&&removeLogo.checked) {
     status.textContent=file?.size>40960?'Logo może mieć maksymalnie 40 KB.':'Wybierz plik albo zaznacz usunięcie logo.';
     return;
   }
   const button=form.querySelector('button');
   button.disabled=true;
   try {
-    await api('/api/group-brand',{logo:file?await readBrandLogo(file):''});
-    form.reset();
+    const theme=themeMode.value==='group'?{primary:primaryColor.value,accent:accentColor.value}:null;
+    await api('/api/group-brand',{logo:file?await readBrandLogo(file):removeLogo.checked?'':undefined,theme});
+    logo.value='';
+    removeLogo.checked=false;
     await refresh();
-    status.textContent=file?'Zapisano logo grupy.':'Usunięto logo grupy.';
+    status.textContent='Zapisano wygląd grupy.';
   } catch (error) {
     status.textContent=error.message;
   } finally {

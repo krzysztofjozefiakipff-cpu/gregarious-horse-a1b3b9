@@ -1,10 +1,11 @@
 async function accountGroupBrand(db,group) {
   if (!group) return null;
   const saved=await db.prepare('SELECT logo FROM dealer_group_brand WHERE group_name=?').bind(group).first();
-  if (saved) return {name:group,logo:saved.logo};
+  const theme=await db.prepare('SELECT primary_color AS "primary",accent_color AS accent FROM dealer_group_theme WHERE group_name=?').bind(group).first()??null;
+  if (saved) return {name:group,logo:saved.logo,theme};
   const logos=await list(db,`SELECT DISTINCT b.logo FROM dealer_brand b JOIN dealer_group_salons gs USING(salon)
     WHERE gs.group_name=? AND b.logo<>'' LIMIT 2`,group);
-  return {name:group,logo:logos.length===1?logos[0].logo:''};
+  return {name:group,logo:logos.length===1?logos[0].logo:'',theme};
 }
 
 async function loadAccountHeader(db,user,groupName) {
