@@ -264,11 +264,11 @@ function briefingPreviousResolution(person,report,renderActuals) {
   return section;
 }
 
-const briefingReviewStates={recorded:'Do potwierdzenia',draft:'Zapis roboczy',pending:'Zgłoszenie w toku',missing:'Brak wpisu',off:'Dzień wolny'};
+const briefingReviewStates={recorded:'Do potwierdzenia',draft:'Zapis roboczy',pending:'Zgłoszenie w toku',missing:'Brak wpisu'};
 
 function briefingReviewStep(person,report,canEdit) {
   const {review}=person;
-  const title=review.day?'Poprzedni dzień pracy · '+dateLabel(review.day):'Poprzedni dzień pracy';
+  const title=review.day?'Ostatni dzień pracy · '+dateLabel(review.day):'Ostatni dzień pracy';
   const state=review.confirmed?'Potwierdzony':briefingReviewStates[review.status];
   const step=briefingStep(1,title,state);
   if (review.day&&review.day!==report.yesterday) step.append(reportElement('p','Kalendarz pominął dni wolne.'));
@@ -282,7 +282,6 @@ function briefingReviewStep(person,report,canEdit) {
   if (review.status==='missing') step.append(
     reportElement('p','Handlowiec nie zapisał wpisu na ten dzień. Uzupełnij wykonanie lub oznacz dzień wolny.'));
   if (review.stale) step.append(reportElement('p','Wyniki zmieniły się od potwierdzenia. Sprawdź je ponownie.'));
-  if (review.status==='off') step.append(reportElement('p',calendarKinds[review.dayOff]??'Dzień wolny'));
   if (review.confirmed) step.append(reportElement('p','Potwierdził: '+review.confirmed.by));
   const actualCells=columns.map(()=>reportElement('span'));
   const renderActuals=values=>values.forEach((value,i)=>{
@@ -305,7 +304,7 @@ function briefingReviewStep(person,report,canEdit) {
     step.append(briefingResultEditor(person,report,renderActuals));
   } else {
     if (review.rows) step.append(briefingSourceReview(review.rows));
-    if (canEdit&&['recorded','off'].includes(review.status)&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
+    if (canEdit&&review.status==='recorded'&&!review.confirmed) briefingAction(step,'Potwierdź wykonanie',person,report,
       {action:'confirm',actual:review.actual,version:review.version},'Potwierdzono poprzedni dzień pracy · '+person.name);
   }
   return step;
@@ -410,7 +409,7 @@ function renderBriefingSeller(person,report,open,salon) {
   caption.className='briefing-seller-caption';
   caption.append(name);
   const {signoff,review}=person;
-  const previousLabel='Wpis z poprzedniego dnia'+(review.day?' · '+dateLabel(review.day):'');
+  const previousLabel='Wpis z ostatniego dnia pracy'+(review.day?' · '+dateLabel(review.day):'');
   if (person.editable) {
     const awaitingToday=signoff.previousReady&&person.pendingToday;
  const state=signoff.completed?'Zatwierdzona':signoff.accepted?'Do zatwierdzenia'

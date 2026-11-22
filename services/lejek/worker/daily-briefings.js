@@ -66,17 +66,14 @@ async function resolveBriefingPrevious(db,{person,today,manager,review,rows,abse
 async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTargets,salonPlans,managerId}) {
   const yesterday=new Date(Date.parse(today)-86400000).toISOString().slice(0,10);
   const month=today.slice(0,7);
-  const [calendar,tracking,resolutions]=await Promise.all([
+  const [calendar,tracking]=await Promise.all([
     list(db,`SELECT person,day,kind,status,NULL AS reason FROM work_calendar WHERE day<=? AND status IN ('approved','pending') AND `+scope+
       ` UNION ALL SELECT person,day,kind,CASE kind WHEN 'pending' THEN 'pending' ELSE 'approved' END,reason FROM daily_exceptions
       WHERE day<=? AND kind IN ('leave','training','zero','pending') AND `+scope,today,...params,today,...params),
-    list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params),
-    list(db,'SELECT person,reviewed_day FROM daily_briefing_day_resolutions WHERE briefing_day=? AND '+scope+' ORDER BY rowid',
-      today,...params)
+    list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params)
   ]);
   const personalCalendar=Map.groupBy(calendar,row=>row.person);
   const trackingDays=new Map(tracking.map(row=>[row.person,row.start_day]));
-  const resolvedDays=new Map(resolutions.map(row=>[row.person,row.reviewed_day]));
   const schedules=new Map(sellers.map(({id})=>{
     const calendar=personalCalendar.get(id)??[];
     const off=new Set(calendar.filter(row=>row.status==='approved'&&row.kind!=='zero').map(row=>row.day));
@@ -84,7 +81,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
     while (!isSalonWorkday(day)||off.has(day)) {
       day=new Date(Date.parse(day)-86400000).toISOString().slice(0,10);
     }
-    return [id,{off,candidate:resolvedDays.get(id)??day}];
+    return [id,{off,candidate:day}];
   }));
   const months=[...new Set([month,...[...schedules.values()].map(({candidate})=>candidate.slice(0,7))])].sort();
   const first=months[0]+'-01';
@@ -139,13 +136,11 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const previousSettings=personSettings.find(row=>row.day===previousDay);
       const forecastSettings=personSettings.find(row=>row.day.startsWith(month));
       const previousMatrix=previousRow?JSON.parse(previousRow.counters)[5]:draft?JSON.parse(draft):null;
-      const previousOff=resolvedDays.has(id)?dates.find(row=>row.day===previousDay&&row.status==='approved'&&row.kind!=='zero')?.kind:null;
-      const previousStatus=previousRow||approvedZero?'recorded':previousOff?'off'
-        :draft?'draft':pendingPrevious?'pending':'missing';
+      const previousStatus=previousRow||approvedZero?'recorded':draft?'draft':pendingPrevious?'pending':'missing';
       const previousActual=summarizeReportRows(previousRow?[previousRow]
         :previousStatus==='draft'&&validDailyRows(previousMatrix)?[{counters:dailyCounters(previousMatrix)}]:[]).actuals;
       const reviewVersion=JSON.stringify(previousStatus==='recorded'?[previousDay,previousActual,previousRow?.counters??null]
-        :[previousDay,previousActual,null,previousOff?'off:'+previousOff:{draft:draft??null,pending:pendingPrevious?[pendingPrevious.kind,pendingPrevious.reason]:null}]);
+        :[previousDay,previousActual,null,{draft:draft??null,pending:pendingPrevious?[pendingPrevious.kind,pendingPrevious.reason]:null}]);
       const review=reviewed.get(id+'/'+previousDay);
       const matched=review&&(review.actuals===reviewVersion||
         previousStatus==='recorded'&&review.actuals===JSON.stringify(previousActual));
@@ -182,7 +177,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       return [{id,name,archived,editable,ownForecast:!archived&&id===managerId,workday,todayGoals,defaultTodayGoals,correction,dayOff,pendingToday,
         signoff:{previousReady,planVersion,accepted,completionVersion,completed},
         remainingPlan:editable?briefingRemainingPlan(sales,past,days,today,todayGoals):[],
-        review:{day:previousDay,version:reviewVersion,status:previousStatus,dayOff:previousOff??null,absenceRequest:pendingPrevious?{kind:pendingPrevious.kind,reason:pendingPrevious.reason}:null,actual:['recorded','draft'].includes(previousStatus)?previousActual:null,goals:previousGoals,
+        review:{day:previousDay,version:reviewVersion,status:previousStatus,absenceRequest:pendingPrevious?{kind:pendingPrevious.kind,reason:pendingPrevious.reason}:null,actual:['recorded','draft'].includes(previousStatus)?previousActual:null,goals:previousGoals,
           rows:validDailyRows(previousMatrix)?previousMatrix:null,
           confirmed:matched?{by:review.manager_name,at:review.reviewed_at}:null,stale:Boolean(review&&!matched)},
         actual:briefingSalesIndexes.map(i=>actuals[i]),plan:briefingSalesIndexes.map(i=>sales[i]),

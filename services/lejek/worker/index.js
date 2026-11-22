@@ -716,7 +716,7 @@ async function handle(request, env, buildDailyReport=false) {
         goals=excluded.goals,reviewed_at=excluded.reviewed_at
       WHERE daily_briefing_reviews.actuals<>excluded.actuals`)
       .bind(person,current.review.day,user.id,reviewVersion,JSON.stringify(current.review.goals),timestamp);
-    if (action==='confirm'&&(!['recorded','off'].includes(current.review.status)||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
+    if (action==='confirm'&&(current.review.status!=='recorded'||JSON.stringify(current.review.actual)!==JSON.stringify(actual)||
         (version!==undefined&&version!==current.review.version))) {
       return json({error:'Wynik jest niezatwierdzony lub zmienił się po otwarciu odprawy. Odśwież dane.'},409);
     }
