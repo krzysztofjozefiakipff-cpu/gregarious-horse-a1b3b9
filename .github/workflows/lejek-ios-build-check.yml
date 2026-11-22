@@ -37,6 +37,7 @@ jobs:
           writeFileSync(file,JSON.stringify(catalog,null,2)+'\n');
           JS
           /usr/libexec/PlistBuddy -c 'Add :ITSAppUsesNonExemptEncryption bool false' ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c 'Add :NSMicrophoneUsageDescription string Mikrofon służy do nagrywania pytań głosowych do asystenta Lisek.' ios/App/App/Info.plist
       - name: Sign and upload to internal TestFlight
         env:
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
@@ -167,7 +168,8 @@ jobs:
           test -s "$archive/Products/Applications/App.app/public/login"
           app="$archive/Products/Applications/App.app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$app/Info.plist")" = AppIcon
-          echo "Verified startup file and native icon in the signed archive."
+          test -n "$(/usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$app/Info.plist")"
+          echo "Verified startup file, native icon and microphone permission in the signed archive."
           export_options="$RUNNER_TEMP/BiegWyzejExport.plist"
           plutil -create xml1 "$export_options"
           plutil -insert method -string app-store-connect "$export_options"
