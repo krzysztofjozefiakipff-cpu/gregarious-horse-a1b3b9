@@ -505,7 +505,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .seller-nav { position:sticky; top:0; z-index:3; }
 }
 .management-nav { position:sticky; top:0; z-index:3; }
-details[name] > summary, :has(> details[data-scroll-to-card]) { scroll-margin-block-start:max(64px, calc(env(safe-area-inset-top) + 12px)); }
+details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { scroll-margin-block-start:max(64px, calc(env(safe-area-inset-top) + 12px)); }
 #role-function-buttons { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:6px; }
 #role-function-buttons a { border:1px solid var(--line); font-size:.875rem; line-height:1.25; }
 #role-function-buttons a:not([aria-current]):hover { background:var(--tint); }
