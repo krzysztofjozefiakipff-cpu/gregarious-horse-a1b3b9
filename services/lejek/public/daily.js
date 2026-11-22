@@ -3330,7 +3330,6 @@ function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
   const active=requested==='lekcja'||links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
-  placeFoxAssistant(active==='dzisiaj'&&!previewTarget?$('#today-fox'):null);
   if (active==='wiecej') renderMoreMenu($('#seller-more-links'),sellerModules);
   const lesson=$('#daily-lesson');
   const lessonHost=active==='lekcja'?$('#seller-lesson'):$('.daily-inspiration');

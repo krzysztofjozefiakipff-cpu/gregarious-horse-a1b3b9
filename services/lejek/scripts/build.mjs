@@ -5,7 +5,7 @@ const assets = Object.fromEntries(['zarzadzanie.html','quarter.js','panel-naviga
 const mascot=readFileSync('public/fox-mascot.html','utf8').trim();
 const accountHeader=readFileSync('public/account-header.html','utf8').replaceAll('<!-- FOX_MASCOT -->',mascot);
 const panelPages=['/daily.html','/zarzadzanie.html','/z-zycia-salonu.html'];
-for (const page of panelPages) assets[page]=assets[page].replace('<!-- ACCOUNT_HEADER -->',accountHeader);
+for (const page of panelPages) assets[page]=assets[page].replace('<!-- ACCOUNT_HEADER -->',accountHeader).replaceAll('<!-- FOX_MASCOT -->',mascot);
 for (const script of ['daily.js','management.js','panel-navigation.js','workbook-plan.js','work-calendar.js','reports.js','briefings.js','salon-life.js','account-header.js']) {
   const version=createHash('sha256').update(assets['/'+script]).digest('hex').slice(0,12);
   for (const page of panelPages) {

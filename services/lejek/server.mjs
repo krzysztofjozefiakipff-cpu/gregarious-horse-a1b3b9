@@ -86,6 +86,7 @@ const publicPages = new Map([
   ['/', ['text/html', readFileSync('public/home.html', 'utf8')]],
   ['/home.css', ['text/css', readFileSync('public/home.css', 'utf8')]],
   ['/showroom-jaecoo-8.webp', ['image/webp', readFileSync('public/showroom-jaecoo-8.webp')]],
+  ['/fox-mascot.webp', ['image/webp', readFileSync('public/fox-mascot.webp')]],
   ['/favicon.ico', ['image/x-icon', readFileSync('public/favicon.ico')]],
   ['/favicon.svg', ['image/svg+xml', readFileSync('public/favicon.svg')]],
   ['/theme.css', ['text/css', readFileSync('public/theme.css', 'utf8')]]

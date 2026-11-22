@@ -5,7 +5,6 @@
     </div>
     <img class="dealer-logo" id="account-dealer-logo" alt="" hidden>
     <div class="account-controls" id="account-controls" hidden>
-      <button type="button" id="fox-assistant-open" aria-label="Otwórz asystenta Lisek" title="Zapytaj Liska" hidden><!-- FOX_MASCOT --></button>
       <details id="account-menu">
         <summary aria-label="Konto" title="Konto">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="3.25"/><path d="M5 20v-1a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v1"/></svg>
@@ -28,6 +27,8 @@
   </div>
 </header>
 
+<button type="button" id="fox-assistant-open" aria-label="Otwórz asystenta Lisek" title="Zapytaj Liska" hidden><!-- FOX_MASCOT --></button>
+
 <dialog id="fox-assistant" aria-labelledby="fox-assistant-title">
   <header>
     <h2 id="fox-assistant-title"><!-- FOX_MASCOT --> Zapytaj Liska</h2>
@@ -45,25 +46,27 @@
   </form>
 </dialog>
 <style>
-  #fox-assistant-open { border-radius: 50%; width: 46px; height: 46px; flex: 0 0 46px; padding: 2px; background: #fff1e5; border: 1px solid #e4b48d; }
-  #fox-assistant-open:focus-visible { outline: 2px solid #693768; outline-offset: 2px; }
-  .fox-mascot { display: block; width: 100%; height: 100%; overflow: visible; }
-  #fox-assistant-title .fox-mascot { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 50%; background: #fff1e5; }
-  .fox-head, .fox-tail, .fox-eyes, .fox-paw, .fox-mouth { transform-box: fill-box; }
-  .fox-head { transform-origin: center bottom; }
-  .fox-paw { transform-origin: right bottom; }
-  .fox-mouth { transform-origin: center; }
-  .fox-tail { transform-origin: left bottom; }
-  .fox-eyes { transform-origin: center; animation: fox-blink 6s infinite; }
-  #fox-assistant-open:is(:hover,:focus-visible) .fox-tail { animation: fox-wag .6s ease-in-out 2; }
-  #fox-assistant[data-activity="listening"] .fox-head { animation: fox-listen 1.4s ease-in-out infinite; }
-  #fox-assistant[data-activity="thinking"] .fox-tail { animation: fox-wag .85s ease-in-out infinite; }
-  @keyframes fox-blink { 0%, 44%, 48%, 100% { transform: scaleY(1); } 46% { transform: scaleY(.12); } }
-  @keyframes fox-wag { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-17deg); } }
-  @keyframes fox-listen { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(9deg); } }
-  @media (prefers-reduced-motion: reduce) {
-    .fox-mascot * { animation: none !important; }
+  #fox-assistant-open {
+    position:fixed; z-index:6; inset-inline-end:max(12px,env(safe-area-inset-right));
+    inset-block-end:calc(12px + env(safe-area-inset-bottom));
+    width:clamp(60px,17vw,76px); aspect-ratio:1; padding:2px; border-radius:50%;
+    border:1px solid #e4b48d; background:#fff1e5; box-shadow:0 3px 12px #3f214333;
+    cursor:pointer; touch-action:manipulation;
   }
+  body:has(.persistent-panel-nav:not([hidden])) #fox-assistant-open { inset-block-end:calc(76px + env(safe-area-inset-bottom)); }
+  @media(max-width:850px) {
+    body:has(.mobile-panel-nav:not([hidden]), #daily:not([hidden]) .seller-nav:not([hidden])) #fox-assistant-open { inset-block-end:calc(76px + env(safe-area-inset-bottom)); }
+  }
+  #fox-assistant-open:focus-visible { outline:2px solid #693768; outline-offset:2px; }
+  .fox-mascot { display:block; width:100%; height:100%; object-fit:contain; transform-origin:center bottom; }
+  #fox-assistant-title .fox-mascot { width:56px; height:56px; flex:0 0 56px; border-radius:50%; background:#fff1e5; }
+  #fox-assistant-open .fox-mascot { animation:fox-greeting 7s ease-in-out infinite; }
+  #fox-assistant-open:is(:hover,:focus-visible) .fox-mascot { animation:fox-nod .55s ease-in-out 2; }
+  #fox-assistant[data-activity="listening"] .fox-mascot { animation:fox-nod 1.4s ease-in-out infinite; }
+  #fox-assistant[data-activity="thinking"] .fox-mascot { animation:fox-greeting 1.8s ease-in-out infinite; }
+  @keyframes fox-greeting { 0%, 85%, 100% { transform:translateY(0) rotate(0); } 92% { transform:translateY(-4px) rotate(-5deg); } }
+  @keyframes fox-nod { 0%, 100% { transform:rotate(0); } 50% { transform:rotate(-8deg) translateY(-2px); } }
+  @media(prefers-reduced-motion:reduce) { .fox-mascot, .fox-mascot * { animation:none !important; } }
   #fox-assistant { box-sizing: border-box; width: min(34rem, calc(100% - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #e4dbe5; border-radius: 16px; padding: 1rem; color: #302033; background: #fff; }
   #fox-assistant::backdrop { background: #26132888; }
   #fox-assistant header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
