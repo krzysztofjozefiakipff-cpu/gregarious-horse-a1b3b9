@@ -1,4 +1,4 @@
-import {createAssistant,createTranscriber,createWebAssistant,createModerator} from './scripts/assistant.mjs';
+import {createAssistant,createTranscriber,createWebAssistant,createModerator,createFoxSpeech} from './scripts/assistant.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
@@ -54,6 +54,7 @@ try {
 } catch(error) { database.exec('ROLLBACK'); throw error; }
 const aiKey=process.env.OPENAI_API_KEY?.trim();
 const transcribe=createTranscriber(aiKey);
+const foxSpeech=createFoxSpeech(aiKey);
 const moderate=createModerator(aiKey);
 const webAssist=createWebAssistant({key:aiKey,model:process.env.LEJEK_AI_MODEL||undefined});
 const assist=createAssistant({key:aiKey,model:process.env.LEJEK_AI_MODEL||undefined});
@@ -390,7 +391,7 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,assist,transcribe,webAssist,moderate,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
+  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,assist,transcribe,foxSpeech,webAssist,moderate,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
   const url=new URL(request.url);
   if (response.ok&&request.method==='GET'&&['/api/management-reports','/api/daily-briefing'].includes(path)&&url.searchParams.get('format')==='pdf') {
     return downloadReportPdf(response,url);
