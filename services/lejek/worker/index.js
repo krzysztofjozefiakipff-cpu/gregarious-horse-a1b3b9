@@ -373,35 +373,49 @@ async function handle(request, env, buildDailyReport=false) {
       salons:seller?[{salon:seller.salon}]:salons,scope:seller?'person=?':scope,params:seller?[seller.id]:params});
   };
   if (path==='/api/fox-motto'&&request.method==='GET') {
-    if (role!=='seller'||preview) return json({error:'Hasło Liska jest dostępne na własnym koncie handlowca.'},403);
+    if (preview||role!=='seller'&&!managesSalonPlans) return json({error:'Hasło Liska jest dostępne we własnym panelu handlowca, kierownika lub szefa grupy.'},403);
     if (!env.assist||!env.moderate) return json({text:null});
     const day=localDay();
     if (foxMottoDay!==day) {
       foxMottos.clear();
       foxMottoDay=day;
     }
-    const key=url.origin+'/'+user.id;
+    const key=url.origin+'/'+viewer+'/'+role;
     let motto=foxMottos.get(key);
     if (!motto) {
       motto=(async()=>{
-        const {salons:[{people:[person]}]}=await loadBriefing(day,{id:user.id,salon:user.salon,name:'',planEligible:true});
-        if (!person) return null;
-        const {review,workday}=person;
-        const metrics=dailyActionMetrics.map(([label],index)=>({
-          label,index,done:review.actual?.[index],goal:review.goals[index]
-        }));
-        const comparable=review.status==='recorded'&&review.rows
-          ?metrics.filter(({done,goal})=>Number.isFinite(done)&&goal>0):[];
-        // Prefer a concrete win or a gap in the activities the salesperson can act on today.
-        const gap=comparable.find(({index,done,goal})=>index<6&&done<goal);
-        const win=comparable.find(({index,done,goal})=>index===6&&done>=goal)
-          ??comparable.find(({done,goal})=>done>goal||!gap&&done===goal);
-        const followUp=metrics.slice(0,6).find((_,index)=>person.todayGoals[index]>0)?.label;
-        const signal=!workday?{kind:'dayOff'}:win?{kind:'win',metric:win}
-          :gap?{kind:'gap',metric:gap}:followUp?{kind:'priority',activity:followUp}:{kind:'encourage'};
+        let signal;
+        if (role==='seller') {
+          const {salons:[{people:[person]}]}=await loadBriefing(day,{id:user.id,salon:user.salon,name:'',planEligible:true});
+          if (!person) return null;
+          const {review,workday}=person;
+          const metrics=dailyActionMetrics.map(([label],index)=>({
+            label,index,done:review.actual?.[index],goal:review.goals[index]
+          }));
+          const comparable=review.status==='recorded'&&review.rows
+            ?metrics.filter(({done,goal})=>Number.isFinite(done)&&goal>0):[];
+          // Prefer a concrete win or a gap in the activities the salesperson can act on today.
+          const gap=comparable.find(({index,done,goal})=>index<6&&done<goal);
+          const win=comparable.find(({index,done,goal})=>index===6&&done>=goal)
+            ??comparable.find(({done,goal})=>done>goal||!gap&&done===goal);
+          const followUp=metrics.slice(0,6).find((_,index)=>person.todayGoals[index]>0)?.label;
+          signal=!workday?{kind:'dayOff'}:win?{kind:'win',metric:win}
+            :gap?{kind:'gap',metric:gap}:followUp?{kind:'priority',activity:followUp}:{kind:'encourage'};
+        } else if (!isSalonWorkday(day)) {
+          signal={kind:'dayOff'};
+        } else if (role==='manager') {
+          const {salons:briefingSalons}=await loadBriefing(day);
+          const participants=briefingSalons.flatMap(salon=>salon.people).filter(person=>person.editable&&person.workday);
+          const completed=participants.filter(person=>person.signoff.completed).length;
+          signal={kind:'manager',briefings:participants.length,completed};
+        } else {
+          signal={kind:'group',salonCount:salons.length};
+        }
+        const audience={seller:'handlowca salonu samochodowego',manager:'kierownika salonu samochodowego',group:'szefa grupy dealerskiej'};
         const text=await env.assist(
-          'Napisz jedno krótkie Hasło dnia od Liska dla handlowca salonu samochodowego. Maksymalnie dwa krótkie zdania, do 180 znaków. '+
+          'Napisz jedno krótkie Hasło dnia od Liska dla '+audience[role]+'. Maksymalnie dwa krótkie zdania, do 180 znaków. '+
           'Dostosuj ton do sygnału: win to konkretne gratulacje, gap to życzliwe przypomnienie o zaległym działaniu z małym krokiem na dziś, priority to zachęta do wskazanego działania. '+
+          'Przy manager nawiąż do odprawy i podpowiedz jeden praktyczny krok dla zespołu, ewentualnie doceń zakończone odprawy. Przy group podpowiedz jeden praktyczny krok w pracy z salonami, bez oceniania ich wyników. '+
           'Przy dayOff życz odpoczynku i nie proponuj pracy. Przy encourage daj lekką, opcjonalnie dowcipną zachętę bez oceniania wyników. '+
           'Możesz lekko zażartować z sytuacji, nigdy z osoby. Bez zawstydzania, obelg, presji i moralizowania. Nie wymyślaj wyników, przyczyn ani zaległości. Dane win lub gap są z ostatniego dnia roboczego, nie z dziś. '+
           'Zwróć samo hasło, bez cudzysłowu, podpisu i zwrotu po imieniu.',

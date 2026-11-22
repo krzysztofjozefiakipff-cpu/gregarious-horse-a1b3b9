@@ -498,7 +498,6 @@ async function loadBriefingPanel(message='',focusSeller) {
   try {
     const report=await api('/api/daily-briefing');
     if (version!==briefingLoadVersion||briefingHost.hidden) return;
-    briefingHost.querySelector('#briefing-dates').textContent=dateLabel(report.today,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const previous=briefingSalon.selectedIndex<0?null:briefingSalon.value;
     const salons=report.salons.map(row=>row.salon);
     briefingSalon.replaceChildren(...salons.map(salon=>new Option(salon,salon)));

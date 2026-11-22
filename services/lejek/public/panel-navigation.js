@@ -57,8 +57,8 @@ function panelNavigation(render) {
 
 const mobileTabs={
   seller:[['dzisiaj','Dzisiaj','calendar'],['plan','Wyniki','bars'],['kalendarz-pracy','Kalendarz','clock']],
-  manager:[['odprawa-dzienna','Odprawa','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
-  group:[['wykonanie','Salony','building'],['plany-salonow','Plany','calendar'],['raporty','Raporty','bars']],
+  manager:[['odprawa-dzienna','Dzisiaj','calendar'],['wykonanie','Wyniki','bars'],['zespol','Zespół','people']],
+  group:[['wykonanie','Dzisiaj','building'],['plany-salonow','Plany','calendar'],['raporty','Raporty','bars']],
   admin:[['konta-uzytkownikow','Użytkownicy','people'],['salony','Salony','building'],['grupy','Grupy','bars']]
 };
 const panelIcons={

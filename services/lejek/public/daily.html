@@ -12,7 +12,7 @@ header{border-bottom:1px solid var(--line)}header strong{font-size:1.45rem;lette
 footer{border-top:1px solid var(--line);font-size:.9rem}
 .layout{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(250px,1fr);gap:20px}.layout>*{min-width:0}h1,h2,p,blockquote{margin:0}h1,h2{letter-spacing:-.045em;line-height:1.12}h2{font-size:1.45rem;margin-bottom:12px}
 .eyebrow{font-weight:750;font-size:.76rem;letter-spacing:.12em;text-transform:uppercase}
-.quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing #quote{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing #quote{opacity:1}.quote.is-typing .quote-animated{display:none}}
+.quote blockquote{display:grid}.quote blockquote span{grid-area:1/1}.quote-animated{display:none}.quote.is-typing .quote-text{opacity:0}.quote.is-typing .quote-animated{display:block}.quote.is-typing .quote-animated::after{content:"▏";color:var(--panel-orange)}@media(prefers-reduced-motion:reduce){.quote.is-typing .quote-text{opacity:1}.quote.is-typing .quote-animated{display:none}}
 .task-note{display:block;margin-top:10px;padding:9px 12px;border-inline-start:3px solid var(--primary);border-radius:6px;background:var(--tint);color:var(--ink);font-size:1rem;font-weight:650;line-height:1.4}.task-message{grid-column:1/-1}
 .behind{color:#a12528}.ahead{color:#12633b}
 textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}
@@ -210,8 +210,6 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .daily-report-actions li span{display:block;color:var(--muted);margin-top:4px}
 .daily-report-actions li p{margin:4px 0 0}
 #daily-briefing { max-width:1040px; }
-.briefing-header { margin-block:2px 12px; }
-#briefing-dates { text-transform:capitalize; }
 #briefing-results { display:grid; gap:12px; }
 #daily-briefing article { min-width:0; background:#fff; border:1px solid var(--line); border-radius:16px; padding:12px; }
 .briefing-empty { padding:12px; color:var(--panel-muted); }
@@ -545,17 +543,17 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 
 .today-heading { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:clamp(8px,2vw,20px); margin-bottom:16px; }
 .today-heading .screen-title { font-size:clamp(1.05rem,4.5vw,1.55rem); }
-.today-heading #today-date { font-size:.8rem; white-space:nowrap; }
+.today-heading .today-date { font-size:.8rem; white-space:nowrap; }
 .today-motto { display:flex; align-items:center; gap:10px; min-width:0; }
-#today-fox { width:clamp(42px,12vw,64px); flex:none; aspect-ratio:1; }
+.today-fox { width:clamp(42px,12vw,64px); flex:none; aspect-ratio:1; }
 .today-heading .quote { position:relative; flex:1; min-width:0; margin:0; padding:9px 11px; border:1px solid #d5c0d5; border-radius:16px; background:#fff8ef; color:var(--panel-plum); }
-#today-fox + .quote::before { content:""; position:absolute; inset-inline-start:-6px; top:50%; width:10px; height:10px; transform:translateY(-50%) rotate(45deg); background:inherit; border-inline-start:1px solid #d5c0d5; border-bottom:1px solid #d5c0d5; }
-.today-heading.is-speaking #today-fox .fox-mascot { animation:fox-nod .55s ease-in-out 3; }
-.today-heading.is-speaking #today-fox .fox-tail-layer { animation:fox-tail-wag .6s ease-in-out 3; }
-.today-heading.is-speaking #today-fox .fox-paw-layer { animation:fox-paw-wave 1.65s ease-in-out; }
+.today-fox + .quote::before { content:""; position:absolute; inset-inline-start:-6px; top:50%; width:10px; height:10px; transform:translateY(-50%) rotate(45deg); background:inherit; border-inline-start:1px solid #d5c0d5; border-bottom:1px solid #d5c0d5; }
+.today-heading.is-speaking .today-fox .fox-mascot { animation:fox-nod .55s ease-in-out 3; }
+.today-heading.is-speaking .today-fox .fox-tail-layer { animation:fox-tail-wag .6s ease-in-out 3; }
+.today-heading.is-speaking .today-fox .fox-paw-layer { animation:fox-paw-wave 1.65s ease-in-out; }
 .today-heading .quote blockquote { font-size:clamp(.82rem,2.7vw,1rem); line-height:1.32; font-weight:650; overflow-wrap:anywhere; }
 #calendar-reminder:not([hidden]) { margin-bottom:14px; }
-.today-heading p,#briefing-dates { color:var(--panel-muted); margin-top:7px; }
+.today-heading p { color:var(--panel-muted); margin-top:7px; }
 .today-entry { position:relative; background:var(--panel-plum); color:white; padding:18px; border-radius:18px; }
 .today-entry h2 { margin:0 0 8px; padding-inline-end:44px; }
 .today-entry p { color:#f3d8eb; margin-bottom:14px; }
@@ -715,13 +713,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <a data-panel-route href="#wiecej" data-seller-tab="wiecej">Więcej</a>
 </nav>
 <div data-seller-panel="dzisiaj">
-<div class="today-heading">
-  <div><h1 class="screen-title">Dzisiaj</h1><p id="today-date"></p></div>
-  <div class="today-motto">
-    <div id="today-fox" aria-hidden="true"><!-- FOX_MASCOT --></div>
-    <div class="quote"><blockquote><span id="quote"></span><span id="quote-animated" class="quote-animated" aria-hidden="true"></span></blockquote></div>
-  </div>
-</div>
+<!-- TODAY_MOTTO -->
 <div class="daily-work">
   <section class="today-entry" aria-labelledby="today-entry-title">
     <h2 id="today-entry-title">Wpis dzienny</h2>
@@ -937,6 +929,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   <div id="role-function-buttons" class="panel-nav"></div>
   <label id="role-function-picker">Aktywna funkcja <select id="role-function-select"></select></label>
 </nav>
+<div id="management-today" hidden><!-- TODAY_MOTTO --></div>
 <section id="performance-view">
   <h1 class="screen-title" id="performance-title">Wykonanie planu</h1>
   <p id="management-plan-period"></p>
@@ -1035,7 +1028,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 </details>
 </section>
 <section id="daily-briefing" hidden>
-  <div class="briefing-header"><h1 class="screen-title">Odprawa dzienna</h1><p id="briefing-dates"></p></div>
+
   <div id="briefing-progress" hidden>
     <div class="briefing-progress-copy">
       <strong id="briefing-progress-label" aria-live="polite"></strong>

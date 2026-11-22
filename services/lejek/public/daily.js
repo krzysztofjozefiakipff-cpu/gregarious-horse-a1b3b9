@@ -1076,23 +1076,30 @@ const taskPriorities=[
 
 let dailyMotto;
 
-function renderDailyMotto(day,fallback) {
-  if (dailyMotto?.day===day) {
-    renderQuote(dailyMotto.text??fallback);
+function renderDailyMotto(heading,day,fallback) {
+  const date=heading.querySelector('.today-date');
+  const fullDate=dateLabel(day,{weekday:'long',day:'numeric',month:'long'});
+  date.textContent=day.slice(8)+'.'+day.slice(5,7);
+  date.title=fullDate;
+  date.setAttribute('aria-label',fullDate);
+  const role=data.role;
+  if (dailyMotto?.day===day&&dailyMotto.role===role) {
+    renderQuote(heading,dailyMotto.text??fallback);
     return;
   }
-  renderQuote(fallback);
-  if (previewTarget||data.role!=='seller') return;
-  const current={day};
+  renderQuote(heading,fallback);
+  if (previewTarget) return;
+  const current={day,role};
   dailyMotto=current;
   void api('/api/fox-motto').then(({day:replyDay,text})=>{
-    if (dailyMotto!==current||replyDay!==day||data?.today!==day||typeof text!=='string'||!text) return;
+    if (dailyMotto!==current||replyDay!==day||data?.today!==day||data.role!==role||typeof text!=='string'||!text) return;
     current.text=text;
-    renderQuote(text);
+    renderQuote(heading,text);
   }).catch(()=>{});
 }
 
 function renderTodayTasks(metrics,previous,day) {
+  const heading=$('#daily .today-heading');
   const dayIndex=Math.floor(Date.parse(day)/86400000);
   const fallback=quotes[dayIndex%quotes.length];
   const holiday=polishHoliday(day);
@@ -1102,7 +1109,7 @@ function renderTodayTasks(metrics,previous,day) {
     message.textContent=holiday+' · dzień bez aktywności.';
     $('#tasks').replaceChildren(message);
     for (const id of ['tasks-intro','followup-reminder']) $('#'+id).hidden=true;
-    renderDailyMotto(day,fallback);
+    renderDailyMotto(heading,day,fallback);
     return;
   }
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
@@ -1138,7 +1145,7 @@ function renderTodayTasks(metrics,previous,day) {
     :'';
   const hasDailyActivity=tasks.length||remaining||metrics.some(metric=>metric.todayTarget>0);
   const slogans=dailyClosings[tasks.length?'tasks':remaining?'followups':'done'];
-  renderDailyMotto(day,hasDailyActivity?slogans[dayIndex%slogans.length]:fallback);
+  renderDailyMotto(heading,day,hasDailyActivity?slogans[dayIndex%slogans.length]:fallback);
 }
 
 const actionsByMetric={
@@ -1199,19 +1206,18 @@ function renderMotivator(metrics,day) {
     :gaps.length>3?'Zacznij od tych trzech. Pozostałe braki widać w zestawieniu powyżej.':'Zacznij od pierwszego punktu i odhaczaj kolejne.';
 }
 
-function renderQuote(text) {
-  const full=$('#quote');
+function renderQuote(heading,text) {
+  const full=heading.querySelector('.quote-text');
   if (full.textContent===text) return;
   full.textContent=text;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
   const card=full.closest('.quote');
-  const heading=card.closest('.today-heading');
   if (motion.matches) {
     card.classList.remove('is-typing');
     heading.classList.remove('is-speaking');
     return;
   }
-  const animated=$('#quote-animated');
+  const animated=heading.querySelector('.quote-animated');
   const letters=Array.from(text);
   const interval=Math.min(42,1600/letters.length);
   let started;
@@ -1413,11 +1419,6 @@ function renderToday(records,metrics) {
   const holiday=polishHoliday(today);
   const status=$('#today-entry-status');
   const link=$('#today-entry-link');
-  const date=$('#today-date');
-  const fullDate=dateLabel(today,{weekday:'long',day:'numeric',month:'long'});
-  date.textContent=today.slice(8)+'.'+today.slice(5,7);
-  date.title=fullDate;
-  date.setAttribute('aria-label',fullDate);
   link.href='#wyniki';
   link.onclick=()=>{if (showTodayEntry) { showTodayEntry=false; renderSeller(); }};
   const dayOff=!isSalonWorkday(today)||['leave','training'].includes(exception);
@@ -2741,7 +2742,7 @@ function renderMoreMenu(host,modules) {
 
 const managementFunctions={
   'wykonanie': ['Realizacja planów','target'],
-  'odprawa-dzienna': ['Odprawa dzienna','clipboard'],
+  'odprawa-dzienna': ['Dzisiaj','clipboard'],
   'raporty': ['Raporty zarządcze','report'],
   'plany-salonow': ['Plany salonów','building','salon-plans'],
   'zespol': ['Zespół','people'],
@@ -2753,7 +2754,7 @@ const managementFunctions={
   'dane-dealera': ['Dane dealera','card','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
-  manager:['wykonanie','odprawa-dzienna','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
+  manager:['odprawa-dzienna','wykonanie','raporty','plany-salonow','zespol','kalendarz-pracy','lekcja','historia-planow',
     'konta-uzytkownikow','dane-dealera'],
   group:['wykonanie','raporty','plany-salonow','historia-planow','zespol','kalendarz-pracy','konta-uzytkownikow',
     'dodaj-salon','lekcja','dane-dealera']
@@ -2788,21 +2789,22 @@ function selectRoleFunction(routes) {
   const fallback=mobilePanel.matches?mobileTabs[data.role][0][0]:routes[0];
   const active=requested==='administracja'?'plany-salonow':requested==='dni-bez-aktywnosci'?'kalendarz-pracy'
     :requested==='wiecej'||routes.includes(requested)?requested:fallback;
-  const [label,,blockId,settingId]=managementFunctions[active]??[];
+  const details=route=>data.role==='group'&&route==='wykonanie'?['Dzisiaj','building']:managementFunctions[route];
+  const [label,,blockId,settingId]=details(active)??[];
   const nav=$('#management-mobile-nav');
   const primaryRoutes=new Set(mobileTabs[data.role].map(([route])=>route));
   nav.classList.toggle('persistent-panel-nav',!primaryRoutes.has(active));
   renderPanelTabs(nav,data.role,active);
   $('#management-more').hidden=active!=='wiecej';
   if (active==='wiecej') {
-    const modules=routes.map(route=>[route,...managementFunctions[route].slice(0,2)]);
+    const modules=routes.map(route=>[route,...details(route).slice(0,2)]);
     renderMoreMenu($('#management-more-links'),[...modules,salonLifeModule]);
   }
   const buttons=$('#role-function-buttons');
   const select=$('#role-function-select');
   if (buttons.dataset.role!==data.role) {
     buttons.dataset.role=data.role;
-    const items=[...routes.map(route=>[route,managementFunctions[route][0]]),['wiecej','Więcej']];
+    const items=[...routes.map(route=>[route,details(route)[0]]),['wiecej','Więcej']];
     buttons.replaceChildren(...items.map(([route,label])=>mobileLink(route,label)));
     select.replaceChildren(...items.map(([route,label])=>new Option(label,route)));
   }
@@ -2815,6 +2817,12 @@ function selectRoleFunction(routes) {
   placeManagementScope(active);
   $('#management-reports').hidden=active!=='raporty';
   if (active==='raporty') renderReportPicker(data);
+  const today=active==='odprawa-dzienna'||data.role==='group'&&active==='wykonanie';
+  $('#management-today').hidden=!today;
+  if (today) renderDailyMotto($('#management-today .today-heading'),data.today,data.role==='manager'
+    ?'Na odprawie wybierz z zespołem jedno działanie, które dziś zrobi największą różnicę.'
+    :'Spójrz na wyniki salonów i wybierz jedno miejsce, w którym możesz dziś pomóc.');
+  $('#performance-title').hidden=today;
   $('#daily-briefing').hidden=active!=='odprawa-dzienna';
   if (active==='odprawa-dzienna') loadBriefingPanel();
   $('#performance-view').hidden=active!=='wykonanie'&&active!=='historia-planow';
@@ -2860,6 +2868,8 @@ function selectManagementView() {
   }
   $('#management-reports').hidden=true;
   $('#daily-briefing').hidden=true;
+  $('#management-today').hidden=true;
+  $('#performance-title').hidden=false;
   const preview=Boolean(managerPreviewSalon||groupPreviewName);
   const primaryAdmin=mobilePanel.matches&&!preview;
   const route=location.hash.slice(1)||(primaryAdmin?'konta-uzytkownikow':'wykonanie');
