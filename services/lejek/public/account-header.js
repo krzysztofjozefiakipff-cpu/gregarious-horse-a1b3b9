@@ -25,11 +25,19 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
   const controls=document.getElementById('account-controls');
   controls.querySelector('.panel-signout').hidden=Boolean(preview);
   controls.hidden=false;
+  if (role!=='seller'||preview) placeFoxAssistant();
   foxAssistantOpen.hidden=Boolean(preview);
   foxAssistantRole=preview?null:role;
 }
 
 const foxAssistantOpen=document.getElementById('fox-assistant-open');
+function placeFoxAssistant(destination=null) {
+  const host=destination??document.getElementById('account-controls');
+  if (foxAssistantOpen.parentElement===host) return;
+  if (destination) host.append(foxAssistantOpen);
+  else host.insertBefore(foxAssistantOpen,host.querySelector('.panel-signout'));
+}
+
 const foxAssistant=document.getElementById('fox-assistant');
 const foxAssistantForm=document.getElementById('fox-assistant-form');
 const foxAssistantQuestion=document.getElementById('fox-assistant-question');

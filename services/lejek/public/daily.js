@@ -1204,13 +1204,19 @@ function renderQuote(text) {
   if (full.textContent===text) return;
   full.textContent=text;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  if (motion.matches) return;
   const card=full.closest('.quote');
+  const heading=card.closest('.today-heading');
+  if (motion.matches) {
+    card.classList.remove('is-typing');
+    heading.classList.remove('is-speaking');
+    return;
+  }
   const animated=$('#quote-animated');
   const letters=Array.from(text);
   const interval=Math.min(42,1600/letters.length);
   let started;
   card.classList.add('is-typing');
+  heading.classList.add('is-speaking');
   animated.textContent='';
   function frame(now) {
     if (full.textContent!==text) return;
@@ -1218,6 +1224,7 @@ function renderQuote(text) {
     const count=Math.floor((now-started)/interval);
     if (count>=letters.length||motion.matches) {
       card.classList.remove('is-typing');
+      heading.classList.remove('is-speaking');
       return;
     }
     animated.textContent=letters.slice(0,count).join('');
@@ -1406,7 +1413,11 @@ function renderToday(records,metrics) {
   const holiday=polishHoliday(today);
   const status=$('#today-entry-status');
   const link=$('#today-entry-link');
-  $('#today-date').textContent=dateLabel(today,{weekday:'long',day:'numeric',month:'long'});
+  const date=$('#today-date');
+  const fullDate=dateLabel(today,{weekday:'long',day:'numeric',month:'long'});
+  date.textContent=today.slice(8)+'.'+today.slice(5,7);
+  date.title=fullDate;
+  date.setAttribute('aria-label',fullDate);
   link.href='#wyniki';
   link.onclick=()=>{if (showTodayEntry) { showTodayEntry=false; renderSeller(); }};
   const dayOff=!isSalonWorkday(today)||['leave','training'].includes(exception);
@@ -3319,6 +3330,7 @@ function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
   const active=requested==='lekcja'||links.some(link=>link.dataset.sellerTab===requested)?requested:'dzisiaj';
+  placeFoxAssistant(active==='dzisiaj'&&!previewTarget?$('#today-fox'):null);
   if (active==='wiecej') renderMoreMenu($('#seller-more-links'),sellerModules);
   const lesson=$('#daily-lesson');
   const lessonHost=active==='lekcja'?$('#seller-lesson'):$('.daily-inspiration');

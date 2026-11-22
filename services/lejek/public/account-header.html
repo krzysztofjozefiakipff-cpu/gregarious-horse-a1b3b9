@@ -38,8 +38,10 @@
   #fox-assistant-open:focus-visible { outline: 2px solid #693768; outline-offset: 2px; }
   .fox-mascot { display: block; width: 100%; height: 100%; overflow: visible; }
   #fox-assistant-title .fox-mascot { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 50%; background: #fff1e5; }
-  .fox-head, .fox-tail, .fox-eyes { transform-box: fill-box; }
+  .fox-head, .fox-tail, .fox-eyes, .fox-paw, .fox-mouth { transform-box: fill-box; }
   .fox-head { transform-origin: center bottom; }
+  .fox-paw { transform-origin: right bottom; }
+  .fox-mouth { transform-origin: center; }
   .fox-tail { transform-origin: left bottom; }
   .fox-eyes { transform-origin: center; animation: fox-blink 6s infinite; }
   #fox-assistant-open:is(:hover,:focus-visible) .fox-tail { animation: fox-wag .6s ease-in-out 2; }
