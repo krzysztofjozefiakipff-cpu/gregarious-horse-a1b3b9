@@ -22,6 +22,7 @@ jobs:
         env:
           INVITE_SMTP_PASSWORD: ${{ secrets.INVITE_SMTP_PASSWORD }}
           RESET_SMTP_PASSWORD: ${{ secrets.RESET_SMTP_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.LEJEK_OPENAI_API_KEY }}
           GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
           OVH_SSH_PRIVATE_KEY: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
           OVH_SSH_HOST_KEY: ${{ secrets.OVH_SSH_HOST_KEY }}
@@ -41,7 +42,7 @@ jobs:
           "${SSH[@]}" "$HOST" 'install -d -m 700 "$HOME/carvamo-lejek"'
           "${SCP[@]}" "/tmp/$GITHUB_SHA.tgz" "$HOST:carvamo-lejek/$GITHUB_SHA.tgz"
           "${SCP[@]}" services/lejek/deploy.sh "$HOST:carvamo-lejek/deploy-$GITHUB_SHA.sh"
-          printf '%s\n' "$GIPHY_API_KEY" "$RESET_SMTP_PASSWORD" "$INVITE_SMTP_PASSWORD" | "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
+          printf '%s\n' "$GIPHY_API_KEY" "$RESET_SMTP_PASSWORD" "$INVITE_SMTP_PASSWORD" "$OPENAI_API_KEY" | "${SSH[@]}" "$HOST" "bash carvamo-lejek/deploy-$GITHUB_SHA.sh $GITHUB_SHA"
   dns:
     needs: deploy
     runs-on: ubuntu-24.04
