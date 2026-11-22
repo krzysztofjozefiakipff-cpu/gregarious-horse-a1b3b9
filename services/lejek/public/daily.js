@@ -1404,13 +1404,10 @@ function renderSeller() {
   const locked=Boolean(dayOff||records[day]||exception==='zero');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
   const lesson=data.lesson;
-  $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
-  $('#lesson-topic').textContent=lesson?.question??lesson?.topic??'Kierownik salonu może opublikować tutaj krótkie lekcje ze standardów obsługi.';
-  const answer=$('#lesson-answer');
-  if (answer.querySelector('p').textContent!==(lesson?.topic??'')) answer.open=false;
-  answer.hidden=!lesson?.question;
-  answer.querySelector('p').textContent=lesson?.question?lesson.topic:'';
-  $('#lesson-remember').hidden=!lesson||Boolean(lesson.question);
+  $('#lesson-title').textContent=lesson?'Temat: '+lesson.title:'Lekcje w przygotowaniu';
+  $('#lesson-topic-heading').hidden=!lesson;
+  $('#lesson-topic').textContent=lesson?.topic??'Kierownik salonu może opublikować tutaj lekcje z materiałów szkoleniowych.';
+  $('#lesson-remember').hidden=!lesson;
   $('#lesson-remember span').textContent=lesson?.remember??'';
   const currentMonth=data.today.slice(0,7);
   const currentMetrics=periodMetrics(data,currentMonth,1);
@@ -3813,7 +3810,7 @@ async function loadLessonPacks() {
       };
       const preview=document.createElement('details');
       const summary=document.createElement('summary');
-      summary.textContent=pack.count+' pytań lub lekcji · '+(pack.active?'Wyświetlana':'Wyłączona');
+      summary.textContent=pack.count+' lekcji · '+(pack.active?'Wyświetlana':'Wyłączona');
       const list=document.createElement('ol');
       preview.append(summary,list);
       preview.ontoggle=async()=>{
@@ -3822,7 +3819,13 @@ async function loadLessonPacks() {
           const {lessons}=await api(path+'&id='+pack.id);
           list.replaceChildren(...lessons.map(lesson=>{
             const item=document.createElement('li');
-            item.textContent=(lesson.question?lesson.question+' Odpowiedź: ':lesson.title+' · ')+lesson.topic;
+            const title=document.createElement('strong');
+            title.textContent='Temat: '+lesson.title;
+            const topic=document.createElement('p');
+            topic.textContent='Zagadnienie: '+lesson.topic;
+            const remember=document.createElement('p');
+            remember.textContent='Zapamiętaj: '+lesson.remember;
+            item.append(title,topic,remember);
             return item;
           }));
         } catch (error) {
@@ -3848,7 +3851,7 @@ function updateLessonButtons() {
 }
 function appendLesson({title='',topic='',remember=''}={}) {
   const field=document.createElement('fieldset');
-  field.innerHTML='<legend>Lekcja</legend><label>Tytuł <input data-lesson="title" maxlength="120" required></label><label>Zagadnienie <textarea data-lesson="topic" maxlength="650" rows="3" required></textarea></label><label>Zapamiętaj! <textarea data-lesson="remember" maxlength="220" rows="2" required></textarea></label><button type="button" class="secondary">Usuń szkic</button>';
+  field.innerHTML='<legend>Lekcja</legend><label>Temat <input data-lesson="title" maxlength="120" required></label><label>Zagadnienie <textarea data-lesson="topic" maxlength="650" rows="3" required></textarea></label><label>Zapamiętaj <textarea data-lesson="remember" maxlength="220" rows="2" required></textarea></label><button type="button" class="secondary">Usuń szkic</button>';
   for (const [key,value] of Object.entries({title,topic,remember})) field.querySelector('[data-lesson="'+key+'"]').value=value;
   field.querySelector('button').onclick=()=>{field.remove();updateLessonButtons();};
   lessonDraftList.append(field);
@@ -3873,7 +3876,7 @@ $('#lesson-import').onclick=async ()=>{
     if (!Number.isSafeInteger(result.count)||result.count<1)
       throw new Error('Nie udało się potwierdzić importu. Sprawdź listę paczek po odświeżeniu strony.');
     $('#lesson-file').value='';
-    status.textContent='Zapisano '+result.count+' pytań w paczce „'+file.name+'”. Sprawdź treść i włącz paczkę, gdy będzie gotowa.';
+    status.textContent='Zapisano '+result.count+' lekcji w paczce „'+file.name+'”. Sprawdź treść i włącz paczkę, gdy będzie gotowa.';
     await loadLessonPacks();
   } catch(error) {status.textContent=error.message;}
   finally {lessonBusy=false;updateLessonButtons();}
