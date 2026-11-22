@@ -122,7 +122,7 @@ function lessonDrafts(text) {
   const skills=[
     ['Pierwszy kontakt i powitanie', /powita|przywita|pierwsz.{0,12}kontakt|oddzwo|czas reakcji|przyjęcie klienta/iu],
     ['Rozpoznanie potrzeb klienta', /potrzeb|oczekiwa|budżet|pytani|użytkowani|kwalifikac/iu],
-    ['Prezentacja samochodu', /wyposażeni|prezentac|parametr|zasięg|napęd|spalani|korzyś|bagażnik|ładowani|gwarancj/iu],
+    ['Prezentacja samochodu', /wyposażeni|prezentac|parametr|zasięg|moc silnika|moment obrotowy|napęd|spalani|korzyś|bagażnik|ładowani|gwarancj/iu],
     ['Jazda próbna', /jazd.{0,7}próbn|trasa testow|samochód testow/iu],
     ['Oferta i finansowanie', /ofert|finansowan|leasing|kredyt|ubezpiecze|rabat|wycen|odkup/iu],
     ['Kontakt po spotkaniu', /follow[ -]?up|ponown.{0,10}kontakt|po spotkaniu|po wizycie|po wysłaniu|następn.{0,8}krok/iu],
@@ -131,43 +131,53 @@ function lessonDrafts(text) {
     ['Standard pracy w salonie', /procedur|dokument|zgod|crm|rejestr|faktur|termin|salon|klient/iu]
   ];
   const actionable=/należy|powinien|powinna|trzeba|wymaga|obowiązk|standard|zapytaj|zaproponuj|przedstaw|wyjaśnij|potwierdź|ustal|sprawdź|przekaż|zaprezentuj/iu;
-  const gap=/\b(?:nie|brak|pominięto|niewykonano)\b|niezgodnoś|pominął|pominęła/iu;
   const metadata=/^(?:spis treści|strona\s+\d|copyright|poufne\b|autor\s*:|data\s*:|wersja\s*:)|\.{3,}\s*\d+\s*$/iu;
+  const auditObservation=/\b(?:brak|pominięto|niewykonano)\b|niezgodnoś|pominął|pominęła|\bnie (?:zapytał|zaproponował|przedstawił|poinformował|skontaktował|oddzwonił|przekazał|potwierdził)/iu;
+  const headingLine=line=>line.length<=80&&!/[.!?;]$/.test(line)&&!/[0-9]/.test(line)&&!actionable.test(line);
+  const bullet=/^(?:[•·▪]|-\s|\d+[.)]\s)\s*/u;
   const segmenter=new Intl.Segmenter('pl',{granularity:'sentence'});
-  const topics=skills.map(()=>[]);
+  const lessons=[];
   const seen=new Set();
   for (const block of text.replaceAll('\r','').split(/\n[ \t]*\n|\f+/)) {
     const lines=block.split('\n').map(line=>line.trim()).filter(line=>line&&!metadata.test(line));
-    const heading=lines.length>1&&lines[0].length<=100&&!/[.!?]$/.test(lines[0])&&!actionable.test(lines[0])
-      ?lines.shift():'';
-    const segments=lines
-      .flatMap(part=>Array.from(segmenter.segment(part),({segment})=>segment));
-    for (const segment of segments) {
-      const fact=segment.replace(/\s+/g,' ').replace(/^(?:[•·▪]|- |\d+[.)] )\s*/u,'').trim();
-      if (fact.length<24||fact.length>600||metadata.test(fact)) continue;
-      const key=fact.toLocaleLowerCase('pl').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-      if (seen.has(key)) continue;
+    const heading=lines.length>1&&headingLine(lines[0])&&!bullet.test(lines[0])?lines.shift():'';
+    const rows=[];
+    for (const line of lines) {
+      if (!rows.length||bullet.test(line)||/[.!?;]$/.test(rows.at(-1))) rows.push(line.replace(bullet,''));
+      else rows[rows.length-1]+=' '+line;
+    }
+    const facts=rows.flatMap(row=>Array.from(segmenter.segment(row),({segment})=>segment.replace(/\s+/g,' ').trim()))
+      .filter(fact=>fact.length>=24&&fact.length<=650&&!metadata.test(fact)&&!auditObservation.test(fact));
+    const fallback=heading?skills.findIndex(([,pattern])=>pattern.test(heading)):-1;
+    const bySkill=new Map();
+    for (const fact of facts) {
       const index=skills.findIndex(([,pattern])=>pattern.test(fact));
-      const fallback=heading?skills.findIndex(([,pattern])=>pattern.test(heading)):-1;
-      const topic=index>=0?index:fallback;
-      if (topic<0) continue;
-      seen.add(key);
-      const priority=(gap.test(fact)?4:0)+(actionable.test(fact)?3:0)+Number(index>=0);
-      topics[topic].push({fact,priority});
+      const skill=fallback>=0&&fallback<skills.length-1?fallback:index>=0?index:fallback;
+      if (skill<0) continue;
+      if (!bySkill.has(skill)) bySkill.set(skill,[]);
+      bySkill.get(skill).push(fact);
+    }
+    for (const [skill,items] of bySkill) {
+      const ranked=items.filter(fact=>fact.length<=350).sort((first,second)=>Number(actionable.test(second))-Number(actionable.test(first)));
+      const key=fact=>fact.toLocaleLowerCase('pl').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+      for (const remember of ranked) {
+        if (seen.has(key(remember))) continue;
+        seen.add(key(remember));
+        const detail=items.find(fact=>!seen.has(key(fact))&&fact.length+remember.length+2<=650);
+        if (detail) seen.add(key(detail));
+        lessons.push({title:fallback===skill?heading.replace(/:$/,''):skills[skill][0],topic:detail?remember+'\n\n'+detail:remember,
+          remember,priority:Number(actionable.test(remember))});
+      }
     }
   }
-  return topics.flatMap((items,index)=>items.map(({fact,priority})=>{
-    const [title,pattern]=skills[index];
-    const match=fact.match(/\b\d+(?:[,.]\d+)?\s*(?:%|km\b|kWh\b|godzin\p{L}*|minut\p{L}*|dni\b|zł\b)/iu)
-      ??fact.match(pattern)??fact.match(/\p{L}{6,}/u);
-    if (!match) return null;
-    const before=fact.slice(0,match.index);
-    const after=fact.slice(match.index+match[0].length);
-    const question=before.replace(/\p{L}+$/u,'')+'[…]'+after.replace(/^\p{L}+/u,'');
-    return {title,question,topic:fact,remember:'Przypomnij sobie tę zasadę przed następną rozmową z klientem.',priority};
-  })).filter(Boolean).sort((a,b)=>b.priority-a.priority)
-    .map(({priority,...lesson})=>lesson);
+  return lessons.sort((a,b)=>b.priority-a.priority).map(({priority,...lesson})=>lesson);
 }
+
+function displayLesson({title,topic,remember,question}) {
+  // Earlier imports stored a fill-in-the-blank question and a generic reminder.
+  return {title,topic,remember:question?topic:remember};
+}
+
 const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
 
 function validAccountPassword(password) {
@@ -492,7 +502,7 @@ async function handle(request, env, buildDailyReport=false) {
     const id=url.searchParams.get('id');
     if (id!==null) {
       const pack=await db.prepare('SELECT lessons FROM lesson_packs WHERE salon=? AND id=?').bind(salon,id).first();
-      return pack?json({lessons:JSON.parse(pack.lessons)}):json({error:'Nie znaleziono paczki.'},404);
+      return pack?json({lessons:JSON.parse(pack.lessons).map(displayLesson)}):json({error:'Nie znaleziono paczki.'},404);
     }
     const packs=await list(db,`SELECT id,name,active,json_array_length(lessons) AS count
       FROM lesson_packs WHERE salon=? ORDER BY id DESC`,salon);
@@ -606,7 +616,7 @@ async function handle(request, env, buildDailyReport=false) {
         WHERE salon=? AND active=1 ORDER BY published_day,id`,user.salon):[];
       const lessons=packs.flatMap(pack=>JSON.parse(pack.lessons));
       const position=lessons.length?Math.max(0,lessonDay(today)-lessonDay(packs[0].published_day))%lessons.length:0;
-      const lesson=lessons[position]??null;
+      const lesson=lessons.length?displayLesson(lessons[position]):null;
       let ranking=null;
       if (personal) {
         const rankingStart=period?months[0]:today.slice(0,7);
@@ -958,7 +968,7 @@ async function handle(request, env, buildDailyReport=false) {
     }
     if (path==='/api/lesson-import') {
       if (body.mode!=='pack')
-        return json({error:'Widok lekcji został zaktualizowany. Odśwież stronę i sprawdź „Paczki pytań”. Jeśli pliku tam nie ma, zaimportuj go ponownie.'},409);
+        return json({error:'Widok lekcji został zaktualizowany. Odśwież stronę i sprawdź „Paczki lekcji”. Jeśli pliku tam nie ma, zaimportuj go ponownie.'},409);
       if (typeof body.filename!=='string'||body.filename.length>255||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
           typeof body.file!=='string'||!body.file||body.file.length>20_971_520)
         return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 15 MB.'},400);

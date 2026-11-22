@@ -735,9 +735,9 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <section id="daily-lesson" aria-labelledby="lesson-title">
   <div class="eyebrow">Lekcja na dziś</div>
   <h2 id="lesson-title"></h2>
+  <h3 id="lesson-topic-heading" hidden>Zagadnienie</h3>
   <p id="lesson-topic"></p>
-  <details id="lesson-answer" hidden><summary>Pokaż odpowiedź</summary><p></p></details>
-  <p id="lesson-remember" hidden><strong>Zapamiętaj!</strong> <span></span></p>
+  <p id="lesson-remember" hidden><strong>Zapamiętaj</strong> <span></span></p>
 </section>
 </div>
 </div>
@@ -1138,12 +1138,12 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 <form id="lesson-editor">
   
   <label id="lesson-salon-label">Salon <select id="lesson-salon"></select></label>
-  <label>Ocena tajemniczego klienta lub standardy obsługi <input id="lesson-file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt"></label>
+  <label>Materiał szkoleniowy <input id="lesson-file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt"></label>
   <p>PDF z tekstem, Word (DOCX), Excel (XLSX), PowerPoint (PPTX) lub TXT, do 15 MB. Sprawdź treść i usuń dane klientów przed publikacją.</p>
-  <div><button id="lesson-import" type="button" class="secondary">Importuj pytania z pliku</button> <button id="lesson-add" type="button" class="secondary">Dodaj lekcję ręcznie</button></div>
+  <div><button id="lesson-import" type="button" class="secondary">Przygotuj lekcje z pliku</button> <button id="lesson-add" type="button" class="secondary">Dodaj lekcję ręcznie</button></div>
   <div id="lesson-drafts"></div><button id="lesson-publish" disabled>Zapisz lekcje dodane ręcznie</button>
   <p id="lesson-status" role="status"></p>
-  <h3>Paczki pytań</h3>
+  <h3>Paczki lekcji</h3>
   <div id="lesson-packs"></div>
 </form>
 </details>
