@@ -234,6 +234,44 @@ function appendFoxMessage(speaker,message,citations=[]) {
   return listen;
 }
 
+function offerFoxSave(proposal,byVoice) {
+  const controls=document.createElement('div');
+  const save=document.createElement('button');
+  const cancel=document.createElement('button');
+  save.type=cancel.type='button';
+  save.textContent='Potwierdź zapis';
+  cancel.textContent='Anuluj';
+  cancel.onclick=()=>controls.remove();
+  save.onclick=async()=>{
+    if (proposal.type==='activity'&&document.querySelector('#entry-draft-state[data-unsaved="true"]')) {
+      foxStatus('Zapisz najpierw zmiany w zakładce Wpisz działania i ponów polecenie.');
+      return;
+    }
+    save.disabled=cancel.disabled=true;
+    foxStatus('Zapisuję zmianę…','thinking');
+    try {
+      const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({feature:'fox-save',proposal})
+      });
+      const result=await response.json();
+      if (!response.ok||typeof result.text!=='string') throw new Error(result.error);
+      controls.remove();
+      const listen=appendFoxMessage('Lisek',result.text);
+      foxStatus('');
+      if (byVoice&&listen&&foxAssistant.open) speakFoxAnswer(result.text,listen);
+      window.dispatchEvent(new Event('fox-saved'));
+    } catch(error) {
+      controls.remove();
+      appendFoxMessage('Lisek',error.message||'Nie udało się potwierdzić zapisu. Sprawdź wpis przed ponowieniem polecenia.');
+      foxStatus('');
+    }
+  };
+  controls.append(save,cancel);
+  foxAssistantMessages.append(controls);
+  foxAssistantMessages.scrollTop=foxAssistantMessages.scrollHeight;
+}
+
 foxAssistantForm.onsubmit=async event=>{
   event.preventDefault();
   const question=foxAssistantQuestion.value.trim();
@@ -255,6 +293,7 @@ foxAssistantForm.onsubmit=async event=>{
     if (!response.ok||typeof result.text!=='string') throw new Error(result.error);
     appendFoxMessage('Ty',question);
     const listen=appendFoxMessage(result.source==='web'?'Lisek · Internet':'Lisek',result.text,result.citations);
+    if (result.proposal) offerFoxSave(result.proposal,byVoice);
     if (foxAssistantQuestion.value.trim()===question) foxAssistantQuestion.value='';
     foxStatus('');
     if (byVoice&&listen&&foxAssistant.open) speakFoxAnswer(result.text,listen);
