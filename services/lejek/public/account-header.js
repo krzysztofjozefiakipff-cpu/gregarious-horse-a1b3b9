@@ -1,5 +1,14 @@
 const accountRoleNames={admin:'Administrator',group:'Szef grupy',manager:'Kierownik',seller:'Handlowiec',staff:'Pracownik'};
 const headerRolePicker=document.getElementById('account-role');
+const accountMenu=document.getElementById('account-menu');
+document.addEventListener('click',event=>{
+  if (accountMenu.open&&!accountMenu.contains(event.target)) accountMenu.open=false;
+});
+accountMenu.addEventListener('keydown',event=>{
+  if (event.key!=='Escape'||!accountMenu.open) return;
+  accountMenu.open=false;
+  accountMenu.querySelector('summary').focus();
+});
 
 function renderAccountHeader({role,roles,accountHeader},preview=null) {
   const {firstName,brand}=accountHeader??{};
@@ -13,7 +22,10 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
   if (roles.length!==headerRolePicker.options.length||roles.some((value,index)=>headerRolePicker.options[index].value!==value)) {
     headerRolePicker.replaceChildren(...roles.map(value=>new Option(accountRoleNames[value],value)));
   }
-  headerRolePicker.hidden=roles.length<2;
+  document.getElementById('account-role-field').hidden=roles.length<2;
+  const currentRole=document.getElementById('account-current-role');
+  currentRole.hidden=roles.length>1;
+  currentRole.textContent=accountRoleNames[role]??'';
   headerRolePicker.value=role;
   headerRolePicker.onchange=()=>{
     const next=headerRolePicker.value;
@@ -35,7 +47,7 @@ function placeFoxAssistant(destination=null) {
   const host=destination??document.getElementById('account-controls');
   if (foxAssistantOpen.parentElement===host) return;
   if (destination) host.append(foxAssistantOpen);
-  else host.insertBefore(foxAssistantOpen,host.querySelector('.panel-signout'));
+  else host.insertBefore(foxAssistantOpen,accountMenu);
 }
 
 const foxAssistant=document.getElementById('fox-assistant');

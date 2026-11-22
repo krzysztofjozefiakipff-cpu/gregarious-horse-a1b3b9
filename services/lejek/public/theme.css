@@ -106,30 +106,39 @@ a { color: var(--ink); }
 .panel-header .product-brand, .panel-header a { color: white; }
 header.account-header {
   display:block; width:100%; max-width:1720px; margin:0 auto; border-bottom:0;
-  padding:calc(env(safe-area-inset-top) + 8px) clamp(12px,2.4vw,40px) 8px;
+  padding:calc(env(safe-area-inset-top) + 5px) clamp(10px,2.4vw,40px) 5px;
 }
-.account-header-inner {
-  display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:6px 16px;
+.account-header-inner { display:flex; align-items:center; gap:clamp(6px,2vw,16px); min-height:44px; }
+.account-brand { flex:1 1 auto; min-width:0; }
+.account-header .product-brand { gap:6px; font-size:clamp(.88rem,4.2vw,1.3rem); white-space:nowrap; }
+.account-header .product-mark { width:clamp(18px,6vw,27px); }
+.account-controls { display:flex; align-items:center; gap:6px; flex:none; }
+.account-controls[hidden] { display:none; }
+.account-header .dealer-logo { flex:none; max-height:23px; max-width:clamp(57px,19vw,105px); padding:3px 5px; border:0; }
+#account-menu { position:relative; }
+#account-menu > summary {
+  display:grid; place-items:center; list-style:none; box-sizing:border-box;
+  width:44px; height:44px; color:white; border:1px solid #ffffff72; border-radius:12px; cursor:pointer;
 }
-.account-brand, .account-controls { display:flex; align-items:center; flex-wrap:wrap; gap:5px 10px; min-width:0; }
-.account-controls { justify-self:end; }
-.account-header .dealer-logo { grid-column:3; grid-row:1; justify-self:end; max-height:27px; max-width:120px; padding:4px 6px; border:0; }
+#account-menu > summary::-webkit-details-marker { display:none; }
+#account-menu[open] > summary, #account-menu > summary:hover { background:#ffffff19; }
+#account-menu > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.account-menu-content {
+  position:absolute; inset-inline-end:0; inset-block-start:calc(100% + 8px); z-index:12;
+  display:grid; gap:8px; width:min(250px,calc(100vw - 24px)); padding:12px;
+  background:#fff; color:var(--panel-ink); border:1px solid var(--panel-border); border-radius:14px;
+  box-shadow:0 8px 22px #25132924;
+}
 .account-header #account-greeting { font-size:1rem; line-height:1.3; letter-spacing:normal; overflow-wrap:anywhere; }
-.account-header #account-role, .account-header .panel-signout button {
-  background:transparent; color:white; border:1px solid #ffffff65; border-radius:8px;
-  min-height:44px; font:inherit;
+.account-header #account-current-role { font-size:.85rem; margin:0; color:var(--panel-muted); }
+#account-role-field:not([hidden]) { display:grid; gap:4px; font-size:.8rem; font-weight:700; }
+.account-header #account-role { width:100%; min-height:44px; padding:5px 8px; font-size:1rem; color:var(--panel-ink); background:white; }
+.account-header .panel-signout { margin:0; }
+.account-header .panel-signout button {
+  display:flex; align-items:center; gap:7px; width:100%; min-height:44px; padding:6px 9px;
+  color:var(--panel-plum); background:var(--panel-lilac); border:0; border-radius:8px; font:inherit; cursor:pointer;
 }
-.account-header #account-role { width:auto; max-width:100%; padding:4px 6px; }
-.account-header #account-role option { color:var(--ink); background:white; }
-.account-header .panel-signout { margin:0; display:block; }
-.account-header .panel-signout button { display:grid; place-items:center; width:44px; padding:0; cursor:pointer; }
-.account-header .panel-signout button:hover { background:#ffffff18; }
-@media(max-width:520px) {
-  .account-header-inner { grid-template-columns:minmax(0,1fr) auto; gap:6px 10px; }
-  .account-header .dealer-logo { grid-column:2; }
-  .account-controls { grid-column:1/-1; justify-self:stretch; }
-  .account-controls #account-greeting { flex:1 1 70px; }
-}
+.account-header .panel-signout button:hover { background:#ecdeed; }
 .panel-return-link {
   display:inline-flex;
   align-items:center;
