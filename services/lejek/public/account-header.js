@@ -32,6 +32,9 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
 const foxAssistantOpen=document.getElementById('fox-assistant-open');
 const foxAssistant=document.getElementById('fox-assistant');
 const foxAssistantForm=document.getElementById('fox-assistant-form');
+const foxAssistantMode=document.getElementById('fox-assistant-mode');
+const foxAssistantWebNote=document.getElementById('fox-assistant-web-note');
+foxAssistantMode.onchange=()=>{foxAssistantWebNote.hidden=foxAssistantMode.value!=='web';};
 const foxAssistantQuestion=document.getElementById('fox-assistant-question');
 const foxAssistantMessages=document.getElementById('fox-assistant-messages');
 const foxAssistantStatus=document.getElementById('fox-assistant-status');
@@ -189,15 +192,28 @@ foxAssistant.addEventListener('close',()=>{
 
 foxAssistantOpen.onclick=()=>foxAssistant.showModal();
 
-function appendFoxMessage(speaker,message) {
+function appendFoxMessage(speaker,message,citations=[]) {
   const row=document.createElement('p');
   row.dataset.speaker=speaker;
   const label=document.createElement('strong');
   label.textContent=speaker;
-  row.append(label,'\n'+message);
+  row.append(label,'\n');
+  let offset=0;
+  for (const citation of [...citations].sort((a,b)=>a.at-b.at)) {
+    const url=new URL(citation.url);
+    if (!['http:','https:'].includes(url.protocol)||citation.at<offset||citation.at>message.length) continue;
+    const link=document.createElement('a');
+    link.href=url.href;
+    link.target='_blank';
+    link.rel='noopener noreferrer';
+    link.textContent=' ['+citation.title+']';
+    row.append(message.slice(offset,citation.at),link);
+    offset=citation.at;
+  }
+  row.append(message.slice(offset));
   foxAssistantMessages.append(row);
   let listen;
-  if (speaker==='Lisek'&&foxCanSpeak) {
+  if (speaker!=='Ty'&&foxCanSpeak) {
     listen=document.createElement('button');
     listen.type='button';
     listen.textContent='Odsłuchaj odpowiedź';
@@ -213,22 +229,23 @@ foxAssistantForm.onsubmit=async event=>{
   const question=foxAssistantQuestion.value.trim();
   const send=foxAssistantForm.querySelector('button[type="submit"]');
   const byVoice=foxSendByVoice;
+  const feature=foxAssistantMode.value==='web'?'web':'fox';
   foxSendByVoice=false;
   if (!question||!foxAssistantRole||send.disabled) return;
   stopFoxRecording();
   send.disabled=true;
   foxAssistantMic.disabled=true;
-  foxStatus('Lisek przygotowuje odpowiedź…');
+  foxStatus(feature==='web'?'Lisek szuka w internecie…':'Lisek przygotowuje odpowiedź…');
   try {
     const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({feature:'fox',question})
+      body:JSON.stringify({feature,question})
     });
     const result=await response.json();
     if (!response.ok||typeof result.text!=='string') throw new Error(result.error);
     appendFoxMessage('Ty',question);
-    const listen=appendFoxMessage('Lisek',result.text);
+    const listen=appendFoxMessage(feature==='web'?'Lisek · Internet':'Lisek',result.text,result.citations);
     if (foxAssistantQuestion.value.trim()===question) foxAssistantQuestion.value='';
     foxStatus('');
     if (byVoice&&listen&&foxAssistant.open) speakFoxAnswer(result.text,listen);

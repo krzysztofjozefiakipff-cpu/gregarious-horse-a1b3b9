@@ -763,6 +763,16 @@ async function handle(request, env, buildDailyReport=false) {
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
   if (path==='/api/assistant') {
     const {feature,salon,question}=body;
+    if (feature==='web') {
+      if (typeof question!=='string'||!question.trim()||question.length>500)
+        return json({error:'Wpisz pytanie do 500 znaków.'},400);
+      if (!env.webAssist) return json({error:'Wyszukiwanie w internecie jest niedostępne.'},503);
+      try {
+        return json(await env.webAssist(question.trim()));
+      } catch {
+        return json({error:'Nie udało się przeszukać internetu. Spróbuj ponownie.'},503);
+      }
+    }
     if (feature==='transcribe') {
       const {audio,mime}=body;
       if (!['audio/mp4','audio/webm','audio/ogg'].includes(mime)||typeof audio!=='string'||
