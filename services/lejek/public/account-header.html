@@ -49,8 +49,8 @@
   #fox-assistant-open {
     position:fixed; z-index:6; inset-inline-end:max(12px,env(safe-area-inset-right));
     inset-block-end:calc(12px + env(safe-area-inset-bottom));
-    width:clamp(60px,17vw,76px); aspect-ratio:1; padding:2px; border-radius:50%;
-    border:1px solid #e4b48d; background:#fff1e5; box-shadow:0 3px 12px #3f214333;
+    width:clamp(60px,17vw,76px); aspect-ratio:1; padding:0; border-radius:12px;
+    border:0; background:transparent; box-shadow:none;
     cursor:pointer; touch-action:manipulation;
   }
   body:has(.persistent-panel-nav:not([hidden])) #fox-assistant-open { inset-block-end:calc(76px + env(safe-area-inset-bottom)); }
@@ -71,34 +71,16 @@
   .fox-body-layer {
     clip-path:polygon(0 0,100% 0,100% 50%,68% 50%,60% 58%,57% 65%,58% 72%,60% 83%,58% 90%,54% 95%,53% 100%,0 100%,0 73%,27% 73%,30% 66%,28% 58%,27% 52%,21% 45%,0 45%);
   }
-  #fox-assistant-title .fox-mascot { width:56px; height:56px; flex:0 0 56px; border-radius:50%; background:#fff1e5; }
-  #fox-assistant-open { animation:fox-stroll 20s ease-in-out 2s infinite; }
-  #fox-assistant-open .fox-mascot { animation:fox-stride 20s ease-in-out 2s infinite; }
+  #fox-assistant-title .fox-mascot { width:56px; height:56px; flex:0 0 56px; }
   #fox-assistant-open .fox-tail-layer { animation:fox-tail-wag 1.8s ease-in-out infinite; }
   #fox-assistant-open .fox-paw-layer { animation:fox-paw-wave 9s ease-in-out infinite; }
-  #fox-assistant-open:is(:hover,:focus-visible,:active),
-  #fox-assistant-open:is(:hover,:focus-visible,:active) .fox-mascot { animation-play-state:paused; }
   #fox-assistant[data-activity="listening"] .fox-mascot { animation:fox-nod 1.4s ease-in-out infinite; }
   #fox-assistant[data-activity="thinking"] .fox-tail-layer { animation:fox-tail-wag .85s ease-in-out infinite; }
-  @keyframes fox-stroll {
-    0%, 14%, 100% { transform:translateX(0); }
-    3% { transform:translateX(-16px); }
-    6%, 7% { transform:translateX(-36px); }
-    10% { transform:translateX(-21px); }
-  }
-  @keyframes fox-stride {
-    0%, 6%, 14%, 100% { transform:translateY(0) scaleX(1); }
-    1.5%, 4.5% { transform:translateY(-3px) rotate(-6deg); }
-    3% { transform:translateY(0) rotate(3deg); }
-    7%, 12% { transform:translateY(0) scaleX(-1); }
-    8.5%, 11% { transform:translateY(-3px) rotate(5deg) scaleX(-1); }
-    13% { transform:translateY(0) scaleX(.4); }
-  }
   @keyframes fox-tail-wag { 0%,100% { transform:rotate(-4deg); } 50% { transform:rotate(7deg); } }
   @keyframes fox-paw-wave { 0%,83%,100% { transform:rotate(0); } 87%,95% { transform:rotate(12deg); } 91% { transform:rotate(-8deg); } }
   @keyframes fox-nod { 0%,100% { transform:rotate(0); } 50% { transform:rotate(-8deg) translateY(-2px); } }
   @media(prefers-reduced-motion:reduce) {
-    #fox-assistant-open, .fox-mascot, .fox-mascot * { animation:none !important; }
+    .fox-mascot, .fox-mascot * { animation:none !important; }
   }
   #fox-assistant { box-sizing: border-box; width: min(34rem, calc(100% - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #e4dbe5; border-radius: 16px; padding: 1rem; color: #302033; background: #fff; }
   #fox-assistant::backdrop { background: #26132888; }
