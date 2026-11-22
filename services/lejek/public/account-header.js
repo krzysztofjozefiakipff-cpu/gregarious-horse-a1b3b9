@@ -36,15 +36,14 @@ const foxAssistantQuestion=document.getElementById('fox-assistant-question');
 const foxAssistantMessages=document.getElementById('fox-assistant-messages');
 const foxAssistantStatus=document.getElementById('fox-assistant-status');
 const foxAssistantMic=document.getElementById('fox-assistant-mic');
-const FoxRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+
 const foxSpeech=window.speechSynthesis;
 const foxCanSpeak=Boolean(foxSpeech&&window.SpeechSynthesisUtterance);
 let foxAssistantRole=null;
-let foxRecognition=null;
+let foxRecording=null;
 let foxSpeaking=null;
 let foxSendByVoice=false;
 
-foxAssistantMic.hidden=!FoxRecognition;
 
 function foxStatus(message) {
   foxAssistantStatus.textContent=message;
@@ -79,59 +78,110 @@ function speakFoxAnswer(message,button) {
   foxSpeech.speak(speech);
 }
 
-function stopFoxRecording() {
-  if (!foxRecognition) return;
-  const recognition=foxRecognition;
-  foxRecognition=null;
-  foxAssistantMic.textContent='🎙️ Zadaj głosowo';
-  recognition.abort();
+function releaseFoxRecording(recording) {
+  clearTimeout(recording.timer);
+  recording.stream?.getTracks().forEach(track=>track.stop());
 }
 
-foxAssistantMic.onclick=()=>{
-  if (!FoxRecognition||foxAssistantForm.querySelector('button[type="submit"]').disabled) return;
-  if (foxRecognition) {
+function stopFoxRecording() {
+  const recording=foxRecording;
+  if (!recording) return;
+  foxRecording=null;
+  releaseFoxRecording(recording);
+  recording.upload?.abort();
+  foxAssistantMic.textContent='🎙️ Zadaj głosowo';
+}
+
+async function sendFoxRecording(recording,blob) {
+  releaseFoxRecording(recording);
+  if (foxRecording!==recording||!foxAssistant.open) return;
+  foxAssistantMic.textContent='Anuluj';
+  foxStatus('Rozpoznaję pytanie…');
+  const upload=new AbortController();
+  recording.upload=upload;
+  try {
+    if (!blob.size||blob.size>1_050_000) throw new Error('Powtórz pytanie. Nagranie było puste lub za długie.');
+    const audio=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result).split(',')[1]);
+      reader.onerror=()=>reject(new Error('Nie udało się odczytać nagrania.'));
+      reader.readAsDataURL(blob);
+    });
+    const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
+      method:'POST',headers:{'Content-Type':'application/json'},signal:upload.signal,
+      body:JSON.stringify({feature:'transcribe',mime:blob.type.split(';')[0],audio})
+    });
+    const result=await response.json();
+    if (!response.ok||typeof result.text!=='string') throw new Error(result.error);
+    if (foxRecording!==recording||!foxAssistant.open) return;
+    stopFoxRecording();
+    foxAssistantQuestion.value=result.text;
+    foxSendByVoice=true;
+    foxAssistantForm.requestSubmit();
+  } catch (error) {
+    if (foxRecording!==recording) return;
+    stopFoxRecording();
+    foxStatus(error.message||'Nie udało się rozpoznać pytania. Spróbuj ponownie.');
+  }
+}
+
+foxAssistantMic.onclick=async()=>{
+  if (foxAssistantForm.querySelector('button[type="submit"]').disabled) return;
+  if (foxRecording?.recorder?.state==='recording') {
+    foxRecording.recorder.stop();
+    foxAssistantMic.textContent='Anuluj';
+    foxStatus('Przetwarzam nagranie…');
+    return;
+  }
+  if (foxRecording) {
     stopFoxRecording();
     foxStatus('');
     return;
   }
+  if (!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder) {
+    foxStatus('Ten widok nie udostępnia mikrofonu. Otwórz biegwyzej.pl bezpośrednio w Safari lub użyj dyktowania na klawiaturze.');
+    return;
+  }
   stopFoxSpeech();
-  const recognition=new FoxRecognition();
-  recognition.lang='pl-PL';
-  recognition.interimResults=false;
-  recognition.continuous=false;
-  foxRecognition=recognition;
-  foxAssistantMic.textContent='Anuluj nagrywanie';
-  foxStatus('Słucham. Zadaj pytanie po polsku.');
-  recognition.onresult=event=>{
-    if (foxRecognition!==recognition||!foxAssistant.open) return;
-    const question=event.results[event.resultIndex]?.[0]?.transcript?.trim();
-    if (!question) return;
-    foxAssistantQuestion.value=question.slice(0,foxAssistantQuestion.maxLength);
-    foxSendByVoice=true;
-    foxAssistantForm.requestSubmit();
-  };
-  recognition.onerror=event=>{
-    if (foxRecognition!==recognition) return;
-    foxStatus(['not-allowed','service-not-allowed'].includes(event.error)
-      ?'Zezwól przeglądarce na dostęp do mikrofonu albo wpisz pytanie.'
-      :'Nie udało się rozpoznać pytania. Spróbuj ponownie albo wpisz je ręcznie.');
-  };
-  recognition.onend=()=>{
-    if (foxRecognition!==recognition) return;
-    foxRecognition=null;
-    foxAssistantMic.textContent='🎙️ Zadaj głosowo';
-    if (foxAssistantStatus.textContent==='Słucham. Zadaj pytanie po polsku.') foxStatus('');
-  };
-  try {recognition.start();}
-  catch {
-    recognition.onend();
-    foxStatus('Mikrofon jest niedostępny. Możesz wpisać pytanie lub użyć dyktowania z klawiatury.');
+  const recording={};
+  foxRecording=recording;
+  foxAssistantMic.textContent='Anuluj';
+  foxStatus('Oczekuję na dostęp do mikrofonu…');
+  try {
+    recording.stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    if (foxRecording!==recording||!foxAssistant.open) {
+      releaseFoxRecording(recording);
+      return;
+    }
+    const mimeType=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'].find(type=>MediaRecorder.isTypeSupported(type));
+    const recorder=new MediaRecorder(recording.stream,mimeType?{mimeType}:{});
+    recording.recorder=recorder;
+    const chunks=[];
+    recorder.ondataavailable=event=>{if (event.data.size) chunks.push(event.data);};
+    recorder.onstop=()=>void sendFoxRecording(recording,new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type}));
+    recorder.onerror=()=>{
+      if (foxRecording!==recording) return;
+      stopFoxRecording();
+      foxStatus('Nagrywanie zostało przerwane. Spróbuj ponownie.');
+    };
+    recorder.start();
+    recording.timer=setTimeout(()=>{
+      if (foxRecording===recording&&recorder.state==='recording') recorder.stop();
+    },20000);
+    foxAssistantMic.textContent='Zakończ i wyślij';
+    foxStatus('Słucham. Po zadaniu pytania wybierz „Zakończ i wyślij”.');
+  } catch (error) {
+    if (foxRecording!==recording) return;
+    stopFoxRecording();
+    foxStatus(error.name==='NotAllowedError'
+      ?'Dostęp do mikrofonu jest zablokowany. Na iPhonie otwórz stronę w Safari i w ustawieniach witryny zezwól na mikrofon.'
+      :'Mikrofon jest niedostępny. Możesz użyć dyktowania na klawiaturze.');
   }
 };
 
 foxAssistant.addEventListener('close',()=>{
   stopFoxSpeech();
-  if (foxRecognition) {
+  if (foxRecording) {
     stopFoxRecording();
     foxStatus('');
   }

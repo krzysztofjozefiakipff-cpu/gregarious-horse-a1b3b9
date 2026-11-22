@@ -44,3 +44,27 @@ export function createAssistant({key,model='gpt-6-luna',fetchResponse=fetch}) {
     }
   };
 }
+
+export function createTranscriber(key,fetchAudio=fetch) {
+  if (!key) return undefined;
+  let active=0;
+  return async (audio,mime)=>{
+    if (active>=4) throw new Error('Transcription busy');
+    active++;
+    try {
+      const form=new FormData();
+      form.set('model','gpt-transcribe');
+      form.append('languages[]','pl');
+      form.set('file',new Blob([Buffer.from(audio,'base64')],{type:mime}),
+        'pytanie.'+(mime==='audio/mp4'?'m4a':mime.split('/')[1]));
+      const response=await fetchAudio('https://api.openai.com/v1/audio/transcriptions',{
+        method:'POST',headers:{Authorization:'Bearer '+key},body:form,signal:AbortSignal.timeout(25000)
+      });
+      if (!response.ok) throw new Error('Transcription request failed');
+      const {text}=await response.json();
+      return typeof text==='string'?text.trim():'';
+    } finally {
+      active--;
+    }
+  };
+}

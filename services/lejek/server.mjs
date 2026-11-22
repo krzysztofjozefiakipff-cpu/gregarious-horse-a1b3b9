@@ -1,4 +1,4 @@
-import {createAssistant} from './scripts/assistant.mjs';
+import {createAssistant,createTranscriber} from './scripts/assistant.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
@@ -52,7 +52,9 @@ try {
   }
   database.exec('COMMIT');
 } catch(error) { database.exec('ROLLBACK'); throw error; }
-const assist=createAssistant({key:process.env.OPENAI_API_KEY?.trim(),model:process.env.LEJEK_AI_MODEL||undefined});
+const aiKey=process.env.OPENAI_API_KEY?.trim();
+const transcribe=createTranscriber(aiKey);
+const assist=createAssistant({key:aiKey,model:process.env.LEJEK_AI_MODEL||undefined});
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
 const DB = {
   prepare(sql) {
@@ -385,7 +387,7 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,assist,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
+  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,assist,transcribe,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
   const url=new URL(request.url);
   if (response.ok&&request.method==='GET'&&['/api/management-reports','/api/daily-briefing'].includes(path)&&url.searchParams.get('format')==='pdf') {
     return downloadReportPdf(response,url);
@@ -411,7 +413,7 @@ createServer(async (req,res)=>{
     const host=req.headers.host;
     const origin=allowedHosts.has(host)?'https://'+host:previewOrigin;
     const pathname=new URL(req.url,origin).pathname;
-    const maxBytes=req.method!=='POST'?65_536:pathname==='/api/lesson-import'?21_000_000:pathname==='/api/salon-life'?260_000:65_536;
+    const maxBytes=req.method!=='POST'?65_536:pathname==='/api/lesson-import'?21_000_000:pathname==='/api/salon-life'?260_000:pathname==='/api/assistant'?1_410_000:65_536;
     for await(const chunk of req) {
       bytes+=chunk.length;
       if(bytes>maxBytes){res.writeHead(413);res.end();return;}

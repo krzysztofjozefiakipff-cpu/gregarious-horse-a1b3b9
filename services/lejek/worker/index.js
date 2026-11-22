@@ -763,6 +763,19 @@ async function handle(request, env, buildDailyReport=false) {
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
   if (path==='/api/assistant') {
     const {feature,salon,question}=body;
+    if (feature==='transcribe') {
+      const {audio,mime}=body;
+      if (!['audio/mp4','audio/webm','audio/ogg'].includes(mime)||typeof audio!=='string'||
+          !audio.length||audio.length>1_400_000||audio.length%4||!/^[A-Za-z0-9+/]+={0,2}$/.test(audio))
+        return json({error:'Nagranie jest puste, zbyt duże lub ma nieobsługiwany format.'},400);
+      if (!env.transcribe) return json({error:'Rozpoznawanie mowy jest niedostępne.'},503);
+      try {
+        const text=await env.transcribe(audio,mime);
+        return text?json({text:text.slice(0,500)}):json({error:'W nagraniu nie rozpoznano pytania.'},422);
+      } catch {
+        return json({error:'Nie udało się rozpoznać nagrania. Spróbuj ponownie lub wpisz pytanie.'},503);
+      }
+    }
     const isFox=feature==='fox';
     const allowed=isFox||(feature==='today'?role==='seller':feature==='briefing'?role==='manager'
       :['report','chat'].includes(feature)&&managesSalonPlans);
