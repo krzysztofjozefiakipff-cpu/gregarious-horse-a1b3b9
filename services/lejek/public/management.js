@@ -69,7 +69,7 @@ async function refresh() {
   }
 }
 const sum = rows => rows.reduce((total, row) => total.map((v,i) => v+row[i]),empty());
-const nf = new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
+const nf = new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0});
 const pct = (a,b) => b ? nf.format(100*a/b)+'%' : '—';
 const table = (head,rows) => '<table><thead><tr>'+head.map(v=>'<th scope="col">'+v+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
 const options = (el,rows) => {el.replaceChildren(...rows.map(([value,label])=>new Option(label,value)));};

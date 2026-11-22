@@ -864,7 +864,7 @@ function renderPlans(snapshot,month,type) {
     ?ratedMetrics.reduce((total,{actual,goal})=>total+actual/goal,0)/ratedMetrics.length
     :null;
   const stars=average===null?null:Math.min(5,average*5);
-  const format=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
+  const format=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0});
   $('#seller-goal-rating').hidden=false;
   $('#rating-stars').hidden=stars===null;
   $('#rating-stars').style.setProperty('--rating-fill',((stars??0)*20)+'%');
@@ -1113,7 +1113,7 @@ function renderMotivator(metrics,day) {
   const strongest=ranked[0];
   const gaps=ranked.filter(metric=>metric.delta<0).reverse();
   const weakest=gaps[0]??ranked.at(-1);
-  const percent=metric=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(100*metric.actual/metric.goal)+'% celu na dziś';
+  const percent=metric=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0}).format(100*metric.actual/metric.goal)+'% celu na dziś';
   const best=$('#motivation-best');
   const low=$('#motivation-low');
   best.hidden=!strongest||strongest===weakest&&strongest.delta<0;
@@ -1670,8 +1670,7 @@ function renderSalonSummary(view,team=[],period=null) {
   results.replaceChildren();
   if (!view.salons.length) {results.textContent='Brak przypisanych salonów.';return;}
   if (!period&&!data.salonPerformance) {results.textContent='Nie udało się pobrać realizacji planów salonów.';return;}
-  const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1});
-  const wholeNumber=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0});
+  const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0});
   const [year,month]=view.today.split('-').map(Number);
   const first=monthStart(year,month-1);
   const end=monthStart(year,month);
@@ -1743,9 +1742,9 @@ function renderSalonSummary(view,team=[],period=null) {
       row.append(metric);
       const pace=paces[index];
       const expected=row.insertCell();
-      expected.textContent=pace?wholeNumber.format(pace.expected):'—';
+      expected.textContent=pace?number.format(pace.expected):'—';
       const forecast=row.insertCell();
-      forecast.textContent=pace?.forecast!=null?wholeNumber.format(pace.forecast):'—';
+      forecast.textContent=pace?.forecast!=null?number.format(pace.forecast):'—';
       if (pace?.forecast!=null) forecast.className=pace.tone;
       if (!pace) {
         const reason=plan.partial?.[index]?'Cel dostępny dla części miesięcy':plan.configured[index]?'Cel zerowy':'Brak celu';
@@ -1874,7 +1873,7 @@ function renderManagerDashboard(view,detailOnly=false) {
   const list=$('#manager-team-list');
   list.replaceChildren();
   if (!team.length) list.textContent='Brak aktywnych handlowców.';
-  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
+  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
   for (const {seller,status,metrics,weakest,orders} of team) {
     const detail=document.createElement('details');
     const summary=document.createElement('summary');
@@ -2100,7 +2099,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   const reviewStep=step('3. Podgląd i korekta');
   const reference=document.createElement('p');
   reference.textContent='Plan zakłada lepszą obsługę dostępnych leadów. Kalkulator przewiduje kolejne próby kontaktu oraz follow-up po niemal każdej ofercie. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach widać wynik salonu. Lepszy wynik może podnieść cel konwersji. Przy słabszym wyniku obok celu pokażemy różnicę do nadrobienia.';
-  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:1});
+  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
   const summary=document.createElement('dl');
   summary.className='planning-totals';
   const sourceDetails=document.createElement('details');
@@ -2185,7 +2184,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     if (historyRate!=null) {
       const gap=targetRate-historyRate;
       rateNote.textContent+=' · wynik salonu '+percent.format(historyRate)
-        +(gap>=0.001?' · do poprawy o '+new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(gap*100)+' p.p.':'');
+        +(gap>=0.005?' · do poprawy o '+new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0}).format(gap*100)+' p.p.':'');
     }
     panel.append(title,rateNote,manual.fields,activity.fields,reset);
     sourcePanels.push(panel);
