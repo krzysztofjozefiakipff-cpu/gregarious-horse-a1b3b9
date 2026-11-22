@@ -43,14 +43,34 @@ const briefingPdfShare=briefingPdfDialog.querySelector('#briefing-pdf-share');
 const briefingPdfDownload=briefingPdfDialog.querySelector('#briefing-pdf-download');
 const briefingPdfStatus=briefingPdfDialog.querySelector('#briefing-pdf-status');
 const briefingPdfPreview=briefingPdfDialog.querySelector('#briefing-pdf-preview');
+const briefingPdfOptions=briefingPdfDialog.querySelector('#briefing-pdf-options');
+const briefingPdfView=briefingPdfDialog.querySelector('#briefing-pdf-view');
+const briefingPdfPages=briefingPdfDialog.querySelector('#briefing-pdf-pages');
+const briefingPdfBack=briefingPdfDialog.querySelector('#briefing-pdf-back');
 let briefingPdfAddress;
+let briefingPreviewRequest;
+
+function closeReportPreview() {
+  briefingPreviewRequest?.abort();
+  briefingPreviewRequest=undefined;
+  briefingPdfDialog.classList.remove('previewing');
+  briefingPdfView.hidden=true;
+  briefingPdfPages.replaceChildren();
+  briefingPdfOptions.hidden=false;
+}
+
+briefingPdfBack.onclick=()=>{
+  closeReportPreview();
+  briefingPdfPreview.focus();
+};
 
 briefingPdfDialog.onclose=()=>{
   URL.revokeObjectURL(briefingPdfAddress);
   briefingPdfAddress=undefined;
   briefingPdfDownload.removeAttribute('href');
   briefingPdfShare.onclick=null;
-  briefingPdfPreview.removeAttribute('href');
+  briefingPdfPreview.onclick=null;
+  closeReportPreview();
 };
 
 async function requestManagementPdf(endpoint) {
@@ -70,8 +90,36 @@ function showManagementPdf(file,endpoint,salon,title) {
   briefingPdfDownload.href=briefingPdfAddress;
   briefingPdfDownload.download=file.name;
   const preview=new URL(endpoint,location.href);
-  preview.searchParams.set('disposition','inline');
-  briefingPdfPreview.href=preview.href;
+  preview.searchParams.set('preview','pages');
+  briefingPdfPreview.onclick=async()=>{
+    const request=new AbortController();
+    briefingPreviewRequest=request;
+    briefingPdfOptions.hidden=true;
+    briefingPdfView.hidden=false;
+    briefingPdfDialog.classList.add('previewing');
+    const status=reportElement('p','Wczytywanie stron raportu…');
+    status.setAttribute('role','status');
+    briefingPdfPages.replaceChildren(status);
+    briefingPdfBack.focus();
+    try {
+      const response=await fetch(preview,{cache:'no-store',signal:request.signal});
+      const payload=await response.json();
+      if (!response.ok||!payload.pages?.length) throw new Error(payload.error||'Podgląd raportu jest niedostępny.');
+      if (request.signal.aborted) return;
+      const pages=payload.pages.map((src,index)=>{
+        const image=reportElement('img');
+        image.alt='Strona '+(index+1)+' z '+payload.pages.length;
+        image.loading='lazy';
+        image.decoding='async';
+        image.src=src;
+        return image;
+      });
+      briefingPdfPages.replaceChildren(...pages);
+      briefingPdfPages.scrollTop=0;
+    } catch (error) {
+      if (!request.signal.aborted) status.textContent=error.message;
+    }
+  };
   briefingPdfDialog.querySelector('#briefing-pdf-scope').textContent=salon||'Wszystkie salony';
   briefingPdfShare.hidden=!(navigator.share&&navigator.canShare?.(shareData));
   briefingPdfShare.onclick=async()=>{

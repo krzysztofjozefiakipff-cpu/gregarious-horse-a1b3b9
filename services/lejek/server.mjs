@@ -1,7 +1,11 @@
-import {spawn} from 'node:child_process';
+import {execFile,spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
 import {readFileSync} from 'node:fs';
+import {mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {promisify} from 'node:util';
 import {DatabaseSync} from 'node:sqlite';
 import {extractLessonText} from './scripts/lesson-text.mjs';
 import {localIdentity, sharedAdmin} from './identity.mjs';
@@ -202,6 +206,27 @@ async function adminAccount(token) {
   const {account}=await response.json();
   return account?.email===sharedAdmin&&account?.role==='admin'?account:null;
 }
+const runReportCommand=promisify(execFile);
+
+async function reportPreviewPages(pdf) {
+  const directory=await mkdtemp(join(tmpdir(),'lejek-report-'));
+  try {
+    const input=join(directory,'report.pdf');
+    await writeFile(input,pdf);
+    await runReportCommand('pdftoppm',['-jpeg','-r','125',input,join(directory,'page')],{timeout:20000});
+    const files=(await readdir(directory)).filter(name=>/^page-\d+\.jpg$/.test(name))
+      .sort((first,second)=>Number.parseInt(first.slice(5),10)-Number.parseInt(second.slice(5),10));
+    if (!files.length) throw new Error('Nie znaleziono stron raportu');
+    const pages=[];
+    for (const file of files) {
+      pages.push('data:image/jpeg;base64,'+(await readFile(join(directory,file))).toString('base64'));
+    }
+    return pages;
+  } finally {
+    await rm(directory,{recursive:true,force:true});
+  }
+}
+
 let activeReportPdfs=0;
 async function downloadReportPdf(response,url) {
   const report=await response.json();
@@ -221,6 +246,9 @@ async function downloadReportPdf(response,url) {
       child.on('close',code=>code===0?resolve(Buffer.concat(chunks)):reject(new Error('Błąd generatora PDF')));
       child.stdin.end(JSON.stringify(report));
     });
+    if (url.searchParams.get('preview')==='pages') {
+      return Response.json({pages:await reportPreviewPages(pdf)},{headers});
+    }
     const slug=report.salons.length===1?report.salons[0].salon.toLowerCase().replaceAll('ł','l').normalize('NFD')
       .replace(/[^\p{ASCII}]/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100):'';
     const filename=daily?'bieg-wyzej-raport-dzienny-'+(slug||'wszystkie-salony')+'-'+report.reportDay
@@ -231,7 +259,7 @@ async function downloadReportPdf(response,url) {
       ...(daily?{'X-Lejek-Report-Layout':'daily-plans'}:{})});
   } catch (error) {
     console.error('Eksport PDF:',error.message);
-    return Response.json({error:'Nie udało się przygotować PDF.'},{status:500,headers});
+    return Response.json({error:url.searchParams.get('preview')==='pages'?'Nie udało się przygotować podglądu raportu.':'Nie udało się przygotować PDF.'},{status:500,headers});
   } finally {
     activeReportPdfs--;
   }
