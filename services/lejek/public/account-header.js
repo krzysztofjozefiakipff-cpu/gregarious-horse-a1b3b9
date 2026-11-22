@@ -91,6 +91,10 @@ async function playFoxAudio(current) {
 }
 
 async function speakFoxAnswer(message,button) {
+  if (foxRecording) {
+    stopFoxRecording();
+    foxStatus('');
+  }
   if (foxSpeaking?.button===button) {
     if (foxSpeaking.ready) return playFoxAudio(foxSpeaking);
     stopFoxSpeech();
@@ -121,6 +125,8 @@ async function speakFoxAnswer(message,button) {
 
 function releaseFoxRecording(recording) {
   clearTimeout(recording.timer);
+  clearInterval(recording.speechTimer);
+  if (recording.context && recording.context.state!=='closed') void recording.context.close().catch(()=>{});
   recording.stream?.getTracks().forEach(track=>track.stop());
 }
 
@@ -166,29 +172,54 @@ async function sendFoxRecording(recording,blob) {
   }
 }
 
-foxAssistantMic.onclick=async()=>{
-  if (foxAssistantForm.querySelector('button[type="submit"]').disabled) return;
-  if (foxRecording?.recorder?.state==='recording') {
-    foxRecording.recorder.stop();
-    foxAssistantMic.textContent='Anuluj';
-    foxStatus('Przetwarzam nagranie…','thinking');
-    return;
-  }
-  if (foxRecording) {
-    stopFoxRecording();
-    foxStatus('');
-    return;
-  }
+function watchFoxSpeech(recording) {
+  const analyser=recording.context.createAnalyser();
+  analyser.fftSize=1024;
+  recording.context.createMediaStreamSource(recording.stream).connect(analyser);
+  const samples=new Float32Array(analyser.fftSize);
+  let noiseFloor=.006;
+  let activeSince=null;
+  let lastSound=0;
+  recording.speechTimer=setInterval(()=>{
+    analyser.getFloatTimeDomainData(samples);
+    let power=0;
+    for (const sample of samples) power+=sample*sample;
+    const level=Math.sqrt(power/samples.length);
+    const now=performance.now();
+    if (level>Math.max(.014,noiseFloor*2.6)) {
+      activeSince??=now;
+      lastSound=now;
+      if (!recording.heardSpeech&&now-activeSince>=120) {
+        recording.heardSpeech=true;
+        foxAssistantMic.textContent='Zakończ i wyślij';
+        foxStatus('Słucham… Wyślę pytanie po chwili ciszy.','listening');
+      }
+    } else {
+      activeSince=null;
+      if (!recording.heardSpeech) noiseFloor=noiseFloor*.94+level*.06;
+    }
+    if (recording.heardSpeech&&now-lastSound>=1250&&recording.recorder.state==='recording') recording.recorder.stop();
+  },40);
+}
+
+async function startFoxRecording(automatic=false) {
+  if (foxRecording||!foxAssistantRole||foxAssistantForm.querySelector('button[type="submit"]').disabled) return;
   if (!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder) {
     foxStatus('Ten widok nie udostępnia mikrofonu. Otwórz biegwyzej.pl bezpośrednio w Safari lub użyj dyktowania na klawiaturze.');
     return;
   }
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if (automatic&&!AudioContextClass) return;
   stopFoxSpeech();
-  const recording={};
+  const recording={automatic};
   foxRecording=recording;
   foxAssistantMic.textContent='Anuluj';
   foxStatus('Oczekuję na dostęp do mikrofonu…');
   try {
+    if (automatic) {
+      recording.context=new AudioContextClass();
+      void recording.context.resume().catch(()=>{});
+    }
     recording.stream=await navigator.mediaDevices.getUserMedia({audio:true});
     if (foxRecording!==recording||!foxAssistant.open) {
       releaseFoxRecording(recording);
@@ -206,11 +237,22 @@ foxAssistantMic.onclick=async()=>{
       foxStatus('Nagrywanie zostało przerwane. Spróbuj ponownie.');
     };
     recorder.start();
+    if (automatic) {
+      watchFoxSpeech(recording);
+      foxStatus('Powiedz pytanie albo zacznij pisać.','listening');
+    } else {
+      foxAssistantMic.textContent='Zakończ i wyślij';
+      foxStatus('Słucham. Po zadaniu pytania wybierz „Zakończ i wyślij”.','listening');
+    }
     recording.timer=setTimeout(()=>{
-      if (foxRecording===recording&&recorder.state==='recording') recorder.stop();
+      if (foxRecording!==recording||recorder.state!=='recording') return;
+      if (automatic&&!recording.heardSpeech) {
+        stopFoxRecording();
+        foxStatus('Możesz wpisać pytanie lub ponownie włączyć mikrofon.');
+      } else {
+        recorder.stop();
+      }
     },20000);
-    foxAssistantMic.textContent='Zakończ i wyślij';
-    foxStatus('Słucham. Po zadaniu pytania wybierz „Zakończ i wyślij”.','listening');
   } catch (error) {
     if (foxRecording!==recording) return;
     stopFoxRecording();
@@ -218,7 +260,33 @@ foxAssistantMic.onclick=async()=>{
       ?'Dostęp do mikrofonu jest zablokowany. Na iPhonie otwórz stronę w Safari i w ustawieniach witryny zezwól na mikrofon.'
       :'Mikrofon jest niedostępny. Możesz użyć dyktowania na klawiaturze.');
   }
+}
+
+foxAssistantMic.onclick=()=>{
+  if (foxRecording?.recorder?.state==='recording'&&(!foxRecording.automatic||foxRecording.heardSpeech)) {
+    foxRecording.recorder.stop();
+    return;
+  }
+  if (foxRecording) {
+    stopFoxRecording();
+    foxStatus('');
+    return;
+  }
+  void startFoxRecording();
 };
+
+foxAssistantQuestion.addEventListener('input',()=>{
+  if (!foxRecording) return;
+  stopFoxRecording();
+  foxStatus('');
+});
+
+document.addEventListener('visibilitychange',()=>{
+  if (document.visibilityState==='hidden'&&foxRecording) {
+    stopFoxRecording();
+    foxStatus('');
+  }
+});
 
 foxAssistant.addEventListener('close',()=>{
   stopFoxSpeech();
@@ -228,7 +296,11 @@ foxAssistant.addEventListener('close',()=>{
   }
 });
 
-foxAssistantOpen.onclick=()=>foxAssistant.showModal();
+foxAssistantOpen.onclick=()=>{
+  foxAssistant.showModal();
+  if (window.matchMedia('(pointer: fine)').matches) foxAssistantQuestion.focus();
+  if (!foxAssistantQuestion.value) void startFoxRecording(true);
+};
 
 function appendFoxMessage(speaker,message,citations=[]) {
   const row=document.createElement('p');
