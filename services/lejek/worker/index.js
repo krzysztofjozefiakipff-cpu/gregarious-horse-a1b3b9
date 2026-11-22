@@ -45,6 +45,27 @@ function compareSalesCounts(a,b) {
   return orders||registrations||invoices||reviews;
 }
 
+async function loadPlanActivity(db,first,last,scope,params,includeDrafts=true) {
+  const results=`SELECT person,day,counters,0 AS draft FROM daily_results
+    WHERE day BETWEEN ? AND ? AND ${scope} AND ${includedDailyResult}`;
+  const args=[first,last,...params];
+  if (!includeDrafts) return list(db,results+' ORDER BY day,person',...args);
+  const rows=await list(db,`${results}
+    UNION ALL
+    SELECT person,day,rows AS counters,1 AS draft FROM daily_drafts d
+    WHERE day BETWEEN ? AND ? AND ${scope}
+      AND NOT EXISTS (SELECT 1 FROM daily_results r WHERE r.person=d.person AND r.day=d.day)
+      AND NOT EXISTS (SELECT 1 FROM daily_exceptions e WHERE e.person=d.person AND e.day=d.day AND e.kind<>'rejected')
+      AND NOT EXISTS (SELECT 1 FROM work_calendar c WHERE c.person=d.person AND c.day=d.day AND c.status='approved')
+      AND NOT EXISTS (SELECT 1 FROM archived_users a WHERE a.email=${resultAddress('d')})
+    ORDER BY day,person`,...args,...args);
+  return rows.flatMap(row=>{
+    if (!row.draft) return [row];
+    const draft=JSON.parse(row.counters);
+    return isSalonWorkday(row.day)&&validDailyRows(draft)?[{...row,counters:dailyCounters(draft)}]:[];
+  });
+}
+
 const normalizeWalkIn=rows=>{rows[0][1]=rows[0][2]=rows[0][0];};
 const insertDailyResult=`INSERT INTO daily_results (person,day,counters)
   SELECT ?1,?2,?3
@@ -499,12 +520,19 @@ async function handle(request, env, buildDailyReport=false) {
       const archivedActivity=new Map();
       const sellerSalons=new Map(sellers.map(seller=>[seller.id,seller.salon]));
       const totals=new Map(salons.map(({salon})=>[salon,[0,0,0,0]]));
-      const daily=await list(db,'SELECT person,counters FROM daily_results WHERE substr(day,1,7)=? AND day<=? AND '+scope+' AND '+includedDailyResult,month,localDay(),...params);
+      const draftCounts=new Map();
+      const through=[month+'-31',localDay()].sort()[0];
+      const daily=await loadPlanActivity(db,month+'-01',through,scope,params,!historyView);
+
       for (const row of daily) {
         const total=totals.get(sellerSalons.get(row.person));
         if (!total) continue;
         const counts=salesCounts(JSON.parse(row.counters));
         counts.forEach((value,i)=>{total[i]+=value;});
+        if (row.draft) {
+          const salon=sellerSalons.get(row.person);
+          draftCounts.set(salon,(draftCounts.get(salon)??0)+1);
+        }
         const seller=sellerById.get(row.person);
         if (historyView&&seller.accountStatus==='inactive') {
           if (!archivedActivity.has(row.person)) {
@@ -578,12 +606,12 @@ async function handle(request, env, buildDailyReport=false) {
         const configured=automatic.map((_,index)=>Boolean(manual)||planTeam.some(person=>person.targets[index]!=null));
         const targets=manual?JSON.parse(manual.targets):automatic;
         if (period) {
-          plans.push({salon,configured,targets,actuals:totals.get(salon)});
+          plans.push({salon,configured,targets,actuals:totals.get(salon),draftCount:draftCounts.get(salon)??0});
           continue;
         }
         plans.push({salon,automatic,sourceRates,sourceHistoryRates,configured,targets,override,direct:Boolean(direct),protected:Boolean(direct?.protected),
           change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
-          contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
+          contributors,actuals:totals.get(salon),draftCount:draftCounts.get(salon)??0,editable:Boolean(approvals&&managers.length),managers,
           manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
           team:team.map(({version,...person})=>{
             const personal=personalHistory.get(person.id)??[];
@@ -669,7 +697,7 @@ async function handle(request, env, buildDailyReport=false) {
     const {firstName,brand:headerBrand,groupBrand,dealer:brand}=await loadAccountHeader(db,user,groupName??null);
     const accountHeader={firstName,brand:headerBrand};
     if (path==='/api/daily') {
-      const daily = await list(db,'SELECT person,day,counters FROM daily_results WHERE substr(day,1,7) IN ('+placeholders+') AND '+scope+' AND '+includedDailyResult,...months,...params);
+      const daily=await loadPlanActivity(db,months[0]+'-01',[months.at(-1)+'-31',localDay()].sort()[0],scope,params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('plans','plans.month'),...months,...params);
       if (period&&months[0]>localDay().slice(0,7)&&!plans.length&&!reviewPlans.length&&
           !funnelPlans.some(row=>JSON.parse(row.targets).some(target=>target!=null)))

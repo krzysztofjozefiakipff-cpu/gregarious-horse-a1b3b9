@@ -9,6 +9,7 @@ const reportPercent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFracti
 let reportRevision=0;
 let reportFilterRevision=0;
 let reportCsv;
+let reportSignature;
 
 function reportElement(tag,label) {
   const node=document.createElement(tag);
@@ -458,29 +459,49 @@ function renderLiveBriefingReport(report,selectedSalon) {
   reportExport.disabled=!salons.length;
 }
 
-reportForm.onsubmit=async event=>{
+reportForm.onsubmit=event=>{
   event.preventDefault();
+  void loadManagementReport();
+};
+
+function refreshOpenManagementReport(current) {
+  if (!reportCsv||reportExport.disabled||reportPdfExport.disabled) return;
+  return loadManagementReport({silent:true,current});
+}
+
+async function loadManagementReport({silent=false,current}={}) {
   const {path,query,salon,liveBriefing}=reportSelection();
   const revision=++reportRevision;
-  reportExport.disabled=true;
-  reportResults.replaceChildren();
-  reportStatus.textContent='Wczytywanie raportu…';
+  if (!silent) {
+    reportExport.disabled=true;
+    reportResults.replaceChildren();
+    reportStatus.textContent='Wczytywanie raportu…';
+  }
   try {
     const report=await api(path+'?'+query);
-    if (revision!==reportRevision) return;
+    if (revision!==reportRevision||silent&&(!current()||reportPdfExport.disabled)) return;
+    const {generatedAt,...content}=report;
+    const signature=JSON.stringify([salon,content]);
+    if (silent&&signature===reportSignature) return;
+    reportSignature=signature;
+    const open=[...reportResults.querySelectorAll('details')].map(detail=>detail.open);
+    reportResults.replaceChildren();
     const date=dateLabel(liveBriefing?report.today:report.through,{day:'numeric',month:'long',year:'numeric'});
     const generated=report.generatedAt?new Intl.DateTimeFormat('pl-PL',{timeZone:'Europe/Warsaw',hour:'2-digit',minute:'2-digit'}).format(new Date(report.generatedAt)):null;
     reportStatus.textContent=monthLabel(report.month)+' · wyniki do '+date+(generated?' · wygenerowano o '+generated:'');
     if (liveBriefing) renderLiveBriefingReport(report,salon);
     else renderManagementReport(report,salon);
+    if (silent) {
+      [...reportResults.querySelectorAll('details')].forEach((detail,index)=>{detail.open=Boolean(open[index]);});
+    }
     const context={...Object.fromEntries(query),salon,liveBriefing};
     reportResults.prepend(
       assistantControl(liveBriefing?'Podsumuj odprawę':'Przeanalizuj raport',()=>({...context,feature:liveBriefing?'briefing':'report'}))
     );
   } catch (error) {
-    if (revision===reportRevision) reportStatus.textContent=error.message;
+    if (!silent&&revision===reportRevision) reportStatus.textContent=error.message;
   }
-};
+}
 
 reportExport.onclick=()=>{
   if (!reportCsv||reportExport.disabled) return;

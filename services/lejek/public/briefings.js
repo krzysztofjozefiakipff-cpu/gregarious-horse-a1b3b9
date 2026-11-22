@@ -5,6 +5,7 @@ const briefingPdf=briefingHost.querySelector('#briefing-pdf');
 const briefingSalon=briefingHost.querySelector('#briefing-salon');
 const briefingSalesLabels=['Zamówienia','Faktury','Rejestracje','Opinie Google'];
 let briefingLoadVersion=0;
+let briefingSignature;
 let briefingReady=false;
 let briefingDownloading=false;
 
@@ -82,6 +83,7 @@ function briefingResultEditor(person,report,updateActuals,resolve=false) {
   const update=()=>{
     const values=readRows();
     const changed=JSON.stringify(values)!==baseline;
+    form.toggleAttribute('data-unsaved',changed||fields.flat().some(field=>field.validity.badInput));
     save.textContent=resolve?'Zapisz i potwierdź wykonanie':changed
       ?(person.review.confirmed?'Zapisz zmiany i potwierdź ponownie':'Zapisz zmiany i potwierdź')
       :'Potwierdź wykonanie';
@@ -253,12 +255,15 @@ function briefingPreviousResolution(person,report,renderActuals) {
       save.disabled=false;
     }
   };
+  const initialChoice=person.review.status==='draft'?'work':'';
+  const initialAbsence=absence.value;
   const update=()=>{
+    section.toggleAttribute('data-unsaved',choice.value!==initialChoice||absence.value!==initialAbsence);
     work.hidden=choice.value!=='work';
     absenceForm.hidden=choice.value!=='off';
   };
-  choice.value=person.review.status==='draft'?'work':'';
-  choice.onchange=update;
+  choice.value=initialChoice;
+  choice.onchange=absence.onchange=update;
   update();
   section.append(label,work,absenceForm);
   return section;
@@ -345,6 +350,7 @@ function briefingTodayStep(person,report,canEdit,onDraftChange) {
     const baseline=fields.map(field=>field.value);
     const update=()=>{
       const dirty=fields.some((field,i)=>field.value!==baseline[i]||field.validity.badInput);
+      save.form.toggleAttribute('data-unsaved',dirty);
       save.disabled=!dirty;
       if (accept) accept.disabled=dirty;
       onDraftChange(dirty);
@@ -382,6 +388,7 @@ function briefingForecast(person,report,canEdit,onDraftChange=()=>{}) {
   const save=briefingSave(form,'Zapisz prognozę',person,report,fields,'forecast');
   const update=()=>{
     const dirty=fields.some((field,i)=>field.value!==baseline[i]||field.validity.badInput);
+    form.toggleAttribute('data-unsaved',dirty);
     save.disabled=!dirty;
     onDraftChange(dirty);
   };
@@ -488,16 +495,29 @@ function renderBriefingSeller(person,report,open,salon) {
   return details;
 }
 
-async function loadBriefingPanel(message='',focusSeller) {
+async function loadBriefingPanel(message='',focusSeller,{silent=false,current}={}) {
+  const canUpdate=()=>!briefingDownloading&&(!current||current())
+    &&!briefingResults.querySelector('[data-unsaved]');
+  if (silent&&!canUpdate()) return;
   const version=++briefingLoadVersion;
-  briefingReady=false;
-  briefingPdf.disabled=true;
-  briefingStatus.textContent='Wczytywanie odprawy…';
+  if (!silent) {
+    briefingReady=false;
+    briefingPdf.disabled=true;
+    briefingStatus.textContent='Wczytywanie odprawy…';
+  }
   const open=new Set([...briefingResults.querySelectorAll('details[data-seller][open]')].map(row=>row.dataset.seller));
   const openTotals=new Set([...briefingResults.querySelectorAll('.briefing-salon-totals[open]')].map(row=>row.closest('article').dataset.salon));
+  const openSections=new Map([...briefingResults.querySelectorAll('details[data-seller][open]')].map(row=>[
+    row.dataset.seller,
+    new Set([...row.querySelectorAll('details[open] > summary')].map(summary=>summary.textContent))
+  ]));
   try {
     const report=await api('/api/daily-briefing');
-    if (version!==briefingLoadVersion||briefingHost.hidden) return;
+    if (version!==briefingLoadVersion||briefingHost.hidden||silent&&!canUpdate()) return;
+    const {generatedAt,...content}=report;
+    const signature=JSON.stringify(content);
+    if (silent&&signature===briefingSignature) return;
+    briefingSignature=signature;
     const previous=briefingSalon.selectedIndex<0?null:briefingSalon.value;
     const salons=report.salons.map(row=>row.salon);
     briefingSalon.replaceChildren(...salons.map(salon=>new Option(salon,salon)));
@@ -532,7 +552,16 @@ async function loadBriefingPanel(message='',focusSeller) {
       card.append(heading);
       if (salon.people.length) card.append(assistantControl('Podsumuj odprawę',()=>({feature:'briefing',salon:salon.salon})));
       if (!salon.people.length) card.append(reportElement('p','Brak handlowców do odprawy.'));
-      for (const person of salon.people) card.append(renderBriefingSeller(person,report,open.has(String(person.id)),salon.salon));
+      for (const person of salon.people) {
+        const row=renderBriefingSeller(person,report,open.has(String(person.id)),salon.salon);
+        const sections=openSections.get(String(person.id));
+        if (sections) {
+          for (const summary of row.querySelectorAll('details > summary')) {
+            if (sections.has(summary.textContent)) summary.parentElement.open=true;
+          }
+        }
+        card.append(row);
+      }
       if (salon.people.length) card.append(totals);
       briefingResults.append(card);
     }
@@ -545,7 +574,7 @@ async function loadBriefingPanel(message='',focusSeller) {
       if (row?.open&&!row.closest('article').hidden) focusBriefingStep(row);
     }
   } catch(error) {
-    if (version===briefingLoadVersion) briefingStatus.textContent=error.message;
+    if (!silent&&version===briefingLoadVersion) briefingStatus.textContent=error.message;
   }
 }
 

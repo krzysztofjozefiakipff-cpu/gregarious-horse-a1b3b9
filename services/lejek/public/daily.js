@@ -725,6 +725,8 @@ function mountResultsCard(containerId) {
 const todayResults=mountResultsCard('today-results');
 const periodResults=mountResultsCard('period-results');
 
+const draftResultsNote='Wyniki obejmują zapisane szkice.';
+
 function renderResultsCard(container,metrics,missingTarget) {
   for (const cell of container.querySelectorAll('[data-seller-result]')) {
     const index=Number(cell.dataset.sellerResult);
@@ -793,7 +795,10 @@ async function loadSellerPeriod({silent=false}={}) {
     if (revision!==periodRevision||silent&&(writes!==writeRevision||!canAutoRefreshSeller())) return;
     renderPlans(snapshot,month,type);
     renderRanking(snapshot.ranking);
-    const message=periodNotice(month,type,snapshot.today.slice(0,7));
+    const [year,number]=month.split('-').map(Number);
+    const end=monthStart(year,number-1+periodLength[type]).slice(0,7);
+    const hasDraft=snapshot.daily.some(row=>row.draft&&row.day.slice(0,7)>=month&&row.day.slice(0,7)<end);
+    const message=[periodNotice(month,type,snapshot.today.slice(0,7)),hasDraft?draftResultsNote:''].filter(Boolean).join(' ');
     $('#seller-period-notice-text').textContent=message;
     $('#seller-period-notice').hidden=!message;
     status.hidden=true;
@@ -1442,13 +1447,14 @@ function renderToday(records,metrics) {
   }
 
   renderResultsCard(todayResults,metrics,'Brak planu na ten miesiąc');
+  $('#today-draft-results-note').hidden=!data.daily.some(row=>row.draft&&row.day.startsWith(today.slice(0,7)));
   $('#life-headline').textContent=data.salonLifeHeadline??'Zobacz wpisy i ankietę zespołu';
 }
 
 function renderSeller() {
   const {personal}=data;
   labelPanel('seller');
-  const records=Object.fromEntries(data.daily.map(row=>[row.day,JSON.parse(row.counters)]));
+  const records=Object.fromEntries(data.daily.filter(row=>!row.draft).map(row=>[row.day,JSON.parse(row.counters)]));
   const next=personal.missing[0];
   const day=showTodayEntry?data.today:next??data.today;
   const exception=personal.exceptions[day];
@@ -1619,8 +1625,9 @@ function aggregateSalonPerformance(months,now) {
     total+=days;
     for (const plan of plans) {
       if (!plansBySalon.has(plan.salon)) plansBySalon.set(plan.salon,{salon:plan.salon,
-        actuals:[0,0,0,0],targets:[0,0,0,0],expected:[0,0,0,0],monthsWithPlan:[0,0,0,0]});
+        actuals:[0,0,0,0],targets:[0,0,0,0],expected:[0,0,0,0],monthsWithPlan:[0,0,0,0],draftCount:0});
       const result=plansBySalon.get(plan.salon);
+      result.draftCount+=plan.draftCount??0;
       for (const [index,actual] of plan.actuals.entries()) {
         result.actuals[index]+=actual;
         if (!plan.configured[index]) continue;
@@ -1655,7 +1662,7 @@ function selectedManagementMonth() {
   return managementYear.value+'-'+(managementPeriodType.value==='year'?'01':managementQuarter.value);
 }
 
-async function renderManagementPerformance() {
+async function renderManagementPerformance({silent=false,currentView}={}) {
   const {view,team}=performanceView;
   $('#management-filter-salon').textContent=view.salons.length>1?'Wszystkie salony':view.salons[0]?.salon??'Brak salonu';
   const type=managementPeriodType.value;
@@ -1683,25 +1690,31 @@ async function renderManagementPerformance() {
     renderSalonSummary(view,team);
     return;
   }
-  status.textContent='Wczytywanie okresu…';
-  $('#salon-pace-key').hidden=true;
-  $('#salon-results').replaceChildren();
+  if (!silent) {
+    status.textContent='Wczytywanie okresu…';
+    $('#salon-pace-key').hidden=true;
+    $('#salon-results').replaceChildren();
+  }
   try {
     const key=type+'/'+month;
-    if (performanceCache?.data!==data||performanceCache.key!==key) {
-      performanceCache={data,key,request:api('/api/salon-plans?'+new URLSearchParams({month,period:type}))};
+    if (silent||performanceCache?.data!==data||performanceCache.key!==key) {
+      const signature=performanceCache?.key===key?performanceCache.signature:null;
+      performanceCache={data,key,signature,request:api('/api/salon-plans?'+new URLSearchParams({month,period:type}))};
     }
     const request=performanceCache.request;
     const {months}=await request.catch(error=>{
       if (performanceCache?.request===request) performanceCache=null;
       throw error;
     });
-    if (revision!==performanceRevision) return;
+    if (revision!==performanceRevision||silent&&!currentView()) return;
+    const signature=JSON.stringify(months);
+    if (silent&&performanceCache.signature===signature) return;
+    performanceCache.signature=signature;
     status.textContent='';
     const completed=months.at(-1).month<current;
     renderSalonSummary(view,[],{...aggregateSalonPerformance(months,data.today),completed});
   } catch (error) {
-    if (revision===performanceRevision) status.textContent=error.message;
+    if (!silent&&revision===performanceRevision) status.textContent=error.message;
   }
 }
 
@@ -1742,6 +1755,7 @@ function renderSalonSummary(view,team=[],period=null) {
   const completed=Boolean(period?.completed);
   const salons=new Set(view.salons.map(({salon})=>salon));
   const plans=(period?.plans??data.salonPerformance).filter(plan=>salons.has(plan.salon));
+  if (plans.some(plan=>plan.draftCount>0)) results.append(reportElement('p',draftResultsNote));
   const sellerSalons=new Map(view.sellers.map(seller=>[seller.id,seller.salon]));
   const activityBySalon=new Map(plans.map(plan=>[plan.salon,columns.map(()=>0)]));
   for (const {person,day,counters} of period?[]:view.daily) {
@@ -1909,8 +1923,10 @@ function renderManagerDashboard(view,detailOnly=false) {
   const month=today.slice(0,7);
   const [year,monthNumber]=month.split('-').map(Number);
   const entries=new Map();
+  const draftPeople=new Set();
   for (const row of daily) {
     if (!row.day.startsWith(month)||row.day>today) continue;
+    if (row.draft) draftPeople.add(row.person);
     if (!entries.has(row.person)) entries.set(row.person,[]);
     entries.get(row.person).push([row.day,JSON.parse(row.counters)]);
   }
@@ -1930,14 +1946,15 @@ function renderManagerDashboard(view,detailOnly=false) {
       view.absenceAdjustments?.[seller.id+'/'+month]);
     const weakest=metrics.filter(metric=>metric.delta<0)
       .sort((a,b)=>a.actual/a.goal-b.actual/b.goal||a.delta-b.delta)[0];
-    return {seller,status,metrics,weakest,orders:metrics.find(metric=>metric.index===7)};
+    return {seller,status,metrics,weakest,hasDraft:draftPeople.has(seller.id),orders:metrics.find(metric=>metric.index===7)};
   });
   if (detailOnly) return team;
   const list=$('#manager-team-list');
+  const open=new Set([...list.querySelectorAll('details[open]')].map(row=>row.id));
   list.replaceChildren();
   if (!team.length) list.textContent='Brak aktywnych handlowców.';
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
-  for (const {seller,status,metrics,weakest,orders} of team) {
+  for (const {seller,status,metrics,weakest,orders,hasDraft} of team) {
     const detail=document.createElement('details');
     const summary=document.createElement('summary');
     const name=document.createElement('strong');
@@ -1950,7 +1967,7 @@ function renderManagerDashboard(view,detailOnly=false) {
     badge.className='status-badge '+(seller.accountStatus==='active'?'status-positive':'status-negative');
     badge.textContent=accountLabels[seller.accountStatus];
     badges.append(badge);
-    summary.append(name,badges,progress+' · '+status+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
+    summary.append(name,badges,progress+' · '+status+(hasDraft?' · Wyniki ze szkicem':'')+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
     const figures=document.createElement('ul');
     figures.className='team-metrics';
     figures.setAttribute('role','list');
@@ -1971,6 +1988,7 @@ function renderManagerDashboard(view,detailOnly=false) {
       figures.append(row);
     }
     detail.id='zespol-handlowiec-'+seller.id;
+    detail.open=open.has(detail.id);
     detail.append(summary,figures);
     if (view.role==='manager'&&data.role==='manager'&&seller.accountStatus!=='inactive') {
       const link=document.createElement('a');
@@ -2564,6 +2582,29 @@ function salonGoalsEditor(plan,month) {
   return section;
 }
 
+function updateSalonPlanTotals(card,plan) {
+  const totals=card.querySelector('.planning-totals');
+  [...totals.querySelectorAll('dd')].forEach((cell,index)=>{
+    cell.textContent=plan.actuals[index]+' / '+plan.targets[index]+' · suma celów: '+plan.automatic[index];
+    cell.className=plan.actuals[index]>=plan.targets[index]?'ahead':'behind';
+  });
+  card.querySelector('[data-plan-draft-note]').hidden=!plan.draftCount;
+}
+
+async function refreshSalonPlanTotals(current) {
+  const month=salonPlanMonth.value;
+  const revision=salonPlanRevision;
+  if (!month) return;
+  const {plans}=await api('/api/salon-plans?month='+encodeURIComponent(month));
+  if (revision!==salonPlanRevision||!current()) return;
+  const cards=new Map([...$('#salon-plan-results').querySelectorAll('article[data-salon]')]
+    .map(card=>[card.dataset.salon,card]));
+  for (const plan of plans) {
+    const card=cards.get(plan.salon);
+    if (card) updateSalonPlanTotals(card,plan);
+  }
+}
+
 async function loadSalonPlans() {
   const revision=++salonPlanRevision;
   const month=salonPlanMonth.value;
@@ -2610,12 +2651,10 @@ async function loadSalonPlans() {
       if (plan.team.length) state.textContent+=' · Zatwierdzono '+approved+' z '+plan.team.length+' planów handlowców';
       const totals=document.createElement('dl');
       totals.className='planning-totals';
-      for (const [index,label] of salonPlanMetrics.entries()) {
+      for (const label of salonPlanMetrics) {
         const term=document.createElement('dt');
         const value=document.createElement('dd');
         term.textContent=label;
-        value.textContent=plan.actuals[index]+' / '+plan.targets[index]+' · suma celów: '+plan.automatic[index];
-        value.className=plan.actuals[index]>=plan.targets[index]?'ahead':'behind';
         const item=document.createElement('div');
         item.append(term,value);
         totals.append(item);
@@ -2624,11 +2663,14 @@ async function loadSalonPlans() {
       overview.className='planning-compact';
       const overviewTitle=document.createElement('summary');
       overviewTitle.textContent='Wyniki i cele salonu';
-      overview.append(overviewTitle,state,totals);
+      const draftNote=reportElement('p',draftResultsNote);
+      draftNote.dataset.planDraftNote='';
+      overview.append(overviewTitle,state,draftNote,totals);
       card.append(title,salonGoalsEditor(plan,month),overview);
+      updateSalonPlanTotals(card,plan);
       if (plan.contributors.length) {
         const note=document.createElement('p');
-        note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zatwierdzone działania liczą się do wyników salonu.';
+        note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zapisane działania liczą się do wyników salonu.';
         card.append(note);
       }
       const weights=plan.team.map(person=>person.sourceProfile?.some(Boolean)?person.plannedWorkdays??1:0);
@@ -3355,7 +3397,10 @@ const navigation=panelNavigation(()=>{
     groupPreviewName=group;
     showView();
   } else if (data.role==='seller') selectSellerTab();
-  else selectManagementView();
+  else {
+    selectManagementView();
+    void autoRefreshManagement();
+  }
   if (location.hash==='#zespol') selectedTeamSeller();
 });
 
@@ -3390,20 +3435,27 @@ for (const panel of historyPanels) {
   const status=panel.querySelector('.history-status');
   const results=panel.querySelector('.history-results');
   let revision=0;
-  const load=async()=>{
+  let signature;
+  const load=async({silent=false}={})=>{
     const request=++revision;
     const month=input.value;
-    results.replaceChildren();
-    status.textContent='';
+    if (!silent) {
+      results.replaceChildren();
+      status.textContent='';
+    }
     if (!month) return;
     if (!input.validity.valid || month>data.today.slice(0,7)) {
       status.textContent='Wybierz bieżący lub wcześniejszy miesiąc.';
       return;
     }
-    status.textContent='Wczytywanie…';
+    if (!silent) status.textContent='Wczytywanie…';
     try {
       const response=await api('/api/salon-plans?month='+encodeURIComponent(month)+'&history=1');
-      if(request!==revision) return;
+      if (request!==revision||silent&&(!panel.open||!panel.getClientRects().length||!canRefreshManagement())) return;
+      const next=JSON.stringify(response);
+      if (silent&&next===signature) return;
+      signature=next;
+      results.replaceChildren();
       status.textContent=monthLabel(month)+' · wykonanie / cel miesięczny';
       const plans=response.plans.filter(plan=>historySalons.has(plan.salon));
       for (const plan of plans) {
@@ -3435,7 +3487,7 @@ for (const panel of historyPanels) {
       }
       if (!plans.length) results.textContent='Brak wyników dla wybranych salonów.';
     } catch (error) {
-      if (request===revision) status.textContent=error.message;
+      if (!silent&&request===revision) status.textContent=error.message;
     }
   };
   input.addEventListener('change',load);
@@ -3444,7 +3496,7 @@ for (const panel of historyPanels) {
     input.value ||= input.dataset.previousMonth;
     load();
   });
-  panel.reloadHistory=()=>{if(panel.open && input.value) load();};
+  panel.reloadHistory=options=>{if(panel.open && input.value) return load(options);};
 }
 
 async function loadReopenDays(seller) {
@@ -3490,7 +3542,7 @@ function sellerDetailUrl(person,from) {
   return '/daily.html?'+params;
 }
 
-function renderSellerDetail() {
+function renderSellerDetail({refreshDays=true}={}) {
   const section=$('#seller-detail');
   section.hidden=false;
   const team=detailParams.get('powrot')==='zespol'&&['manager','group'].includes(data.role);
@@ -3509,7 +3561,7 @@ function renderSellerDetail() {
   const [person]=renderManagerDashboard({...data,sellers:[seller]},true);
   labelPanel(data.role);
   $('#seller-detail-heading').textContent=seller.name+' · praca na lejku';
-  $('#seller-detail-period').textContent=seller.salon+' · '+monthLabel(data.today.slice(0,7))+' · '+person.status;
+  $('#seller-detail-period').textContent=seller.salon+' · '+monthLabel(data.today.slice(0,7))+' · '+person.status+(person.hasDraft?' · Wyniki ze szkicem':'');
   const tbody=$('#seller-detail-metrics');
   tbody.replaceChildren(...person.metrics.map(metric=>{
     const row=document.createElement('tr');
@@ -3529,7 +3581,7 @@ function renderSellerDetail() {
   $('#seller-detail-table').hidden=false;
   const reopenForm=$('#reopen-day-form');
   reopenForm.hidden=data.role!=='manager'||seller.accountStatus==='inactive';
-  if (!reopenForm.hidden) loadReopenDays(seller);
+  if (refreshDays&&!reopenForm.hidden) loadReopenDays(seller);
 }
 
 function userPreviewUrl(email,role) {
@@ -4048,7 +4100,7 @@ $('#charity').onsubmit=event=>{
 if (previewTarget) {
   $('#user-preview-banner').hidden=false;
 }
-const sellerRefreshInterval=30_000;
+const planRefreshInterval=10_000;
 let sellerRefreshInFlight=false;
 let lastSellerRefresh=0;
 
@@ -4083,9 +4135,97 @@ async function autoRefreshSeller() {
   }
 }
 
-document.addEventListener('visibilitychange',autoRefreshSeller);
-window.addEventListener('focus',autoRefreshSeller);
-window.addEventListener('online',autoRefreshSeller);
-window.addEventListener('pageshow',event=>{if(event.persisted) autoRefreshSeller();});
-window.setInterval(autoRefreshSeller,sellerRefreshInterval);
+let managementRefreshInFlight=false;
+let lastManagementRefresh=0;
+
+function visibleManagementView() {
+  if (detailSeller) return 'seller-detail';
+  if (!$('#daily-briefing').hidden) return 'briefing';
+  if (!$('#management-reports').hidden) return 'report';
+  if (salonPlans.open&&salonPlans.getClientRects().length) return 'plans';
+  if ($('#manager-team-view').getClientRects().length) return 'team';
+  if ($('[data-history="management"]').getClientRects().length&&$('#admin').dataset.function==='historia-planow') return 'history';
+  if ($('#salon-summary').getClientRects().length) return 'performance';
+  return '';
+}
+
+function canRefreshManagement() {
+  return data&&data.role!=='seller'&&document.visibilityState==='visible'
+    &&!busy&&!pendingWrites&&!explicitRefreshes
+    &&!document.activeElement?.matches('input, form select, textarea, [contenteditable="true"]')
+    &&!document.querySelector('dialog[open]');
+}
+
+function managementPlanSnapshot(snapshot) {
+  const {today,daily,teamDay,plans,funnelPlans,reviewPlans,sellers,salons,calendar,absenceAdjustments}=snapshot;
+  return JSON.stringify([today,daily,teamDay,plans,funnelPlans,reviewPlans,sellers,salons,calendar,absenceAdjustments]);
+}
+
+async function autoRefreshManagement() {
+  if (managementRefreshInFlight||Date.now()-lastManagementRefresh<1_000||!canRefreshManagement()) return;
+  const view=visibleManagementView();
+  if (!view) return;
+  managementRefreshInFlight=true;
+  lastManagementRefresh=Date.now();
+  const revision=refreshRevision;
+  const writes=writeRevision;
+  const current=()=>revision===refreshRevision&&writes===writeRevision&&canRefreshManagement()&&view===visibleManagementView();
+  try {
+    if (view==='briefing') {
+      await loadBriefingPanel('',undefined,{silent:true,current});
+      return;
+    }
+    if (view==='report') {
+      await refreshOpenManagementReport(current);
+      return;
+    }
+    if (view==='history') {
+      await $('[data-history="management"]').reloadHistory({silent:true});
+      return;
+    }
+    if (view==='plans') {
+      await refreshSalonPlanTotals(current);
+      return;
+    }
+    const snapshot=await loadDailySnapshot();
+    if (!current()) return;
+    const changed=managementPlanSnapshot(snapshot)!==managementPlanSnapshot(data);
+    if (view==='seller-detail') {
+      if (changed) {
+        data=snapshot;
+        renderSellerDetail({refreshDays:false});
+      }
+      return;
+    }
+    const plans=view==='performance'
+      ?(await api('/api/salon-plans?month='+snapshot.today.slice(0,7))).plans
+      :data.salonPerformance;
+    if (!current()) return;
+    if (changed||JSON.stringify(plans)!==JSON.stringify(data.salonPerformance)) {
+      data={...snapshot,salonPerformance:plans};
+      renderAdmin();
+    } else if (view==='performance') {
+      if ($('[data-history="management"]').getClientRects().length)
+        await $('[data-history="management"]').reloadHistory({silent:true});
+      if (managementPeriodType.value!=='month'||selectedManagementMonth()!==snapshot.today.slice(0,7)) {
+        await renderManagementPerformance({silent:true,currentView:current});
+      }
+    }
+  } catch {
+    // Keep the last displayed results until the next successful request.
+  } finally {
+    managementRefreshInFlight=false;
+  }
+}
+
+function refreshVisiblePlans() {
+  if (data?.role==='seller') void autoRefreshSeller();
+  else void autoRefreshManagement();
+}
+
+document.addEventListener('visibilitychange',refreshVisiblePlans);
+window.addEventListener('focus',refreshVisiblePlans);
+window.addEventListener('online',refreshVisiblePlans);
+window.addEventListener('pageshow',event=>{if(event.persisted) refreshVisiblePlans();});
+window.setInterval(refreshVisiblePlans,planRefreshInterval);
 refresh().catch(error=>{$('#load').textContent=error.message;});
