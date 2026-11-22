@@ -136,11 +136,10 @@ function showManagementPdf(file,endpoint,salon,title) {
 }
 
 function showReportFields() {
-  const {type,month,day,salon}=reportForm.elements;
+  const {type,month,day}=reportForm.elements;
   const daily=type.value==='daily';
   reportGet('#report-day-field').hidden=day.disabled=!daily;
   reportGet('#report-month-field').hidden=month.disabled=daily;
-  reportGet('#report-filter-salon').textContent=salon.selectedOptions[0]?.textContent||'Brak salonów';
   const date=daily?day.value:month.value;
   reportGet('#report-filter-period').textContent=!date?'Wybierz okres':daily?dateLabel(date):monthLabel(date);
 }
