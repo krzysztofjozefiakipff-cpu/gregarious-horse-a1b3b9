@@ -607,7 +607,7 @@ briefingPdf.onclick=async()=>{
     const endpoint='/api/daily-briefing?'+query;
     const file=await requestManagementPdf(endpoint);
     if (briefingHost.hidden) return;
-    showManagementPdf(file,endpoint,salon,'Raport odprawy','Wróć do odprawy');
+    showManagementPdf(file,endpoint,salon,'Raport odprawy');
     briefingStatus.textContent='';
   } catch(error) {
     briefingStatus.textContent=error.message;

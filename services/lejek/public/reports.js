@@ -42,9 +42,7 @@ const briefingPdfDialog=reportGet('#briefing-pdf-dialog');
 const briefingPdfShare=briefingPdfDialog.querySelector('#briefing-pdf-share');
 const briefingPdfDownload=briefingPdfDialog.querySelector('#briefing-pdf-download');
 const briefingPdfStatus=briefingPdfDialog.querySelector('#briefing-pdf-status');
-const briefingPdfOptions=briefingPdfDialog.querySelector('#briefing-pdf-options');
 const briefingPdfPreview=briefingPdfDialog.querySelector('#briefing-pdf-preview');
-const briefingPdfView=briefingPdfDialog.querySelector('#briefing-pdf-view');
 let briefingPdfAddress;
 
 briefingPdfDialog.onclose=()=>{
@@ -52,11 +50,7 @@ briefingPdfDialog.onclose=()=>{
   briefingPdfAddress=undefined;
   briefingPdfDownload.removeAttribute('href');
   briefingPdfShare.onclick=null;
-  briefingPdfPreview.onclick=null;
-  briefingPdfView.querySelector('iframe')?.remove();
-  briefingPdfDialog.classList.remove('previewing');
-  briefingPdfOptions.hidden=false;
-  briefingPdfView.hidden=true;
+  briefingPdfPreview.removeAttribute('href');
 };
 
 async function requestManagementPdf(endpoint) {
@@ -68,24 +62,16 @@ async function requestManagementPdf(endpoint) {
   return new File([await response.blob()],filename,{type:'application/pdf'});
 }
 
-function showManagementPdf(file,endpoint,salon,title,back) {
+function showManagementPdf(file,endpoint,salon,title) {
   briefingPdfDialog.setAttribute('aria-label',title);
   briefingPdfDialog.querySelector('h2').textContent=title;
-  briefingPdfView.querySelector('button').textContent=back;
   const shareData={files:[file]};
   briefingPdfAddress=URL.createObjectURL(file);
   briefingPdfDownload.href=briefingPdfAddress;
   briefingPdfDownload.download=file.name;
-  briefingPdfPreview.onclick=()=>{
-    const frame=reportElement('iframe');
-    frame.title=title;
-    frame.src=endpoint+'&disposition=inline';
-    briefingPdfOptions.hidden=true;
-    briefingPdfView.hidden=false;
-    briefingPdfDialog.classList.add('previewing');
-    briefingPdfView.append(frame);
-    briefingPdfView.querySelector('button').focus();
-  };
+  const preview=new URL(endpoint,location.href);
+  preview.searchParams.set('disposition','inline');
+  briefingPdfPreview.href=preview.href;
   briefingPdfDialog.querySelector('#briefing-pdf-scope').textContent=salon||'Wszystkie salony';
   briefingPdfShare.hidden=!(navigator.share&&navigator.canShare?.(shareData));
   briefingPdfShare.onclick=async()=>{
@@ -475,7 +461,7 @@ reportPdfExport.onclick=async ()=>{
     const file=await requestManagementPdf(endpoint);
     if (revision!==reportFilterRevision||reportGet('#management-reports').hidden) return;
     const title=liveBriefing?'Raport odprawy':reportForm.elements.type.selectedOptions[0].textContent;
-    showManagementPdf(file,endpoint,salon,title,'Wróć do raportów');
+    showManagementPdf(file,endpoint,salon,title);
   } catch (error) {
     if (revision===reportFilterRevision) reportStatus.textContent=error.message||'Nie udało się przygotować PDF.';
   } finally {
