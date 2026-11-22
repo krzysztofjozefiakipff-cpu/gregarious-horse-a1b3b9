@@ -67,7 +67,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
   const yesterday=new Date(Date.parse(today)-86400000).toISOString().slice(0,10);
   const month=today.slice(0,7);
   const [calendar,tracking]=await Promise.all([
-    list(db,`SELECT person,day,kind,status,NULL AS reason FROM work_calendar WHERE day<=? AND status IN ('approved','pending') AND `+scope+
+    list(db,`SELECT person,day,kind,status,NULL AS reason FROM work_calendar WHERE day<=date(?,'start of month','+1 month','-1 day') AND status IN ('approved','pending') AND `+scope+
       ` UNION ALL SELECT person,day,kind,CASE kind WHEN 'pending' THEN 'pending' ELSE 'approved' END,reason FROM daily_exceptions
       WHERE day<=? AND kind IN ('leave','training','zero','pending') AND `+scope,today,...params,today,...params),
     list(db,'SELECT person,start_day FROM daily_tracking WHERE '+scope,...params)

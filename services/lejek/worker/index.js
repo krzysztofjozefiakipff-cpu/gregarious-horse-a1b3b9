@@ -173,9 +173,42 @@ function lessonDrafts(text) {
   return lessons.sort((a,b)=>b.priority-a.priority).map(({priority,...lesson})=>lesson);
 }
 
-function displayLesson({title,topic,remember,question}) {
+function validLessonDraft(lesson) {
+  return lesson&&typeof lesson.title==='string'&&lesson.title.trim()&&lesson.title.length<=120&&
+    typeof lesson.topic==='string'&&lesson.topic.trim()&&lesson.topic.length<=650&&
+    typeof lesson.remember==='string'&&lesson.remember.trim()&&lesson.remember.length<=220;
+}
+
+async function generateAssistantLessons(text,filename,assist) {
+  const normalize=value=>value.replace(/\s+/g,' ').trim();
+  const sections=text.split('\f').flatMap((page,index)=>{
+    const content=normalize(page);
+    return content.match(/.{1,6000}(?:\s|$)|\S+/g)?.map(part=>({page:index+1,text:part.trim()}))??[];
+  });
+  if (sections.length>15) throw new Error('Document exceeds AI import limit');
+  const output=[];
+  for (let offset=0;offset<sections.length&&output.length<20;offset+=5) {
+    const excerpts=sections.slice(offset,offset+5);
+    const result=await assist('Ułóż do 5 krótkich lekcji produktowych lub sprzedażowych do zapamiętania. Zwróć JSON jako {"lessons":[{"title":"","topic":"","remember":"","excerpt":0,"quote":""}]}. excerpt to indeks fragmentu, licząc od zera. quote to dokładny cytat dowodzący treści. Limity znaków: title 120, topic 650, remember 220. Omijaj wrażliwe informacje i dane osobowe.',excerpts,true);
+    if (!Array.isArray(result?.lessons)) throw new Error('Invalid lessons');
+    for (const lesson of result.lessons.slice(0,5)) {
+      if (!validLessonDraft(lesson)||typeof lesson.quote!=='string') continue;
+      const excerpt=Number.isInteger(lesson.excerpt)?excerpts[lesson.excerpt]:null;
+      const quote=normalize(lesson.quote);
+      if (quote.length<12||quote.length>250||!excerpt?.text.includes(quote)) continue;
+      const {title,topic,remember}=lesson;
+      if (output.some(item=>item.title.toLowerCase()===title.trim().toLowerCase())) continue;
+      const location=/\.pdf$/i.test(filename)?' · str. '+excerpt.page:'';
+      output.push({title:title.trim(),topic:topic.trim(),remember:remember.trim(),source:filename+location+' · „'+quote+'”'});
+      if (output.length===20) break;
+    }
+  }
+  return output;
+}
+
+function displayLesson({title,topic,remember,question,source}) {
   // Earlier imports stored a fill-in-the-blank question and a generic reminder.
-  return {title,topic,remember:question?topic:remember};
+  return {title,topic,remember:question?topic:remember,...(source?{source}:{})};
 }
 
 const lessonDay=value=>Date.parse(value+'T00:00:00Z')/86400000;
@@ -420,6 +453,7 @@ async function handle(request, env, buildDailyReport=false) {
         }
       }
       const historicalRates=new Map();
+      const personalHistory=new Map();
       if (!period&&user.role==='manager') {
         const cutoff=[month,localDay().slice(0,7)].sort()[0];
         const history=await list(db,`SELECT person,counters FROM daily_results
@@ -430,13 +464,27 @@ async function handle(request, env, buildDailyReport=false) {
           if (!salon||!Array.isArray(matrix)) continue;
           if (!historicalRates.has(salon)) historicalRates.set(salon,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
           const totals=historicalRates.get(salon);
+          if (!personalHistory.has(row.person)) personalHistory.set(row.person,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
+          const personal=personalHistory.get(row.person);
           matrix.slice(0,sourceCount).forEach((source,index)=>{
             totals[index].leads+=source[0]??0;
+            personal[index].leads+=source[0]??0;
+            personal[index].orders+=source[7]??0;
             totals[index].orders+=source[7]??0;
           });
         }
       }
       const adjustments=await calendarAdjustments(db,[month],scope,...params);
+      const plannedDays=new Map();
+      if (!period&&role==='manager') {
+        const days=calendarMonthDays(month).filter(isSalonWorkday);
+        const dates=await list(db,`SELECT person,day FROM work_calendar
+          WHERE status='approved' AND kind<>'zero' AND substr(day,1,7)=? AND ${scope}
+          UNION SELECT person,day FROM daily_exceptions WHERE kind IN ('leave','training') AND substr(day,1,7)=? AND ${scope}`,
+          month,...params,month,...params);
+        const excluded=Map.groupBy(dates.filter(({day})=>isSalonWorkday(day)),row=>row.person);
+        for (const seller of sellers) plannedDays.set(seller.id,days.length-(excluded.get(seller.id)?.length??0));
+      }
       const plans=[];
       for (const {salon} of salons) {
         const storedTeam=await sellerTargets(salon,month);
@@ -475,7 +523,12 @@ async function handle(request, env, buildDailyReport=false) {
           change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
           contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
           manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
-          team:team.map(({version,...person})=>({...person,approved:Boolean(version),absenceAdjustment:adjustments[person.id+'/'+month]??null}))});
+          team:team.map(({version,...person})=>{
+            const personal=personalHistory.get(person.id)??[];
+            return {...person,approved:Boolean(version),historicalLeads:personal.map(row=>row.leads),
+              personalRates:personal.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders)),
+              plannedWorkdays:plannedDays.get(person.id),absenceAdjustment:adjustments[person.id+'/'+month]??null};
+          })});
       }
       return {plans,archivedActivity:[...archivedActivity.values()]};
     };
@@ -708,6 +761,76 @@ async function handle(request, env, buildDailyReport=false) {
   let body;
   try {body=await request.json();} catch {return json({error:'Nieprawidłowy formularz.'},400);}
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
+  if (path==='/api/assistant') {
+    const {feature,salon,question}=body;
+    const allowed=feature==='today'?role==='seller':feature==='briefing'?role==='manager'
+      :['report','chat'].includes(feature)&&managesSalonPlans;
+    if (!allowed) return json({error:'Brak dostępu do tej funkcji asystenta.'},403);
+    if (!env.assist) return json({error:'Asystent AI nie jest jeszcze skonfigurowany.'},503);
+    if (salon!==undefined&&typeof salon!=='string') return json({error:'Wybierz salon.'},400);
+    if (salon&&!managedSalons.has(salon)) return json({error:'Brak dostępu do salonu.'},403);
+    if (feature==='chat'&&(typeof question!=='string'||!question.trim()||question.length>500))
+      return json({error:'Wpisz pytanie do 500 znaków.'},400);
+    const sourceLabels=['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi','Odzyskane przez BDC'];
+    let facts,instructions;
+    if (feature==='today') {
+      const report=await loadBriefing(localDay(),{id:user.id,salon:user.salon,name:'',planEligible:true});
+      const person=report.salons[0]?.people[0];
+      if (!person) return json({error:'Brak danych do analizy dnia.'},422);
+      const month=report.month;
+      const [plan,records,adjustments]=await Promise.all([
+        db.prepare('SELECT targets FROM seller_source_plans WHERE person=? AND month=?').bind(user.id,month).first(),
+        list(db,'SELECT counters FROM daily_results WHERE person=? AND substr(day,1,7)=? AND day<=? AND '+includedDailyResult,
+          user.id,month,report.today),
+        calendarAdjustments(db,[month],'person=?',user.id)
+      ]);
+      const sourceActuals=Array.from({length:sourceCount},()=>Array(5).fill(0));
+      for (const {counters} of records) {
+        for (const [index,source] of (JSON.parse(counters)[5]??[]).entries()) {
+          if (index>=sourceCount) break;
+          [0,1,2,4,7].forEach((column,i)=>{sourceActuals[index][i]+=source[column]??0;});
+        }
+      }
+      const targets=plan?effectiveSourcePlan(JSON.parse(plan.targets),adjustments[user.id+'/'+month]):[];
+      facts={day:report.today,workday:person.workday,todayGoals:person.todayGoals,
+        remainingPlan:person.remainingPlan,actual:person.actual,plan:person.plan,
+        sources:targets.map((row,i)=>({source:sourceLabels[i],target:[7,4,8,5,0].map(j=>row[j]),actual:sourceActuals[i]})),
+        sourceMetrics:['Leady','Próby kontaktu','Spotkania','Jazdy próbne','Zamówienia']};
+      instructions='Wyjaśnij cele na dziś i podaj maksymalnie trzy priorytety. Uwzględnij dzień wolny. Nie wskazuj konkretnego źródła leadów bez danych.';
+    } else if (feature==='briefing'||feature==='chat'&&role==='manager'&&body.liveBriefing) {
+      const report=await loadBriefing(localDay());
+      facts={day:report.today,salons:report.salons.filter(row=>!salon||row.salon===salon).map(row=>({
+        salon:row.salon,people:row.people.filter(person=>!person.archived).map(({name,review,todayGoals,workday,plan,actual,remainingPlan})=>({
+          name,workday,plan,actual,todayGoals,remainingPlan,lastWorkday:{day:review.day,status:review.status,actual:review.actual,goals:review.goals,bySource:review.rows}
+        }))
+      }))};
+      instructions='Przygotuj krótką odprawę według salonów, z pytaniami do rozmowy. Przy braku zapisu zaznacz brak danych. Jeśli podano pytanie, odpowiedz na nie.';
+    } else {
+      const target=new URL('/api/management-reports',url.origin);
+      for (const field of ['type','month','day']) if (typeof body[field]==='string') target.searchParams.set(field,body[field]);
+      target.searchParams.set('role',role);
+      const response=await handle(new Request(target,{headers:request.headers}),env);
+      if (!response.ok) return response;
+      const report=await response.json();
+      const scopedSalons=data=>data.salons.filter(row=>!salon||row.salon===salon)
+        .map(({salon,totals,targets,expected,sources,recommendations})=>({salon,totals,targets,expected,sources,
+          recommendations:data.type==='marketing'?recommendations:undefined}));
+      facts={month:report.month,through:report.through,marketing:report.marketing,salons:scopedSalons(report)};
+      if (['monthly','marketing'].includes(report.type)) {
+        const previousMonth=new Date(Date.parse(report.month+'-01')-86400000).toISOString().slice(0,7);
+        target.searchParams.set('month',previousMonth);
+        const previous=await handle(new Request(target,{headers:request.headers}),env);
+        if (previous.ok) facts.previous={month:previousMonth,salons:scopedSalons(await previous.json())};
+      }
+      instructions='Porównaj dostępne salony i źródła. Podaj liczebność i etap spadku konwersji, jeśli są dane. Przy małej próbie unikaj mocnych wniosków. Wskaż priorytety marketingowe, jeśli uzasadniają je dane. Jeśli podano pytanie, odpowiedz na nie.';
+    }
+    const salesLabels=['Zamówienia','Faktury','Rejestracje','Opinie Google'];
+    const goalLabels=dailyActionMetrics.map(([label])=>label);
+    const input={facts,salesLabels,goalLabels,sourceLabels,sourceDailyColumns:['Leady','Próby kontaktu','Spotkania','Spotkania odbyte (pole historyczne)','Jazdy próbne','Oferty','Follow-up','Zamówienia','Rejestracje','Opinie Google','Faktury'],question:feature==='chat'?question.trim():undefined};
+    if (JSON.stringify(input).length>55000) return json({error:'Wybierz jeden salon, aby zawęzić analizę.'},422);
+    try {return json({text:await env.assist(instructions,input)});}
+    catch {return json({error:'Asystent jest chwilowo niedostępny. Spróbuj ponownie.'},503);}
+  }
   if (path==='/api/daily-briefing') {
     const {person,day,action,actual,goals,forecast,rows,previousRows,version,part}=body;
     const today=localDay();
@@ -972,25 +1095,43 @@ async function handle(request, env, buildDailyReport=false) {
       if (typeof body.filename!=='string'||body.filename.length>255||!/[.](pdf|docx|xlsx|pptx|txt)$/i.test(body.filename)||
           typeof body.file!=='string'||!body.file||body.file.length>20_971_520)
         return json({error:'Wybierz PDF, DOCX, XLSX, PPTX lub TXT do 15 MB.'},400);
+      if (body.ai===true&&!env.assist) return json({error:'Asystent AI nie jest jeszcze skonfigurowany.'},503);
       try {
         const text=(await env.extractLessonText(body.filename,body.file));
-        const lessons=lessonDrafts(text);
+        if (!text.trim()) return json({error:'Brak tekstu do odczytania. Użyj pliku z rozpoznanym tekstem.'},422);
+        if (body.ai===true&&text.length>80000) return json({error:'Podziel długi materiał na części do 80 000 znaków.'},422);
+        const lessons=body.ai===true?await generateAssistantLessons(text,body.filename,env.assist):lessonDrafts(text);
         if (lessons.length) {
-          await db.prepare(`INSERT INTO lesson_packs(salon,name,published_day,lessons)
+          const result=await db.prepare(`INSERT INTO lesson_packs(salon,name,published_day,lessons)
             VALUES (?,?,?,?) ON CONFLICT(salon,name) DO UPDATE
-            SET active=0,published_day=excluded.published_day,lessons=excluded.lessons`)
-            .bind(salon,body.filename,localDay(),JSON.stringify(lessons)).run();
+            SET active=0,published_day=excluded.published_day,lessons=excluded.lessons
+            WHERE ?=0 OR lesson_packs.active=0`)
+            .bind(salon,body.filename,localDay(),JSON.stringify(lessons),Number(body.ai===true)).run();
+          if (!result.meta.changes) return json({error:'Paczka o tej nazwie jest opublikowana. Nadaj plikowi inną nazwę, aby dodać nowy szkic.'},409);
           return json({count:lessons.length});
         }
         if (text.trim()) return json({error:'Nie znaleziono zagadnień sprzedażowych. Wybierz dokument ze standardami obsługi, oceną wizyty lub informacjami o produkcie albo dodaj lekcję ręcznie.'},422);
         return json({error:'Brak tekstu do odczytania. Jeśli to skan, użyj pliku z rozpoznanym tekstem lub dodaj lekcję ręcznie.'},422);
       } catch {
-        return json({error:'Nie udało się odczytać pliku. Sprawdź format lub dodaj lekcję ręcznie.'},422);
+        return body.ai===true?json({error:'Nie udało się przygotować lekcji przez AI. Sprawdź format pliku lub spróbuj ponownie.'},503):
+          json({error:'Nie udało się odczytać pliku. Sprawdź format lub dodaj lekcję ręcznie.'},422);
       }
     }
-    if (!Array.isArray(body.lessons)||body.lessons.length<1||body.lessons.length>40||
-        !body.lessons.every(lesson=>lesson&&textValid(lesson.title)&&typeof lesson.topic==='string'&&
-          lesson.topic.trim()&&lesson.topic.length<=650&&typeof lesson.remember==='string'&&lesson.remember.trim()&&lesson.remember.length<=220))
+    if (path==='/api/lessons'&&body.packId!==undefined) {
+      if (!Number.isSafeInteger(body.packId)||!Array.isArray(body.lessons)||body.lessons.length<1||body.lessons.length>40||
+          !body.lessons.every(validLessonDraft)) return json({error:'Sprawdź treść lekcji.'},400);
+      const pack=await db.prepare('SELECT lessons,active FROM lesson_packs WHERE salon=? AND id=?').bind(salon,body.packId).first();
+      if (!pack||pack.active) return json({error:'Do edycji wybierz wyłączoną paczkę.'},409);
+      const original=JSON.parse(pack.lessons);
+      if (original.length!==body.lessons.length) return json({error:'Paczka uległa zmianie.'},409);
+      const lessons=body.lessons.map(({title,topic,remember},i)=>({
+        title:title.trim(),topic:topic.trim(),remember:remember.trim(),source:original[i].source
+      }));
+      const result=await db.prepare('UPDATE lesson_packs SET lessons=? WHERE salon=? AND id=? AND active=0 AND lessons=?')
+        .bind(JSON.stringify(lessons),salon,body.packId,pack.lessons).run();
+      return result.meta.changes?json({ok:true}):json({error:'Paczka uległa zmianie.'},409);
+    }
+    if (!Array.isArray(body.lessons)||body.lessons.length<1||body.lessons.length>40||!body.lessons.every(validLessonDraft))
       return json({error:'Uzupełnij tytuł, zagadnienie i „Zapamiętaj!” dla każdej lekcji.'},400);
     const lessons=body.lessons.map(({title,topic,remember})=>({title:title.trim(),topic:topic.trim(),remember:remember.trim()}));
     await db.prepare(`INSERT INTO lesson_packs(salon,name,active,published_day,lessons)

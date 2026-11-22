@@ -473,6 +473,11 @@ reportForm.onsubmit=async event=>{
     reportStatus.textContent=monthLabel(report.month)+' · wyniki do '+date+(generated?' · wygenerowano o '+generated:'');
     if (liveBriefing) renderLiveBriefingReport(report,salon);
     else renderManagementReport(report,salon);
+    const context={...Object.fromEntries(query),salon,liveBriefing};
+    reportResults.prepend(
+      assistantControl(liveBriefing?'Podsumuj odprawę':'Przeanalizuj raport',()=>({...context,feature:liveBriefing?'briefing':'report'})),
+      assistantControl('Zapytaj o wyniki',()=>({...context,feature:'chat'}),{question:true})
+    );
   } catch (error) {
     if (revision===reportRevision) reportStatus.textContent=error.message;
   }

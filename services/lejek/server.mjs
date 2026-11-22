@@ -1,3 +1,4 @@
+import {createAssistant} from './scripts/assistant.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
@@ -51,6 +52,7 @@ try {
   }
   database.exec('COMMIT');
 } catch(error) { database.exec('ROLLBACK'); throw error; }
+const assist=createAssistant({key:process.env.OPENAI_API_KEY?.trim(),model:process.env.LEJEK_AI_MODEL||undefined});
 const GIPHY_API_KEY=process.env.GIPHY_API_KEY?.trim()||'';
 const DB = {
   prepare(sql) {
@@ -269,7 +271,7 @@ async function handle(request) {
   const {pathname:path,origin}=new URL(request.url);
   if (path==='/healthz' && request.method==='GET') {
     database.prepare('SELECT 1 FROM daily_results LIMIT 1').all();
-    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing','X-Lejek-Reset-Mail':smtpReady?'configured':'missing','X-Lejek-Invite-Mail':inviteReady?'configured':'missing'});
+    return reply('lejek-ok',200,{'X-Lejek-Release':process.env.LEJEK_RELEASE??'local','X-Lejek-AI':assist?'configured':'missing','X-Lejek-Giphy':GIPHY_API_KEY?'configured':'missing','X-Lejek-Reset-Mail':smtpReady?'configured':'missing','X-Lejek-Invite-Mail':inviteReady?'configured':'missing'});
   }
   const publicPage = publicPages.get(path);
   if (publicPage && (request.method === 'GET' || request.method === 'HEAD')) {
@@ -383,7 +385,7 @@ async function handle(request) {
   forwarded.set('oai-authenticated-user-email',account.email);
   forwarded.set('oai-authenticated-user-id',String(account.id));
   forwarded.set('x-lejek-verified-admin',account.role==='admin'?'1':'0');
-  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
+  const response=await worker.fetch(new Request(request,{headers:forwarded}),{DB,GIPHY_API_KEY,assist,extractLessonText,passwordStatements:identity.passwordStatements,inviteReady,sendInvitation,sharedAdmin});
   const url=new URL(request.url);
   if (response.ok&&request.method==='GET'&&['/api/management-reports','/api/daily-briefing'].includes(path)&&url.searchParams.get('format')==='pdf') {
     return downloadReportPdf(response,url);

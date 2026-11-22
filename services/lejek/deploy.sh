@@ -5,12 +5,13 @@ if [ ! -t 0 ]; then
   IFS= read -r GIPHY_API_KEY || true
   IFS= read -r RESET_SMTP_PASSWORD || true
   IFS= read -r INVITE_SMTP_PASSWORD || true
+  IFS= read -r OPENAI_API_KEY || true
 fi
 export INVITE_SMTP_PASSWORD
 export RESET_SMTP_PASSWORD
 export RESET_SMTP_HOST=smtp.mail.ovh.net
 export RESET_SMTP_USER=admin@carvamo.com
-export GIPHY_API_KEY
+export GIPHY_API_KEY OPENAI_API_KEY
 [[ "$release" =~ ^[0-9a-f]{40}$ ]]
 test "$(id -un)" = carvamo-deploy
 proxy=carvamo-preview-web
@@ -32,7 +33,7 @@ if ! docker volume inspect "$production_volume" >/dev/null 2>&1; then
 fi
 docker volume create "$production_volume" >/dev/null
 mail_network=biegwyzej_mail_egress
-if [[ -n "${RESET_SMTP_PASSWORD:-}${INVITE_SMTP_PASSWORD:-}" ]]; then
+if [[ -n "${RESET_SMTP_PASSWORD:-}${INVITE_SMTP_PASSWORD:-}${OPENAI_API_KEY:-}" ]]; then
   docker network inspect "$mail_network" >/dev/null 2>&1 ||
     docker network create "$mail_network" >/dev/null
 fi
@@ -50,6 +51,21 @@ if [[ -n "${INVITE_SMTP_PASSWORD:-}" ]]; then
     echo "::warning::Bieg Wyżej: invitation SMTP authentication failed"
   fi
 fi
+if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  docker run --rm -i --network "$mail_network" --read-only --cap-drop ALL \
+    --security-opt no-new-privileges -e OPENAI_API_KEY "$image" node --input-type=module <<'NODE'
+import {createAssistant} from './scripts/assistant.mjs';
+const ask=createAssistant({key:process.env.OPENAI_API_KEY});
+try {
+  const answer=await ask('Zwróć obiekt JSON z polem ok o wartości true.', {test:true}, true);
+  if (answer?.ok!==true) throw new Error('Unexpected response');
+  console.log('Bieg Wyżej: OpenAI API verified from OVH');
+} catch {
+  console.error('Bieg Wyżej: OpenAI API test failed from OVH');
+  process.exitCode=1;
+}
+NODE
+fi
 old_image=
 old_volume=
 if docker container inspect "$service" >/dev/null 2>&1; then
@@ -61,9 +77,9 @@ fi
 run_service() {
   local deployed_image="$1" data_volume="$2"
   docker run -d --name "$service" --label com.carvamo.role=lejek --restart unless-stopped \
-    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD -e INVITE_SMTP_PASSWORD --read-only --tmpfs /tmp:rw,noexec,nosuid \
+    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY -e OPENAI_API_KEY -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD -e INVITE_SMTP_PASSWORD --read-only --tmpfs /tmp:rw,noexec,nosuid \
     --security-opt no-new-privileges --cap-drop ALL -v "$data_volume:/data" "$deployed_image" >/dev/null || return
-  if [[ -n "${RESET_SMTP_PASSWORD:-}${INVITE_SMTP_PASSWORD:-}" ]]; then
+  if [[ -n "${RESET_SMTP_PASSWORD:-}${INVITE_SMTP_PASSWORD:-}${OPENAI_API_KEY:-}" ]]; then
     docker network connect "$mail_network" "$service"
   fi
 }

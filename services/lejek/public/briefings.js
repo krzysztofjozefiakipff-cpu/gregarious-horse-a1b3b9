@@ -531,6 +531,7 @@ async function loadBriefingPanel(message='',focusSeller) {
             salon.forecast[i]==null?null:salon.forecast[i]+(salon.missing[i]?' (częściowa)':''),
             salon.missing[i]?null:briefingEnd(salon.actual[i],salon.forecast[i])])));
       card.append(heading);
+      if (salon.people.length) card.append(assistantControl('Podsumuj odprawę',()=>({feature:'briefing',salon:salon.salon})));
       if (!salon.people.length) card.append(reportElement('p','Brak handlowców do odprawy.'));
       for (const person of salon.people) card.append(renderBriefingSeller(person,report,open.has(String(person.id)),salon.salon));
       if (salon.people.length) card.append(totals);

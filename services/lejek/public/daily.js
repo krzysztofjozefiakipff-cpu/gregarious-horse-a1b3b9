@@ -367,6 +367,42 @@ async function api(path,body) {
   }
 }
 
+function assistantControl(label,request,{question=false}={}) {
+  const control=document.createElement('div');
+  control.className='assistant-control';
+  control.hidden=Boolean(previewTarget);
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='secondary';
+  button.textContent=label;
+  const output=document.createElement('p');
+  output.setAttribute('role','status');
+  output.style.whiteSpace='pre-wrap';
+  let input;
+  if (question) {
+    input=document.createElement('input');
+    input.type='text';
+    input.maxLength=500;
+    const field=document.createElement('label');
+    field.append('Pytanie o wyniki',input);
+    control.append(field);
+  }
+  control.append(button,output);
+  button.onclick=async()=>{
+    if (input&&!input.value.trim()) {input.focus();return;}
+    button.disabled=true;
+    output.textContent='Asystent przygotowuje odpowiedź…';
+    try {
+      const result=await api('/api/assistant',{...request(),...(input?{question:input.value.trim()}:{})});
+      output.textContent=result.text;
+    } catch (error) {output.textContent=error.message;}
+    finally {button.disabled=false;}
+  };
+  return control;
+}
+
+$('#tasks').after(assistantControl('Wyjaśnij plan na dziś',()=>({feature:'today'})));
+
 const calendarKinds={leave:'Urlop',sick:'Chorobowe',training:'Szkolenie',saturday:'Wolna sobota',other:'Inny dzień bez aktywności',noActivity:'Brak aktywności'};
 const calendarStatuses={pending:'Czeka na zatwierdzenie',approved:'Zatwierdzony',rejected:'Odrzucony',recorded:'Rozliczony',automatic:'Z grafiku'};
 
@@ -1409,6 +1445,8 @@ function renderSeller() {
   $('#lesson-topic').textContent=lesson?.topic??'Kierownik salonu może opublikować tutaj lekcje z materiałów szkoleniowych.';
   $('#lesson-remember').hidden=!lesson;
   $('#lesson-remember span').textContent=lesson?.remember??'';
+  $('#lesson-source').textContent=lesson?.source?('Źródło · '+lesson.source):'';
+  $('#lesson-source').hidden=!lesson?.source;
   const currentMonth=data.today.slice(0,7);
   const currentMetrics=periodMetrics(data,currentMonth,1);
   renderTodayTasks(currentMetrics,data.previousDaily,data.today);
@@ -2089,7 +2127,7 @@ function sourceProfileEditor(person,individual,month,peers) {
   return {panel,getProfile:()=>person.sourceProfile};
 }
 
-function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryRates=[]) {
+function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryRates=[],allocatedGoals=null) {
   const form=document.createElement('form');
   const step=title=>{
     const section=document.createElement('section');
@@ -2103,7 +2141,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   const goalsStep=step('2. Cele miesięczne');
   const reviewStep=step('3. Podgląd i korekta');
   const reference=document.createElement('p');
-  reference.textContent='Liczbę zamówień dzielimy przez przyjętą konwersję źródła i zaokrąglamy liczbę leadów w górę. Stawki bazowe to założenia do planu. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach pokazujemy zaobserwowaną relację zamówień do leadów w salonie. Lepszy wynik może podnieść stawkę używaną do wyliczeń.';
+  reference.textContent='Liczbę zamówień dzielimy przez przyjętą konwersję źródła i zaokrąglamy liczbę leadów w górę. Stawki bazowe to założenia do planu. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach pokazujemy zaobserwowaną relację zamówień do leadów w salonie. Przy wystarczającej próbie wyliczenie korzysta z historii handlowca, następnie salonu. Lepszy wynik może podnieść przyjętą stawkę.';
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
   const summary=document.createElement('dl');
   summary.className='planning-totals';
@@ -2122,12 +2160,14 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   const propose=document.createElement('button');
   propose.type='button';
   propose.className='secondary';
-  propose.textContent='Wylicz plan';
+  propose.textContent='Zaproponuj plan handlowca';
   const proposalStatus=document.createElement('p');
   proposalStatus.setAttribute('role','status');
   proposalTitle.textContent=monthLabel(month)+' · wpisz cele łączne';
   goalsStep.append(proposalTitle,proposal.fields,propose,proposalStatus);
-  reviewStep.append(summary,sourceDetails);
+  const feasibility=document.createElement('div');
+  feasibility.className='planning-feasibility';
+  reviewStep.append(summary,feasibility,sourceDetails);
   form.append(goalsStep,reviewStep);
   if (!person.sourceTargets&&person.targets.some(value=>value!==null)) {
     const legacy=document.createElement('p');
@@ -2137,6 +2177,30 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
 
   function updateSummary() {
     const totals=rows.reduce((sum,{inputs})=>sum.map((value,index)=>value+(inputs[index].valueAsNumber||0)),Array(10).fill(0));
+    const adjustment=person.absenceAdjustment;
+    const days=person.plannedWorkdays;
+    const adjusted=effectiveSourcePlan(rows.map(({inputs})=>inputs.map(input=>input.valueAsNumber||0)),adjustment);
+    const notes=adjusted.flatMap((row,index)=>{
+      if (!row[7]||!person.historicalLeads?.length) return [];
+      const average=person.historicalLeads[index]/3;
+      const gap=Math.ceil(row[7]-average);
+      return gap>0?[sources[index]+' · potrzeba '+row[7]+' leadów, średnio '+average.toLocaleString('pl-PL',{maximumFractionDigits:1})+
+        ' przez 3 poprzednie miesiące. Do sprawdzenia dopływ ok. '+gap+' dodatkowych leadów lub podział celu.']:[];
+    });
+    feasibility.replaceChildren();
+    if (days!==undefined&&totals.some(Boolean)) {
+      const pace=document.createElement('p');
+      pace.textContent=days>0?'Tempo po korekcie kalendarza · '+days+' dni pracy · '+
+        [7,4,8,5].map(index=>sellerActivityPlan[index-4][0]+' '+(adjusted.reduce((sum,row)=>sum+row[index],0)/days)
+          .toLocaleString('pl-PL',{maximumFractionDigits:1})+'/dzień').join(' · ')
+        :'Brak dni roboczych w wybranym miesiącu.';
+      feasibility.append(pace);
+    }
+    for (const note of notes) {
+      const line=document.createElement('p');
+      line.textContent=note;
+      feasibility.append(line);
+    }
     const labels=[...salonPlanMetrics,...sellerActivityPlan.map(([label])=>label)];
     summary.replaceChildren(...[0,2,1,3,7,4,8,5,6,9].map(index=>{
       const item=document.createElement('div');
@@ -2185,7 +2249,8 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     const rateNote=document.createElement('p');
     const targetRate=sourceConversionRate(index,sourceRates[index]);
     const historyRate=sourceHistoryRates[index];
-    rateNote.textContent='Konwersja przyjęta do planu · '+percent.format(targetRate);
+    const basis=person.personalRates?.[index]!=null?'historia handlowca':sourceRates[index]!=null?'historia salonu':'stawka bazowa';
+    rateNote.textContent='Konwersja przyjęta do planu · '+percent.format(targetRate)+' · '+basis;
     if (historyRate!=null) {
       const gap=targetRate-historyRate;
       rateNote.textContent+=' · wynik salonu '+percent.format(historyRate)
@@ -2229,6 +2294,17 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     appliedTotals=proposalInputs().join(',');
     proposalStatus.textContent='Plan wyliczony. Sprawdź podsumowanie poniżej i zapisz.';
   };
+  if (allocatedGoals) {
+    const allocate=document.createElement('button');
+    allocate.type='button';
+    allocate.className='secondary';
+    allocate.textContent='Wczytaj udział w celu salonu';
+    allocate.onclick=()=>{
+      proposal.inputs.forEach((input,index)=>{input.value=allocatedGoals[index];});
+      propose.click();
+    };
+    goalsStep.append(allocate);
+  }
   const copy=sellerCopyControls('Plan innego handlowca','Kopiuj plan innego handlowca');
   const picker=document.createElement('details');
   const pickerTitle=document.createElement('summary');
@@ -2535,7 +2611,10 @@ async function loadSalonPlans() {
         note.textContent=plan.contributors.map(person=>person.name).join(', ')+' · zatwierdzone działania liczą się do wyników salonu.';
         card.append(note);
       }
-      for (const person of plan.team) {
+      const weights=plan.team.map(person=>person.sourceProfile?.some(Boolean)?person.plannedWorkdays??1:0);
+      const splits=(plan.direct||plan.override)&&weights.some(Boolean)
+        ?plan.targets.map(target=>allocateSourceTargets(target,weights)):null;
+      for (const [personIndex,person] of plan.team.entries()) {
         const row=document.createElement('details');
         const summary=document.createElement('summary');
         const badge=document.createElement('span');
@@ -2560,7 +2639,9 @@ async function loadSalonPlans() {
         }
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
-          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id),plan.sourceHistoryRates??[]));
+          const rates=sources.map((_,index)=>person.personalRates?.[index]??plan.sourceRates?.[index]);
+          row.append(sellerPlanForm(person,individual,month,rates,team.filter(peer=>peer.id!==person.id),
+            plan.sourceHistoryRates??[],weights[personIndex]&&splits?splits.map(column=>column[personIndex]):null));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
@@ -3826,8 +3907,40 @@ async function loadLessonPacks() {
             const remember=document.createElement('p');
             remember.textContent='Zapamiętaj: '+lesson.remember;
             item.append(title,topic,remember);
+            if (lesson.source) {
+              const source=document.createElement('p');
+              source.textContent='Źródło · '+lesson.source;
+              item.append(source);
+            }
+            if (!pack.active&&!previewTarget) {
+              for (const [key,label,limit] of [['title','Temat',120],['topic','Zagadnienie',650],['remember','Zapamiętaj',220]]) {
+                const field=document.createElement('label');
+                const input=document.createElement(key==='title'?'input':'textarea');
+                input.dataset.lesson=key;
+                input.value=lesson[key];
+                input.maxLength=limit;
+                field.append(label,input);
+                item.append(field);
+              }
+            }
             return item;
           }));
+          if (!pack.active&&!previewTarget) {
+            const save=document.createElement('button');
+            save.type='button';
+            save.textContent='Zapisz poprawki lekcji';
+            save.onclick=async()=>{
+              save.disabled=true;
+              try {
+                const lessons=[...list.children].map(item=>Object.fromEntries(
+                  [...item.querySelectorAll('[data-lesson]')].map(input=>[input.dataset.lesson,input.value.trim()])));
+                await api('/api/lessons',{salon,packId:pack.id,lessons});
+                $('#lesson-status').textContent='Zapisano poprawki. Włącz paczkę, aby opublikować lekcje.';
+                await loadLessonPacks();
+              } catch (error) {$('#lesson-status').textContent=error.message;save.disabled=false;}
+            };
+            preview.append(save);
+          }
         } catch (error) {
           $('#lesson-status').textContent=error.message;
         }
@@ -3848,6 +3961,7 @@ function updateLessonButtons() {
   $('#lesson-publish').disabled=lessonBusy||total===0;
   $('#lesson-add').disabled=lessonBusy||total>=40;
   $('#lesson-import').disabled=lessonBusy;
+  $('#lesson-import-ai').disabled=lessonBusy;
 }
 function appendLesson({title='',topic='',remember=''}={}) {
   const field=document.createElement('fieldset');
@@ -3858,7 +3972,7 @@ function appendLesson({title='',topic='',remember=''}={}) {
   updateLessonButtons();
 }
 $('#lesson-add').onclick=()=>appendLesson();
-$('#lesson-import').onclick=async ()=>{
+async function importLessonFile(ai) {
   const file=$('#lesson-file').files[0];
   const status=$('#lesson-status');
   if (!file||file.size>15*1024*1024) {status.textContent='Wybierz plik do 15 MB.';return;}
@@ -3872,7 +3986,7 @@ $('#lesson-import').onclick=async ()=>{
       reader.onerror=()=>reject(new Error('Nie udało się otworzyć pliku.'));
       reader.readAsDataURL(file);
     });
-    const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded,mode:'pack'});
+    const result=await api('/api/lesson-import',{salon:$('#lesson-salon').value,filename:file.name,file:encoded,mode:'pack',ai});
     if (!Number.isSafeInteger(result.count)||result.count<1)
       throw new Error('Nie udało się potwierdzić importu. Sprawdź listę paczek po odświeżeniu strony.');
     $('#lesson-file').value='';
@@ -3880,7 +3994,9 @@ $('#lesson-import').onclick=async ()=>{
     await loadLessonPacks();
   } catch(error) {status.textContent=error.message;}
   finally {lessonBusy=false;updateLessonButtons();}
-};
+}
+$('#lesson-import').onclick=()=>importLessonFile(false);
+$('#lesson-import-ai').onclick=()=>importLessonFile(true);
 lessonEditor.onsubmit=async event=>{
   event.preventDefault();
   const status=$('#lesson-status');
