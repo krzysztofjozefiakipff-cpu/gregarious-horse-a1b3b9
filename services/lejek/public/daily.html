@@ -1174,7 +1174,13 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
   <h3>Logo grupy dealerskiej</h3>
   <label>Logo (PNG, JPG lub WebP, do 40 KB) <input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label>
   <label><input name="removeLogo" type="checkbox"> Usuń logo z paneli szefa i kierownika</label>
-  <button>Zapisz logo grupy</button>
+  <label>Kolorystyka <select name="themeMode"><option value="default">Kolory Biegu Wyżej</option><option value="group">Kolory grupy</option></select></label>
+  <div id="group-theme-colors" class="user-search-fields" hidden>
+    <label>Kolor główny <input name="primaryColor" type="color" value="#52294f"></label>
+    <label>Kolor akcentu <input name="accentColor" type="color" value="#ffc184"></label>
+    <span id="group-theme-preview" class="status-badge">Podgląd kolorów</span>
+  </div>
+  <button>Zapisz wygląd grupy</button>
   <p id="group-brand-status" role="status"></p>
 </form></details>
 <details id="global-charity-settings" name="additional-settings"><summary>Cel miesiąca</summary><form id="charity"><label>Miesiąc <input name="month" type="month" required></label><label>Nazwa celu <input name="title" required maxlength="120"></label><label>Organizacja <input name="organization" required maxlength="120"></label><label>Informacja o darowiźnie <input name="description" required maxlength="120"></label><button>Zapisz cel</button></form></details>

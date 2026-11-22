@@ -67,8 +67,8 @@ async function viewSalonLife(db,current,scopes,email,today,week,user,roles,previ
       label,votes:votes.find(row=>row.choice===i)?.votes??0
     }))};
   }
-  const {firstName,brand}=await loadAccountHeader(db,user);
-  return json({role:user.role,roles,accountHeader:{firstName,brand},scopes,current,posts,hit,drafts,poll,hasOlder,readOnly:preview});
+  const {firstName,brand,groupBrand}=await loadAccountHeader(db,user);
+  return json({role:user.role,roles,accountHeader:{firstName,brand,theme:groupBrand?.theme},scopes,current,posts,hit,drafts,poll,hasOlder,readOnly:preview});
 }
 
 async function handleSalonLife(request,url,db,user,roles,email,preview) {

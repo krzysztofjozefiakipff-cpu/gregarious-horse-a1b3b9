@@ -22,6 +22,17 @@
   --error: #a12528;
   accent-color: var(--primary);
 }
+:root[data-group-theme] {
+  --panel-plum: var(--group-primary);
+  --panel-orange: var(--group-accent);
+  --panel-lilac: color-mix(in srgb, var(--group-primary) 8%, white);
+  --panel-border: color-mix(in srgb, var(--group-primary) 18%, white);
+  --highlight: color-mix(in srgb, var(--group-accent) 32%, white);
+  --accent-ink: var(--group-primary);
+  --input-border: color-mix(in srgb, var(--group-primary) 45%, white);
+  --on-plum-muted: white;
+  --focus-ring: var(--group-primary);
+}
 * { box-sizing: border-box; }
 body {
   margin: 0;

@@ -11,7 +11,14 @@ accountMenu.addEventListener('keydown',event=>{
 });
 
 function renderAccountHeader({role,roles,accountHeader},preview=null) {
-  const {firstName,brand}=accountHeader??{};
+  const {firstName,brand,theme}=accountHeader??{};
+  const root=document.documentElement;
+  root.toggleAttribute('data-group-theme',Boolean(theme));
+  for (const [property,color] of [['--group-primary',theme?.primary],['--group-accent',theme?.accent]]) {
+    if (color) root.style.setProperty(property,color);
+    else root.style.removeProperty(property);
+  }
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',theme?.primary??'#52294f');
   const logo=document.getElementById('account-dealer-logo');
   logo.hidden=!brand?.logo;
   if (brand?.logo) {

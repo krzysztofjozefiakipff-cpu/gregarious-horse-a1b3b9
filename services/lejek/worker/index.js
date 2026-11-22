@@ -737,7 +737,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     const groupName=user.role==='group'?user.group:['manager','seller'].includes(user.role)
       ?(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first())?.group_name:null;
     const {firstName,brand:headerBrand,groupBrand,dealer:brand}=await loadAccountHeader(db,user,groupName??null);
-    const accountHeader={firstName,brand:headerBrand};
+    const accountHeader={firstName,brand:headerBrand,theme:groupBrand?.theme};
     if (path==='/api/daily') {
       const daily=await loadPlanActivity(db,months[0]+'-01',[months.at(-1)+'-31',localDay()].sort()[0],scope,params);
       const plans = await list(db,'SELECT person,month,target FROM plans WHERE month IN ('+placeholders+') AND '+planScope+' AND '+includedResult('plans','plans.month'),...months,...params);
@@ -1596,10 +1596,30 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   }
   if (path==='/api/group-brand') {
     if (user.role!=='group') return json({error:'Logo grupy może zmienić szef grupy dealerskiej.'},403);
-    const {logo}=body;
-    if (!validBrandLogo(logo)) return json({error:'Sprawdź format logo grupy.'},400);
-    await db.prepare(`INSERT INTO dealer_group_brand (group_name,logo) VALUES (?,?)
-      ON CONFLICT(group_name) DO UPDATE SET logo=excluded.logo`).bind(user.group,logo).run();
+    const {logo,theme}=body;
+    if (logo===undefined&&theme===undefined||logo!==undefined&&!validBrandLogo(logo))
+      return json({error:'Sprawdź ustawienia wyglądu grupy.'},400);
+    if (theme!==undefined&&theme!==null) {
+      const colors=[theme.primary,theme.accent];
+      if (!colors.every(color=>typeof color==='string'&&/^#[0-9a-f]{6}$/i.test(color)))
+        return json({error:'Wybierz poprawne kolory grupy.'},400);
+      const luminance=color=>[.2126,.7152,.0722].reduce((sum,weight,index)=>{
+        const channel=parseInt(color.slice(1+index*2,3+index*2),16)/255;
+        return sum+weight*(channel<=.04045?channel/12.92:((channel+.055)/1.055)**2.4);
+      },0);
+      const [primary,accent]=colors.map(luminance);
+      if (1.05/(primary+.05)<4.5||
+          (accent+.05)/(Math.max(primary,luminance('#2d2031'))+.05)<4.5)
+        return json({error:'Wybierz ciemniejszy kolor główny lub jaśniejszy akcent, aby tekst pozostał czytelny.'},400);
+    }
+    const changes=[];
+    if (logo!==undefined) changes.push(db.prepare(`INSERT INTO dealer_group_brand (group_name,logo) VALUES (?,?)
+      ON CONFLICT(group_name) DO UPDATE SET logo=excluded.logo`).bind(user.group,logo));
+    if (theme===null) changes.push(db.prepare('DELETE FROM dealer_group_theme WHERE group_name=?').bind(user.group));
+    else if (theme!==undefined) changes.push(db.prepare(`INSERT INTO dealer_group_theme (group_name,primary_color,accent_color) VALUES (?,?,?)
+      ON CONFLICT(group_name) DO UPDATE SET primary_color=excluded.primary_color,accent_color=excluded.accent_color`)
+      .bind(user.group,theme.primary,theme.accent));
+    await db.batch(changes);
     return json({ok:true});
   }
   if (path==='/api/brand' && canManage) {
