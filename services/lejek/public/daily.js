@@ -4223,6 +4223,11 @@ function refreshVisiblePlans() {
   else void autoRefreshManagement();
 }
 
+window.addEventListener('fox-saved',()=>{
+  const dialog=$('#fox-assistant');
+  if (dialog.open) dialog.addEventListener('close',refreshVisiblePlans,{once:true});
+  else refreshVisiblePlans();
+});
 document.addEventListener('visibilitychange',refreshVisiblePlans);
 window.addEventListener('focus',refreshVisiblePlans);
 window.addEventListener('online',refreshVisiblePlans);
