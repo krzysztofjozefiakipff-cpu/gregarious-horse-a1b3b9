@@ -66,7 +66,7 @@ jobs:
           const apps=await api('apps?'+new URLSearchParams({'filter[bundleId]':id}));
           if(apps.length!==1) throw Error('App Store Connect must have one app record for '+id);
           
-          const buildNumber='15.1';
+          const buildNumber='16.1';
           const params=new URLSearchParams({'filter[app]':apps[0].id,'filter[version]':buildNumber,include:'buildBetaDetail,betaGroups'});
           for(let attempt=0;attempt<30;attempt++){
             const page=await request('builds?'+params);
