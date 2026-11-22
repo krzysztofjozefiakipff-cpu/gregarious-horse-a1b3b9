@@ -111,3 +111,18 @@ export function createWebAssistant({key,model='gpt-6-luna',fetchResponse=fetch})
     }
   };
 }
+
+export function createModerator(key,fetchModeration=fetch) {
+  if (!key) return undefined;
+  return async input=>{
+    const response=await fetchModeration('https://api.openai.com/v1/moderations',{
+      method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+      signal:AbortSignal.timeout(8000),
+      body:JSON.stringify({model:'omni-moderation-latest',input})
+    });
+    if (!response.ok) throw new Error('Moderation request failed');
+    const {results}=await response.json();
+    if (typeof results?.[0]?.flagged!=='boolean') throw new Error('Moderation result missing');
+    return results[0].flagged;
+  };
+}

@@ -32,9 +32,6 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
 const foxAssistantOpen=document.getElementById('fox-assistant-open');
 const foxAssistant=document.getElementById('fox-assistant');
 const foxAssistantForm=document.getElementById('fox-assistant-form');
-const foxAssistantMode=document.getElementById('fox-assistant-mode');
-const foxAssistantWebNote=document.getElementById('fox-assistant-web-note');
-foxAssistantMode.onchange=()=>{foxAssistantWebNote.hidden=foxAssistantMode.value!=='web';};
 const foxAssistantQuestion=document.getElementById('fox-assistant-question');
 const foxAssistantMessages=document.getElementById('fox-assistant-messages');
 const foxAssistantStatus=document.getElementById('fox-assistant-status');
@@ -230,23 +227,22 @@ foxAssistantForm.onsubmit=async event=>{
   const question=foxAssistantQuestion.value.trim();
   const send=foxAssistantForm.querySelector('button[type="submit"]');
   const byVoice=foxSendByVoice;
-  const feature=foxAssistantMode.value==='web'?'web':'fox';
   foxSendByVoice=false;
   if (!question||!foxAssistantRole||send.disabled) return;
   stopFoxRecording();
   send.disabled=true;
   foxAssistantMic.disabled=true;
-  foxStatus(feature==='web'?'Lisek szuka w internecie…':'Lisek przygotowuje odpowiedź…','thinking');
+  foxStatus('Lisek przygotowuje odpowiedź…','thinking');
   try {
     const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({feature,question})
+      body:JSON.stringify({feature:'fox',question})
     });
     const result=await response.json();
     if (!response.ok||typeof result.text!=='string') throw new Error(result.error);
     appendFoxMessage('Ty',question);
-    const listen=appendFoxMessage(feature==='web'?'Lisek · Internet':'Lisek',result.text,result.citations);
+    const listen=appendFoxMessage(result.source==='web'?'Lisek · Internet':'Lisek',result.text,result.citations);
     if (foxAssistantQuestion.value.trim()===question) foxAssistantQuestion.value='';
     foxStatus('');
     if (byVoice&&listen&&foxAssistant.open) speakFoxAnswer(result.text,listen);
