@@ -328,6 +328,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   }
 
   const user={...assigned,role,group:head?.group_name};
+  if (path==='/api/communication') return handleCommunication(request,url,db,user,email,preview);
   if (path==='/api/salon-life'||path==='/api/salon-life/photo') return handleSalonLife(request,url,db,user,roles,email,preview);
   if (role==='staff'&&path!=='/api/assistant') {
     if (path==='/api/daily'&&request.method==='GET') return json({role,redirect:'/z-zycia-salonu.html'});

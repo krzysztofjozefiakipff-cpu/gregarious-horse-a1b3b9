@@ -5,6 +5,10 @@
     </div>
     <img class="dealer-logo" id="account-dealer-logo" alt="" hidden>
     <div class="account-controls" id="account-controls" hidden>
+      <button type="button" id="communication-open" aria-label="Wiadomości i powiadomienia" aria-haspopup="dialog" hidden>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+        <span id="communication-count" hidden></span>
+      </button>
       <details id="account-menu">
         <summary aria-label="Konto" title="Konto">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="3.25"/><path d="M5 20v-1a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v1"/></svg>
@@ -26,6 +30,69 @@
     </div>
   </div>
 </header>
+
+<dialog id="communication-dialog" aria-labelledby="communication-title">
+  <header>
+    <h2 id="communication-title">Wiadomości i powiadomienia</h2>
+    <form method="dialog"><button type="submit" aria-label="Zamknij">×</button></form>
+  </header>
+  <p id="communication-status" role="status"></p>
+  <div id="communication-inbox">
+    <button type="button" id="communication-refresh" class="secondary">Odśwież</button>
+    <details id="communication-events" hidden>
+      <summary>Powiadomienia systemowe</summary>
+      <ul id="communication-event-list"></ul>
+    </details>
+    <ul id="communication-list"></ul>
+    <details id="communication-compose">
+      <summary>Nowa wiadomość</summary>
+      <form id="communication-send">
+        <label>Odbiorca <select name="destination" required></select></label>
+        <label>Temat <input name="title" maxlength="100" required></label>
+        <label>Wiadomość <textarea name="message" maxlength="4000" rows="4" required></textarea></label>
+        <button>Wyślij</button>
+      </form>
+    </details>
+    <details id="communication-staff" hidden>
+      <summary>Stanowiska pracowników</summary>
+      <form id="communication-position">
+        <label>Pracownik <select name="person" required></select></label>
+        <label>Stanowisko <select name="position"></select></label>
+        <button>Zapisz stanowisko</button>
+      </form>
+    </details>
+  </div>
+  <section id="communication-thread" hidden>
+    <button type="button" id="communication-back" class="secondary">Wróć do skrzynki</button>
+    <h3 id="communication-subject"></h3>
+    <button type="button" id="communication-older" class="secondary" hidden>Starsze wiadomości</button>
+    <ol id="communication-messages"></ol>
+    <form id="communication-reply">
+      <label>Odpowiedź <textarea name="message" maxlength="4000" rows="3" required></textarea></label>
+      <button>Wyślij odpowiedź</button>
+    </form>
+  </section>
+</dialog>
+<style>
+#communication-open { position:relative; display:grid; place-items:center; width:44px; height:44px; padding:0; color:white; border:1px solid #ffffff72; border-radius:12px; background:transparent; }
+#communication-open[hidden] { display:none; }
+#communication-count { position:absolute; inset-block-start:-5px; inset-inline-end:-4px; border-radius:12px; padding:2px 4px; font-size:.7rem; color:var(--panel-ink); background:var(--panel-orange); }
+#communication-dialog { width:min(36rem,calc(100% - 1.5rem)); max-height:86dvh; overflow:auto; padding:1rem; border:1px solid var(--panel-border); border-radius:16px; color:var(--panel-ink); }
+#communication-dialog::backdrop { background:#24152299; }
+#communication-dialog header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 0 8px; }
+#communication-dialog h2 { font-size:1.15rem; margin:0; }
+#communication-dialog button { min-height:44px; }
+#communication-dialog ul, #communication-dialog ol { display:grid; gap:8px; list-style:none; padding:0; }
+#communication-list button { width:100%; text-align:start; overflow-wrap:anywhere; }
+#communication-messages li { padding:10px; border-radius:10px; background:var(--panel-lilac); }
+#communication-messages li[data-own="true"] { background:var(--highlight); }
+#communication-messages p { white-space:pre-wrap; overflow-wrap:anywhere; margin:4px 0 0; }
+#communication-dialog details { margin:10px 0; padding:8px; border:1px solid var(--panel-border); border-radius:10px; }
+#communication-dialog summary { cursor:pointer; font-weight:700; }
+#communication-dialog form:not([method="dialog"]), #communication-dialog label { display:grid; gap:6px; min-width:0; }
+#communication-dialog form:not([method="dialog"]) { margin-top:8px; }
+#communication-dialog :is(input,select,textarea) { width:100%; min-width:0; font:inherit; }
+</style>
 
 <button type="button" id="fox-assistant-open" aria-label="Otwórz asystenta Lisek" title="Zapytaj Liska" hidden><!-- FOX_MASCOT --></button>
 
