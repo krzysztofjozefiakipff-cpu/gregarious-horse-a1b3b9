@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 from functools import lru_cache
+from ovh_storage import OVHPhotoStorage, StorageConfig
 
 import psycopg
 import requests
@@ -33,12 +34,25 @@ POLL_SECONDS = max(1,min(int(os.getenv("CARVELO_POLL_SECONDS","2")),60))
 HEADERS = {"apikey":SERVICE_KEY,"Authorization":"Bearer "+SERVICE_KEY}
 MAX_BYTES = 6_000_000
 MAX_PIXELS = 12_000_000
+STORAGE_BACKEND = os.environ.get("CARVAMO_PHOTO_STORAGE_BACKEND", "legacy").strip().lower()
+
+@lru_cache(maxsize=1)
+def ovh_storage():
+    return OVHPhotoStorage(StorageConfig.from_env())
 
 @lru_cache(maxsize=1)
 def session():
     return new_session("u2net")
 
 def get_photo(path):
+    if STORAGE_BACKEND == "ovh":
+        content = ovh_storage().download_original(path, max_bytes=MAX_BYTES)
+        with Image.open(io.BytesIO(content)) as raw:
+            if raw.width * raw.height > MAX_PIXELS:
+                raise ValueError("source_pixel_limit")
+            photo = ImageOps.exif_transpose(raw).convert("RGBA")
+            photo.thumbnail((1400, 1400), Image.Resampling.LANCZOS)
+            return photo
     url=SUPABASE_URL+"/storage/v1/object/authenticated/carvelo-photo-originals/"+quote(path,safe="/")
     resp=requests.get(url,headers=HEADERS,timeout=45)
     if not resp.ok:
@@ -117,12 +131,21 @@ def make_candidate(job, progress=None):
     return out,changed,reason
 
 def upload(path,data):
+    if STORAGE_BACKEND == "ovh":
+        ovh_storage().upload_processed(path, data, content_type="image/png")
+        return
     response=requests.post(SUPABASE_URL+"/storage/v1/object/carvelo-photo-branded/"+quote(path,safe="/"),
                            headers={**HEADERS,"Content-Type":"image/png","x-upsert":"false"},
                            data=data,timeout=90)
     response.raise_for_status()
 
 def remove_uploaded(path):
+    if STORAGE_BACKEND == "ovh":
+        try:
+            ovh_storage().delete_processed(path)
+        except Exception:
+            pass
+        return
     try:
         requests.delete(SUPABASE_URL+"/storage/v1/object/carvelo-photo-branded/"+quote(path,safe="/"),
                         headers=HEADERS,timeout=20)
@@ -174,8 +197,14 @@ def run_once(conn):
     return True
 
 def main():
-    if not all((DATABASE_URL,SUPABASE_URL,SERVICE_KEY)):
-        raise RuntimeError("Missing CARVELO worker host secrets")
+    if STORAGE_BACKEND not in ("legacy", "ovh"):
+        raise RuntimeError("Unsupported photo storage backend")
+    if not DATABASE_URL:
+        raise RuntimeError("Missing worker database configuration")
+    if STORAGE_BACKEND == "legacy" and not all((SUPABASE_URL, SERVICE_KEY)):
+        raise RuntimeError("Missing legacy photo storage configuration")
+    if STORAGE_BACKEND == "ovh":
+        ovh_storage()  # Fail fast on missing OVH credentials before claiming jobs.
     if not SCENE.is_file() or not LOGO.is_file():
         raise RuntimeError("Approved showroom/logo missing")
     print("CARVELO persistent worker listening",flush=True)
