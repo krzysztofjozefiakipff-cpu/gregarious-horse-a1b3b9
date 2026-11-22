@@ -551,6 +551,8 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 .today-heading .quote { position:relative; flex:1; min-width:0; margin:0; padding:9px 11px; border:1px solid #d5c0d5; border-radius:16px; background:#fff8ef; color:var(--panel-plum); }
 #today-fox + .quote::before { content:""; position:absolute; inset-inline-start:-6px; top:50%; width:10px; height:10px; transform:translateY(-50%) rotate(45deg); background:inherit; border-inline-start:1px solid #d5c0d5; border-bottom:1px solid #d5c0d5; }
 .today-heading.is-speaking #today-fox .fox-mascot { animation:fox-nod .55s ease-in-out 3; }
+.today-heading.is-speaking #today-fox .fox-tail-layer { animation:fox-tail-wag .6s ease-in-out 3; }
+.today-heading.is-speaking #today-fox .fox-paw-layer { animation:fox-paw-wave 1.65s ease-in-out; }
 .today-heading .quote blockquote { font-size:clamp(.82rem,2.7vw,1rem); line-height:1.32; font-weight:650; overflow-wrap:anywhere; }
 #calendar-reminder:not([hidden]) { margin-bottom:14px; }
 .today-heading p,#briefing-dates { color:var(--panel-muted); margin-top:7px; }
