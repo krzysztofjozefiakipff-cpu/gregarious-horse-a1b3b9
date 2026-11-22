@@ -91,7 +91,7 @@ async function tracking(db,person,readOnly=false) {
   const closed=day=>saved.has(day)||['leave','training','zero'].includes(exceptions[day]);
   const drafts=await list(db,'SELECT day FROM daily_drafts WHERE person=? AND day<?',person,localDay());
   const missing=[...new Set([...days.filter(day=>day<localDay()),...drafts.map(row=>row.day)])]
-    .filter(day=>!polishHoliday(day)&&!closed(day)).sort();
+    .filter(day=>isSalonWorkday(day)&&!closed(day)).sort();
   const month=days.filter(day=>day.startsWith(localDay().slice(0,7))&&!['leave','training'].includes(exceptions[day]));
   return {missing,exceptions,progress:[month.filter(closed).length,month.length]};
 }
@@ -559,8 +559,9 @@ async function handle(request, env, buildDailyReport=false) {
       if (personal) {
         const drafts=await list(db,'SELECT day,rows,saved_at FROM daily_drafts WHERE person=? AND day IN (?,?)',
           user.id,localDay(),personal.missing[0]??null);
-        personal.drafts=Object.fromEntries(drafts.map(({day,rows})=>[day,JSON.parse(rows)]));
-        personal.draftSavedAt=Object.fromEntries(drafts.map(({day,saved_at})=>[day,saved_at]));
+        const requiredDrafts=drafts.filter(({day})=>isSalonWorkday(day)&&!['leave','training','zero'].includes(personal.exceptions[day]));
+        personal.drafts=Object.fromEntries(requiredDrafts.map(({day,rows})=>[day,JSON.parse(rows)]));
+        personal.draftSavedAt=Object.fromEntries(requiredDrafts.map(({day,saved_at})=>[day,saved_at]));
       }
       const calendar=await list(db,`SELECT person,day,kind,status FROM work_calendar
         WHERE (substr(day,1,7) IN (${placeholders}) OR status='pending') AND ${scope}
@@ -1370,12 +1371,13 @@ async function handle(request, env, buildDailyReport=false) {
     if (user.role!=='seller') return json({error:'Dzienny wpis zapisuje handlowiec.'},403);
     const {day}=body;
     if (!dayValid(day)||day>localDay()) return json({error:'Sprawdź datę wpisu.'},400);
-    if (polishHoliday(day)) return json({error:'Święto jest automatycznie rozliczane jako dzień bez aktywności.'},409);
+    if (!isSalonWorkday(day)) return json({error:'W dniu wolnym wpis nie jest wymagany.'},409);
     const {missing,exceptions}=await tracking(db,user.id);
+    if (['leave','training'].includes(exceptions[day])) return json({error:'W dniu wolnym wpis nie jest wymagany.'},409);
     const reportingToday=path==='/api/day-exception'&&body.kind==='pending'&&day===localDay();
     if (day !== (missing[0] ?? localDay())&&!reportingToday)
       return json({error:'Najpierw rozlicz najstarszy zaległy dzień.'},409);
-    if (['pending','leave','training','zero'].includes(exceptions[day])) return json({error:'Ten dzień ma już status rozliczenia.'},409);
+    if (['pending','zero'].includes(exceptions[day])) return json({error:'Ten dzień ma już status rozliczenia.'},409);
     if (path==='/api/day-exception') {
       if (!['leave','training','pending'].includes(body.kind)||body.kind==='pending'&&!textValid(body.reason))
         return json({error:'Wybierz status i podaj powód dnia bez aktywności.'},400);
