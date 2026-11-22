@@ -48,7 +48,8 @@ let foxSpeaking=null;
 let foxSendByVoice=false;
 
 
-function foxStatus(message) {
+function foxStatus(message,activity='') {
+  foxAssistant.dataset.activity=activity;
   foxAssistantStatus.textContent=message;
   foxAssistantStatus.hidden=!message;
 }
@@ -99,7 +100,7 @@ async function sendFoxRecording(recording,blob) {
   releaseFoxRecording(recording);
   if (foxRecording!==recording||!foxAssistant.open) return;
   foxAssistantMic.textContent='Anuluj';
-  foxStatus('Rozpoznaję pytanie…');
+  foxStatus('Rozpoznaję pytanie…','thinking');
   const upload=new AbortController();
   recording.upload=upload;
   try {
@@ -133,7 +134,7 @@ foxAssistantMic.onclick=async()=>{
   if (foxRecording?.recorder?.state==='recording') {
     foxRecording.recorder.stop();
     foxAssistantMic.textContent='Anuluj';
-    foxStatus('Przetwarzam nagranie…');
+    foxStatus('Przetwarzam nagranie…','thinking');
     return;
   }
   if (foxRecording) {
@@ -172,7 +173,7 @@ foxAssistantMic.onclick=async()=>{
       if (foxRecording===recording&&recorder.state==='recording') recorder.stop();
     },20000);
     foxAssistantMic.textContent='Zakończ i wyślij';
-    foxStatus('Słucham. Po zadaniu pytania wybierz „Zakończ i wyślij”.');
+    foxStatus('Słucham. Po zadaniu pytania wybierz „Zakończ i wyślij”.','listening');
   } catch (error) {
     if (foxRecording!==recording) return;
     stopFoxRecording();
@@ -235,7 +236,7 @@ foxAssistantForm.onsubmit=async event=>{
   stopFoxRecording();
   send.disabled=true;
   foxAssistantMic.disabled=true;
-  foxStatus(feature==='web'?'Lisek szuka w internecie…':'Lisek przygotowuje odpowiedź…');
+  foxStatus(feature==='web'?'Lisek szuka w internecie…':'Lisek przygotowuje odpowiedź…','thinking');
   try {
     const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
       method:'POST',

@@ -6,7 +6,7 @@
     <div class="account-controls" id="account-controls" hidden>
       <strong id="account-greeting"></strong>
       <select id="account-role" aria-label="Zmień rolę" hidden></select>
-      <button type="button" id="fox-assistant-open" aria-label="Otwórz asystenta Lisek" title="Zapytaj Liska" hidden><span aria-hidden="true">🦊</span></button>
+      <button type="button" id="fox-assistant-open" aria-label="Otwórz asystenta Lisek" title="Zapytaj Liska" hidden><!-- FOX_MASCOT --></button>
       <form class="panel-signout" method="post" action="/logout">
         <button type="submit" aria-label="Wyloguj się" title="Wyloguj się">
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5v16h5m3-8h9m-4-4 4 4-4 4"/></svg>
@@ -19,7 +19,7 @@
 
 <dialog id="fox-assistant" aria-labelledby="fox-assistant-title">
   <header>
-    <h2 id="fox-assistant-title"><span aria-hidden="true">🦊</span> Zapytaj Liska</h2>
+    <h2 id="fox-assistant-title"><!-- FOX_MASCOT --> Zapytaj Liska</h2>
     <form method="dialog"><button type="submit" aria-label="Zamknij asystenta">×</button></form>
   </header>
   <div id="fox-assistant-messages" role="log" aria-label="Pytania i odpowiedzi"></div>
@@ -40,11 +40,27 @@
   </form>
 </dialog>
 <style>
-  #fox-assistant-open { border-radius: 50%; min-width: 44px; min-height: 44px; padding: 0; background: #fff1e5; border: 1px solid #e4b48d; font-size: 1.25rem; }
+  #fox-assistant-open { border-radius: 50%; width: 46px; height: 46px; flex: 0 0 46px; padding: 2px; background: #fff1e5; border: 1px solid #e4b48d; }
+  #fox-assistant-open:focus-visible { outline: 2px solid #693768; outline-offset: 2px; }
+  .fox-mascot { display: block; width: 100%; height: 100%; overflow: visible; }
+  #fox-assistant-title .fox-mascot { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 50%; background: #fff1e5; }
+  .fox-head, .fox-tail, .fox-eyes { transform-box: fill-box; }
+  .fox-head { transform-origin: center bottom; }
+  .fox-tail { transform-origin: left bottom; }
+  .fox-eyes { transform-origin: center; animation: fox-blink 6s infinite; }
+  #fox-assistant-open:is(:hover,:focus-visible) .fox-tail { animation: fox-wag .6s ease-in-out 2; }
+  #fox-assistant[data-activity="listening"] .fox-head { animation: fox-listen 1.4s ease-in-out infinite; }
+  #fox-assistant[data-activity="thinking"] .fox-tail { animation: fox-wag .85s ease-in-out infinite; }
+  @keyframes fox-blink { 0%, 44%, 48%, 100% { transform: scaleY(1); } 46% { transform: scaleY(.12); } }
+  @keyframes fox-wag { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-17deg); } }
+  @keyframes fox-listen { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(9deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .fox-mascot * { animation: none !important; }
+  }
   #fox-assistant { box-sizing: border-box; width: min(34rem, calc(100% - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #e4dbe5; border-radius: 16px; padding: 1rem; color: #302033; background: #fff; }
   #fox-assistant::backdrop { background: #26132888; }
   #fox-assistant header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-  #fox-assistant h2 { margin: 0; font-size: 1.15rem; }
+  #fox-assistant h2 { display: flex; align-items: center; gap: .65rem; margin: 0; font-size: 1.15rem; }
   #fox-assistant button { min-height: 44px; border-radius: 8px; }
   #fox-assistant header button { min-width: 44px; font-size: 1.2rem; }
   #fox-assistant-messages { max-height: 36dvh; overflow: auto; overflow-wrap: anywhere; }

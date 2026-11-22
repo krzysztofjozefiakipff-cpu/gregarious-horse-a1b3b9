@@ -2,7 +2,8 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const assets = Object.fromEntries(['zarzadzanie.html','quarter.js','panel-navigation.js','workbook-plan.js','work-calendar.js','reports.js','briefings.js','management.js','daily.html','daily.js','z-zycia-salonu.html','salon-life.js','account-header.js'].map(name =>
   ['/'+name, readFileSync('public/'+name,'utf8')]));
-const accountHeader=readFileSync('public/account-header.html','utf8');
+const mascot=readFileSync('public/fox-mascot.html','utf8').trim();
+const accountHeader=readFileSync('public/account-header.html','utf8').replaceAll('<!-- FOX_MASCOT -->',mascot);
 const panelPages=['/daily.html','/zarzadzanie.html','/z-zycia-salonu.html'];
 for (const page of panelPages) assets[page]=assets[page].replace('<!-- ACCOUNT_HEADER -->',accountHeader);
 for (const script of ['daily.js','management.js','panel-navigation.js','workbook-plan.js','work-calendar.js','reports.js','briefings.js','salon-life.js','account-header.js']) {
