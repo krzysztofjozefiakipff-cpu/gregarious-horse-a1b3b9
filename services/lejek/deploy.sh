@@ -55,12 +55,28 @@ if [[ -n "${OPENAI_API_KEY:-}" ]]; then
   docker run --rm -i --network "$mail_network" --read-only --cap-drop ALL \
     --security-opt no-new-privileges -e OPENAI_API_KEY "$image" node --input-type=module <<'NODE'
 import {createAssistant} from './scripts/assistant.mjs';
-const ask=createAssistant({key:process.env.OPENAI_API_KEY});
+const ask=createAssistant({key:process.env.OPENAI_API_KEY.trim(),fetchResponse:async (...args)=>{
+  const response=await fetch(...args);
+  if (!response.ok) {
+    const {error}=await response.clone().json().catch(()=>({}));
+    const codes=['invalid_api_key','insufficient_quota','model_not_found','invalid_request_error',
+      'rate_limit_exceeded','unsupported_country_region_territory','missing_scope','billing_hard_limit_reached'];
+    const code=codes.includes(error?.code)?error.code:codes.includes(error?.type)?error.type:'unknown';
+    console.error('Bieg Wyżej: OpenAI HTTP '+response.status+' ('+code+')');
+  } else {
+    const result=await response.clone().json();
+    console.log('Bieg Wyżej: OpenAI HTTP '+response.status+', completed='+String(result.status==='completed'));
+  }
+  return response;
+}});
 try {
   const answer=await ask('Zwróć obiekt JSON z polem ok o wartości true.', {test:true}, true);
   if (answer?.ok!==true) throw new Error('Unexpected response');
   console.log('Bieg Wyżej: OpenAI API verified from OVH');
-} catch {
+} catch (error) {
+  const cause=error?.cause?.code;
+  if (['ENOTFOUND','EAI_AGAIN','ECONNRESET','UND_ERR_CONNECT_TIMEOUT','ENETUNREACH'].includes(cause))
+    console.error('Bieg Wyżej: OpenAI network error '+cause);
   console.error('Bieg Wyżej: OpenAI API test failed from OVH');
   process.exitCode=1;
 }
