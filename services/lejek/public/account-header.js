@@ -25,4 +25,53 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
   const controls=document.getElementById('account-controls');
   controls.querySelector('.panel-signout').hidden=Boolean(preview);
   controls.hidden=false;
+  foxAssistantOpen.hidden=Boolean(preview);
+  foxAssistantRole=preview?null:role;
 }
+
+const foxAssistantOpen=document.getElementById('fox-assistant-open');
+const foxAssistant=document.getElementById('fox-assistant');
+const foxAssistantForm=document.getElementById('fox-assistant-form');
+const foxAssistantQuestion=document.getElementById('fox-assistant-question');
+const foxAssistantMessages=document.getElementById('fox-assistant-messages');
+const foxAssistantStatus=document.getElementById('fox-assistant-status');
+let foxAssistantRole=null;
+
+foxAssistantOpen.onclick=()=>foxAssistant.showModal();
+
+function appendFoxMessage(speaker,message) {
+  const row=document.createElement('p');
+  row.dataset.speaker=speaker;
+  const label=document.createElement('strong');
+  label.textContent=speaker;
+  row.append(label,'\n'+message);
+  foxAssistantMessages.append(row);
+  foxAssistantMessages.scrollTop=foxAssistantMessages.scrollHeight;
+}
+
+foxAssistantForm.onsubmit=async event=>{
+  event.preventDefault();
+  const question=foxAssistantQuestion.value.trim();
+  const send=foxAssistantForm.querySelector('button');
+  if (!question||!foxAssistantRole||send.disabled) return;
+  send.disabled=true;
+  foxAssistantStatus.hidden=false;
+  foxAssistantStatus.textContent='Lisek przygotowuje odpowiedź…';
+  try {
+    const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({feature:'fox',question})
+    });
+    const result=await response.json();
+    if (!response.ok||typeof result.text!=='string') throw new Error(result.error);
+    appendFoxMessage('Ty',question);
+    appendFoxMessage('Lisek',result.text);
+    if (foxAssistantQuestion.value.trim()===question) foxAssistantQuestion.value='';
+    foxAssistantStatus.hidden=true;
+  } catch (error) {
+    foxAssistantStatus.textContent=error.message||'Nie udało się pobrać odpowiedzi. Spróbuj ponownie.';
+  } finally {
+    send.disabled=false;
+  }
+};

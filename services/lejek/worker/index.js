@@ -264,7 +264,7 @@ async function handle(request, env, buildDailyReport=false) {
 
   const user={...assigned,role,group:head?.group_name};
   if (path==='/api/salon-life'||path==='/api/salon-life/photo') return handleSalonLife(request,url,db,user,roles,email,preview);
-  if (role==='staff') {
+  if (role==='staff'&&path!=='/api/assistant') {
     if (path==='/api/daily'&&request.method==='GET') return json({role,redirect:'/z-zycia-salonu.html'});
     return json({error:'To konto ma dostęp do zakładki Z życia salonu.'},403);
   }
@@ -284,7 +284,7 @@ async function handle(request, env, buildDailyReport=false) {
   const members=accountRole('accounts','seller');
   const managers=accountRole('accounts','manager');
   const groupSalon='salon IN (SELECT salon FROM dealer_group_salons WHERE group_name=?)';
-  const filters={admin:'',group:' AND '+groupSalon,manager:' AND (salon=? OR salon IN (SELECT salon FROM manager_salons WHERE manager=?))',seller:' AND id=?'};
+  const filters={admin:'',group:' AND '+groupSalon,manager:' AND (salon=? OR salon IN (SELECT salon FROM manager_salons WHERE manager=?))',seller:' AND id=?',staff:' AND id=?'};
   const params=user.role==='admin'?[]:user.role==='group'?[user.group]:user.role==='manager'?[user.salon,user.id]:[user.id];
   const accountStatuses=`CASE WHEN EXISTS (SELECT 1 FROM archived_users au WHERE au.email=accounts.email) THEN 'inactive'
          WHEN EXISTS (SELECT 1 FROM lejek_credentials lc WHERE lc.email=accounts.email) THEN 'active'
@@ -763,17 +763,20 @@ async function handle(request, env, buildDailyReport=false) {
   if (!body || typeof body!=='object') return json({error:'Nieprawidłowy formularz.'},400);
   if (path==='/api/assistant') {
     const {feature,salon,question}=body;
-    const allowed=feature==='today'?role==='seller':feature==='briefing'?role==='manager'
-      :['report','chat'].includes(feature)&&managesSalonPlans;
+    const isFox=feature==='fox';
+    const allowed=isFox||(feature==='today'?role==='seller':feature==='briefing'?role==='manager'
+      :['report','chat'].includes(feature)&&managesSalonPlans);
     if (!allowed) return json({error:'Brak dostępu do tej funkcji asystenta.'},403);
     if (!env.assist) return json({error:'Asystent AI nie jest jeszcze skonfigurowany.'},503);
     if (salon!==undefined&&typeof salon!=='string') return json({error:'Wybierz salon.'},400);
     if (salon&&!managedSalons.has(salon)) return json({error:'Brak dostępu do salonu.'},403);
-    if (feature==='chat'&&(typeof question!=='string'||!question.trim()||question.length>500))
+    if ((isFox||feature==='chat')&&(typeof question!=='string'||!question.trim()||question.length>500))
       return json({error:'Wpisz pytanie do 500 znaków.'},400);
     const sourceLabels=['Walk-in','Facebook','Strona WWW','Kontakt z salonem','OTOMOTO','Polecenia','Baza retencyjna','Importerskie','Broker','Serwis','Galerie','Targi','Odzyskane przez BDC'];
     let facts,instructions;
-    if (feature==='today') {
+    if (isFox&&!managesSalonPlans&&role!=='seller') {
+      facts={};
+    } else if (feature==='today'||isFox&&role==='seller') {
       const report=await loadBriefing(localDay(),{id:user.id,salon:user.salon,name:'',planEligible:true});
       const person=report.salons[0]?.people[0];
       if (!person) return json({error:'Brak danych do analizy dnia.'},422);
@@ -808,6 +811,10 @@ async function handle(request, env, buildDailyReport=false) {
     } else {
       const target=new URL('/api/management-reports',url.origin);
       for (const field of ['type','month','day']) if (typeof body[field]==='string') target.searchParams.set(field,body[field]);
+      if (isFox) {
+        target.searchParams.set('type','monthly');
+        target.searchParams.set('month',localDay().slice(0,7));
+      }
       target.searchParams.set('role',role);
       const response=await handle(new Request(target,{headers:request.headers}),env);
       if (!response.ok) return response;
@@ -816,7 +823,7 @@ async function handle(request, env, buildDailyReport=false) {
         .map(({salon,totals,targets,expected,sources,recommendations})=>({salon,totals,targets,expected,sources,
           recommendations:data.type==='marketing'?recommendations:undefined}));
       facts={month:report.month,through:report.through,marketing:report.marketing,salons:scopedSalons(report)};
-      if (['monthly','marketing'].includes(report.type)) {
+      if (!isFox&&['monthly','marketing'].includes(report.type)) {
         const previousMonth=new Date(Date.parse(report.month+'-01')-86400000).toISOString().slice(0,7);
         target.searchParams.set('month',previousMonth);
         const previous=await handle(new Request(target,{headers:request.headers}),env);
@@ -824,9 +831,20 @@ async function handle(request, env, buildDailyReport=false) {
       }
       instructions='Porównaj dostępne salony i źródła. Podaj liczebność i etap spadku konwersji, jeśli są dane. Przy małej próbie unikaj mocnych wniosków. Wskaż priorytety marketingowe, jeśli uzasadniają je dane. Jeśli podano pytanie, odpowiedz na nie.';
     }
+    if (isFox) {
+      const sections={
+        seller:['Wpisz działania','Zatwierdź dzień','Do zrobienia dziś','Lekcja na dziś','Kalendarz pracy'],
+        manager:['Odprawa dzienna','Plany handlowców','Raporty zarządcze','Lekcja na dziś','Kalendarz pracy'],
+        group:['Plany salonów','Raporty zarządcze','Kalendarz pracy'],
+        admin:['Konta użytkowników','Grupy dealerskie i salony'],
+        staff:['Z życia salonu']
+      };
+      facts={role,sections:sections[role],...facts};
+      instructions='Jesteś Liskiem, asystentem Biegu Wyżej. Odpowiedz bezpośrednio na pytanie. Możesz objaśniać lejek sprzedaży, planowanie i pracę z klientem. Dane liczbowe podawaj tylko na podstawie przekazanych danych. Jeżeli pytanie dotyczy innej osoby, salonu lub okresu, dla których nie otrzymałeś danych, powiedz wprost, że ich nie widzisz. Nie wymyślaj nazw ekranów, uprawnień ani funkcji aplikacji.';
+    }
     const salesLabels=['Zamówienia','Faktury','Rejestracje','Opinie Google'];
     const goalLabels=dailyActionMetrics.map(([label])=>label);
-    const input={facts,salesLabels,goalLabels,sourceLabels,sourceDailyColumns:['Leady','Próby kontaktu','Spotkania','Spotkania odbyte (pole historyczne)','Jazdy próbne','Oferty','Follow-up','Zamówienia','Rejestracje','Opinie Google','Faktury'],question:feature==='chat'?question.trim():undefined};
+    const input={facts,salesLabels,goalLabels,sourceLabels,sourceDailyColumns:['Leady','Próby kontaktu','Spotkania','Spotkania odbyte (pole historyczne)','Jazdy próbne','Oferty','Follow-up','Zamówienia','Rejestracje','Opinie Google','Faktury'],question:isFox||feature==='chat'?question.trim():undefined};
     if (JSON.stringify(input).length>55000) return json({error:'Wybierz jeden salon, aby zawęzić analizę.'},422);
     try {return json({text:await env.assist(instructions,input)});}
     catch {return json({error:'Asystent jest chwilowo niedostępny. Spróbuj ponownie.'},503);}

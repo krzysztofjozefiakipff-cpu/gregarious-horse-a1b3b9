@@ -6,6 +6,7 @@
     <div class="account-controls" id="account-controls" hidden>
       <strong id="account-greeting"></strong>
       <select id="account-role" aria-label="Zmień rolę" hidden></select>
+      <button type="button" id="fox-assistant-open" aria-label="Otwórz asystenta Lisek" title="Zapytaj Liska" hidden><span aria-hidden="true">🦊</span></button>
       <form class="panel-signout" method="post" action="/logout">
         <button type="submit" aria-label="Wyloguj się" title="Wyloguj się">
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5v16h5m3-8h9m-4-4 4 4-4 4"/></svg>
@@ -15,3 +16,31 @@
     <img class="dealer-logo" id="account-dealer-logo" alt="" hidden>
   </div>
 </header>
+
+<dialog id="fox-assistant" aria-labelledby="fox-assistant-title">
+  <header>
+    <h2 id="fox-assistant-title"><span aria-hidden="true">🦊</span> Zapytaj Liska</h2>
+    <form method="dialog"><button type="submit" aria-label="Zamknij asystenta">×</button></form>
+  </header>
+  <div id="fox-assistant-messages" role="log" aria-label="Pytania i odpowiedzi"></div>
+  <p id="fox-assistant-status" role="status" hidden></p>
+  <form id="fox-assistant-form">
+    <label for="fox-assistant-question">Twoje pytanie</label>
+    <textarea id="fox-assistant-question" rows="2" maxlength="500" required placeholder="W czym Lisek może pomóc?"></textarea>
+    <button type="submit">Wyślij pytanie</button>
+  </form>
+</dialog>
+<style>
+  #fox-assistant-open { border-radius: 50%; min-width: 44px; min-height: 44px; padding: 0; background: #fff1e5; border: 1px solid #e4b48d; font-size: 1.25rem; }
+  #fox-assistant { box-sizing: border-box; width: min(34rem, calc(100% - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #e4dbe5; border-radius: 16px; padding: 1rem; color: #302033; background: #fff; }
+  #fox-assistant::backdrop { background: #26132888; }
+  #fox-assistant header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  #fox-assistant h2 { margin: 0; font-size: 1.15rem; }
+  #fox-assistant button { min-height: 44px; border-radius: 8px; }
+  #fox-assistant header button { min-width: 44px; font-size: 1.2rem; }
+  #fox-assistant-messages { max-height: 36dvh; overflow: auto; overflow-wrap: anywhere; }
+  #fox-assistant-messages p { margin: .6rem 0; padding: .65rem; border-radius: 8px; background: #f5eef6; white-space: pre-wrap; }
+  #fox-assistant-messages p[data-speaker="Ty"] { background: #fff1e5; }
+  #fox-assistant-form { display: grid; gap: .45rem; margin-top: .75rem; }
+  #fox-assistant-question { box-sizing: border-box; width: 100%; font-size: 1rem; }
+</style>
