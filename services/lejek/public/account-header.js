@@ -49,8 +49,7 @@ const foxAssistantMessages=document.getElementById('fox-assistant-messages');
 const foxAssistantStatus=document.getElementById('fox-assistant-status');
 const foxAssistantMic=document.getElementById('fox-assistant-mic');
 
-const foxSpeech=window.speechSynthesis;
-const foxCanSpeak=Boolean(foxSpeech&&window.SpeechSynthesisUtterance);
+
 let foxAssistantRole=null;
 let foxRecording=null;
 let foxSpeaking=null;
@@ -64,31 +63,60 @@ function foxStatus(message,activity='') {
 }
 
 function stopFoxSpeech() {
-  if (!foxSpeaking) return;
-  foxSpeaking.button.textContent='Odsłuchaj odpowiedź';
+  const current=foxSpeaking;
+  if (!current) return;
   foxSpeaking=null;
-  foxSpeech.cancel();
+  current.controller.abort();
+  current.audio.pause();
+  current.audio.removeAttribute('src');
+  if (current.url) URL.revokeObjectURL(current.url);
+  current.button.textContent='Odsłuchaj odpowiedź';
 }
 
-function speakFoxAnswer(message,button) {
-  const wasSpeaking=foxSpeaking?.button===button;
+async function playFoxAudio(current) {
+  current.ready=false;
+  current.button.textContent='Zatrzymaj odczyt';
+  try {
+    await current.audio.play();
+  } catch(error) {
+    if (foxSpeaking!==current) return;
+    if (error.name==='NotAllowedError') {
+      current.ready=true;
+      current.button.textContent='Odtwórz odpowiedź';
+      return;
+    }
+    stopFoxSpeech();
+    foxStatus('Nie udało się odtworzyć odpowiedzi. Spróbuj ponownie.');
+  }
+}
+
+async function speakFoxAnswer(message,button) {
+  if (foxSpeaking?.button===button) {
+    if (foxSpeaking.ready) return playFoxAudio(foxSpeaking);
+    stopFoxSpeech();
+    return;
+  }
   stopFoxSpeech();
-  if (wasSpeaking) return;
-  const speech=new SpeechSynthesisUtterance(message);
-  speech.lang='pl-PL';
-  const voice=foxSpeech.getVoices().find(item=>/^pl(?:-|$)/i.test(item.lang));
-  if (voice) speech.voice=voice;
-  foxSpeaking={speech,button};
-  button.textContent='Zatrzymaj odczyt';
-  const finish=(error=false)=>{
-    if (foxSpeaking?.speech!==speech) return;
-    foxSpeaking=null;
-    button.textContent='Odsłuchaj odpowiedź';
-    if (error) foxStatus('Nie udało się odtworzyć odpowiedzi. Spróbuj użyć przycisku odsłuchu.');
-  };
-  speech.onend=()=>finish();
-  speech.onerror=()=>finish(true);
-  foxSpeech.speak(speech);
+  const current={audio:new Audio(),button,controller:new AbortController(),url:null,ready:false};
+  foxSpeaking=current;
+  button.textContent='Anuluj przygotowanie głosu';
+  try {
+    const response=await fetch('/api/assistant?'+new URLSearchParams({role:foxAssistantRole}),{
+      method:'POST',headers:{'Content-Type':'application/json'},signal:current.controller.signal,
+      body:JSON.stringify({feature:'speak',text:message})
+    });
+    if (!response.ok) throw new Error((await response.json()).error);
+    const audio=await response.blob();
+    if (foxSpeaking!==current) return;
+    current.url=URL.createObjectURL(audio);
+    current.audio.onended=()=>{if (foxSpeaking===current) stopFoxSpeech();};
+    current.audio.src=current.url;
+    await playFoxAudio(current);
+  } catch(error) {
+    if (foxSpeaking!==current) return;
+    stopFoxSpeech();
+    foxStatus(error.message||'Nie udało się przygotować głosu Liska. Spróbuj ponownie.');
+  }
 }
 
 function releaseFoxRecording(recording) {
@@ -223,7 +251,7 @@ function appendFoxMessage(speaker,message,citations=[]) {
   row.append(message.slice(offset));
   foxAssistantMessages.append(row);
   let listen;
-  if (speaker!=='Ty'&&foxCanSpeak) {
+  if (speaker!=='Ty'&&foxAssistantRole&&message.length<=4000) {
     listen=document.createElement('button');
     listen.type='button';
     listen.textContent='Odsłuchaj odpowiedź';

@@ -286,7 +286,7 @@ function serveAsset(path,method) {
     const asset = path==='/'?'/daily.html':path;
     if (method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});
     return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8',
-      'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; object-src 'none'; base-uri 'none'; form-action 'self'"}});
+      'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'"}});
 }
 
 async function handle(request, env, buildDailyReport=false, expectedDraft=undefined) {
@@ -918,6 +918,17 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         :action.type==='calendar-remove'?'Usunięto wpis z kalendarza.'
         :role==='seller'?'Wysłano zgłoszenie do kierownika. Liczba zapisanych dni: '+days+'.'
         :'Zapisano zmiany w kalendarzu. Liczba zapisanych dni: '+days+'.'});
+    }
+    if (feature==='speak') {
+      const message=typeof body.text==='string'?body.text.trim():'';
+      if (!message||message.length>4000) return json({error:'Tekst do odsłuchu musi mieć od 1 do 4000 znaków.'},400);
+      if (!env.foxSpeech) return json({error:'Głos Liska jest chwilowo niedostępny.'},503);
+      try {
+        const audio=await env.foxSpeech(message,request.signal);
+        return new Response(audio,{headers:{...headers,'Content-Type':'audio/mpeg'}});
+      } catch {
+        return json({error:'Nie udało się przygotować głosu Liska. Spróbuj ponownie.'},503);
+      }
     }
     if (feature==='transcribe') {
       const {audio,mime}=body;
