@@ -1792,6 +1792,7 @@ function renderSalonSummary(view,team=[],period=null) {
     card.className='salon-result-card';
     const details=document.createElement('details');
     details.dataset.salon=plan.salon;
+    details.setAttribute('name','salon-performance-details');
     details.open=expanded.get(plan.salon)??false;
     const summary=document.createElement('summary');
     summary.textContent='Szczegóły realizacji';
@@ -1956,6 +1957,7 @@ function renderManagerDashboard(view,detailOnly=false) {
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
   for (const {seller,status,metrics,weakest,orders,hasDraft} of team) {
     const detail=document.createElement('details');
+    detail.setAttribute('name','team-performance-details');
     const summary=document.createElement('summary');
     const name=document.createElement('strong');
     name.textContent=seller.name+(view.salons.length>1?' · '+seller.salon:'');
@@ -2281,6 +2283,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     reset.onclick=()=>{edited.fill(false);recalculate();updateSource();};
     title.textContent=source+' · zamówienia: '+(saved?.[0]??0)+' · leady: '+(saved?.[7]??0);
     panel.className='planning-source';
+    panel.setAttribute('name','planning-source-'+person.id);
     for (const input of [...manual.inputs,...activity.inputs]) {
       input.addEventListener('invalid',()=>{sourceDetails.open=true;panel.open=true;});
     }
@@ -3633,6 +3636,7 @@ adminBackfill.addEventListener('toggle',()=>{
     const details=document.createElement('details');
     const summary=document.createElement('summary');
     summary.textContent=source;
+    details.setAttribute('name','backfill-sources');
     details.open=row===0;
     const fields=document.createElement('div');
     fields.className='user-search-fields';
@@ -3971,6 +3975,7 @@ async function loadLessonPacks() {
         }
       };
       const preview=document.createElement('details');
+      preview.setAttribute('name','lesson-pack-previews');
       const summary=document.createElement('summary');
       summary.textContent=pack.count+' lekcji · '+(pack.active?'Wyświetlana':'Wyłączona');
       const list=document.createElement('ol');

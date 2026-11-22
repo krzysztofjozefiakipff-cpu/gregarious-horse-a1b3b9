@@ -268,11 +268,13 @@ function renderDailyManagementSalon(card,salon,csv,closed) {
 
   const headers=['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'];
   const activities=reportElement('details');
+  activities.setAttribute('name','daily-report-salons');
   activities.append(reportElement('summary','Aktywności i rozliczenie dni pracy'),
     reportTable(headers,teamMetrics.slice(0,6)));
   csv.push(...teamMetrics.slice(0,6).map(row=>[salon.salon,'Razem',...row]));
   for (const [index,person] of salon.people.entries()) {
     const details=reportElement('details');
+    details.setAttribute('name','daily-report-people-'+salon.salon);
     const name=person.name+(person.archived?' · archiwum':'');
     const metrics=peopleMetrics[index].slice(0,6);
     details.append(reportElement('summary',name),reportTable(headers,metrics));
@@ -296,6 +298,7 @@ function renderMonthlyManagementSalon(card,salon,csv) {
   const metrics=reportMetrics(salon.totals,salon.targets,salon.expected);
   card.append(reportElement('h3','Realizacja sprzedaży i cele'),reportSalesTable(salon));
   const details=reportElement('details');
+  details.setAttribute('name','monthly-report-salons');
   details.append(reportElement('summary','Aktywności salonu'),
     reportTable(['Aktywność','Wynik','Plan miesięczny','Realizacja','Plan do daty'],metrics.slice(0,6)));
   const conversion=reportSourceConversionRows(salon);
@@ -345,12 +348,14 @@ function renderMarketingSalon(card,salon,benchmarks,csv) {
   card.append(reportElement('h3','Konwersja według źródła'),
     reportTable(['Źródło leadów','Leady','Zamówienia','Zamówienia / leady'],reportSourceConversionRows(salon)));
   const funnel=reportElement('details');
+  funnel.setAttribute('name','marketing-report-funnels');
   funnel.append(reportElement('summary','Etapy lejka według źródła'));
   for (const [index,source] of salon.sources.entries()) {
     const stages=benchmarks.stages.map(stage=>marketingStageValues(source,stage));
     for (const stage of stages) csv.push([salon.salon,'Etap',sources[index],...stage,'','','','','']);
     if (!source.stages.some(Boolean)) continue;
     const channel=reportElement('details');
+    channel.setAttribute('name','marketing-report-sources-'+salon.salon);
     channel.append(reportElement('summary',sources[index]),
       reportTable(['Etap','Licznik','Mianownik','Wskaźnik'],stages));
     funnel.append(channel);
@@ -447,6 +452,7 @@ function renderLiveBriefingReport(report,selectedSalon) {
     csv.push(...rows(salon).map(row=>[salon.salon,'Razem',...row]));
     for (const person of salon.people) {
       const details=reportElement('details');
+      details.setAttribute('name','briefing-report-people-'+salon.salon);
       const name=person.name+(person.archived?' · archiwum':'');
       details.append(reportElement('summary',name),reportTable(headers,rows(person)));
       card.append(details);
