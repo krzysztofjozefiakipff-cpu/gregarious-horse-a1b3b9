@@ -1962,7 +1962,7 @@ function sourcePlanProposal(totals,shares,rates) {
 
 function copySourcePlan(donor,shares,rates) {
   if (donor.sourceTargets) return donor.sourceTargets;
-  const mix=shares??[...defaultMix,0];
+  const mix=shares??defaultMix;
   const values=sourcePlanProposal(donor.targets.map(target=>target??0),mix,rates);
   donor.funnelTargets.forEach((total,column)=>{
     if (total==null) return;
@@ -2098,7 +2098,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   const goalsStep=step('2. Cele miesięczne');
   const reviewStep=step('3. Podgląd i korekta');
   const reference=document.createElement('p');
-  reference.textContent='Plan zakłada lepszą obsługę dostępnych leadów. Kalkulator przewiduje kolejne próby kontaktu oraz follow-up po niemal każdej ofercie. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach widać wynik salonu. Lepszy wynik może podnieść cel konwersji. Przy słabszym wyniku obok celu pokażemy różnicę do nadrobienia.';
+  reference.textContent='Liczbę zamówień dzielimy przez przyjętą konwersję źródła i zaokrąglamy liczbę leadów w górę. Stawki bazowe to założenia do planu. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach pokazujemy zaobserwowaną relację zamówień do leadów w salonie. Lepszy wynik może podnieść stawkę używaną do wyliczeń.';
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
   const summary=document.createElement('dl');
   summary.className='planning-totals';
@@ -2180,7 +2180,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     const rateNote=document.createElement('p');
     const targetRate=sourceConversionRate(index,sourceRates[index]);
     const historyRate=sourceHistoryRates[index];
-    rateNote.textContent='Cel konwersji leadów na zamówienia · '+percent.format(targetRate);
+    rateNote.textContent='Konwersja przyjęta do planu · '+percent.format(targetRate);
     if (historyRate!=null) {
       const gap=targetRate-historyRate;
       rateNote.textContent+=' · wynik salonu '+percent.format(historyRate)
@@ -2357,6 +2357,48 @@ function planAction(button,path,body,month) {
   }).finally(()=>{button.disabled=false;});
 }
 
+function salonLeadEstimate(plan,input) {
+  const box=document.createElement('details');
+  const title=document.createElement('summary');
+  const note=document.createElement('p');
+  const list=document.createElement('ul');
+  box.className='planning-compact';
+  box.append(title,note,list);
+  const sourcePlans=plan.team.filter(person=>person.sourceTargets)
+    .map(person=>effectiveSourcePlan(person.sourceTargets,person.absenceAdjustment));
+  const weights=sources.map((_,index)=>sourcePlans.reduce((sum,rows)=>sum+(rows[index]?.[0]??0),0));
+  const hasMix=weights.some(Boolean);
+  const rates=plan.sourceRates??[];
+  const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
+  const number=new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0});
+  const update=()=>{
+    const goal=input.valueAsNumber;
+    list.replaceChildren();
+    if (!input.validity.valid||!Number.isSafeInteger(goal)) {
+      title.textContent='Szacowana liczba leadów';
+      note.textContent='Wpisz cel zamówień salonu.';
+      return;
+    }
+    const orders=allocateSourceTargets(goal,hasMix?weights:defaultMix);
+    const leads=orders.map((count,index)=>sourceActivityProposal(index,count,rates[index])[3]);
+    const total=leads.reduce((sum,count)=>sum+count,0);
+    title.textContent='Szacowana liczba leadów · '+(Number.isSafeInteger(total)?number.format(total):'—');
+    note.textContent=(hasMix?'Podział zamówień według zapisanych planów zespołu.':'Domyślny podział zamówień. Zapisz plany handlowców według źródeł, aby użyć podziału zespołu.')
+      +' Szacunek służy do oceny celu salonu.';
+    if (!Number.isSafeInteger(total)) return;
+    orders.forEach((count,index)=>{
+      if (!count) return;
+      const item=document.createElement('li');
+      item.textContent=sources[index]+' · zamówienia '+number.format(count)+' · konwersja '
+        +percent.format(sourceConversionRate(index,rates[index]))+' · leady '+number.format(leads[index]);
+      list.append(item);
+    });
+  };
+  input.addEventListener('input',update);
+  update();
+  return box;
+}
+
 function salonGoalsEditor(plan,month) {
   const section=document.createElement('details');
   section.className='planning-compact';
@@ -2398,6 +2440,7 @@ function salonGoalsEditor(plan,month) {
   const form=document.createElement('form');
   const {fields,inputs}=planTargets(plan.targets.map((value,index)=>plan.configured[index]?value:null),Number.MAX_SAFE_INTEGER);
   form.append(fields);
+  if (data.role==='manager') form.append(salonLeadEstimate(plan,inputs[0]));
   const reason=document.createElement('textarea');
   if (restricted) {
     const label=document.createElement('label');

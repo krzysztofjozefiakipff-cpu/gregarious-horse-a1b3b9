@@ -2,21 +2,21 @@
 // Columns: orders per lead, attempts per lead, scheduled meetings per lead, drives per scheduled meeting,
 // offers per lead, follow-ups per offer. Walk-in matches the daily entry's automatic counts.
 const sourceAssumptions = [
-  [0.25,1,1,0.35,0.65,0.95],   // Walk-in
-  [0.05,1.7,0.23,0.45,0.32,1], // Facebook
-  [0.11,1.5,0.38,0.45,0.48,1], // Strona WWW
-  [0.20,1.4,0.53,0.50,0.58,1], // Kontakt z salonem
-  [0.08,1.5,0.34,0.45,0.42,1], // OTOMOTO
-  [0.27,1.3,0.59,0.50,0.64,1], // Polecenia
-  [0.07,1.5,0.26,0.45,0.35,1], // Baza retencyjna
-  [0.08,1.6,0.31,0.45,0.40,1], // Importerskie
-  [0.16,1.3,0.23,0.25,0.65,1], // Broker
-  [0.07,1.4,0.28,0.40,0.36,1], // Serwis
-  [0.04,1.5,0.19,0.45,0.28,1], // Galerie
-  [0.05,1.5,0.23,0.45,0.32,1], // Targi
-  [0.07,1.5,0.32,0.45,0.40,1]  // Odzyskane przez BDC
+  [0.28,1,1,0.35,0.65,0.95],   // Walk-in
+  [0.07,1.7,0.23,0.45,0.32,1], // Facebook
+  [0.14,1.5,0.38,0.45,0.48,1], // Strona WWW
+  [0.22,1.4,0.53,0.50,0.58,1], // Kontakt z salonem
+  [0.11,1.5,0.34,0.45,0.42,1], // OTOMOTO
+  [0.32,1.3,0.59,0.50,0.64,1], // Polecenia
+  [0.11,1.5,0.26,0.45,0.35,1], // Baza retencyjna
+  [0.11,1.6,0.31,0.45,0.40,1], // Importerskie
+  [0.20,1.3,0.23,0.25,0.65,1], // Broker
+  [0.10,1.4,0.28,0.40,0.36,1], // Serwis
+  [0.06,1.5,0.19,0.45,0.28,1], // Galerie
+  [0.07,1.5,0.23,0.45,0.32,1], // Targi
+  [0.10,1.5,0.32,0.45,0.40,1]  // Odzyskane przez BDC
 ];
-const defaultMix = [6, 1, 1, 4, 0, 1, 1, 1, 0, 0, 0, 0];
+const defaultMix = [6, 1, 1, 4, 0, 1, 1, 1, 0, 0, 0, 0, 0];
 
 const sourceProfilePresets={
   salon:{label:'Salonowy',shares:[45,0,0,20,0,15,10,0,0,7,2,1,0]},
