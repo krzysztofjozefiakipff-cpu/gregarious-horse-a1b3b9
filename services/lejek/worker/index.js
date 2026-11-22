@@ -464,11 +464,12 @@ async function handle(request, env, buildDailyReport=false) {
           if (!salon||!Array.isArray(matrix)) continue;
           if (!historicalRates.has(salon)) historicalRates.set(salon,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
           const totals=historicalRates.get(salon);
-          if (!personalHistory.has(row.person)) personalHistory.set(row.person,Array(sourceCount).fill(0));
-          const volumes=personalHistory.get(row.person);
+          if (!personalHistory.has(row.person)) personalHistory.set(row.person,Array.from({length:sourceCount},()=>({leads:0,orders:0})));
+          const personal=personalHistory.get(row.person);
           matrix.slice(0,sourceCount).forEach((source,index)=>{
             totals[index].leads+=source[0]??0;
-            volumes[index]+=source[0]??0;
+            personal[index].leads+=source[0]??0;
+            personal[index].orders+=source[7]??0;
             totals[index].orders+=source[7]??0;
           });
         }
@@ -522,7 +523,12 @@ async function handle(request, env, buildDailyReport=false) {
           change:change?{id:change.id,status:change.status,targets:JSON.parse(change.proposed_targets),reason:change.reason,requester:change.requester}:null,
           contributors,actuals:totals.get(salon),editable:Boolean(approvals&&managers.length),managers,
           manager:managers.find(manager=>manager.id===saved?.manager)?.id??null,
-          team:team.map(({version,...person})=>({...person,approved:Boolean(version),historicalLeads:personalHistory.get(person.id)??[],plannedWorkdays:plannedDays.get(person.id),absenceAdjustment:adjustments[person.id+'/'+month]??null}))});
+          team:team.map(({version,...person})=>{
+            const personal=personalHistory.get(person.id)??[];
+            return {...person,approved:Boolean(version),historicalLeads:personal.map(row=>row.leads),
+              personalRates:personal.map(({leads,orders},index)=>calibratedSourceRate(index,leads,orders)),
+              plannedWorkdays:plannedDays.get(person.id),absenceAdjustment:adjustments[person.id+'/'+month]??null};
+          })});
       }
       return {plans,archivedActivity:[...archivedActivity.values()]};
     };

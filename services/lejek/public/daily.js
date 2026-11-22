@@ -2141,7 +2141,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   const goalsStep=step('2. Cele miesięczne');
   const reviewStep=step('3. Podgląd i korekta');
   const reference=document.createElement('p');
-  reference.textContent='Liczbę zamówień dzielimy przez przyjętą konwersję źródła i zaokrąglamy liczbę leadów w górę. Stawki bazowe to założenia do planu. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach pokazujemy zaobserwowaną relację zamówień do leadów w salonie. Lepszy wynik może podnieść stawkę używaną do wyliczeń.';
+  reference.textContent='Liczbę zamówień dzielimy przez przyjętą konwersję źródła i zaokrąglamy liczbę leadów w górę. Stawki bazowe to założenia do planu. Przy co najmniej 60 leadach z danego źródła w trzech zakończonych miesiącach pokazujemy zaobserwowaną relację zamówień do leadów w salonie. Przy wystarczającej próbie wyliczenie korzysta z historii handlowca, następnie salonu. Lepszy wynik może podnieść przyjętą stawkę.';
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
   const summary=document.createElement('dl');
   summary.className='planning-totals';
@@ -2249,7 +2249,8 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
     const rateNote=document.createElement('p');
     const targetRate=sourceConversionRate(index,sourceRates[index]);
     const historyRate=sourceHistoryRates[index];
-    rateNote.textContent='Konwersja przyjęta do planu · '+percent.format(targetRate);
+    const basis=person.personalRates?.[index]!=null?'historia handlowca':sourceRates[index]!=null?'historia salonu':'stawka bazowa';
+    rateNote.textContent='Konwersja przyjęta do planu · '+percent.format(targetRate)+' · '+basis;
     if (historyRate!=null) {
       const gap=targetRate-historyRate;
       rateNote.textContent+=' · wynik salonu '+percent.format(historyRate)
@@ -2638,7 +2639,9 @@ async function loadSalonPlans() {
         }
         const individual={salon:plan.salon,person:person.id};
         if (data.role==='manager') {
-          row.append(sellerPlanForm(person,individual,month,plan.sourceRates??[],team.filter(peer=>peer.id!==person.id),plan.sourceHistoryRates??[],weights[personIndex]&&splits?splits.map(column=>column[personIndex]):null));
+          const rates=sources.map((_,index)=>person.personalRates?.[index]??plan.sourceRates?.[index]);
+          row.append(sellerPlanForm(person,individual,month,rates,team.filter(peer=>peer.id!==person.id),
+            plan.sourceHistoryRates??[],weights[personIndex]&&splits?splits.map(column=>column[personIndex]):null));
         } else {
           const values=document.createElement('p');
           values.textContent=salonPlanMetrics.map((label,index)=>label+' '+(person.targets[index]??'—')).join(' · ');
