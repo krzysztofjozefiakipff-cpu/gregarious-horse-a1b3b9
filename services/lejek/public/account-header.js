@@ -46,6 +46,7 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
   controls.hidden=false;
   foxAssistantOpen.hidden=Boolean(preview);
   foxAssistantRole=preview?null:role;
+  setCommunicationRole(preview?null:role);
 }
 
 const foxAssistantOpen=document.getElementById('fox-assistant-open');
