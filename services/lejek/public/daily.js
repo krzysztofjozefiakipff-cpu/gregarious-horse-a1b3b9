@@ -1355,8 +1355,13 @@ function renderToday(records,metrics) {
   $('#today-date').textContent=dateLabel(today,{weekday:'long',day:'numeric',month:'long'});
   link.href='#wyniki';
   link.onclick=()=>{if (showTodayEntry) { showTodayEntry=false; renderSeller(); }};
-  if (records[today]||holiday||['zero','leave','training'].includes(exception)) {
-    status.textContent=records[today]?'Dzień zatwierdzony':holiday??'Dzień rozliczony';
+  const dayOff=!isSalonWorkday(today)||['leave','training'].includes(exception);
+  if (dayOff&&!records[today]) {
+    status.textContent=(holiday??'Dzień wolny')+' · wpis nie jest wymagany';
+    link.textContent=next?'Zobacz zaległy dzień':'Otwórz kalendarz';
+    if (!next) link.href='#kalendarz-pracy';
+  } else if (records[today]||exception==='zero') {
+    status.textContent=records[today]?'Dzień zatwierdzony':'Dzień rozliczony';
     link.textContent='Zobacz wpis';
     link.onclick=()=>{if (next&&!showTodayEntry) { showTodayEntry=true; renderSeller(); }};
   } else if (next&&next!==today) {
@@ -1394,7 +1399,9 @@ function renderSeller() {
   const waiting=personal.exceptions[next]==='pending';
   const blocked=(next&&day!==next)||exception==='pending';
   const holiday=polishHoliday(day);
-  const locked=Boolean(holiday||records[day]||exception==='zero'||exception==='leave'||exception==='training');
+  const dayOff=!isSalonWorkday(day)||['leave','training'].includes(exception);
+  const skipEntry=dayOff&&!records[day];
+  const locked=Boolean(dayOff||records[day]||exception==='zero');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
   const lesson=data.lesson;
   $('#lesson-title').textContent=lesson?.title??'Lekcje w przygotowaniu';
@@ -1429,6 +1436,7 @@ function renderSeller() {
     if (next) $('#seller-calendar-editor').dataset.calendarDraftDay=next;
   };
   $('#save').disabled=$('#approve-day').disabled=busy||Boolean(blocked)||locked||Boolean(data.previewUser);
+  $('#save').hidden=$('#approve-day').hidden=skipEntry;
   const draft=personal.drafts?.[day];
   const matrix=records[day]?.[5]??draft;
   const legacy=records[day]&&!records[day][5];
@@ -1439,7 +1447,7 @@ function renderSeller() {
   const previousSource=$('#entry-grid').dataset.day===day?activeEntrySource:0;
   $('#entry-grid').dataset.day=day;
   const readOnly=locked||blocked||data.previewUser;
-  $('#rows').innerHTML=legacy?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
+  $('#rows').innerHTML=legacy||skipEntry?'':sources.map((name,r)=>'<tr data-source="'+r+'"><th scope="row">'+name+
     '<small class="source-detail">'+sourceDetails[r]+'</small></th>'+columns.map(([c,label])=>{
       const automatic=r===0&&(c===1||c===2);
       const fieldLabel=c===10?'Faktury':label;
@@ -1452,14 +1460,14 @@ function renderSeller() {
         (automatic?' readonly title="Automatycznie z liczby leadów"':'')+'></td>';
     }).join('')+'</tr>').join('');
   addNumberControlsIn($('#rows'));
-  $('#mobile-entry').hidden=Boolean(legacy);
-  $('#entry-grid').hidden=Boolean(legacy);
-  if (!legacy) {
+  $('#mobile-entry').hidden=Boolean(legacy||skipEntry);
+  $('#entry-grid').hidden=Boolean(legacy||skipEntry);
+  if (!legacy&&!skipEntry) {
     entrySourceList.innerHTML=sources.map((name,index)=>'<button type="button" class="secondary" data-source="'+index+'"><span>'+name+'</span><small hidden>Wpisano</small></button>').join('');
     showEntrySource(previousSource);
     updateSourceStatuses();
   }
-  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':holiday?holiday+' · dzień bez aktywności.':locked?'Dzień rozliczony.'
+  $('#status').textContent=legacy?'Dzień zapisano wcześniej w formacie sumarycznym.':records[day]?'Dzień zatwierdzony.':dayOff?(holiday??'Dzień wolny')+' · wpis nie jest wymagany.':locked?'Dzień rozliczony.'
     :blocked?(exception==='pending'?'Dzień czeka na zatwierdzenie.':'Najpierw rozlicz zaległość.')
     :data.previewUser?'Podgląd wpisu.':'';
   $('#fortune').textContent=fortunes[dayIndex%fortunes.length];
