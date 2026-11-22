@@ -1,14 +1,17 @@
-document.addEventListener('click',event=>{
-  const summary=event.target.closest('details[name] > summary');
-  if (!summary||event.defaultPrevented) return;
-  if (event.target.closest('a, button, input, select, textarea, label')) return;
-  const details=summary.parentElement;
-  if (details.open) return;
+function scrollToOpenedDetails(details,summary=details.querySelector(':scope > summary')) {
   requestAnimationFrame(()=>{
-    if (!summary.isConnected||!details.open) return;
+    if (!summary?.isConnected||!details.open) return;
     const start=details.hasAttribute('data-scroll-to-card')?details.parentElement:summary;
     start.scrollIntoView({block:'start'});
   });
+}
+
+document.addEventListener('click',event=>{
+  const summary=event.target.closest('details:not(#account-menu) > summary');
+  if (!summary||event.defaultPrevented) return;
+  if (event.target.closest('a, button, input, select, textarea, label')) return;
+  const details=summary.parentElement;
+  if (!details.open) scrollToOpenedDetails(details,summary);
 });
 
 function panelNavigation(render) {
@@ -215,7 +218,12 @@ function addMobileEntryPicker(host,panels,labels,caption='Źródło kontaktu',on
     option.type='button';
     option.className='secondary';
     option.textContent=label;
-    option.onclick=()=>{select(index);dialog.close();onSelect?.(index);};
+    option.onclick=()=>{
+      select(index);
+      dialog.close();
+      onSelect?.(index);
+      if (panels[index].matches('details[name]')) scrollToOpenedDetails(panels[index],button);
+    };
     options.append(option);
   });
   dialog.append(heading,options);

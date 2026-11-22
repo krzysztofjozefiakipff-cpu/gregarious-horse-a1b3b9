@@ -2187,6 +2187,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   const summary=document.createElement('dl');
   summary.className='planning-totals';
   const sourceDetails=document.createElement('details');
+  sourceDetails.name='planning-review-'+person.id;
   const sourceHeading=document.createElement('summary');
   sourceHeading.textContent='Sprawdź lub edytuj cele według źródeł';
   sourceDetails.append(sourceHeading);
@@ -2442,6 +2443,7 @@ function sellerPlanForm(person,individual,month,sourceRates,peers,sourceHistoryR
   };
   reviewStep.append(recalculateActivities,activityStatus);
   const calculationInfo=document.createElement('details');
+  calculationInfo.name='planning-review-'+person.id;
   const calculationTitle=document.createElement('summary');
   calculationTitle.textContent='Jak liczymy działania?';
   calculationInfo.append(calculationTitle,reference);
@@ -2525,6 +2527,8 @@ function salonLeadEstimate(plan,input) {
 function salonGoalsEditor(plan,month) {
   const section=document.createElement('details');
   section.className='planning-compact';
+  section.name='salon-plan-sections-'+plan.salon;
+  section.setAttribute('data-scroll-to-card','');
   const title=document.createElement('summary');
   const restricted=data.role==='manager'&&plan.protected;
   const pending=plan.change?.status==='pending';
@@ -2665,6 +2669,8 @@ async function loadSalonPlans() {
       }
       const overview=document.createElement('details');
       overview.className='planning-compact';
+      overview.name='salon-plan-sections-'+plan.salon;
+      overview.setAttribute('data-scroll-to-card','');
       const overviewTitle=document.createElement('summary');
       overviewTitle.textContent='Wyniki i cele salonu';
       const draftNote=reportElement('p',draftResultsNote);
