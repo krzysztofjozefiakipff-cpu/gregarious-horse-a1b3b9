@@ -1,3 +1,5 @@
+const foxMottos=new Map();
+let foxMottoDay;
 const headers = {'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const json = (body,status=200) => Response.json(body,{status,headers});
 const monthValid = month => typeof month==='string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
@@ -370,6 +372,52 @@ async function handle(request, env, buildDailyReport=false) {
     return buildDailyBriefing(db,{today,sellerTargets,salonPlans,managerId:user.id,sellers:seller?[seller]:sellers,
       salons:seller?[{salon:seller.salon}]:salons,scope:seller?'person=?':scope,params:seller?[seller.id]:params});
   };
+  if (path==='/api/fox-motto'&&request.method==='GET') {
+    if (role!=='seller'||preview) return json({error:'Hasło Liska jest dostępne na własnym koncie handlowca.'},403);
+    if (!env.assist||!env.moderate) return json({text:null});
+    const day=localDay();
+    if (foxMottoDay!==day) {
+      foxMottos.clear();
+      foxMottoDay=day;
+    }
+    const key=url.origin+'/'+user.id;
+    let motto=foxMottos.get(key);
+    if (!motto) {
+      motto=(async()=>{
+        const {salons:[{people:[person]}]}=await loadBriefing(day,{id:user.id,salon:user.salon,name:'',planEligible:true});
+        if (!person) return null;
+        const {review,workday}=person;
+        const metrics=dailyActionMetrics.map(([label],index)=>({
+          label,index,done:review.actual?.[index],goal:review.goals[index]
+        }));
+        const comparable=review.status==='recorded'&&review.rows
+          ?metrics.filter(({done,goal})=>Number.isFinite(done)&&goal>0):[];
+        // Prefer a concrete win or a gap in the activities the salesperson can act on today.
+        const gap=comparable.find(({index,done,goal})=>index<6&&done<goal);
+        const win=comparable.find(({index,done,goal})=>index===6&&done>=goal)
+          ??comparable.find(({done,goal})=>done>goal||!gap&&done===goal);
+        const followUp=metrics.slice(0,6).find((_,index)=>person.todayGoals[index]>0)?.label;
+        const signal=!workday?{kind:'dayOff'}:win?{kind:'win',metric:win}
+          :gap?{kind:'gap',metric:gap}:followUp?{kind:'priority',activity:followUp}:{kind:'encourage'};
+        const text=await env.assist(
+          'Napisz jedno krótkie Hasło dnia od Liska dla handlowca salonu samochodowego. Maksymalnie dwa krótkie zdania, do 180 znaków. '+
+          'Dostosuj ton do sygnału: win to konkretne gratulacje, gap to życzliwe przypomnienie o zaległym działaniu z małym krokiem na dziś, priority to zachęta do wskazanego działania. '+
+          'Przy dayOff życz odpoczynku i nie proponuj pracy. Przy encourage daj lekką, opcjonalnie dowcipną zachętę bez oceniania wyników. '+
+          'Możesz lekko zażartować z sytuacji, nigdy z osoby. Bez zawstydzania, obelg, presji i moralizowania. Nie wymyślaj wyników, przyczyn ani zaległości. Dane win lub gap są z ostatniego dnia roboczego, nie z dziś. '+
+          'Zwróć samo hasło, bez cudzysłowu, podpisu i zwrotu po imieniu.',
+          signal);
+        const line=text.replace(/\s+/g,' ').trim();
+        if (!line||line.length>220||await env.moderate(line)) return null;
+        const {firstName}=await loadAccountHeader(db,user,null);
+        return /^[\p{L}’-]{1,35}$/u.test(firstName)?firstName+' — '+line:line;
+      })().catch(()=>null);
+      if (foxMottos.size>=1500) foxMottos.delete(foxMottos.keys().next().value);
+      foxMottos.set(key,motto);
+    }
+    const text=await motto;
+    if (!text&&foxMottos.get(key)===motto) foxMottos.delete(key);
+    return json({day,text});
+  }
   if (path==='/api/daily-briefing'&&request.method==='GET') {
     if (role!=='manager') return json({error:'Odprawa dzienna jest dostępna dla kierowników salonu.'},403);
     return json(await loadBriefing(localDay()));

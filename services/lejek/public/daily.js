@@ -1074,6 +1074,24 @@ const taskPriorities=[
   ['Obsługa sprzedaży', [10,8,9]]
 ];
 
+let dailyMotto;
+
+function renderDailyMotto(day,fallback) {
+  if (dailyMotto?.day===day) {
+    renderQuote(dailyMotto.text??fallback);
+    return;
+  }
+  renderQuote(fallback);
+  if (previewTarget||data.role!=='seller') return;
+  const current={day};
+  dailyMotto=current;
+  void api('/api/fox-motto').then(({day:replyDay,text})=>{
+    if (dailyMotto!==current||replyDay!==day||data?.today!==day||typeof text!=='string'||!text) return;
+    current.text=text;
+    renderQuote(text);
+  }).catch(()=>{});
+}
+
 function renderTodayTasks(metrics,previous,day) {
   const dayIndex=Math.floor(Date.parse(day)/86400000);
   const fallback=quotes[dayIndex%quotes.length];
@@ -1084,7 +1102,7 @@ function renderTodayTasks(metrics,previous,day) {
     message.textContent=holiday+' · dzień bez aktywności.';
     $('#tasks').replaceChildren(message);
     for (const id of ['tasks-intro','followup-reminder']) $('#'+id).hidden=true;
-    renderQuote(fallback);
+    renderDailyMotto(day,fallback);
     return;
   }
   const tasks=metrics.filter(({todayTarget,doneToday})=>todayTarget>doneToday);
@@ -1120,7 +1138,7 @@ function renderTodayTasks(metrics,previous,day) {
     :'';
   const hasDailyActivity=tasks.length||remaining||metrics.some(metric=>metric.todayTarget>0);
   const slogans=dailyClosings[tasks.length?'tasks':remaining?'followups':'done'];
-  renderQuote(hasDailyActivity?slogans[dayIndex%slogans.length]:fallback);
+  renderDailyMotto(day,hasDailyActivity?slogans[dayIndex%slogans.length]:fallback);
 }
 
 const actionsByMetric={
