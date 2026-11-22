@@ -1,6 +1,7 @@
 """Render authorized management report data as a paginated PDF."""
 from datetime import date, datetime
 from html import escape
+from math import floor
 import json
 import sys
 from zoneinfo import ZoneInfo
@@ -67,7 +68,9 @@ def p(text, style='body'):
 def number(value):
     if value is None:
         return '–'
-    return f'{value:,.1f}'.rstrip('0').rstrip('.').replace(',', ' ').replace('.', ',')
+    rounded = floor(abs(value) + 0.5)
+    signed = -rounded if value < 0 else rounded
+    return f'{signed:,}'.replace(',', ' ')
 
 
 def percent(numerator, denominator):
