@@ -1,3 +1,14 @@
+document.addEventListener('click',event=>{
+  const summary=event.target.closest('details[name] > summary');
+  if (!summary||event.defaultPrevented) return;
+  if (event.target.closest('a, button, input, select, textarea, label')) return;
+  const details=summary.parentElement;
+  if (details.open) return;
+  requestAnimationFrame(()=>{
+    if (summary.isConnected&&details.open) summary.scrollIntoView({block:'start'});
+  });
+});
+
 function panelNavigation(render) {
   const positions=new Map();
   const historyKey='panelRoute';
