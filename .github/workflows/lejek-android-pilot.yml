@@ -1,0 +1,83 @@
+name: Bieg Wyżej Android — APK testowy
+on:
+  push:
+    branches: [lejek/android-pilot]
+    paths: [.github/workflows/lejek-android-pilot.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build and verify Android pilot
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bieg-wyzej/www"
+          cd "$RUNNER_TEMP/bieg-wyzej"
+          printf '%s\n' '{"name":"bieg-wyzej-test","version":"0.1.0","private":true}' > package.json
+          printf '%s\n' '{"appId":"pl.biegwyzej.pilot","appName":"Bieg Wyżej Test","webDir":"www","server":{"url":"https://lejek.carvamo.com/","appStartPath":"login"}}' > capacitor.config.json
+          printf '%s\n' '<!doctype html><html lang="pl"><meta charset="utf-8"><title>Bieg Wyżej Test</title><p>Połącz się z internetem i uruchom Bieg Wyżej ponownie.</p></html>' > www/index.html
+          cp www/index.html www/login
+          npm install --save-exact @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/android@8.6.2
+          npx cap add android
+          cd android
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+          permission = '    <uses-permission android:name="android.permission.{}" />\n'
+          for name in ("RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"):
+              if "android.permission." + name not in xml:
+                  xml = xml.replace("</manifest>", permission.format(name) + "</manifest>")
+          manifest.write_text(xml)
+          PY
+          cat > app/src/main/java/pl/biegwyzej/pilot/MainActivity.java <<'JAVA'
+          package pl.biegwyzej.pilot;
+
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.webkit.PermissionRequest;
+          import com.getcapacitor.BridgeActivity;
+          import com.getcapacitor.BridgeWebChromeClient;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  getBridge().getWebView().setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
+                      @Override
+                      public void onPermissionRequest(PermissionRequest request) {
+                          Uri origin = request.getOrigin();
+                          String[] resources = request.getResources();
+                          if ("https".equals(origin.getScheme()) && "lejek.carvamo.com".equals(origin.getHost())
+                              && (origin.getPort() == -1 || origin.getPort() == 443)
+                              && resources.length == 1 && PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0])) {
+                              super.onPermissionRequest(request);
+                          } else {
+                              request.deny();
+                          }
+                      }
+                  });
+              }
+          }
+          JAVA
+          ./gradlew :app:assembleDebug --no-daemon
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          aapt="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)"
+          "$aapt" dump permissions "$apk" | grep -F 'android.permission.RECORD_AUDIO'
+          install -Dm644 "$apk" "$GITHUB_WORKSPACE/Bieg-Wyzej-Android-Test.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bieg-Wyzej-Android-Test
+          path: Bieg-Wyzej-Android-Test.apk
+          if-no-files-found: error
