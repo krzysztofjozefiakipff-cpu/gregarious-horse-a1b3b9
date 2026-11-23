@@ -23,7 +23,7 @@ async function communicationDirectory(db,user,email) {
     FROM dealer_group_heads h LEFT JOIN accounts a ON a.email=h.email
     WHERE h.email<>?1 AND h.group_name IN (SELECT value FROM json_each(?2))
       AND NOT EXISTS(SELECT 1 FROM archived_users x WHERE x.email=h.email)`,email,JSON.stringify(groups));
-  const departmentAccounts=await list(db,`SELECT DISTINCT a.id,a.email,a.name,a.salon,d.group_name AS groupName
+  const departmentAccounts=await list(db,`SELECT DISTINCT a.id,a.email,a.name,a.salon,d.salon AS departmentSalon,d.group_name AS groupName
     FROM accounts a JOIN communication_departments d ON ${departmentMembership}
     WHERE a.email<>?1 AND a.role<>'admin' AND d.group_name IN (SELECT value FROM json_each(?2))
       AND NOT EXISTS(SELECT 1 FROM archived_users x WHERE x.email=a.email)
@@ -52,7 +52,7 @@ async function handleCommunication(request,url,db,user,email,preview) {
         JOIN communication_threads t ON t.id=m.thread LEFT JOIN communication_reads r ON r.thread=t.id AND r.email=?1
         WHERE ${access} AND m.author<>?1 AND m.id>COALESCE(r.last_read,0)`).bind(...scope).first();
       const events=await db.prepare('SELECT COUNT(*) AS unread FROM communication_events WHERE person=? AND read_at IS NULL').bind(user.id??null).first();
-      const managesDepartment=await db.prepare(`SELECT 1 FROM communication_departments WHERE manager=? AND department||'_manager'=?
+      const managesDepartment=await db.prepare(`SELECT 1 FROM communication_departments WHERE manager=? AND type||'_manager'=?
         AND group_name IN (SELECT value FROM json_each(?)) LIMIT 1`).bind(user.id??null,user.activeRole,JSON.stringify(groups)).first();
       return json({unread:result.unread+events.unread,managesDepartment:Boolean(managesDepartment)});
     }
@@ -67,18 +67,21 @@ async function handleCommunication(request,url,db,user,email,preview) {
       return json({thread:info,messages:messages.slice(0,50).reverse(),hasOlder:messages.length>50});
     }
     const {contacts,scopes,members,departmentAccounts}=await communicationDirectory(db,user,email);
-    const departments=await list(db,`SELECT group_name AS groupName,department,name,manager FROM communication_departments
-      WHERE group_name IN (SELECT value FROM json_each(?))`,JSON.stringify(groups));
-    const ownDepartments=departments.filter(item=>item.manager===user.id&&item.department+'_manager'===user.activeRole);
+    const departments=await list(db,`SELECT group_name AS groupName,department,type,name,manager,salon FROM communication_departments
+      WHERE group_name IN (SELECT value FROM json_each(?)) ORDER BY name,salon`,JSON.stringify(groups));
+    const ownDepartments=departments.filter(item=>item.manager===user.id&&item.type+'_manager'===user.activeRole);
     const managedGroups=user.role==='group'?[user.group]:[...new Set(ownDepartments.map(item=>item.groupName))];
-    const standaloneAccounts=await list(db,`SELECT a.id,a.name,a.salon,g.group_name AS groupName
+    const standaloneAccounts=await list(db,`SELECT a.id,a.name,COALESCE(NULLIF(a.salon,''),g.salon) AS salon,g.group_name AS groupName
       FROM communication_department_accounts g JOIN accounts a ON a.id=g.person
       WHERE a.email<>?1 AND g.group_name IN (SELECT value FROM json_each(?2))
         AND NOT EXISTS(SELECT 1 FROM archived_users x WHERE x.email=a.email)`,email,JSON.stringify(managedGroups));
     const departmentPeople=[...new Map([...members,...departmentAccounts,...standaloneAccounts].filter(member=>
-      managedGroups.includes(member.groupName)).map(member=>[JSON.stringify([member.id,member.groupName]),member])).values()];
-    const memberships=await list(db,`SELECT person,group_name AS groupName,department FROM communication_department_members
-      WHERE group_name IN (SELECT value FROM json_each(?))`,JSON.stringify(managedGroups));
+      managedGroups.includes(member.groupName)&&(user.role==='group'||ownDepartments.some(office=>
+        office.groupName===member.groupName&&(!office.salon||!member.salon||office.salon===member.salon)))).map(member=>[JSON.stringify([member.id,member.groupName]),member])).values()];
+    const memberships=(await list(db,`SELECT person,group_name AS groupName,department FROM communication_department_members
+      WHERE group_name IN (SELECT value FROM json_each(?))`,JSON.stringify(managedGroups))).filter(item=>
+      user.role==='group'||ownDepartments.some(office=>office.groupName===item.groupName&&office.department===item.department));
+    const departmentSalons=user.role==='group'?scopes.filter(item=>item.scope==='salon').map(item=>item.name):[];
     const inbox=await list(db,`SELECT t.id,t.title,t.kind,m.created_at AS date,
        (SELECT COUNT(*) FROM communication_messages x WHERE x.thread=t.id AND x.author<>?1
          AND x.id>COALESCE(r.last_read,0)) AS unread
@@ -88,7 +91,7 @@ async function handleCommunication(request,url,db,user,email,preview) {
     const events=await list(db,`SELECT id,kind,subject,read_at IS NULL AS unread FROM communication_events
       WHERE person=? ORDER BY unread DESC,id DESC LIMIT 50`,user.id??null);
     return json({inbox,events,contacts:contacts.map(({email:contact,name,salon,groupName})=>({contact,name,salon,groupName})),groups,
-      departments,ownDepartments,memberships,
+      departments,ownDepartments,memberships,departmentSalons,
       departmentAdmin:user.role==='group'?user.group:null,
       departmentPeople:departmentPeople.map(({id,name,salon,groupName})=>({id,name,salon,groupName})),
       announcements:scopes.filter(item=>item.moderate).map(({scope,name})=>({scope,name}))});
@@ -104,15 +107,29 @@ async function handleCommunication(request,url,db,user,email,preview) {
       .bind(body.id,user.id??null).run();
     return json({ok:true});
   }
+  if (body.action==='carwash-salon') {
+    const {group,salon,department='carwash'}=body;
+    if (user.role!=='group'||group!==user.group) return json({error:'Myjnię przypisuje szef grupy.'},403);
+    if (typeof department!=='string'||typeof salon!=='string'||!await db.prepare('SELECT 1 FROM dealer_group_salons WHERE salon=? AND group_name=?').bind(salon,group).first())
+      return json({error:'Wybierz salon ze swojej grupy.'},400);
+    const occupied=await db.prepare('SELECT 1 FROM communication_departments WHERE group_name=? AND salon=?').bind(group,salon).first();
+    if (occupied) return json({error:'Ten salon ma już przypisaną myjnię.'},409);
+    const linked=await db.prepare(`UPDATE communication_departments AS d SET salon=?1
+      WHERE group_name=?2 AND department=?3 AND type='carwash' AND salon IS NULL
+        AND NOT EXISTS (SELECT 1 FROM accounts a LEFT JOIN communication_department_accounts da ON da.person=a.id
+          WHERE ${departmentMembership} AND COALESCE(NULLIF(a.salon,''),da.salon,?1)<>?1)`).bind(salon,group,department).run();
+    return linked.meta.changes?json({ok:true}):json({error:'Myjnia jest już przypisana albo ma kierownika lub pracowników z innego salonu.'},409);
+  }
   if (body.action==='department-manager'||body.action==='department-staff') {
     const {group,department,person}=body;
-    if (!groups.includes(group)||typeof department!=='string'||!Object.hasOwn(communicationDepartments,department))
+    if (!groups.includes(group)||typeof department!=='string')
       return json({error:'Wybierz dział z własnej grupy.'},403);
     const appoint=body.action==='department-manager';
-    const office=await db.prepare('SELECT manager FROM communication_departments WHERE group_name=? AND department=?').bind(group,department).first();
-    if (!office||(appoint ? user.role!=='group'||user.group!==group : office.manager!==user.id||user.activeRole!==department+'_manager'))
+    const office=await db.prepare('SELECT manager,type,salon FROM communication_departments WHERE group_name=? AND department=?').bind(group,department).first();
+    if (!office||(appoint ? user.role!=='group'||user.group!==group : office.manager!==user.id||user.activeRole!==office.type+'_manager'))
       return json({error:'Brak uprawnień do zarządzania działem.'},403);
-    const member=await db.prepare(`SELECT a.id,a.email,a.role FROM accounts a
+    const member=await db.prepare(`SELECT a.id,a.email,a.role,COALESCE(NULLIF(a.salon,''),da.salon) AS salon FROM accounts a
+      LEFT JOIN communication_department_accounts da ON da.person=a.id
       WHERE a.id=?1 AND a.email<>?3 AND a.role<>'admin'
       AND NOT EXISTS(SELECT 1 FROM dealer_group_heads h WHERE h.email=a.email)
       AND NOT EXISTS(SELECT 1 FROM archived_users x WHERE x.email=a.email)
@@ -121,7 +138,9 @@ async function handleCommunication(request,url,db,user,email,preview) {
         OR EXISTS(SELECT 1 FROM communication_department_accounts da WHERE da.person=a.id AND da.group_name=?2))`)
       .bind(person??null,group,email).first();
     if (!member) return json({error:'Wybierz aktywnego pracownika z tej grupy.'},400);
-    const role=appoint?department+'_manager':department;
+    if (body.remove!==true&&office.salon&&member.salon&&member.salon!==office.salon)
+      return json({error:'Wybierz użytkownika przypisanego do salonu tej myjni.'},403);
+    const role=appoint?office.type+'_manager':office.type;
     const insertRole=db.prepare('INSERT OR IGNORE INTO account_roles(person,role) VALUES (?,?)').bind(member.id,role);
     const preserveLegacy=db.prepare(`INSERT INTO account_roles(person,role)
       SELECT id,role FROM accounts WHERE id=?1 AND salon<>'' AND NOT EXISTS(SELECT 1 FROM account_roles WHERE person=?1)`).bind(member.id);
@@ -130,7 +149,7 @@ async function handleCommunication(request,url,db,user,email,preview) {
         preserveLegacy,insertRole,
         db.prepare('UPDATE communication_departments SET manager=? WHERE group_name=? AND department=?').bind(member.id,group,department),
         db.prepare(`DELETE FROM account_roles WHERE person=?1 AND role=?2 AND NOT EXISTS(
-          SELECT 1 FROM communication_departments d WHERE d.manager=?1 AND d.department||'_manager'=?2)`).bind(office.manager,role)
+          SELECT 1 FROM communication_departments d WHERE d.manager=?1 AND d.type||'_manager'=?2)`).bind(office.manager,role)
       ]);
     } else if (body.remove===true) {
       const assignment=await db.prepare('SELECT 1 FROM communication_department_members WHERE person=? AND group_name=? AND department=?')
@@ -138,7 +157,9 @@ async function handleCommunication(request,url,db,user,email,preview) {
       if (!assignment) return json({error:'Pracownik nie należy do tego działu.'},404);
       await db.batch([
         db.prepare('DELETE FROM communication_department_members WHERE person=? AND group_name=? AND department=?').bind(member.id,group,department),
-        db.prepare('DELETE FROM account_roles WHERE person=? AND role=?').bind(member.id,role)
+        db.prepare(`DELETE FROM account_roles WHERE person=?1 AND role=?2 AND NOT EXISTS(
+          SELECT 1 FROM communication_department_members m JOIN communication_departments d USING(group_name,department)
+          WHERE m.person=?1 AND d.type=?2)`).bind(member.id,role)
       ]);
     } else {
       const assignment=await db.prepare('SELECT group_name FROM communication_department_members WHERE person=? AND department=?')
@@ -171,12 +192,15 @@ async function handleCommunication(request,url,db,user,email,preview) {
   let group=null,department=null,departmentName=null;
   if (body.kind==='direct'&&contacts.some(contact=>contact.email===body.recipient)) recipients.add(body.recipient);
   else if (body.kind==='department'&&groups.includes(body.group)&&typeof body.department==='string'&&(departmentName=(await db.prepare(
-    'SELECT name FROM communication_departments WHERE group_name=? AND department=?').bind(body.group,body.department).first())?.name)) {
+    `SELECT name||COALESCE(' · '||salon,'') AS name FROM communication_departments WHERE group_name=? AND department=?`).bind(body.group,body.department).first())?.name)) {
     group=body.group;
     department=body.department;
   } else if (body.kind==='announcement'&&scopes.some(scope=>scope.moderate&&scope.scope===body.scope&&scope.name===body.audience)) {
-    const audienceMembers=body.scope==='group'?[...members,...departmentAccounts]:members;
-    for (const member of audienceMembers) if ((body.scope==='group'?member.groupName:member.salon)===body.audience) recipients.add(member.email);
+    for (const member of [...members,...departmentAccounts]) {
+      const matches=body.scope==='group'?member.groupName===body.audience:
+        member.salon===body.audience||member.departmentSalon===body.audience;
+      if (matches) recipients.add(member.email);
+    }
     group=body.scope==='group'?body.audience:(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(body.audience).first())?.group_name??null;
     const heads=await list(db,'SELECT email FROM dealer_group_heads h WHERE group_name=? AND NOT EXISTS(SELECT 1 FROM archived_users x WHERE x.email=h.email)',group);
     for (const head of heads) recipients.add(head.email);

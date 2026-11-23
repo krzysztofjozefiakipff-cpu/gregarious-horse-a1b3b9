@@ -3178,7 +3178,7 @@ function updateUserRoleFields() {
   const departmentRoles=existingRoles.filter(role=>['carwash','logistics','carwash_manager','logistics_manager'].includes(role));
   const canKeepDepartmentRoles=userEditorRole==='admin'&&departmentRoles.length>0;
   for (const input of choices.filter(input=>input.value.endsWith('_manager'))) {
-    const department=userEditorDepartments.find(item=>item.department+'_manager'===input.value&&!item.manager);
+    const department=userEditorDepartments.find(item=>item.type+'_manager'===input.value&&!item.manager);
     input.disabled=userEditorRole!=='group'||editingUsers()||!department;
     input.closest('label').hidden=input.disabled;
     if (input.disabled) input.checked=false;
@@ -3186,9 +3186,18 @@ function updateUserRoleFields() {
   const available=choices.filter(input=>!input.disabled);
   const roles=available.filter(input=>input.checked).map(input=>input.value);
   const departmentRole=roles.find(role=>role.endsWith('_manager'));
-  const department=userEditorDepartments.find(item=>item.department+'_manager'===departmentRole);
+  const matchingDepartments=userEditorDepartments.filter(item=>item.type+'_manager'===departmentRole&&!item.manager);
+  const departmentPicker=userEditor.elements.department;
+  const chooseCarwash=departmentRole==='carwash_manager';
+  const previousDepartment=departmentPicker.value;
+  $('#user-department-label').hidden=!chooseCarwash;
+  departmentPicker.disabled=!chooseCarwash;
+  departmentPicker.required=chooseCarwash;
+  departmentPicker.replaceChildren(new Option('Wybierz myjnię',''),...matchingDepartments.map(item=>
+    new Option([item.name,item.salon??'Bez przypisanego salonu'].join(' · '),item.department)));
+  if (matchingDepartments.some(item=>item.department===previousDepartment)) departmentPicker.value=previousDepartment;
   const departmentNote=$('#user-department');
-  const departmentDetails=department?'Dział · '+department.name:departmentRoles.map(role=>accountRoleNames[role]).join(', ');
+  const departmentDetails=departmentRole==='logistics_manager'?'Dział · '+matchingDepartments[0]?.name:departmentRoles.map(role=>accountRoleNames[role]).join(', ');
   departmentNote.hidden=!departmentDetails;
   departmentNote.textContent=departmentDetails;
   for (const input of choices) input.setCustomValidity('');
@@ -3233,6 +3242,7 @@ function loadUserEditor() {
   $('#user-invite-note').hidden=editing;
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??fixedUserGroup;
+  userEditor.elements.department.value='';
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
   $('#user-send-invite').hidden=!selected||Boolean(selected.archived||managerPreviewSalon||groupPreviewName);
   const archiveButton=$('#user-archive');
@@ -3388,11 +3398,20 @@ function renderAdmin() {
   const departments=view.departments??[];
   const departmentList=$('#group-departments');
   departmentList.hidden=!group||!departments.length;
-  departmentList.replaceChildren(...departments.map(({name})=>{
+  departmentList.replaceChildren(...departments.map(({name,type,salon})=>{
     const item=document.createElement('li');
-    item.textContent=name;
+    item.textContent=type==='carwash'?name+' · '+(salon??'Bez przypisanego salonu'):name;
     return item;
   }));
+  if (group) {
+    const picker=$('#group-add-salon').elements.salon;
+    const chosenSalon=picker.value;
+    const busySalons=new Set(departments.map(item=>item.salon).filter(Boolean));
+    const availableSalons=baseView.salons.filter(item=>!busySalons.has(item.salon));
+    picker.replaceChildren(new Option(availableSalons.length?'Wybierz salon':'Brak salonów bez myjni',''),
+      ...availableSalons.map(({salon})=>new Option(salon,salon)));
+    if (availableSalons.some(item=>item.salon===chosenSalon)) picker.value=chosenSalon;
+  }
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
@@ -4016,13 +4035,22 @@ function renderDealerGroups(groups) {
     list.append(section);
   }
 }
-$('#group-add-salon').onsubmit=event=>{
+const groupUnitForm=$('#group-add-salon');
+function updateGroupUnitFields() {
+  const needsSalon=groupUnitForm.elements.type.value==='carwash';
+  $('#group-carwash-salon-label').hidden=!needsSalon;
+  groupUnitForm.elements.salon.disabled=!needsSalon;
+  groupUnitForm.elements.salon.required=needsSalon;
+}
+groupUnitForm.elements.type.onchange=updateGroupUnitFields;
+groupUnitForm.onsubmit=event=>{
   event.preventDefault();
   const form=event.currentTarget;
-  const {type,name}=Object.fromEntries(new FormData(form));
+  const {type,name,salon}=Object.fromEntries(new FormData(form));
   run(async()=>{
-    await api('/api/group/salon',type==='salon'?{salon:name}:{department:type,name});
+    await api('/api/group/salon',type==='salon'?{salon:name}:{department:type,name,salon});
     form.reset();
+    updateGroupUnitFields();
   });
 };
 $('#group-editor').onsubmit=event=>{

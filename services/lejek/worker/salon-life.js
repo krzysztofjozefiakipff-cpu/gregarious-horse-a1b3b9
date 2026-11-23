@@ -11,7 +11,7 @@ async function lifeScopes(db,user) {
     :role==='group'?await list(db,'SELECT salon FROM dealer_group_salons WHERE group_name=? ORDER BY salon',user.group)
     :role==='manager'?await list(db,"SELECT ? AS salon UNION SELECT salon FROM manager_salons WHERE manager=? ORDER BY salon",user.salon,user.id)
     :[{salon:user.salon}];
-  const names=salons.map(row=>row.salon).filter(Boolean);
+  const names=[...new Set([...salons.map(row=>row.salon).filter(Boolean),...(user.activeDepartmentSalons??[])])];
   const groups=role==='admin'?await list(db,'SELECT name FROM dealer_groups ORDER BY name')
     :role==='group'?[{name:user.group}]
     :await list(db,`SELECT DISTINCT group_name AS name FROM dealer_group_salons
