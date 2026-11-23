@@ -59,6 +59,9 @@ try {
   if (!database.prepare('PRAGMA table_info(communication_departments)').all().some(column=>column.name==='salon')) {
     database.exec(readFileSync('drizzle/0043_salon_carwashes.sql','utf8'));
   }
+  if (!database.prepare('PRAGMA table_info(lejek_sessions)').all().some(column=>column.name==='remembered')) {
+    database.exec(readFileSync('drizzle/0044_remembered_sessions.sql','utf8'));
+  }
   database.exec('COMMIT');
 } catch(error) { database.exec('ROLLBACK'); throw error; }
 const aiKey=process.env.OPENAI_API_KEY?.trim();
@@ -92,6 +95,7 @@ const DB = {
 const identity=localIdentity(database,DB);
 const cookie='__Host-lejek';
 const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
+const sessionCookie=(token,maxAge)=>cookie+'='+token+cookieOptions+'; Max-Age='+maxAge;
 const publicPages = new Map([
   ['/', ['text/html', readFileSync('public/home.html', 'utf8')]],
   ['/home.css', ['text/css', readFileSync('public/home.css', 'utf8')]],
@@ -151,7 +155,7 @@ const redirect=(to,extra={})=>reply(null,303,{Location:to,...extra});
 const loginCsrfCookie='__Host-lejek-login';
 const emailField='<label>E-mail<input name="email" type="email" autocomplete="username" maxlength="254" required></label>';
 const currentField='<label>Obecne hasło<input name="password" type="password" autocomplete="current-password" maxlength="512" required></label>';
-const rememberField='<label class="remember-device"><input type="checkbox" name="remember" value="1"><span>Pozostań zalogowany przez 30 dni<small>Zaznacz tylko na swoim urządzeniu.</small></span></label>';
+const rememberField='<label class="remember-device"><input type="checkbox" name="remember" value="1"><span>Pozostań zalogowany<small>Na własnym urządzeniu. Sesja odnawia się podczas korzystania i wygasa po 30 dniach bez aktywności.</small></span></label>';
 const newFields='<label>Nowe hasło (min. 8 znaków)<input name="new_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>'+
   '<label>Powtórz nowe hasło<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>';
 const forms={
@@ -303,6 +307,14 @@ async function handle(request) {
   const localToken=token?.match(/^bw-([a-f0-9]{64})$/)?.[1];
   const sharedToken=token?.startsWith('shared-')?token.slice(7):null;
   const sessionAccount=async()=>localToken?identity.account(localToken):sharedToken?adminAccount(sharedToken):null;
+  const renewSession=response=>{
+    if (!localToken) return response;
+    const maxAge=identity.renewRememberedSession(localToken);
+    if (!maxAge) return response;
+    const renewedHeaders=new Headers(response.headers);
+    renewedHeaders.append('Set-Cookie',sessionCookie('bw-'+localToken,maxAge));
+    return new Response(response.body,{status:response.status,headers:renewedHeaders});
+  };
   if (Object.hasOwn(forms,path)) {
     const csrf=request.headers.get('cookie')?.match(/(?:^|;\s*)__Host-lejek-login=([a-f0-9]{64})(?:;|$)/)?.[1];
     const render=(message='',status=200,token='')=>loginForm(csrf??randomBytes(32).toString('hex'),message,status,path,token);
@@ -311,7 +323,7 @@ async function handle(request) {
       if (path==='/login'&&params.get('password')==='changed') return render('Hasło zostało zapisane. Zaloguj się ponownie.');
       if (path==='/login') {
         const account=await sessionAccount().catch(()=>null);
-        if (account?.id&&account?.email) return redirect('/daily.html');
+        if (account?.id&&account?.email) return renewSession(redirect('/daily.html'));
       }
       if (path==='/reset-password') {
         const token=params.get('token')??'';
@@ -372,7 +384,7 @@ async function handle(request) {
       }
       const session=await identity.authenticate(email,password,form.get('remember')==='1');
       if (!session) return render('Sprawdź e-mail i hasło.',401);
-      return redirect('/daily.html',{'Set-Cookie':cookie+'='+session.token+cookieOptions+'; Max-Age='+session.maxAge});
+      return redirect('/daily.html',{'Set-Cookie':sessionCookie(session.token,session.maxAge)});
     }
     const result=await accountsPost('/api/auth/login',{email,password});
     if (result.status===429) return render('Zbyt wiele prób. Spróbuj później.',429);
@@ -405,7 +417,7 @@ async function handle(request) {
   if (response.ok&&request.method==='GET'&&['/api/management-reports','/api/daily-briefing'].includes(path)&&url.searchParams.get('format')==='pdf') {
     return downloadReportPdf(response,url);
   }
-  return response;
+  return response.ok ? renewSession(response) : response;
 }
 let generatingReports=false;
 let generatedReportDay;
@@ -435,7 +447,9 @@ createServer(async (req,res)=>{
     const request=new Request(origin+req.url,{method:req.method,headers:req.headers,
       body:chunks.length && !['GET','HEAD'].includes(req.method)?Buffer.concat(chunks):undefined});
     const response=await handle(request);
-    res.writeHead(response.status,Object.fromEntries(response.headers));
+    const responseHeaders=Object.fromEntries(response.headers);
+    if (response.headers.has('Set-Cookie')) responseHeaders['set-cookie']=response.headers.getSetCookie();
+    res.writeHead(response.status,responseHeaders);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {
     res.writeHead(503,headers);

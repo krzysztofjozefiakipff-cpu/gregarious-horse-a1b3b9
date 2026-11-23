@@ -100,11 +100,11 @@ export function localIdentity(database, db) {
       const maxAge = remember ? rememberedSessionSeconds : sessionSeconds;
       database.prepare('DELETE FROM lejek_sessions WHERE expires_at <= ?').run(now);
       const result = database.prepare(`
-        INSERT INTO lejek_sessions (token_hash, email, expires_at)
-        SELECT ?, email, ? FROM lejek_credentials
+        INSERT INTO lejek_sessions (token_hash, email, expires_at, remembered)
+        SELECT ?, email, ?, ? FROM lejek_credentials
         WHERE email = ? AND password_hash = ?
           AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email = ?)
-      `).run(tokenHash(token), now + maxAge * 1000, email, credential.password_hash, email);
+      `).run(tokenHash(token), now + maxAge * 1000, Number(remember), email, credential.password_hash, email);
       return result.changes ? {token:'bw-' + token,maxAge} : null;
     },
     account(token) {
@@ -114,6 +114,16 @@ export function localIdentity(database, db) {
         WHERE token_hash = ? AND expires_at > ?
           AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email = accounts.email)
       `).get(tokenHash(token), Date.now());
+    },
+    renewRememberedSession(token) {
+      const now = Date.now();
+      const result = database.prepare(`
+        UPDATE lejek_sessions SET expires_at = ?
+        WHERE token_hash = ? AND remembered = 1 AND expires_at > ? AND expires_at <= ?
+          AND NOT EXISTS (SELECT 1 FROM archived_users WHERE email = lejek_sessions.email)
+      `).run(now + rememberedSessionSeconds * 1000, tokenHash(token), now,
+        now + (rememberedSessionSeconds - 24 * 60 * 60) * 1000);
+      return result.changes ? rememberedSessionSeconds : null;
     },
     logout(token) {
       database.prepare('DELETE FROM lejek_sessions WHERE token_hash = ?').run(tokenHash(token));
