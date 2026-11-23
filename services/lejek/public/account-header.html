@@ -19,6 +19,7 @@
           <label id="account-role-field" for="account-role" hidden>Aktywna rola
             <select id="account-role"></select>
           </label>
+          <button type="button" id="department-menu-open" hidden>Zespół działu</button>
           <form class="panel-signout" method="post" action="/logout">
             <button type="submit">
               <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5v16h5m3-8h9m-4-4 4 4-4 4"/></svg>
@@ -53,14 +54,6 @@
         <button>Wyślij</button>
       </form>
     </details>
-    <details id="communication-staff" hidden>
-      <summary>Stanowiska pracowników</summary>
-      <form id="communication-position">
-        <label>Pracownik <select name="person" required></select></label>
-        <label>Stanowisko <select name="position"></select></label>
-        <button>Zapisz stanowisko</button>
-      </form>
-    </details>
   </div>
   <section id="communication-thread" hidden>
     <button type="button" id="communication-back" class="secondary">Wróć do skrzynki</button>
@@ -73,13 +66,20 @@
     </form>
   </section>
 </dialog>
+<dialog id="department-settings" aria-labelledby="department-settings-title">
+  <header><h2 id="department-settings-title">Działy grupy</h2>
+    <form method="dialog"><button type="submit" aria-label="Zamknij">×</button></form>
+  </header>
+  <p id="department-settings-status" role="status"></p>
+  <div id="department-settings-forms"></div>
+</dialog>
 <style>
 #communication-open { position:relative; display:grid; place-items:center; width:44px; height:44px; padding:0; color:white; border:1px solid #ffffff72; border-radius:12px; background:transparent; }
 #communication-open[hidden] { display:none; }
 #communication-count { position:absolute; inset-block-start:-5px; inset-inline-end:-4px; border-radius:12px; padding:2px 4px; font-size:.7rem; color:var(--panel-ink); background:var(--panel-orange); }
-#communication-dialog { width:min(36rem,calc(100% - 1.5rem)); max-height:86dvh; overflow:auto; padding:1rem; border:1px solid var(--panel-border); border-radius:16px; color:var(--panel-ink); }
-#communication-dialog::backdrop { background:#24152299; }
-#communication-dialog header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 0 8px; }
+:is(#communication-dialog,#department-settings) { width:min(36rem,calc(100% - 1.5rem)); max-height:86dvh; overflow:auto; padding:1rem; border:1px solid var(--panel-border); border-radius:16px; color:var(--panel-ink); }
+:is(#communication-dialog,#department-settings)::backdrop { background:#24152299; }
+:is(#communication-dialog,#department-settings) header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 0 8px; }
 #communication-dialog h2 { font-size:1.15rem; margin:0; }
 #communication-dialog button { min-height:44px; }
 #communication-dialog ul, #communication-dialog ol { display:grid; gap:8px; list-style:none; padding:0; }
@@ -89,7 +89,7 @@
 #communication-messages p { white-space:pre-wrap; overflow-wrap:anywhere; margin:4px 0 0; }
 #communication-dialog details { margin:10px 0; padding:8px; border:1px solid var(--panel-border); border-radius:10px; }
 #communication-dialog summary { cursor:pointer; font-weight:700; }
-#communication-dialog form:not([method="dialog"]), #communication-dialog label { display:grid; gap:6px; min-width:0; }
+:is(#communication-dialog,#department-settings) form:not([method="dialog"]), :is(#communication-dialog,#department-settings) label { display:grid; gap:6px; min-width:0; }
 #communication-dialog form:not([method="dialog"]) { margin-top:8px; }
 #communication-dialog :is(input,select,textarea) { width:100%; min-width:0; font:inherit; }
 </style>
