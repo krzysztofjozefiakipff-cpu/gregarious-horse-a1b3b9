@@ -859,11 +859,12 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         ORDER BY a.name,a.id,m.salon`):[];
       const users=!canManage?[]:await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
         COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived,
-        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone
+        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone,cp.position
         FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email
+        LEFT JOIN communication_positions cp ON cp.email=a.email AND cp.salon=a.salon
         LEFT JOIN account_contact_details contact ON contact.person=a.id WHERE `+
         (owner?`a.role<>'admin'
-          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
+          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
       const salonLife=personal&&!period?await db.prepare(`SELECT p.title FROM salon_life_posts p
@@ -1550,6 +1551,17 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     const group=wantsGroup?(user.role==='group'?user.group:(textValid(dealerGroup)?dealerGroup.trim():null)):null;
     if (wantsGroup&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
+    const {position}=body;
+    if (position!==undefined&&(user.role!=='manager'||!needsSalon||!['','reception','sales_assistant'].includes(position)))
+      return json({error:'Stanowiska salonu nadaje kierownik w swoim salonie.'},403);
+    const currentPosition=position===undefined?null:await db.prepare(
+      'SELECT position FROM communication_positions WHERE email=? AND salon=?').bind(address,salon.trim()).first();
+    if (position&&['carwash','logistics'].includes(currentPosition?.position))
+      return json({error:'To konto należy do działu Myjni lub Logistyki.'},409);
+    const positionStatements=position===undefined?[]:position
+      ?[db.prepare(`INSERT INTO communication_positions(email,salon,position) VALUES (?,?,?)
+        ON CONFLICT(email) DO UPDATE SET salon=excluded.salon,position=excluded.position`).bind(address,salon.trim(),position)]
+      :[db.prepare("DELETE FROM communication_positions WHERE email=? AND position IN ('reception','sales_assistant')").bind(address)];
     const fallback=chosen.includes('manager')?'manager':'seller';
     const password=body.password??'';
     if (password!==''&&!validAccountPassword(password))
@@ -1570,6 +1582,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         (createOnly?'':' ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name')).bind(address,group)
         :db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(address),
       ...(!chosen.includes('manager')&&current?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
+      ...positionStatements,
       ...credentials
     ]);
     return creating?invitedNewAccount(address,chosen):json({ok:true});

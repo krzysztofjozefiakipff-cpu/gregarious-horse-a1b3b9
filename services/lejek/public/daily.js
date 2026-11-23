@@ -3213,6 +3213,10 @@ function loadUserEditor() {
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??fixedUserGroup;
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
+  const positionField=userEditor.elements.position;
+  positionField.disabled=userEditorRole!=='manager'||['carwash','logistics'].includes(selected?.position);
+  $('#user-position-label').hidden=positionField.disabled;
+  positionField.value=['reception','sales_assistant'].includes(selected?.position)?selected.position:'';
   $('#user-send-invite').hidden=!selected||Boolean(selected.archived||managerPreviewSalon||groupPreviewName);
   const archiveButton=$('#user-archive');
   archiveButton.hidden=!selected;
@@ -3243,7 +3247,11 @@ function renderUserEditor(view) {
     :[new Option('Wybierz grupę',''),...data.groups.map(group=>new Option(group.name,group.name))]));
   loadUserEditor();
 }
-userEditor.onchange=updateUserRoleFields;
+userEditor.onchange=event=>{
+  if (event.target===userEditor.elements.position&&event.target.value&&!userEditor.querySelector('[name="roles"]:checked'))
+    userEditor.querySelector('[name="roles"][value="staff"]').checked=true;
+  updateUserRoleFields();
+};
 userEditor.onsubmit=async event=>{
   event.preventDefault();
   const values=new FormData(userEditor);

@@ -3,14 +3,16 @@ const communicationDialog=communicationNode('dialog');
 const communicationButton=communicationNode('open');
 const communicationStatus=communicationNode('status');
 const communicationSend=communicationNode('send');
-const communicationPosition=communicationNode('position');
+const departmentDialog=document.getElementById('department-settings');
+const departmentMenu=document.getElementById('department-menu-open');
+const departmentAdmin=document.getElementById('department-admin-open');
 const communicationReply=communicationNode('reply');
 const communicationOlder=communicationNode('older');
 let communicationRole;
 let communicationThread;
 let communicationRevision=0;
 let communicationBefore;
-let communicationStaff=[];
+
 
 async function communicationRequest(query={},body) {
   const params=new URLSearchParams({...query,role:communicationRole});
@@ -26,8 +28,9 @@ async function updateCommunicationCount() {
   if (!communicationRole||document.hidden) return;
   const role=communicationRole;
   try {
-    const {unread}=await communicationRequest({count:'1'});
+    const {unread,managesDepartment}=await communicationRequest({count:'1'});
     if (role!==communicationRole) return;
+    departmentMenu.hidden=!managesDepartment;
     const badge=communicationNode('count');
     badge.hidden=!unread;
     badge.textContent=unread>99?'99+':unread;
@@ -39,14 +42,11 @@ function setCommunicationRole(role) {
   communicationButton.hidden=!role;
   if (communicationRole===role) return;
   communicationRole=role;
+  departmentMenu.hidden=true;
+  if (departmentAdmin) departmentAdmin.hidden=role!=='group';
   communicationRevision++;
   if (communicationDialog.open) communicationDialog.close();
   void updateCommunicationCount();
-}
-
-function loadCommunicationPosition() {
-  const {person,position}=communicationPosition.elements;
-  position.value=communicationStaff.find(member=>member.id===Number(person.value))?.position??'';
 }
 
 async function showCommunicationInbox() {
@@ -90,20 +90,12 @@ async function showCommunicationInbox() {
     const destinations=communicationSend.elements.destination;
     const selected=destinations.value;
     const options=[...data.contacts.map(person=>new Option(person.name+' · '+(person.salon||person.groupName||''),JSON.stringify({kind:'direct',recipient:person.contact}))),
-      ...data.groups.flatMap(group=>Object.entries(data.departments).map(([department,label])=>
-        new Option(label+' · '+group,JSON.stringify({kind:'department',department,group})))),
+      ...data.departments.map(({groupName,department})=>
+        new Option(data.departmentLabels[department]+' · '+groupName,JSON.stringify({kind:'department',department,group:groupName}))),
       ...data.announcements.map(({scope,name})=>new Option('Ogłoszenie · '+name,JSON.stringify({kind:'announcement',scope,audience:name})))];
     destinations.replaceChildren(new Option('Wybierz odbiorcę',''),...options);
     if (options.some(option=>option.value===selected)) destinations.value=selected;
     communicationNode('compose').hidden=!options.length;
-    communicationStaff=data.staff;
-    communicationNode('staff').hidden=!communicationStaff.length;
-    const {person,position}=communicationPosition.elements;
-    const previous=person.value;
-    person.replaceChildren(new Option('Wybierz pracownika',''),...data.staff.map(member=>new Option(member.name+' · '+member.salon,member.id)));
-    if (data.staff.some(member=>String(member.id)===previous)) person.value=previous;
-    position.replaceChildren(new Option('Bez stanowiska',''),...Object.entries(data.positions).map(([id,label])=>new Option(label,id)));
-    loadCommunicationPosition();
     communicationStatus.textContent=data.inbox.length?'':'Brak wiadomości.';
     void updateCommunicationCount();
   } catch(error) { if (revision===communicationRevision) communicationStatus.textContent=error.message; }
@@ -180,14 +172,66 @@ communicationReply.onsubmit=event=>{
     return showCommunicationThread(thread);
   });
 };
-communicationPosition.elements.person.onchange=loadCommunicationPosition;
-communicationPosition.onsubmit=event=>{
-  event.preventDefault();
-  const {person,position}=communicationPosition.elements;
-  void submitCommunication(communicationPosition,{action:'position',person:Number(person.value),position:position.value||null},async()=>{
-    await showCommunicationInbox();
-    communicationStatus.textContent='Zapisano stanowisko.';
-  });
-};
+async function loadDepartmentSettings(asHead) {
+  const status=document.getElementById('department-settings-status');
+  const forms=document.getElementById('department-settings-forms');
+  try {
+    const data=await communicationRequest();
+    if (!departmentDialog.open) return;
+    const departments=asHead&&data.departmentAdmin
+      ?Object.keys(data.departmentLabels).map(department=>data.departments.find(item=>item.department===department&&item.groupName===data.departmentAdmin)
+        ??{department,groupName:data.departmentAdmin})
+      :data.ownDepartments;
+    forms.replaceChildren(...departments.map(({groupName,department,manager})=>{
+      const form=document.createElement('form');
+      const heading=document.createElement('h3');
+      heading.textContent=data.departmentLabels[department]+' · '+groupName;
+      const label=document.createElement('label');
+      label.textContent=asHead?'Kierownik działu':'Pracownik działu';
+      const picker=document.createElement('select');
+      picker.required=true;
+      picker.append(new Option('Wybierz pracownika',''));
+      for (const member of data.departmentPeople.filter(member=>member.groupName===groupName)) {
+        picker.append(new Option(member.name+' · '+member.salon+(!asHead&&member.position===department?' · w dziale':''),member.id));
+      }
+      if (manager&&asHead) picker.value=manager;
+      label.append(picker);
+      const save=document.createElement('button');
+      save.textContent=asHead?(manager?'Zapisz kierownika':'Utwórz dział i nadaj uprawnienia'):'Dodaj do działu';
+      form.append(heading,label,save);
+      if (!asHead) {
+        const remove=document.createElement('button');
+        remove.value='remove';
+        remove.className='secondary';
+        remove.textContent='Usuń z działu';
+        form.append(remove);
+      }
+      form.onsubmit=async event=>{
+        event.preventDefault();
+        const button=event.submitter??save;
+        button.disabled=true;
+        try {
+          await communicationRequest({},{action:asHead?'department-manager':'department-staff',
+            group:groupName,department,person:Number(picker.value),remove:button.value==='remove'});
+          await loadDepartmentSettings(asHead);
+          status.textContent='Zapisano zmiany.';
+        } catch(error) {status.textContent=error.message;}
+        finally {button.disabled=false;}
+      };
+      return form;
+    }));
+    status.textContent=departments.length?'':'Brak działów do zarządzania.';
+  } catch(error) {status.textContent=error.message;}
+}
+function openDepartmentSettings(asHead) {
+  accountMenu.open=false;
+  document.getElementById('department-settings-forms').replaceChildren();
+  document.getElementById('department-settings-status').textContent='Wczytuję działy…';
+  departmentDialog.showModal();
+  void loadDepartmentSettings(asHead);
+}
+departmentMenu.onclick=()=>openDepartmentSettings(false);
+if (departmentAdmin) departmentAdmin.onclick=()=>openDepartmentSettings(true);
+
 document.addEventListener('visibilitychange',updateCommunicationCount);
 setInterval(updateCommunicationCount,20000);
