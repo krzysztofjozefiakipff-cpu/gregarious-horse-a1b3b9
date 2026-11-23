@@ -859,9 +859,9 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         ORDER BY a.name,a.id,m.salon`):[];
       const users=!canManage?[]:await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
         COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived,
-        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone,cp.position
+        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone,
+        (SELECT cp.position FROM communication_positions cp WHERE cp.email=a.email AND cp.salon=a.salon) AS position
         FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email
-        LEFT JOIN communication_positions cp ON cp.email=a.email AND cp.salon=a.salon
         LEFT JOIN account_contact_details contact ON contact.person=a.id WHERE `+
         (owner?`a.role<>'admin'
           UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL,NULL FROM dealer_group_heads h
