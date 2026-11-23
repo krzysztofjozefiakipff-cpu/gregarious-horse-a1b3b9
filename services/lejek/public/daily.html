@@ -1014,6 +1014,7 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 <label id="user-group-label" hidden>Grupa dealerska <select name="dealerGroup"></select></label>
 <label id="user-salon-label" hidden>Salon <select name="salon"></select></label>
 <p id="user-department" hidden></p>
+<label id="user-department-label" hidden>Myjnia <select name="department" disabled></select></label>
 <div class="user-actions">
 <button id="user-save">Zapisz użytkownika i role</button>
 <button type="button" class="secondary" id="user-send-invite" hidden>Ponów wysyłkę zaproszenia</button>
@@ -1134,6 +1135,7 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
     <option value="logistics">Logistyka i transport</option>
     <option value="carwash">Myjnia</option>
   </select></label>
+  <label id="group-carwash-salon-label" hidden>Salon <select name="salon" disabled></select></label>
   <label>Nazwa jednostki <input name="name" required maxlength="120"></label>
   <button>Dodaj do grupy</button>
 </form>

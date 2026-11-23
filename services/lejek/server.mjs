@@ -56,6 +56,9 @@ try {
   if (!database.prepare("SELECT 1 FROM sqlite_schema WHERE name='communication_department_members'").get()) {
     database.exec(readFileSync('drizzle/0042_organization_roles.sql','utf8'));
   }
+  if (!database.prepare('PRAGMA table_info(communication_departments)').all().some(column=>column.name==='salon')) {
+    database.exec(readFileSync('drizzle/0043_salon_carwashes.sql','utf8'));
+  }
   database.exec('COMMIT');
 } catch(error) { database.exec('ROLLBACK'); throw error; }
 const aiKey=process.env.OPENAI_API_KEY?.trim();

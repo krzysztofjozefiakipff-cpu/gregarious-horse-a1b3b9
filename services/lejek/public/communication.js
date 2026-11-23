@@ -90,8 +90,8 @@ async function showCommunicationInbox() {
     const destinations=communicationSend.elements.destination;
     const selected=destinations.value;
     const options=[...data.contacts.map(person=>new Option(person.name+' · '+(person.salon||person.groupName||''),JSON.stringify({kind:'direct',recipient:person.contact}))),
-      ...data.departments.map(({groupName,department,name})=>
-        new Option(name+' · '+groupName,JSON.stringify({kind:'department',department,group:groupName}))),
+      ...data.departments.map(({groupName,department,name,type,salon})=>
+        new Option([name,salon??(type==='carwash'?'Bez przypisanego salonu':groupName)].join(' · '),JSON.stringify({kind:'department',department,group:groupName}))),
       ...data.announcements.map(({scope,name})=>new Option('Ogłoszenie · '+name,JSON.stringify({kind:'announcement',scope,audience:name})))];
     destinations.replaceChildren(new Option('Wybierz odbiorcę',''),...options);
     if (options.some(option=>option.value===selected)) destinations.value=selected;
@@ -179,17 +179,46 @@ async function loadDepartmentSettings(asHead) {
     const data=await communicationRequest();
     if (!departmentDialog.open) return;
     const departments=asHead?data.departments.filter(item=>item.groupName===data.departmentAdmin):data.ownDepartments;
-    forms.replaceChildren(...departments.map(({groupName,department,name,manager})=>{
+    forms.replaceChildren(...departments.map(({groupName,department,name,manager,type,salon})=>{
       const section=document.createElement('section');
       const heading=document.createElement('h3');
-      heading.textContent=name;
+      heading.textContent=type==='carwash'?name+' · '+(salon??'Bez przypisanego salonu'):name;
+      section.append(heading);
+      if (asHead&&type==='carwash'&&!salon) {
+        const linkForm=document.createElement('form');
+        const salonLabel=document.createElement('label');
+        salonLabel.textContent='Salon myjni';
+        const salonPicker=document.createElement('select');
+        salonPicker.required=true;
+        const available=data.departmentSalons.filter(item=>!departments.some(office=>office.salon===item));
+        salonPicker.append(new Option(available.length?'Wybierz salon':'Brak salonów bez myjni',''),
+          ...available.map(item=>new Option(item,item)));
+        salonLabel.append(salonPicker);
+        const link=document.createElement('button');
+        link.textContent='Przypisz myjnię do salonu';
+        link.disabled=!available.length;
+        linkForm.append(salonLabel,link);
+        linkForm.onsubmit=async event=>{
+          event.preventDefault();
+          link.disabled=true;
+          try {
+            await communicationRequest({},{action:'carwash-salon',group:groupName,department,salon:salonPicker.value});
+            await loadDepartmentSettings(true);
+            status.textContent='Przypisano myjnię do salonu.';
+          } catch(error) {status.textContent=error.message;}
+          finally {link.disabled=false;}
+        };
+        section.append(linkForm);
+      }
       const form=document.createElement('form');
       const label=document.createElement('label');
       label.textContent=asHead?'Kierownik działu':'Istniejący użytkownik';
       const picker=document.createElement('select');
       picker.required=true;
       picker.append(new Option('Wybierz pracownika',''));
-      for (const member of data.departmentPeople.filter(member=>member.groupName===groupName)) {
+      for (const member of data.departmentPeople.filter(member=>member.groupName===groupName&&
+        (!salon||!member.salon||member.salon===salon||member.id===manager||
+          (!asHead&&data.memberships.some(item=>item.person===member.id&&item.groupName===groupName&&item.department===department))))) {
         const assigned=data.memberships.some(item=>item.person===member.id&&item.groupName===groupName&&item.department===department);
         const hints=[member.salon,assigned?'w dziale':''].filter(Boolean);
         picker.append(new Option([member.name,...hints].join(' · '),member.id));
@@ -199,7 +228,7 @@ async function loadDepartmentSettings(asHead) {
       const save=document.createElement('button');
       save.textContent=asHead?'Przypisz kierownika':'Nadaj rolę pracownika działu';
       form.append(label,save);
-      section.append(heading,form);
+      section.append(form);
       if (!asHead) {
         const remove=document.createElement('button');
         remove.value='remove';
@@ -209,14 +238,14 @@ async function loadDepartmentSettings(asHead) {
 
         const template=document.getElementById('department-new-user');
         const create=template.content.firstElementChild.cloneNode(true);
-        create.querySelector('[data-department-role]').textContent=accountRoleNames[department];
+        create.querySelector('[data-department-role]').textContent=accountRoleNames[type];
         create.onsubmit=async event=>{
           event.preventDefault();
           const button=event.submitter;
           button.disabled=true;
           try {
             const fields=Object.fromEntries(new FormData(create));
-            const result=await communicationRequest({},{...fields,roles:[department],dealerGroup:groupName,createOnly:true},'/api/users');
+            const result=await communicationRequest({},{...fields,roles:[type],department,dealerGroup:groupName,createOnly:true},'/api/users');
             await loadDepartmentSettings(false);
             status.textContent=result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
               :'Dodano użytkownika. Wysyłka zaproszenia się nie udała.';
