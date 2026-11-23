@@ -313,13 +313,20 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   const assigned = await db.prepare('SELECT id, name, salon, role FROM accounts WHERE email=?').bind(email).first();
   const head=await db.prepare('SELECT group_name FROM dealer_group_heads WHERE email=?').bind(email).first();
   const explicitRoles=assigned?await list(db,'SELECT role FROM account_roles WHERE person=?',assigned.id):[];
-  const roles=owner?['admin']:explicitRoles.length?['group','manager','seller','staff'].filter(role=>
-    explicitRoles.some(row=>row.role===role)&&(role!=='group'||head))
-    :head?['group']:['manager','seller'].includes(assigned?.role)?[assigned.role]:[];
+  const departmentAssignments=assigned?await list(db,`SELECT group_name AS groupName,department||'_manager' AS role
+    FROM communication_departments WHERE manager=?
+    UNION ALL SELECT group_name,department FROM communication_department_members WHERE person=?`,assigned.id,assigned.id):[];
+  const roles=owner?['admin']:explicitRoles.length?accountRoleOrder.filter(role=>
+    explicitRoles.some(row=>row.role===role)&&(role!=='group'||head)&&
+      (!isDepartmentRole(role)||departmentAssignments.some(assignment=>assignment.role===role)))
+    :head?['group']:assigned?.salon&&['manager','seller'].includes(assigned.role)?[assigned.role]:[];
   if (!roles.length) return json({error:'Administrator musi przypisać Ci rolę w lejku.'},403);
   const requested=url.searchParams.get('role');
   if (requested&&!roles.includes(requested)&&(preview||request.method!=='GET')) return json({error:'Nie masz już wybranej roli. Odśwież widok.'},403);
-  const role=roles.includes(requested)?requested:roles[0];
+  const activeRole=roles.includes(requested)?requested:roles[0];
+  const role=staffRoles.includes(activeRole)?'staff':activeRole;
+  const activeDepartmentGroups=departmentAssignments.filter(assignment=>assignment.role===activeRole).map(assignment=>assignment.groupName);
+  const departmentAdministration=isDepartmentRole(activeRole)&&activeRole.endsWith('_manager');
   if (managementPage) {
     if (role==='staff') return new Response(null,{status:303,headers:{...headers,Location:'/z-zycia-salonu.html'}});
     return role==='seller'
@@ -327,11 +334,11 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
       : serveAsset(path,request.method);
   }
 
-  const user={...assigned,role,group:head?.group_name};
+  const user={...assigned,role,activeRole,activeDepartmentGroups,group:head?.group_name};
   if (path==='/api/communication') return handleCommunication(request,url,db,user,email,preview);
   if (path==='/api/salon-life'||path==='/api/salon-life/photo') return handleSalonLife(request,url,db,user,roles,email,preview);
-  if (role==='staff'&&path!=='/api/assistant') {
-    if (path==='/api/daily'&&request.method==='GET') return json({role,redirect:'/z-zycia-salonu.html'});
+  if (role==='staff'&&path!=='/api/assistant'&&!(departmentAdministration&&path==='/api/users')) {
+    if (path==='/api/daily'&&request.method==='GET') return json({role:activeRole,redirect:'/z-zycia-salonu.html'});
     return json({error:'To konto ma dostęp do zakładki Z życia salonu.'},403);
   }
   const signedInAs=assigned?.name?.trim()||email;
@@ -369,7 +376,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   const canManage=['admin','group','manager'].includes(user.role);
   // A delegated operator may manage only subordinate accounts in their full scope.
   const delegatedScope=user.role==='manager'
-    ? filters.manager+' AND ('+accountRole('a','seller')+' OR '+accountRole('a','staff')+') AND NOT '+accountRole('a','manager')
+    ? filters.manager+' AND ('+['seller',...salonStaffRoles].map(role=>accountRole('a',role)).join(' OR ')+') AND NOT '+accountRole('a','manager')
     : filters.group+` AND NOT EXISTS (
       SELECT 1 FROM manager_salons ms WHERE ms.manager=a.id AND NOT EXISTS (
         SELECT 1 FROM dealer_group_salons gs WHERE gs.salon=ms.salon AND gs.group_name=?
@@ -859,18 +866,18 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         ORDER BY a.name,a.id,m.salon`):[];
       const users=!canManage?[]:await list(db,`SELECT a.email,a.name,a.salon,h.group_name AS dealerGroup,
         COALESCE((SELECT group_concat(ar.role) FROM account_roles ar WHERE ar.person=a.id),CASE WHEN h.email IS NULL THEN a.role ELSE 'group' END) AS roles, EXISTS (SELECT 1 FROM archived_users WHERE email=a.email) AS archived,
-        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone,
-        (SELECT cp.position FROM communication_positions cp WHERE cp.email=a.email AND cp.salon=a.salon) AS position
+        contact.first_name AS firstName,contact.last_name AS lastName,contact.phone
         FROM accounts a LEFT JOIN dealer_group_heads h ON h.email=a.email
         LEFT JOIN account_contact_details contact ON contact.person=a.id WHERE `+
         (owner?`a.role<>'admin'
-          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL,NULL FROM dealer_group_heads h
+          UNION ALL SELECT h.email,h.email,'',h.group_name,'group',EXISTS (SELECT 1 FROM archived_users WHERE email=h.email),NULL,NULL,NULL FROM dealer_group_heads h
           WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.email=h.email)`:delegatedWhere)+
         ' ORDER BY 2,1',...(owner?[]:[email,...delegatedParams]));
       const salonLife=personal&&!period?await db.prepare(`SELECT p.title FROM salon_life_posts p
         WHERE p.status='approved' AND ${lifePostAudience}
         ORDER BY p.published_day DESC,p.id DESC LIMIT 1`).bind('salon',user.salon).first():null;
-      return json({signedInAs,previewUser,users,roles,accountHeader,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,dailyGoalPlan,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand:personal?brand:null,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
+      const departments=user.role==='group'?await list(db,'SELECT department,name,manager FROM communication_departments WHERE group_name=? ORDER BY name',user.group):[];
+      return json({signedInAs,previewUser,users,roles,departments,accountHeader,salonLifeHeadline:salonLife?.title??null,managerAssignments,groupBrand,tasksRead,role:user.role,dealerGroup:user.role==='group'?user.group:null,sellers,plans,reviewPlans,funnelPlans,sourcePlans,daily,teamDay,previousDaily,personal,dailyGoalCorrection:correction?JSON.parse(correction.goals):null,dailyGoalPlan,availableMonths:availableMonths.map(row=>row.month),calendar:calendar.filter(row=>!polishHoliday(row.day)),absenceAdjustments,brand:personal?brand:null,salons,groups,ranking,approvals:approvals.filter(row=>!polishHoliday(row.day)),cause,sidebarMode,meme,memeVotes,memeStories,giphy,giphyAvailable:Boolean(env.GIPHY_API_KEY),lesson,salon:user.salon??null,today});
     }
     const [results,plans,accounts]=await Promise.all([
       list(db,'SELECT person,month,source,counters FROM results WHERE month IN ('+placeholders+') AND '+scope+' AND '+includedResult('results','results.month'),...months,...params),
@@ -1396,6 +1403,14 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     return json({ok:true});
   }
   if (path==='/api/group/salon' && user.role==='group') {
+    if (body.department!==undefined) {
+      if (!Object.hasOwn(communicationDepartments,body.department)||!lifeText(body.name,120))
+        return json({error:'Wybierz rodzaj działu i podaj jego nazwę.'},400);
+      const name=body.name.trim();
+      const inserted=await db.prepare(`INSERT INTO communication_departments(group_name,department,name)
+        VALUES (?,?,?) ON CONFLICT(group_name,department) DO NOTHING`).bind(user.group,body.department,name).run();
+      return inserted.meta.changes?json({ok:true}):json({error:'Ten dział już istnieje w Twojej grupie.'},409);
+    }
     if (!textValid(body.salon)) return json({error:'Podaj nazwę salonu.'},400);
     const salon=body.salon.trim();
     if (managedSalons.has(salon)) return json({ok:true});
@@ -1483,7 +1498,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     if (!env.inviteReady) return json({error:'Wysyłka zaproszeń jest chwilowo niedostępna.'},503);
     const explicit=await list(db,'SELECT role FROM account_roles WHERE person=?',account.id);
     const roles=(explicit.length?explicit.map(row=>row.role):[account.group_name?'group':account.role])
-      .filter(role=>['group','manager','seller','staff'].includes(role)&&(role!=='group'||account.group_name));
+      .filter(role=>accountRoleOrder.includes(role)&&(role!=='group'||account.group_name));
     if (!roles.length) return json({error:'Konto nie ma przypisanej roli.'},409);
     const sent=await env.sendInvitation(address,signedInAs,roles).catch(()=>false);
     return sent?json({ok:true}):json({error:'Nie udało się wysłać zaproszenia. Spróbuj ponownie za chwilę.'},503);
@@ -1514,16 +1529,22 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     ]);
     return json({ok:true});
   }
-  if (path==='/api/users' && canManage) {
+  if (path==='/api/users' && (canManage||departmentAdministration)) {
     const {firstName,lastName,phone,roles:chosen,salon,dealerGroup}=body;
-    const needsSalon=Array.isArray(chosen)&&chosen.some(role=>role!=='group');
-    if (!Array.isArray(chosen)||!chosen.length||chosen.length>4||new Set(chosen).size!==chosen.length||
-        !chosen.every(role=>['group','manager','seller','staff'].includes(role))||
+    const departmentRole=Array.isArray(chosen)?chosen.find(isDepartmentRole):null;
+    const needsSalon=Array.isArray(chosen)&&chosen.some(role=>role!=='group'&&!isDepartmentRole(role));
+    if (!Array.isArray(chosen)||new Set(chosen).size!==chosen.length||
+        !chosen.every(role=>accountRoleOrder.includes(role))||
         (needsSalon&&!textValid(salon))||!textValid(body.email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim()))
       return json({error:'Podaj dane użytkownika i zaznacz co najmniej jedną rolę. Wybierz salon dla każdej roli związanej z salonem.'},400);
     const address=body.email.trim().toLowerCase();
     const current=await db.prepare('SELECT id,role FROM accounts WHERE email=?').bind(address).first();
     const creating=body.createOnly===true||!current;
+    const previousRoles=current?await list(db,'SELECT role FROM account_roles WHERE person=?',current.id):[];
+    if (!chosen.length&&(!owner||creating||!previousRoles.some(({role})=>isDepartmentRole(role))))
+      return json({error:'Wybierz co najmniej jedną rolę użytkownika.'},400);
+    if (user.role==='group'&&chosen.some(role=>['reception','sales_assistant'].includes(role)&&!previousRoles.some(row=>row.role===role)))
+      return json({error:'Role Recepcja i Asystent sprzedaży nadaje kierownik salonu.'},403);
     const structured=creating||firstName!==undefined||lastName!==undefined||phone!==undefined;
     const validName=value=>typeof value==='string'&&value.trim().length>0&&value.length<=60;
     const validPhone=typeof phone==='string'&&phone.length<=32&&/^\+?[0-9() .-]+$/.test(phone.trim())
@@ -1540,7 +1561,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     const createOnly=body.createOnly===true;
     if (wantsGroup&&user.role==='group'&&(!createOnly||dealerGroup!=null&&dealerGroup!==''&&dealerGroup!==user.group))
       return json({error:'Szef grupy może nadać tę rolę tylko nowemu użytkownikowi w swojej grupie.'},403);
-    if (user.role==='manager'&&chosen.some(role=>!['seller','staff'].includes(role)) ||
+    if (user.role==='manager'&&chosen.some(role=>!['seller',...salonStaffRoles].includes(role)) ||
         !owner&&needsSalon&&!managedSalons.has(salon.trim()))
       return json({error:'Nie możesz nadać tych ról w wybranym salonie.'},403);
     if (!owner&&!createOnly&&!await canEditDelegated(address))
@@ -1551,22 +1572,33 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     const group=wantsGroup?(user.role==='group'?user.group:(textValid(dealerGroup)?dealerGroup.trim():null)):null;
     if (wantsGroup&&(!group||!await db.prepare('SELECT 1 FROM dealer_groups WHERE name=?').bind(group).first()))
       return json({error:'Wybierz grupę dealerską.'},400);
-    const {position}=body;
-    if (position!==undefined&&(user.role!=='manager'||!needsSalon||!['','reception','sales_assistant'].includes(position)))
-      return json({error:'Stanowiska salonu nadaje kierownik w swoim salonie.'},403);
-    const currentPosition=position===undefined?null:await db.prepare(
-      'SELECT position FROM communication_positions WHERE email=? AND salon=?').bind(address,salon.trim()).first();
-    if (position&&['carwash','logistics'].includes(currentPosition?.position))
-      return json({error:'To konto należy do działu Myjni lub Logistyki.'},409);
-    const positionStatements=position===undefined?[]:position
-      ?[db.prepare(`INSERT INTO communication_positions(email,salon,position) VALUES (?,?,?)
-        ON CONFLICT(email) DO UPDATE SET salon=excluded.salon,position=excluded.position`).bind(address,salon.trim(),position)]
-      :[db.prepare("DELETE FROM communication_positions WHERE email=? AND position IN ('reception','sales_assistant')").bind(address)];
-    const fallback=chosen.includes('manager')?'manager':'seller';
     const password=body.password??'';
     if (password!==''&&!validAccountPassword(password))
       return json({error:'Hasło do Biegu Wyżej musi mieć od 8 do 128 znaków.'},400);
     const credentials=password?await env.passwordStatements(address,password):[];
+    let departmentStatements=[];
+    if (departmentRole||departmentAdministration) {
+      const department=departmentRole?.replace(/_manager$/,'');
+      const assigningManager=departmentRole?.endsWith('_manager');
+      const groupName=assigningManager?user.group:dealerGroup;
+      if (!departmentRole||chosen.length!==1||!createOnly||
+          (assigningManager?user.role!=='group':activeRole!==department+'_manager'||!activeDepartmentGroups.includes(groupName)))
+        return json({error:'Wybierz rolę w dziale, którym możesz zarządzać.'},403);
+      const office=await db.prepare('SELECT manager FROM communication_departments WHERE group_name=? AND department=?').bind(groupName,department).first();
+      if (!office) return json({error:'Najpierw dodaj dział w strukturze grupy.'},400);
+      if (!assigningManager&&office.manager!==user.id) return json({error:'Nie zarządzasz tym działem.'},403);
+      if (assigningManager&&office.manager) return json({error:'Dział ma już kierownika. Możesz zmienić przypisanie w sekcji Działy i kierownicy.'},409);
+      const assignment=assigningManager
+        ?db.prepare('UPDATE communication_departments SET manager=(SELECT id FROM accounts WHERE email=?) WHERE group_name=? AND department=?').bind(address,groupName,department)
+        :db.prepare(`INSERT INTO communication_department_members(person,group_name,department)
+          SELECT id,?,? FROM accounts WHERE email=?`).bind(groupName,department,address);
+      departmentStatements=[
+        db.prepare(`INSERT INTO communication_department_accounts(person,group_name)
+          SELECT id,? FROM accounts WHERE email=?`).bind(groupName,address),
+        assignment
+      ];
+    }
+    const fallback=chosen.includes('manager')?'manager':'seller';
     const insertAccount='INSERT INTO accounts(email,name,salon,role) VALUES (?,?,?,?)';
     const updateAccount=' ON CONFLICT(email) DO UPDATE SET name=excluded.name,salon=excluded.salon,role=excluded.role';
     await db.batch([
@@ -1576,13 +1608,14 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         SELECT id,?,?,? FROM accounts WHERE email=? ON CONFLICT(person) DO UPDATE SET
           first_name=excluded.first_name,last_name=excluded.last_name,phone=excluded.phone
         `).bind(firstName.trim(),lastName.trim(),phone.trim(),address)]:[]),
-      db.prepare('DELETE FROM account_roles WHERE person=(SELECT id FROM accounts WHERE email=?)').bind(address),
+      db.prepare(`DELETE FROM account_roles WHERE person=(SELECT id FROM accounts WHERE email=?)
+        AND role NOT IN ('carwash','logistics','carwash_manager','logistics_manager')`).bind(address),
       ...chosen.map(role=>db.prepare('INSERT INTO account_roles SELECT id,? FROM accounts WHERE email=?').bind(role,address)),
       group?db.prepare('INSERT INTO dealer_group_heads VALUES (?,?)'+
         (createOnly?'':' ON CONFLICT(email) DO UPDATE SET group_name=excluded.group_name')).bind(address,group)
         :db.prepare('DELETE FROM dealer_group_heads WHERE email=?').bind(address),
       ...(!chosen.includes('manager')&&current?[db.prepare('DELETE FROM manager_salons WHERE manager=?').bind(current.id)]:[]),
-      ...positionStatements,
+      ...departmentStatements,
       ...credentials
     ]);
     return creating?invitedNewAccount(address,chosen):json({ok:true});

@@ -1006,14 +1006,14 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 <label id="user-manager-role"><input type="checkbox" name="roles" value="manager"> Kierownik salonu</label>
 <label><input type="checkbox" name="roles" value="seller"> Handlowiec</label>
 <label><input type="checkbox" name="roles" value="staff"> Pracownik · Z życia salonu</label>
+<label><input type="checkbox" name="roles" value="reception"> Recepcja</label>
+<label><input type="checkbox" name="roles" value="sales_assistant"> Asystent sprzedaży</label>
+<label hidden><input type="checkbox" name="roles" value="logistics_manager" disabled> Kierownik logistyki i transportu</label>
+<label hidden><input type="checkbox" name="roles" value="carwash_manager" disabled> Kierownik myjni</label>
 </fieldset>
 <label id="user-group-label" hidden>Grupa dealerska <select name="dealerGroup"></select></label>
-<label id="user-position-label" hidden>Stanowisko w salonie <select name="position" disabled>
-  <option value="">Bez dodatkowego stanowiska</option>
-  <option value="reception">Recepcja</option>
-  <option value="sales_assistant">Asystent sprzedaży</option>
-</select></label>
 <label id="user-salon-label" hidden>Salon <select name="salon"></select></label>
+<p id="user-department" hidden></p>
 <div class="user-actions">
 <button id="user-save">Zapisz użytkownika i role</button>
 <button type="button" class="secondary" id="user-send-invite" hidden>Ponów wysyłkę zaproszenia</button>
@@ -1127,8 +1127,17 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 </details>
 <p id="manager-preview-note" hidden>Podgląd kierownika. Wróć do panelu administratora, aby wprowadzić zmiany.</p>
 <details id="group-add-salon-block" class="admin-block" hidden>
-<summary>Dodaj salon do grupy</summary>
-<form id="group-add-salon"><label>Nazwa nowego salonu <input name="salon" required maxlength="120"></label><button>Dodaj salon</button></form>
+<summary>Dodaj salon lub dział do grupy</summary>
+<form id="group-add-salon">
+  <label>Rodzaj jednostki <select name="type">
+    <option value="salon">Salon</option>
+    <option value="logistics">Logistyka i transport</option>
+    <option value="carwash">Myjnia</option>
+  </select></label>
+  <label>Nazwa jednostki <input name="name" required maxlength="120"></label>
+  <button>Dodaj do grupy</button>
+</form>
+<ul id="group-departments" hidden></ul>
 </details>
 <details id="admin-groups-block" class="admin-block" hidden>
 <summary>Grupy dealerskie</summary>

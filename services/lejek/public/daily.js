@@ -2795,7 +2795,7 @@ const managementFunctions={
   'lekcja': ['Lekcja na dziś','book','admin-lessons-block'],
   'historia-planow': ['Historia planów i aktywności','layers'],
   'konta-uzytkownikow': ['Konta użytkowników','people'],
-  'dodaj-salon': ['Dodaj salon do grupy','add','group-add-salon-block'],
+  'dodaj-salon': ['Dodaj salon lub dział','add','group-add-salon-block'],
   'dane-dealera': ['Dane dealera','card','admin-settings-block','dealer-settings']
 };
 const managementFunctionOrder={
@@ -3039,6 +3039,7 @@ let managedUsers=[];
 const restoringUsers=new Set();
 let fixedUserGroup='';
 let userEditorRole='';
+let userEditorDepartments=[];
 let selectedUserEmail='';
 const selectedEditableUser=()=>managedUsers.find(user=>!user.archived&&user.email===selectedUserEmail);
 const editingUsers=()=>userEditor.parentElement===editUserBlock;
@@ -3169,12 +3170,32 @@ function updateUserRoleFields() {
   groupRole.hidden=!canAssignGroup;
   groupRole.querySelector('input').disabled=!canAssignGroup;
   const choices=[...userEditor.querySelectorAll('input[name="roles"]')];
+  const existingRoles=editingUsers()?selectedEditableUser()?.roles.split(',')??[]:[];
+  for (const input of choices.filter(input=>['reception','sales_assistant'].includes(input.value))) {
+    input.disabled=userEditorRole==='group'&&!existingRoles.includes(input.value);
+    input.closest('label').hidden=input.disabled;
+  }
+  const departmentRoles=existingRoles.filter(role=>['carwash','logistics','carwash_manager','logistics_manager'].includes(role));
+  const canKeepDepartmentRoles=userEditorRole==='admin'&&departmentRoles.length>0;
+  for (const input of choices.filter(input=>input.value.endsWith('_manager'))) {
+    const department=userEditorDepartments.find(item=>item.department+'_manager'===input.value&&!item.manager);
+    input.disabled=userEditorRole!=='group'||editingUsers()||!department;
+    input.closest('label').hidden=input.disabled;
+    if (input.disabled) input.checked=false;
+  }
   const available=choices.filter(input=>!input.disabled);
   const roles=available.filter(input=>input.checked).map(input=>input.value);
+  const departmentRole=roles.find(role=>role.endsWith('_manager'));
+  const department=userEditorDepartments.find(item=>item.department+'_manager'===departmentRole);
+  const departmentNote=$('#user-department');
+  const departmentDetails=department?'Dział · '+department.name:departmentRoles.map(role=>accountRoleNames[role]).join(', ');
+  departmentNote.hidden=!departmentDetails;
+  departmentNote.textContent=departmentDetails;
   for (const input of choices) input.setCustomValidity('');
-  available[0]?.setCustomValidity(roles.length?'':'Wybierz co najmniej jedną rolę użytkownika.');
+  (available.find(input=>input.value===departmentRole)??available[0])?.setCustomValidity(!roles.length&&!canKeepDepartmentRoles?'Wybierz co najmniej jedną rolę użytkownika.'
+    :departmentRole&&roles.length!==1?'Wybierz jedną rolę kierownika działu dla tego konta.':'');
   const group=roles.includes('group');
-  const salon=roles.some(role=>role!=='group');
+  const salon=roles.some(role=>role!=='group'&&!role.endsWith('_manager'));
   $('#user-group-label').hidden=!group;
   $('#user-salon-label').hidden=!salon;
   userEditor.elements.dealerGroup.disabled=Boolean(fixedUserGroup);
@@ -3190,11 +3211,11 @@ function loadUserEditor() {
   $('#user-edit-heading').textContent=selected?.name??'';
   const previewLinks=$('#admin-user-preview-links');
   const canPreview=data?.role==='admin'&&!managerPreviewSalon&&!groupPreviewName&&selected;
-  const roles=canPreview?['group','manager','seller','staff'].filter(role=>selected.roles.split(',').includes(role)):[];
+  const roles=canPreview?selected.roles.split(',').filter(role=>Object.hasOwn(accountRoleNames,role)):[];
   previewLinks.replaceChildren(...roles.map(role=>{
     const link=document.createElement('a');
     link.href=userPreviewUrl(selected.email,role);
-    link.textContent='Podgląd: '+panelNames[role].replace(/^Panel /,'');
+    link.textContent='Podgląd: '+accountRoleNames[role];
     return link;
   }));
   previewLinks.hidden=!roles.length;
@@ -3213,10 +3234,6 @@ function loadUserEditor() {
   userEditor.elements.salon.value=selected?.salon??'';
   userEditor.elements.dealerGroup.value=selected?.dealerGroup??fixedUserGroup;
   for (const input of userEditor.querySelectorAll('input[name="roles"]')) input.checked=Boolean(selected?.roles.split(',').includes(input.value));
-  const positionField=userEditor.elements.position;
-  positionField.disabled=userEditorRole!=='manager'||['carwash','logistics'].includes(selected?.position);
-  $('#user-position-label').hidden=positionField.disabled;
-  positionField.value=['reception','sales_assistant'].includes(selected?.position)?selected.position:'';
   $('#user-send-invite').hidden=!selected||Boolean(selected.archived||managerPreviewSalon||groupPreviewName);
   const archiveButton=$('#user-archive');
   archiveButton.hidden=!selected;
@@ -3225,11 +3242,13 @@ function loadUserEditor() {
 }
 function renderUserEditor(view) {
   userEditorRole=view.role;
+  userEditorDepartments=view.departments??[];
   const delegated=view.role!=='admin';
   const visibleSalons=new Set(view.salons.map(({salon})=>salon));
   managedUsers=data.users.filter(user=>!delegated||
     visibleSalons.has(user.salon)&&!user.roles.split(',').includes('group')&&
-    (view.role!=='manager'||user.roles.split(',').every(role=>['seller','staff'].includes(role))));
+    (view.role!=='manager'||user.roles.split(',').some(role=>['seller','staff','reception','sales_assistant'].includes(role))&&
+      !user.roles.split(',').includes('manager')));
   fixedUserGroup=view.role==='group'?view.dealerGroup:'';
   const managerRole=$('#user-manager-role');
   managerRole.hidden=view.role==='manager';
@@ -3248,8 +3267,13 @@ function renderUserEditor(view) {
   loadUserEditor();
 }
 userEditor.onchange=event=>{
-  if (event.target===userEditor.elements.position&&event.target.value&&!userEditor.querySelector('[name="roles"]:checked'))
-    userEditor.querySelector('[name="roles"][value="staff"]').checked=true;
+  const changed=event.target;
+  if (changed.name==='roles'&&changed.checked) {
+    const departmentRole=changed.value.endsWith('_manager');
+    for (const field of userEditor.querySelectorAll('input[name="roles"]:checked')) {
+      if (field!==changed&&(departmentRole||field.value.endsWith('_manager'))) field.checked=false;
+    }
+  }
   updateUserRoleFields();
 };
 userEditor.onsubmit=async event=>{
@@ -3361,6 +3385,14 @@ function renderAdmin() {
   $('[data-history="management"]').reloadHistory();
   renderUserEditor({...view,salons:baseView.salons,sellers:baseView.sellers});
   $('#group-add-salon-block').hidden=!group;
+  const departments=view.departments??[];
+  const departmentList=$('#group-departments');
+  departmentList.hidden=!group||!departments.length;
+  departmentList.replaceChildren(...departments.map(({name})=>{
+    const item=document.createElement('li');
+    item.textContent=name;
+    return item;
+  }));
   $('#manager-assignments').hidden=view.role!=='admin';
   if (view.role==='admin') renderManagerAssignments();
   $('#group-editor').hidden=view.role!=='admin';
@@ -3825,10 +3857,10 @@ async function refresh() {
 }
 
 async function applyDailySnapshot(snapshot) {
-  if (snapshot.role==='staff') {
-    const params=new URLSearchParams({role:'staff'});
+  if (snapshot.redirect==='/z-zycia-salonu.html') {
+    const params=new URLSearchParams({role:snapshot.role});
     if (previewTarget) params.set('podglad',previewTarget);
-    if (!previewTarget) sessionStorage.setItem('lejek-active-role','staff');
+    if (!previewTarget) sessionStorage.setItem('lejek-active-role',snapshot.role);
     location.replace(snapshot.redirect+'?'+params);
     return;
   }
@@ -3987,7 +4019,11 @@ function renderDealerGroups(groups) {
 $('#group-add-salon').onsubmit=event=>{
   event.preventDefault();
   const form=event.currentTarget;
-  run(async()=>{await api('/api/group/salon',{salon:form.elements.salon.value});form.reset();});
+  const {type,name}=Object.fromEntries(new FormData(form));
+  run(async()=>{
+    await api('/api/group/salon',type==='salon'?{salon:name}:{department:type,name});
+    form.reset();
+  });
 };
 $('#group-editor').onsubmit=event=>{
   event.preventDefault();

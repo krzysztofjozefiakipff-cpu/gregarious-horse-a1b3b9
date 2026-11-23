@@ -93,7 +93,7 @@ function showWall() {
     (item.scope==='salon'?'Salon · ':'Grupa · ')+item.name,String(index))));
   scopePicker.value=String(scopes.findIndex(item=>item.scope===current.scope&&item.name===current.name));
   scopePicker.disabled=scopes.length<2;
-  const panelRole=wall.role==='staff'?wall.roles.find(item=>item!=='staff'):wall.role;
+  const panelRole=isStaffPanelRole(wall.role)?wall.roles.find(item=>!isStaffPanelRole(item)):wall.role;
   renderAccountHeader(wall,preview);
   if (panelRole) {
     const params=new URLSearchParams({role:panelRole});
