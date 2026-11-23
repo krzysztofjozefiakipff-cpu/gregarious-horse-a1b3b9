@@ -13,8 +13,8 @@ async function loadAccountHeader(db,user,groupName) {
   const firstName=contact?.first_name?.trim()||user.name?.trim().split(/\s+/)[0]||'';
   const dealer=user.salon?await db.prepare('SELECT name,logo FROM dealer_brand WHERE salon=?').bind(user.salon).first():null;
   if (groupName===undefined) {
-    groupName=user.role==='group'?user.group:user.salon
-      ?(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first())?.group_name:null;
+    groupName=user.role==='group'?user.group:user.activeDepartmentGroups?.[0]??(user.salon
+      ?(await db.prepare('SELECT group_name FROM dealer_group_salons WHERE salon=?').bind(user.salon).first())?.group_name:null);
   }
   const groupBrand=await accountGroupBrand(db,groupName);
   const brand=user.role==='group'?(groupBrand?.logo?groupBrand:dealer):(dealer?.logo?dealer:groupBrand);

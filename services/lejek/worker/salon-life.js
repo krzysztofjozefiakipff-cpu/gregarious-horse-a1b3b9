@@ -16,9 +16,10 @@ async function lifeScopes(db,user) {
     :role==='group'?[{name:user.group}]
     :await list(db,`SELECT DISTINCT group_name AS name FROM dealer_group_salons
       WHERE salon IN (SELECT value FROM json_each(?)) ORDER BY name`,JSON.stringify(names));
+  const groupNames=[...new Set([...groups.map(({name})=>name),...(user.activeDepartmentGroups??[])])];
   const all=[
     ...names.map(name=>({scope:'salon',name,moderate:['manager','group','admin'].includes(role)})),
-    ...groups.map(({name})=>({scope:'group',name,moderate:['group','admin'].includes(role)}))
+    ...groupNames.map(name=>({scope:'group',name,moderate:['group','admin'].includes(role)}))
   ];
   const preferred=all.find(item=>role==='group'?item.scope==='group':item.scope==='salon'&&item.name===user.salon);
   return preferred?[preferred,...all.filter(item=>item!==preferred)]:all;
@@ -68,7 +69,7 @@ async function viewSalonLife(db,current,scopes,email,today,week,user,roles,previ
     }))};
   }
   const {firstName,brand,groupBrand}=await loadAccountHeader(db,user);
-  return json({role:user.role,roles,accountHeader:{firstName,brand,theme:groupBrand?.theme},scopes,current,posts,hit,drafts,poll,hasOlder,readOnly:preview});
+  return json({role:user.activeRole,roles,accountHeader:{firstName,brand,theme:groupBrand?.theme},scopes,current,posts,hit,drafts,poll,hasOlder,readOnly:preview});
 }
 
 async function handleSalonLife(request,url,db,user,roles,email,preview) {

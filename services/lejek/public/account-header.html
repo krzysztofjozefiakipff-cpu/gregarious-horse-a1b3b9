@@ -164,3 +164,16 @@
   #fox-assistant-messages button { display: block; margin-top: .5rem; }
   #fox-assistant-question { box-sizing: border-box; width: 100%; font-size: 1rem; }
 </style>
+
+<template id="department-new-user">
+  <form>
+    <h4>Dodaj użytkownika</h4>
+    <p>Rola · <strong data-department-role></strong></p>
+    <label>Imię <input name="firstName" autocomplete="given-name" required maxlength="60"></label>
+    <label>Nazwisko <input name="lastName" autocomplete="family-name" required maxlength="60"></label>
+    <label>E-mail <input name="email" type="email" autocomplete="email" required maxlength="120"></label>
+    <label>Numer telefonu <input name="phone" type="tel" autocomplete="tel" required maxlength="32"></label>
+    <label>Hasło (opcjonalnie, co najmniej 8 znaków) <input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password"></label>
+    <button>Dodaj użytkownika</button>
+  </form>
+</template>

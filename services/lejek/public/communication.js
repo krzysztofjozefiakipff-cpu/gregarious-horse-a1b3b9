@@ -14,9 +14,9 @@ let communicationRevision=0;
 let communicationBefore;
 
 
-async function communicationRequest(query={},body) {
+async function communicationRequest(query={},body,path='/api/communication') {
   const params=new URLSearchParams({...query,role:communicationRole});
-  const response=await fetch('/api/communication?'+params,body&&{
+  const response=await fetch(path+'?'+params,body&&{
     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
   });
   const result=await response.json();
@@ -90,8 +90,8 @@ async function showCommunicationInbox() {
     const destinations=communicationSend.elements.destination;
     const selected=destinations.value;
     const options=[...data.contacts.map(person=>new Option(person.name+' · '+(person.salon||person.groupName||''),JSON.stringify({kind:'direct',recipient:person.contact}))),
-      ...data.departments.map(({groupName,department})=>
-        new Option(data.departmentLabels[department]+' · '+groupName,JSON.stringify({kind:'department',department,group:groupName}))),
+      ...data.departments.map(({groupName,department,name})=>
+        new Option(name+' · '+groupName,JSON.stringify({kind:'department',department,group:groupName}))),
       ...data.announcements.map(({scope,name})=>new Option('Ogłoszenie · '+name,JSON.stringify({kind:'announcement',scope,audience:name})))];
     destinations.replaceChildren(new Option('Wybierz odbiorcę',''),...options);
     if (options.some(option=>option.value===selected)) destinations.value=selected;
@@ -178,33 +178,52 @@ async function loadDepartmentSettings(asHead) {
   try {
     const data=await communicationRequest();
     if (!departmentDialog.open) return;
-    const departments=asHead&&data.departmentAdmin
-      ?Object.keys(data.departmentLabels).map(department=>data.departments.find(item=>item.department===department&&item.groupName===data.departmentAdmin)
-        ??{department,groupName:data.departmentAdmin})
-      :data.ownDepartments;
-    forms.replaceChildren(...departments.map(({groupName,department,manager})=>{
-      const form=document.createElement('form');
+    const departments=asHead?data.departments.filter(item=>item.groupName===data.departmentAdmin):data.ownDepartments;
+    forms.replaceChildren(...departments.map(({groupName,department,name,manager})=>{
+      const section=document.createElement('section');
       const heading=document.createElement('h3');
-      heading.textContent=data.departmentLabels[department]+' · '+groupName;
+      heading.textContent=name;
+      const form=document.createElement('form');
       const label=document.createElement('label');
-      label.textContent=asHead?'Kierownik działu':'Pracownik działu';
+      label.textContent=asHead?'Kierownik działu':'Istniejący użytkownik';
       const picker=document.createElement('select');
       picker.required=true;
       picker.append(new Option('Wybierz pracownika',''));
       for (const member of data.departmentPeople.filter(member=>member.groupName===groupName)) {
-        picker.append(new Option(member.name+' · '+member.salon+(!asHead&&member.position===department?' · w dziale':''),member.id));
+        const assigned=data.memberships.some(item=>item.person===member.id&&item.groupName===groupName&&item.department===department);
+        const hints=[member.salon,assigned?'w dziale':''].filter(Boolean);
+        picker.append(new Option([member.name,...hints].join(' · '),member.id));
       }
       if (manager&&asHead) picker.value=manager;
       label.append(picker);
       const save=document.createElement('button');
-      save.textContent=asHead?(manager?'Zapisz kierownika':'Utwórz dział i nadaj uprawnienia'):'Dodaj do działu';
-      form.append(heading,label,save);
+      save.textContent=asHead?'Przypisz kierownika':'Nadaj rolę pracownika działu';
+      form.append(label,save);
+      section.append(heading,form);
       if (!asHead) {
         const remove=document.createElement('button');
         remove.value='remove';
         remove.className='secondary';
         remove.textContent='Usuń z działu';
         form.append(remove);
+
+        const template=document.getElementById('department-new-user');
+        const create=template.content.firstElementChild.cloneNode(true);
+        create.querySelector('[data-department-role]').textContent=accountRoleNames[department];
+        create.onsubmit=async event=>{
+          event.preventDefault();
+          const button=event.submitter;
+          button.disabled=true;
+          try {
+            const fields=Object.fromEntries(new FormData(create));
+            const result=await communicationRequest({},{...fields,roles:[department],dealerGroup:groupName,createOnly:true},'/api/users');
+            await loadDepartmentSettings(false);
+            status.textContent=result.invitation==='sent'?'Dodano użytkownika i wysłano zaproszenie.'
+              :'Dodano użytkownika. Wysyłka zaproszenia się nie udała.';
+          } catch(error) {status.textContent=error.message;}
+          finally {button.disabled=false;}
+        };
+        section.append(create);
       }
       form.onsubmit=async event=>{
         event.preventDefault();
@@ -218,9 +237,9 @@ async function loadDepartmentSettings(asHead) {
         } catch(error) {status.textContent=error.message;}
         finally {button.disabled=false;}
       };
-      return form;
+      return section;
     }));
-    status.textContent=departments.length?'':'Brak działów do zarządzania.';
+    status.textContent=departments.length?'':asHead?'Dodaj dział w sekcji „Dodaj salon lub dział”.':'Brak działów do zarządzania.';
   } catch(error) {status.textContent=error.message;}
 }
 function openDepartmentSettings(asHead) {

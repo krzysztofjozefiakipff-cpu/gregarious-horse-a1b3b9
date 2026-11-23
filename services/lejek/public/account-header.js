@@ -1,4 +1,7 @@
-const accountRoleNames={admin:'Administrator',group:'Szef grupy',manager:'Kierownik',seller:'Handlowiec',staff:'Pracownik'};
+const accountRoleNames={admin:'Administrator',group:'Szef grupy',manager:'Kierownik',seller:'Handlowiec',staff:'Pracownik',
+  reception:'Recepcja',sales_assistant:'Asystent sprzedaży',carwash:'Pracownik myjni',logistics:'Pracownik logistyki i transportu',
+  carwash_manager:'Kierownik myjni',logistics_manager:'Kierownik logistyki i transportu'};
+const isStaffPanelRole=role=>Boolean(accountRoleNames[role])&&!['admin','group','manager','seller'].includes(role);
 const headerRolePicker=document.getElementById('account-role');
 const accountMenu=document.getElementById('account-menu');
 document.addEventListener('click',event=>{
@@ -39,7 +42,7 @@ function renderAccountHeader({role,roles,accountHeader},preview=null) {
     const params=new URLSearchParams({role:next});
     if (preview) params.set('podglad',preview);
     else sessionStorage.setItem('lejek-active-role',next);
-    location.assign((next==='staff'?'/z-zycia-salonu.html':'/daily.html')+'?'+params);
+    location.assign((isStaffPanelRole(next)?'/z-zycia-salonu.html':'/daily.html')+'?'+params);
   };
   const controls=document.getElementById('account-controls');
   controls.querySelector('.panel-signout').hidden=Boolean(preview);
