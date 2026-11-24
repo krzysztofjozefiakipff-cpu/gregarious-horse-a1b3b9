@@ -64,7 +64,7 @@ async function showCommunicationInbox() {
       const button=document.createElement('button');
       button.type='button';
       button.className='secondary';
-      button.textContent=item.title+(item.unread?' · Nowe: '+item.unread:'');
+      button.textContent=displayAppText(item.title)+(item.unread?' · Nowe: '+item.unread:'');
       button.onclick=()=>void showCommunicationThread(item.id);
       row.append(button);
       return row;
@@ -112,7 +112,7 @@ async function showCommunicationThread(id,before) {
     communicationOlder.hidden=!data.hasOlder;
     communicationNode('inbox').hidden=true;
     communicationNode('thread').hidden=false;
-    communicationNode('subject').textContent=data.thread.title;
+    communicationNode('subject').textContent=displayAppText(data.thread.title);
     communicationReply.hidden=data.thread.kind==='announcement';
     const messages=data.messages.map(message=>{
       const row=document.createElement('li');
@@ -120,7 +120,7 @@ async function showCommunicationThread(id,before) {
       const title=document.createElement('strong');
       title.textContent=message.own?'Ty':message.author;
       const text=document.createElement('p');
-      text.textContent=message.message;
+      text.textContent=displayAppText(message.message);
       row.append(title,text);
       return row;
     });

@@ -282,7 +282,7 @@ function briefingReviewStep(person,report,canEdit) {
   if (review.absenceRequest) {
     const {kind,reason}=review.absenceRequest;
     const label=kind==='pending'?'Brak aktywności':calendarKinds[kind];
-    step.append(reportElement('p','Oczekujące zgłoszenie · '+label+(reason?' · '+reason:'')));
+    step.append(reportElement('p','Oczekujące zgłoszenie · '+label+(reason?' · '+displayAppText(reason):'')));
   }
   if (review.status==='missing') step.append(
     reportElement('p','Handlowiec nie zapisał wpisu na ten dzień. Uzupełnij wykonanie lub oznacz dzień wolny.'));

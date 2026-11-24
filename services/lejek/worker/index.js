@@ -1,3 +1,4 @@
+const hasCyrillic=value=>/\p{Script_Extensions=Cyrillic}/u.test(value);
 const foxMottos=new Map();
 let foxMottoDay;
 const headers = {'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -257,7 +258,8 @@ async function generateAssistantLessons(text,filename,assist) {
     const result=await assist('Ułóż do 5 krótkich lekcji produktowych lub sprzedażowych do zapamiętania. Zwróć JSON jako {"lessons":[{"title":"","topic":"","remember":"","excerpt":0,"quote":""}]}. excerpt to indeks fragmentu, licząc od zera. quote to dokładny cytat dowodzący treści. Limity znaków: title 120, topic 650, remember 220. Omijaj wrażliwe informacje i dane osobowe.',excerpts,true);
     if (!Array.isArray(result?.lessons)) throw new Error('Invalid lessons');
     for (const lesson of result.lessons.slice(0,5)) {
-      if (!validLessonDraft(lesson)||typeof lesson.quote!=='string') continue;
+      if (!validLessonDraft(lesson)||typeof lesson.quote!=='string'||
+          [lesson.title,lesson.topic,lesson.remember].some(hasCyrillic)) continue;
       const excerpt=Number.isInteger(lesson.excerpt)?excerpts[lesson.excerpt]:null;
       const quote=normalize(lesson.quote);
       if (quote.length<12||quote.length>250||!excerpt?.text.includes(quote)) continue;
@@ -495,9 +497,9 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
           'Zwróć samo hasło, bez cudzysłowu, podpisu i zwrotu po imieniu.',
           signal);
         const line=text.replace(/\s+/g,' ').trim();
-        if (!line||line.length>220||await env.moderate(line)) return null;
+        if (!line||line.length>220||hasCyrillic(line)||await env.moderate(line)) return null;
         const {firstName}=await loadAccountHeader(db,user,null);
-        return /^[\p{L}’-]{1,35}$/u.test(firstName)?firstName+' — '+line:line;
+        return !hasCyrillic(firstName)&&/^[\p{L}’-]{1,35}$/u.test(firstName)?firstName+' — '+line:line;
       })().catch(()=>null);
       if (foxMottos.size>=1500) foxMottos.delete(foxMottos.keys().next().value);
       foxMottos.set(key,motto);
@@ -934,6 +936,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     if (feature==='speak') {
       const message=typeof body.text==='string'?body.text.trim():'';
       if (!message||message.length>4000) return json({error:'Tekst do odsłuchu musi mieć od 1 do 4000 znaków.'},400);
+      if (hasCyrillic(message)) return json({error:'Lisek odczytuje odpowiedzi pisane alfabetem łacińskim.'},422);
       if (!env.foxSpeech) return json({error:'Głos Liska jest chwilowo niedostępny.'},503);
       try {
         const audio=await env.foxSpeech(message,request.signal);
@@ -950,6 +953,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
       if (!env.transcribe) return json({error:'Rozpoznawanie mowy jest niedostępne.'},503);
       try {
         const text=await env.transcribe(audio,mime);
+        if (text&&hasCyrillic(text)) return json({error:'Lisek nie rozpoznał wypowiedzi po polsku. Spróbuj jeszcze raz lub wpisz pytanie.'},422);
         return text?json({text:text.slice(0,500)}):json({error:'W nagraniu nie rozpoznano pytania.'},422);
       } catch {
         return json({error:'Nie udało się rozpoznać nagrania. Spróbuj ponownie lub wpisz pytanie.'},503);
@@ -1007,8 +1011,10 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
               !/(?:@|https?:|\b(?:[0-9][ -]?){7,}[0-9]\b)/i.test(question)&&!await env.moderate(query)) {
             if (!env.webAssist) return json({error:'Wyszukiwanie w internecie jest niedostępne.'},503);
             const answer=await env.webAssist(query);
+            if (hasCyrillic(answer.text)) throw new Error('Web answer contains Cyrillic');
             const safeText=[answer.text,...answer.citations.map(({title,url})=>title+' '+url)].join('\n');
-            return json(await env.moderate(safeText)?refused:{...answer,source:'web'});
+            const citations=answer.citations.map(item=>hasCyrillic(item.title)?{...item,title:'Źródło'}:item);
+            return json(await env.moderate(safeText)?refused:{...answer,citations,source:'web'});
           }
           return json({text:'Nie udało mi się przygotować zapytania do internetu. Spróbuj podać sam temat, miejscowości, datę i godziny.'});
         }
@@ -1095,7 +1101,8 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     const input={facts,salesLabels,goalLabels,sourceLabels,sourceDailyColumns:['Leady','Próby kontaktu','Spotkania','Spotkania odbyte (pole historyczne)','Jazdy próbne','Oferty','Follow-up','Zamówienia','Rejestracje','Opinie Google','Faktury'],question:isFox||feature==='chat'?question.trim():undefined};
     if (JSON.stringify(input).length>55000) return json({error:'Wybierz jeden salon, aby zawęzić analizę.'},422);
     try {
-      const text=await env.assist(instructions,input,false,{polishExplanation:!interactive});
+      const text=await env.assist(instructions,input);
+      if (hasCyrillic(text)) throw new Error('Assistant answer contains Cyrillic');
       return json(interactive&&await env.moderate(text)?refused:{text});
     }
     catch {return json({error:'Asystent jest chwilowo niedostępny. Spróbuj ponownie.'},503);}
