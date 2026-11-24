@@ -46,7 +46,7 @@ function lifeButton(label,fn,className='secondary') {
 
 function storyCard(post,draft=false) {
   const article=element('article','',draft||post===wall.hit?'':'card');
-  article.append(element('h3',post.title));
+  article.append(element('h3',displayAppText(post.title)));
   if (post.scope==='group'&&wall.current.scope==='salon') article.append(element('p','Grupa · '+post.audience,'hint'));
   if (post.day) {
     const date=new Date(post.day+'T12:00:00Z');
@@ -58,11 +58,11 @@ function storyCard(post,draft=false) {
       article.append(byline);
     } else article.append(time);
   }
-  article.append(element('p',post.message));
+  article.append(element('p',displayAppText(post.message)));
   if (post.hasPhoto) {
     const image=element('img');
     image.loading='lazy';
-    image.alt='Zdjęcie do wpisu: '+post.title;
+    image.alt='Zdjęcie do wpisu: '+displayAppText(post.title);
     image.src=lifeUrl('/api/salon-life/photo')+'&id='+post.id;
     article.append(image);
   }
@@ -118,12 +118,12 @@ function showWall() {
   } else {
     const options=poll.options.map(({label,votes},choice)=>{
       const button=lifeButton('',()=>change({action:'vote',id:poll.id,choice},'Głos zapisany.'),'secondary poll-choice');
-      button.append(element('span',label),element('strong',String(votes)));
+      button.append(element('span',displayAppText(label)),element('strong',String(votes)));
       button.setAttribute('aria-pressed',String(poll.choice===choice));
       button.disabled=readOnly;
       return button;
     });
-    life('#ballot').replaceChildren(element('h3',poll.question),...options);
+    life('#ballot').replaceChildren(element('h3',displayAppText(poll.question)),...options);
   }
 }
 

@@ -384,7 +384,7 @@ function assistantControl(label,request) {
     output.textContent='Asystent przygotowuje odpowiedź…';
     try {
       const result=await api('/api/assistant',request());
-      output.textContent=result.text;
+      output.textContent=displayAppText(result.text);
     } catch (error) {output.textContent=error.message;}
     finally {button.disabled=false;}
   };
@@ -512,7 +512,7 @@ function renderCalendar(host,sellers,role) {
     }
     if (entry.reason) {
       const explanation=document.createElement('p');
-      explanation.textContent='Powód · '+entry.reason;
+      explanation.textContent='Powód · '+displayAppText(entry.reason);
       detail.append(explanation);
     }
     if (canReview&&entry.kind==='noActivity'&&['pending','approved'].includes(entry.status)) {
@@ -1448,7 +1448,7 @@ function renderToday(records,metrics) {
 
   renderResultsCard(todayResults,metrics,'Brak planu na ten miesiąc');
   $('#today-draft-results-note').hidden=!data.daily.some(row=>row.draft&&row.day.startsWith(today.slice(0,7)));
-  $('#life-headline').textContent=data.salonLifeHeadline??'Zobacz wpisy i ankietę zespołu';
+  $('#life-headline').textContent=displayAppText(data.salonLifeHeadline)??'Zobacz wpisy i ankietę zespołu';
 }
 
 function renderSeller() {
@@ -1466,12 +1466,12 @@ function renderSeller() {
   const locked=Boolean(dayOff||records[day]||exception==='zero');
   const dayIndex=Math.floor(Date.parse(data.today)/86400000);
   const lesson=data.lesson;
-  $('#lesson-title').textContent=lesson?'Temat: '+lesson.title:'Lekcje w przygotowaniu';
+  $('#lesson-title').textContent=lesson?'Temat: '+displayAppText(lesson.title):'Lekcje w przygotowaniu';
   $('#lesson-topic-heading').hidden=!lesson;
-  $('#lesson-topic').textContent=lesson?.topic??'Kierownik salonu może opublikować tutaj lekcje z materiałów szkoleniowych.';
+  $('#lesson-topic').textContent=displayAppText(lesson?.topic)??'Kierownik salonu może opublikować tutaj lekcje z materiałów szkoleniowych.';
   $('#lesson-remember').hidden=!lesson;
-  $('#lesson-remember span').textContent=lesson?.remember??'';
-  $('#lesson-source').textContent=lesson?.source?('Źródło · '+lesson.source):'';
+  $('#lesson-remember span').textContent=displayAppText(lesson?.remember)??'';
+  $('#lesson-source').textContent=lesson?.source?('Źródło · '+displayAppText(lesson.source,'cytat lub nazwa pliku w innym języku')):'';
   $('#lesson-source').hidden=!lesson?.source;
   const currentMonth=data.today.slice(0,7);
   const currentMetrics=periodMetrics(data,currentMonth,1);
@@ -2546,7 +2546,7 @@ function salonGoalsEditor(plan,month) {
     request.className='planning-actions';
     const info=document.createElement('p');
     const statusLabels={pending:'Oczekuje na decyzję',approved:'Korekta zatwierdzona',rejected:'Prośba odrzucona',superseded:'Prośba zamknięta po zmianie planu'};
-    info.textContent=statusLabels[status]+' · '+requester+' · '+reason;
+    info.textContent=statusLabels[status]+' · '+requester+' · '+displayAppText(reason);
     const proposal=document.createElement('p');
     proposal.textContent='Proponowane cele · '+salonPlanMetrics.map((label,index)=>label+' '+targets[index]).join(' · ');
     request.append(info,proposal);
@@ -4106,15 +4106,15 @@ async function loadLessonPacks() {
           list.replaceChildren(...lessons.map(lesson=>{
             const item=document.createElement('li');
             const title=document.createElement('strong');
-            title.textContent='Temat: '+lesson.title;
+            title.textContent='Temat: '+displayAppText(lesson.title);
             const topic=document.createElement('p');
-            topic.textContent='Zagadnienie: '+lesson.topic;
+            topic.textContent='Zagadnienie: '+displayAppText(lesson.topic);
             const remember=document.createElement('p');
-            remember.textContent='Zapamiętaj: '+lesson.remember;
+            remember.textContent='Zapamiętaj: '+displayAppText(lesson.remember);
             item.append(title,topic,remember);
             if (lesson.source) {
               const source=document.createElement('p');
-              source.textContent='Źródło · '+lesson.source;
+              source.textContent='Źródło · '+displayAppText(lesson.source,'cytat lub nazwa pliku w innym języku');
               item.append(source);
             }
             if (!pack.active&&!previewTarget) {

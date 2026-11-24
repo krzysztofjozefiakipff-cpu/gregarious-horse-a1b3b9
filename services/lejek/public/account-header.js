@@ -1,3 +1,6 @@
+const hasCyrillicText=value=>/\p{Script_Extensions=Cyrillic}/u.test(value);
+const displayAppText=(value,fallback='Treść niedostępna po polsku.')=>hasCyrillicText(value)?fallback:value;
+
 const accountRoleNames={admin:'Administrator',group:'Szef grupy',manager:'Kierownik',seller:'Handlowiec',staff:'Pracownik',
   reception:'Recepcja',sales_assistant:'Asystent sprzedaży',carwash:'Pracownik myjni',logistics:'Pracownik logistyki i transportu',
   carwash_manager:'Kierownik myjni',logistics_manager:'Kierownik logistyki i transportu'};
@@ -314,6 +317,11 @@ foxAssistantOpen.onclick=()=>{
 };
 
 function appendFoxMessage(speaker,message,citations=[]) {
+  const hidden=hasCyrillicText(message);
+  if (hidden) {
+    message=displayAppText(message);
+    citations=[];
+  }
   const row=document.createElement('p');
   row.dataset.speaker=speaker;
   const label=document.createElement('strong');
@@ -327,14 +335,14 @@ function appendFoxMessage(speaker,message,citations=[]) {
     link.href=url.href;
     link.target='_blank';
     link.rel='noopener noreferrer';
-    link.textContent=' ['+citation.title+']';
+    link.textContent=' ['+displayAppText(citation.title,'Źródło')+']';
     row.append(message.slice(offset,citation.at),link);
     offset=citation.at;
   }
   row.append(message.slice(offset));
   foxAssistantMessages.append(row);
   let listen;
-  if (speaker!=='Ty'&&foxAssistantRole&&message.length<=4000) {
+  if (!hidden&&speaker!=='Ty'&&foxAssistantRole&&message.length<=4000) {
     listen=document.createElement('button');
     listen.type='button';
     listen.textContent='Odsłuchaj odpowiedź';
