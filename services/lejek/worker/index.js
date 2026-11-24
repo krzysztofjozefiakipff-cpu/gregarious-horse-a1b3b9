@@ -1039,8 +1039,12 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
         }
       }
       const targets=plan?effectiveSourcePlan(JSON.parse(plan.targets),adjustments[user.id+'/'+month]):[];
-      facts={day:report.today,workday:person.workday,todayGoals:person.todayGoals,
-        remainingPlan:person.remainingPlan,actual:person.actual,plan:person.plan,
+      const metrics=(values,indexes)=>Object.fromEntries(indexes.map((index,slot)=>
+        [dailyActionMetrics[index][0],values[slot]]));
+      const dailyIndexes=dailyActionMetrics.map((_,index)=>index);
+      facts={day:report.today,workday:person.workday,todayGoals:metrics(person.todayGoals,dailyIndexes),
+        remainingPlan:person.remainingPlan.map(({day,goals})=>({day,goals:metrics(goals,dailyIndexes)})),
+        actual:metrics(person.actual,briefingSalesIndexes),plan:metrics(person.plan,briefingSalesIndexes),
         sources:targets.map((row,i)=>({source:sourceLabels[i],target:[7,4,8,5,0].map(j=>row[j]),actual:sourceActuals[i]})),
         sourceMetrics:['Leady','Próby kontaktu','Spotkania','Jazdy próbne','Zamówienia']};
       instructions='Wyjaśnij cele na dziś i podaj maksymalnie trzy priorytety. Uwzględnij dzień wolny. Nie wskazuj konkretnego źródła leadów bez danych.';
@@ -1091,7 +1095,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
     const input={facts,salesLabels,goalLabels,sourceLabels,sourceDailyColumns:['Leady','Próby kontaktu','Spotkania','Spotkania odbyte (pole historyczne)','Jazdy próbne','Oferty','Follow-up','Zamówienia','Rejestracje','Opinie Google','Faktury'],question:isFox||feature==='chat'?question.trim():undefined};
     if (JSON.stringify(input).length>55000) return json({error:'Wybierz jeden salon, aby zawęzić analizę.'},422);
     try {
-      const text=await env.assist(instructions,input);
+      const text=await env.assist(instructions,input,false,{polishExplanation:!interactive});
       return json(interactive&&await env.moderate(text)?refused:{text});
     }
     catch {return json({error:'Asystent jest chwilowo niedostępny. Spróbuj ponownie.'},503);}
