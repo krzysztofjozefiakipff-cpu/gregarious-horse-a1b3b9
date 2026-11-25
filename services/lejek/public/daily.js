@@ -1956,50 +1956,58 @@ function renderManagerDashboard(view,detailOnly=false) {
   list.replaceChildren();
   if (!team.length) list.textContent='Brak aktywnych handlowców.';
   const percent=new Intl.NumberFormat('pl-PL',{style:'percent',maximumFractionDigits:0});
-  for (const {seller,status,metrics,weakest,orders,hasDraft} of team) {
-    const detail=document.createElement('details');
-    detail.setAttribute('name','team-performance-details');
-    const summary=document.createElement('summary');
-    const name=document.createElement('strong');
-    name.textContent=seller.name+(view.salons.length>1?' · '+seller.salon:'');
-    const progress=orders.target>0?percent.format(orders.actual/orders.target)+' planu miesiąca':'Brak planu zamówień';
-    const badges=document.createElement('span');
-    badges.className='team-statuses';
-    const accountLabels={active:'Konto aktywne',inactive:'Konto nieaktywne',pending:'Konto bez hasła'};
-    const badge=document.createElement('span');
-    badge.className='status-badge '+(seller.accountStatus==='active'?'status-positive':'status-negative');
-    badge.textContent=accountLabels[seller.accountStatus];
-    badges.append(badge);
-    summary.append(name,badges,progress+' · '+status+(hasDraft?' · Wyniki ze szkicem':'')+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
-    const figures=document.createElement('ul');
-    figures.className='team-metrics';
-    figures.setAttribute('role','list');
-    for (const metric of metrics) {
-      const row=document.createElement('li');
-      row.textContent=metric.label+' · '+metric.actual+(metric.target==null?' · brak celu':' / '+metric.target+' w miesiącu');
-      const achieved=metric.target>0&&metric.actual>=metric.target;
-      if (achieved||metric.goal>0) {
-        const behind=!achieved&&metric.delta<0;
-        row.dataset.pace=behind?'behind':'ahead';
-        const symbol=reportElement('span',behind?'↓':'✓');
-        symbol.className='team-metric-symbol';
-        symbol.setAttribute('aria-hidden','true');
-        const description=reportElement('span',achieved?' · Plan wykonany':behind?' · Poniżej tempa':' · W tempie lub powyżej');
-        description.className='entry-visually-hidden';
-        row.append(symbol,description);
+  for (const [salon,members] of Map.groupBy(team,({seller})=>seller.salon)) {
+    const section=document.createElement('section');
+    const heading=reportElement('h2',salon||'Bez przypisanego salonu');
+    const cards=document.createElement('div');
+    cards.className='team-salon-members';
+    section.append(heading,cards);
+    list.append(section);
+    for (const {seller,status,metrics,weakest,orders,hasDraft} of members) {
+      const detail=document.createElement('details');
+      detail.setAttribute('name','team-performance-details');
+      const summary=document.createElement('summary');
+      const name=document.createElement('strong');
+      name.textContent=seller.name;
+      const progress=orders.target>0?percent.format(orders.actual/orders.target)+' planu miesiąca':'Brak planu zamówień';
+      const badges=document.createElement('span');
+      badges.className='team-statuses';
+      const accountLabels={active:'Konto aktywne',inactive:'Konto nieaktywne',pending:'Konto bez hasła'};
+      const badge=document.createElement('span');
+      badge.className='status-badge '+(seller.accountStatus==='active'?'status-positive':'status-negative');
+      badge.textContent=accountLabels[seller.accountStatus];
+      badges.append(badge);
+      summary.append(name,badges,progress+' · '+status+(hasDraft?' · Wyniki ze szkicem':'')+(weakest?' · '+weakest.label+': brakuje '+(-weakest.delta):''));
+      const figures=document.createElement('ul');
+      figures.className='team-metrics';
+      figures.setAttribute('role','list');
+      for (const metric of metrics) {
+        const row=document.createElement('li');
+        row.textContent=metric.label+' · '+metric.actual+(metric.target==null?' · brak celu':' / '+metric.target+' w miesiącu');
+        const achieved=metric.target>0&&metric.actual>=metric.target;
+        if (achieved||metric.goal>0) {
+          const behind=!achieved&&metric.delta<0;
+          row.dataset.pace=behind?'behind':'ahead';
+          const symbol=reportElement('span',behind?'↓':'✓');
+          symbol.className='team-metric-symbol';
+          symbol.setAttribute('aria-hidden','true');
+          const description=reportElement('span',achieved?' · Plan wykonany':behind?' · Poniżej tempa':' · W tempie lub powyżej');
+          description.className='entry-visually-hidden';
+          row.append(symbol,description);
+        }
+        figures.append(row);
       }
-      figures.append(row);
+      detail.id='zespol-handlowiec-'+seller.id;
+      detail.open=open.has(detail.id);
+      detail.append(summary,figures);
+      if (view.role==='manager'&&data.role==='manager'&&seller.accountStatus!=='inactive') {
+        const link=document.createElement('a');
+        link.href=sellerDetailUrl(seller.id,'zespol')+'#reopen-day-form';
+        link.textContent='Zarządzaj zatwierdzonymi dniami';
+        detail.append(link);
+      }
+      cards.append(detail);
     }
-    detail.id='zespol-handlowiec-'+seller.id;
-    detail.open=open.has(detail.id);
-    detail.append(summary,figures);
-    if (view.role==='manager'&&data.role==='manager'&&seller.accountStatus!=='inactive') {
-      const link=document.createElement('a');
-      link.href=sellerDetailUrl(seller.id,'zespol')+'#reopen-day-form';
-      link.textContent='Zarządzaj zatwierdzonymi dniami';
-      detail.append(link);
-    }
-    list.append(detail);
   }
   if (location.hash==='#zespol') selectedTeamSeller();
   return team;
