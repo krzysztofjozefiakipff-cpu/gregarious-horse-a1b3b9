@@ -167,8 +167,8 @@ const forms={
 const localResetToken=/^[a-f0-9]{64}$/;
 const sharedResetToken=/^shared-[\w.-]{1,1024}$/;
 const validResetToken=token=>localResetToken.test(token)||sharedResetToken.test(token);
-const smtpReady=Boolean(process.env.RESET_SMTP_HOST&&process.env.RESET_SMTP_USER&&process.env.RESET_SMTP_PASSWORD);
-const inviteReady=Boolean(process.env.INVITE_SMTP_PASSWORD);
+const smtpReady=Boolean(process.env.RESET_SMTP_HOST&&process.env.INVITE_SMTP_PASSWORD);
+const inviteReady=smtpReady;
 let activeMailJobs=0;
 
 function loginForm(csrf,message='',status=200,path='/login',token='') {

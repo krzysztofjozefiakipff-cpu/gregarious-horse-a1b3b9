@@ -3,14 +3,11 @@ set -euo pipefail
 release="$1"
 if [ ! -t 0 ]; then
   IFS= read -r GIPHY_API_KEY || true
-  IFS= read -r RESET_SMTP_PASSWORD || true
   IFS= read -r INVITE_SMTP_PASSWORD || true
   IFS= read -r OPENAI_API_KEY || true
 fi
 export INVITE_SMTP_PASSWORD
-export RESET_SMTP_PASSWORD
 export RESET_SMTP_HOST=smtp.mail.ovh.net
-export RESET_SMTP_USER=admin@carvamo.com
 export GIPHY_API_KEY OPENAI_API_KEY
 [[ "$release" =~ ^[0-9a-f]{40}$ ]]
 test "$(id -un)" = carvamo-deploy
@@ -33,23 +30,14 @@ if ! docker volume inspect "$production_volume" >/dev/null 2>&1; then
 fi
 docker volume create "$production_volume" >/dev/null
 mail_network=biegwyzej_mail_egress
-if [[ -n "${RESET_SMTP_PASSWORD:-}${INVITE_SMTP_PASSWORD:-}${OPENAI_API_KEY:-}" ]]; then
+if [[ -n "${INVITE_SMTP_PASSWORD:-}${OPENAI_API_KEY:-}" ]]; then
   docker network inspect "$mail_network" >/dev/null 2>&1 ||
     docker network create "$mail_network" >/dev/null
 fi
-if [[ -n "${RESET_SMTP_PASSWORD:-}" ]]; then
-  docker run --rm --network "$mail_network" --read-only --cap-drop ALL \
-    --security-opt no-new-privileges -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD \
-    "$image" python3 scripts/reset-mail.py --check
-fi
 if [[ -n "${INVITE_SMTP_PASSWORD:-}" ]]; then
-  if docker run --rm --network "$mail_network" --read-only --cap-drop ALL \
+  docker run --rm --network "$mail_network" --read-only --cap-drop ALL \
     --security-opt no-new-privileges -e RESET_SMTP_HOST -e INVITE_SMTP_PASSWORD \
-    "$image" python3 scripts/reset-mail.py --invite --check; then
-    echo "Bieg Wyżej: invitation SMTP verified"
-  else
-    echo "::warning::Bieg Wyżej: invitation SMTP authentication failed"
-  fi
+    "$image" python3 scripts/reset-mail.py --check
 fi
 if [[ -n "${OPENAI_API_KEY:-}" ]]; then
   docker run --rm -i --network "$mail_network" --read-only --cap-drop ALL \
@@ -93,9 +81,9 @@ fi
 run_service() {
   local deployed_image="$1" data_volume="$2"
   docker run -d --name "$service" --label com.carvamo.role=lejek --restart unless-stopped \
-    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY -e OPENAI_API_KEY -e RESET_SMTP_HOST -e RESET_SMTP_USER -e RESET_SMTP_PASSWORD -e INVITE_SMTP_PASSWORD --read-only --tmpfs /tmp:rw,noexec,nosuid \
+    --network carvamo_backend_private -e "LEJEK_RELEASE=${deployed_image##*:}" -e GIPHY_API_KEY -e OPENAI_API_KEY -e RESET_SMTP_HOST -e INVITE_SMTP_PASSWORD --read-only --tmpfs /tmp:rw,noexec,nosuid \
     --security-opt no-new-privileges --cap-drop ALL -v "$data_volume:/data" "$deployed_image" >/dev/null || return
-  if [[ -n "${RESET_SMTP_PASSWORD:-}${INVITE_SMTP_PASSWORD:-}${OPENAI_API_KEY:-}" ]]; then
+  if [[ -n "${INVITE_SMTP_PASSWORD:-}${OPENAI_API_KEY:-}" ]]; then
     docker network connect "$mail_network" "$service"
   fi
 }
@@ -117,7 +105,7 @@ for attempt in {1..12}; do
       rollback
       exit 1
     fi
-    if [[ -n "${RESET_SMTP_PASSWORD:-}" ]] &&
+    if [[ -n "${INVITE_SMTP_PASSWORD:-}" ]] &&
         ! docker exec "$service" python3 scripts/reset-mail.py --check; then
       rollback
       exit 1
