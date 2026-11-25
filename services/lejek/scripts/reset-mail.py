@@ -13,8 +13,8 @@ def connect(host):
 
 def main():
     invite = "--invite" in sys.argv[1:]
-    sender = "admin@biegwyzej.pl" if invite else os.environ["RESET_SMTP_USER"]
-    password = os.environ["INVITE_SMTP_PASSWORD" if invite else "RESET_SMTP_PASSWORD"]
+    sender = "admin@biegwyzej.pl"
+    password = os.environ["INVITE_SMTP_PASSWORD"]
     with connect(os.environ["RESET_SMTP_HOST"]) as smtp:
         smtp.login(sender, password)
         if "--check" in sys.argv[1:]:
