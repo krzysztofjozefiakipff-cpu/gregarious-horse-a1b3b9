@@ -52,6 +52,13 @@ select { max-width:100%; }
   #inlineSheet.activity-entry-table table { white-space:normal; }
   #inlineSheet.activity-entry-table tfoot { display:table; white-space:nowrap; margin-top:8px; }
 }
+
+@media (min-width: 1051px) {
+  main { width:min(100%,1920px); }
+  #overview, #journey { grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:20px; }
+  .cards { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+
 </style></head><body>
 <!-- ACCOUNT_HEADER -->
 <main><a class="panel-return-link" id="panel-return" href="/daily.html">← Wróć do panelu</a>
