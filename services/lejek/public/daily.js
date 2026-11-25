@@ -2781,7 +2781,13 @@ function renderMoreMenu(host,modules) {
   host.dataset.modules=signature;
   host.replaceChildren(...modules.map(([route,label,icon])=>{
     const external=route===salonLifeModule[0];
+    const tools=route==='narzedzia'&&data.role!=='seller';
     const link=external?document.createElement('a'):mobileLink(route,label);
+    if (tools) {
+      link.removeAttribute('data-panel-route');
+      link.href='#narzedzia';
+      link.onclick=event=>{event.preventDefault();openAccountTools();};
+    }
     if (external) link.href='/z-zycia-salonu.html?'+params;
     const tile=document.createElement('span');
     tile.className='module-menu-icon';
@@ -2861,7 +2867,7 @@ function selectRoleFunction(routes) {
   $('#management-more').hidden=active!=='wiecej';
   if (active==='wiecej') {
     const modules=routes.map(route=>[route,...details(route).slice(0,2)]);
-    renderMoreMenu($('#management-more-links'),[...modules,salonLifeModule]);
+    renderMoreMenu($('#management-more-links'),[...modules,['narzedzia','Narzędzia','settings'],salonLifeModule]);
   }
   const buttons=$('#role-function-buttons');
   const select=$('#role-function-select');
@@ -2952,7 +2958,7 @@ function selectManagementView() {
     const modules=[...adminModules];
     if (!adminBackfill.hidden) modules.push(['zalegle-aktywnosci','Zaległe aktywności','clipboard']);
     if (adminPreviewBars.some(id=>!$('#'+id).hidden)) modules.push(['podglad-paneli','Podgląd paneli','eye']);
-    renderMoreMenu($('#management-more-links'),[...modules,salonLifeModule]);
+    renderMoreMenu($('#management-more-links'),[...modules,['narzedzia','Narzędzia','settings'],salonLifeModule]);
   }
   const toolsTitle=$('#admin-tools-title');
   if (route==='zalegle-aktywnosci'&&!adminBackfill.hidden) {
@@ -3473,48 +3479,6 @@ function renderAdmin() {
   }
   selectManagementView();
 }
-const sellerToolMenu=$('#seller-tool-menu');
-const sellerToolFrame=$('#seller-tool-frame');
-let sellerToolResize;
-for (const [tool,label,icon] of [
-  ['porownywarka-leasingu','Porównywarka leasingu','bars'],
-  ['kalkulator-transakcji-wiazanej','Kalkulator transakcji wiązanej','layers'],
-  ['kalkulator-oplacalnosci-napedow','Kalkulator opłacalności napędów','target']
-]) {
-  const button=document.createElement('button');
-  button.type='button';
-  button.setAttribute('aria-pressed','false');
-  button.setAttribute('aria-controls',sellerToolFrame.id);
-  const tile=document.createElement('span');
-  tile.className='module-menu-icon';
-  tile.innerHTML=panelIcon(icon);
-  button.append(tile,label);
-  button.onclick=()=>{
-    if (button.getAttribute('aria-pressed')==='true') return;
-    sellerToolMenu.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
-    button.setAttribute('aria-pressed','true');
-    sellerToolFrame.title=label;
-    const params=new URLSearchParams({role:'seller'});
-    if (previewTarget) params.set('podglad',previewTarget);
-    sellerToolFrame.src='/narzedzia/'+tool+'.html?'+params;
-    sellerToolFrame.hidden=false;
-  };
-  sellerToolMenu.append(button);
-}
-sellerToolFrame.onload=()=>{
-  sellerToolResize?.disconnect();
-  const body=sellerToolFrame.contentDocument?.body;
-  if (!body) return;
-  const root=body.ownerDocument.documentElement;
-  const styles=getComputedStyle(document.documentElement);
-  for (const variable of ['--primary','--line','--tint','--ink','--muted']) {
-    root.style.setProperty(variable,styles.getPropertyValue(variable));
-  }
-  sellerToolResize=new ResizeObserver(()=>{
-    if (body.offsetHeight) sellerToolFrame.style.height=body.offsetHeight+'px';
-  });
-  sellerToolResize.observe(body);
-};
 function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];

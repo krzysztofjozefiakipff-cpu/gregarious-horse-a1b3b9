@@ -333,7 +333,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   const activeDepartmentGroups=[...new Set(activeDepartments.map(assignment=>assignment.groupName))];
   const activeDepartmentSalons=[...new Set(activeDepartments.map(assignment=>assignment.salon).filter(Boolean))];
   const departmentAdministration=isDepartmentRole(activeRole)&&activeRole.endsWith('_manager');
-  if (sellerToolPage) return role==='seller'?serveAsset(path,request.method):new Response('Brak dostępu',{status:403,headers});
+  if (sellerToolPage) return serveAsset(path,request.method);
   if (managementPage) {
     if (role==='staff') return new Response(null,{status:303,headers:{...headers,Location:'/z-zycia-salonu.html'}});
     return role==='seller'

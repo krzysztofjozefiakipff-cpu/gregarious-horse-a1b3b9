@@ -19,6 +19,7 @@
           <label id="account-role-field" for="account-role" hidden>Aktywna rola
             <select id="account-role"></select>
           </label>
+          <button type="button" id="account-tools-open" aria-haspopup="dialog">Narzędzia</button>
           <button type="button" id="department-menu-open" hidden>Zespół działu</button>
           <form class="panel-signout" method="post" action="/logout">
             <button type="submit">
@@ -177,3 +178,9 @@
     <button>Dodaj użytkownika</button>
   </form>
 </template>
+
+<dialog id="account-tools-dialog" aria-labelledby="account-tools-title">
+  <form method="dialog"><button>Zamknij</button></form>
+  <h2 id="account-tools-title">Narzędzia</h2>
+  <!-- CALCULATORS -->
+</dialog>
