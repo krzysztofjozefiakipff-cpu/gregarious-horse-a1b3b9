@@ -357,7 +357,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
 
 
 [data-seller-panel] > *, #administration-view > *, #salon-results > *, #manager-team-list > * { min-width: 0; }
-#salon-results, #manager-team-list { display:grid; gap:12px; }
+#salon-results, #manager-team-list, .team-salon-members { display:grid; gap:12px; }
 #salon-results details, #manager-team-list details { margin:0; }
 @media (min-width: 1051px) {
   [data-seller-panel="dzisiaj"] {
@@ -373,7 +373,7 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   [data-seller-panel="dzisiaj"] > .daily-work { grid-area:work; }
   .entry-link { width:fit-content; min-width:15rem; margin-bottom:0; }
   #daily [data-seller-panel="dzisiaj"] > * { margin:0; }
-  #manager-team-list, #administration-view {
+  .team-salon-members, #administration-view {
     grid-template-columns:repeat(2,minmax(0,1fr));
     align-items:start;
   }
