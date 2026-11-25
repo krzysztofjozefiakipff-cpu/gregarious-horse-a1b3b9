@@ -683,6 +683,42 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
   #entry #save:not(:disabled) { color:var(--panel-plum); background:white; }
   #entry #status { font-size:.9rem; }
 }
+
+@media (min-width: 1051px) {
+  main, footer { max-width: 1920px; }
+  #daily-briefing, .work-calendar { max-width:none; }
+  .calendar-layout { grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr); }
+  #salon-results, #briefing-results, #salon-plan-results, #management-report-results {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(min(100%,34rem),1fr));
+    align-items:start;
+    gap:16px;
+  }
+  :is(#salon-results,#briefing-results,#salon-plan-results,#management-report-results) > * { min-width:0; }
+  #salon-results > .salon-overall-totals,
+  #briefing-results > :not(article),
+  #salon-plan-results > :not(article),
+  #management-report-results > :not(article),
+  #management-report-results > #report-monthly-overview { grid-column:1 / -1; }
+  #user-accounts-view {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:start;
+    gap:12px 16px;
+  }
+  #user-accounts-view > :not(details), #user-accounts-view > details[open] { grid-column:1 / -1; }
+  #user-accounts-view > details { margin:0; }
+  .user-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .user-fields > :is(.user-name-fields,fieldset,p,.user-actions) { grid-column:1 / -1; }
+  #user-editor fieldset { display:flex; flex-wrap:wrap; gap:8px 20px; }
+  #user-search-results ul { grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr)); }
+  #administration-view > .admin-block[open] > form { max-width:none; }
+  [data-seller-panel="plan"] { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
+  [data-seller-panel="plan"] > :not(#motivation):not(#pace):not(#seller-ranking):not(#seller-goal-rating) { grid-column:1 / -1; }
+  #seller-tool-menu { max-width:none; }
+  #seller-tool-menu button { padding:12px; border:1px solid var(--line); border-radius:12px; }
+}
+
 </style>
 </head>
 <body>

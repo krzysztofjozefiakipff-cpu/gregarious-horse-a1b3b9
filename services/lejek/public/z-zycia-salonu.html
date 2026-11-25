@@ -45,7 +45,14 @@
     @media(min-width:720px) {
       .columns { grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); align-items:start; }
     }
-  </style>
+
+    @media (min-width:1051px) {
+      main { max-width:1600px; padding-inline:clamp(24px,3vw,48px); }
+      #wall { grid-template-columns:minmax(0,2.2fr) minmax(290px,1fr); gap:24px; }
+      #feed { grid-template-columns:repeat(auto-fit,minmax(min(100%,23rem),1fr)); align-items:start; }
+    }
+
+</style>
 </head>
 <body>
 <!-- ACCOUNT_HEADER -->
