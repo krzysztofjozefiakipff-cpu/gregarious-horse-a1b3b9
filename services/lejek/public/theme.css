@@ -234,3 +234,16 @@ html.lejek-app, .lejek-app * {
     font-size: max(16px, 1em) !important;
   }
 }
+
+.tools-menu { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.tools-menu button { display:grid; justify-items:center; align-content:start; gap:8px; background:none; color:var(--primary); border:0; padding:6px 2px; font-size:.84rem; line-height:1.3; overflow-wrap:anywhere; }
+.tools-menu button:hover .module-menu-icon { background:var(--highlight); }
+.tools-menu button[aria-pressed="true"] .module-menu-icon { background:var(--primary); color:white; }
+.tools-frame { display:block; width:100%; border:0; margin-top:14px; }
+.tools-frame[hidden] { display:none; }
+.tools-menu { display:grid; gap:8px; }
+.tools-menu .module-menu-icon { display:grid; place-items:center; width:54px; height:54px; background:var(--tint); border:1px solid var(--line); border-radius:14px; }
+.tools-menu svg { width:26px; height:26px; stroke:currentColor; }
+#account-tools-dialog { width:min(1200px,calc(100% - 24px)); max-width:none; max-height:90dvh; overflow:auto; background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:14px; padding:16px; }
+#account-tools-dialog::backdrop { background:#25162480; }
+#account-tools-dialog form { display:flex; justify-content:flex-end; }

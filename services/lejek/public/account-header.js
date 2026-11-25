@@ -423,3 +423,52 @@ foxAssistantForm.onsubmit=async event=>{
     foxAssistantMic.disabled=false;
   }
 };
+
+const accountToolsDialog=document.getElementById("account-tools-dialog");
+function openAccountTools() {
+  accountMenu.open=false;
+  if (!accountToolsDialog.open) accountToolsDialog.showModal();
+}
+document.getElementById("account-tools-open").onclick=openAccountTools;
+for (const sellerToolMenu of document.querySelectorAll(".tools-menu")) {
+  const sellerToolFrame=sellerToolMenu.nextElementSibling;
+  let sellerToolResize;
+  for (const [tool,label,icon] of [
+    ['porownywarka-leasingu','Porównywarka leasingu','bars'],
+    ['kalkulator-transakcji-wiazanej','Kalkulator transakcji wiązanej','layers'],
+    ['kalkulator-oplacalnosci-napedow','Kalkulator opłacalności napędów','target']
+  ]) {
+    const button=document.createElement('button');
+    button.type='button';
+    button.setAttribute('aria-pressed','false');
+    const tile=document.createElement('span');
+    tile.className='module-menu-icon';
+    tile.innerHTML=panelIcon(icon);
+    button.append(tile,label);
+    button.onclick=()=>{
+      if (button.getAttribute('aria-pressed')==='true') return;
+      sellerToolMenu.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
+      button.setAttribute('aria-pressed','true');
+      sellerToolFrame.title=label;
+      const params=new URLSearchParams(location.search);
+      if (headerRolePicker.value) params.set('role',headerRolePicker.value);
+      sellerToolFrame.src='/narzedzia/'+tool+'.html?'+params;
+      sellerToolFrame.hidden=false;
+    };
+    sellerToolMenu.append(button);
+  }
+  sellerToolFrame.onload=()=>{
+    sellerToolResize?.disconnect();
+    const body=sellerToolFrame.contentDocument?.body;
+    if (!body) return;
+    const root=body.ownerDocument.documentElement;
+    const styles=getComputedStyle(document.documentElement);
+    for (const variable of ['--primary','--line','--tint','--ink','--muted']) {
+      root.style.setProperty(variable,styles.getPropertyValue(variable));
+    }
+    sellerToolResize=new ResizeObserver(()=>{
+      if (body.offsetHeight) sellerToolFrame.style.height=body.offsetHeight+'px';
+    });
+    sellerToolResize.observe(body);
+  };
+}
