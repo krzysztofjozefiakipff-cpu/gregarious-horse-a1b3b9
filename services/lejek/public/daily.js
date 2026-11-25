@@ -2762,7 +2762,7 @@ function mobileLink(route,label) {
 const salonLifeModule=['z-zycia-salonu','Z życia salonu','chat'];
 const sellerModules=[
   ['dzisiaj','Dzisiaj','calendar'],['wyniki','Wpis dzienny','clipboard'],['plan','Wyniki','bars'],
-  ['kalendarz-pracy','Kalendarz pracy','clock'],['lekcja','Lekcja na dziś','book'],salonLifeModule
+  ['kalendarz-pracy','Kalendarz pracy','clock'],['lekcja','Lekcja na dziś','book'],['narzedzia','Narzędzia','settings'],salonLifeModule
 ];
 
 function renderMoreMenu(host,modules) {
@@ -3465,6 +3465,31 @@ function renderAdmin() {
   }
   selectManagementView();
 }
+const sellerTool=$('#seller-tool');
+const sellerToolFrame=$('#seller-tool-frame');
+let sellerToolResize;
+sellerTool.onchange=()=>{
+  sellerToolFrame.hidden=!sellerTool.value;
+  if (!sellerTool.value) return;
+  sellerToolFrame.title=sellerTool.selectedOptions[0].textContent;
+  const params=new URLSearchParams({role:'seller'});
+  if (previewTarget) params.set('podglad',previewTarget);
+  sellerToolFrame.src='/narzedzia/'+sellerTool.value+'.html?'+params;
+};
+sellerToolFrame.onload=()=>{
+  sellerToolResize?.disconnect();
+  const body=sellerToolFrame.contentDocument?.body;
+  if (!body) return;
+  const root=body.ownerDocument.documentElement;
+  const styles=getComputedStyle(document.documentElement);
+  for (const variable of ['--primary','--line','--tint','--ink','--muted']) {
+    root.style.setProperty(variable,styles.getPropertyValue(variable));
+  }
+  sellerToolResize=new ResizeObserver(()=>{
+    if (body.offsetHeight) sellerToolFrame.style.height=body.offsetHeight+'px';
+  });
+  sellerToolResize.observe(body);
+};
 function selectSellerTab() {
   const requested=location.hash.slice(1);
   const links=[...document.querySelectorAll('[data-seller-tab]')];
@@ -3474,8 +3499,8 @@ function selectSellerTab() {
   const lessonHost=active==='lekcja'?$('#seller-lesson'):$('.daily-inspiration');
   if (lesson.parentElement!==lessonHost) lessonHost.append(lesson);
   const nav=$('#seller-mobile-nav');
-  nav.classList.toggle('persistent-panel-nav',['wiecej','wyniki','kalendarz-pracy','lekcja'].includes(active));
-  renderPanelTabs(nav,'seller',active==='wyniki'?'dzisiaj':active);
+  nav.classList.toggle('persistent-panel-nav',['wiecej','wyniki','kalendarz-pracy','lekcja','narzedzia'].includes(active));
+  renderPanelTabs(nav,'seller',active==='wyniki'?'dzisiaj':active==='narzedzia'?'wiecej':active);
   for (const link of links) {
     if (link.dataset.sellerTab===active) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');

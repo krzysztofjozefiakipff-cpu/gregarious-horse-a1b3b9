@@ -413,6 +413,9 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .task-group ol { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .task-action { padding-block:3px; }
 }
+#seller-tools select { width:100%; max-width:30rem; }
+#seller-tool-frame { display:block; width:100%; border:0; margin-top:14px; }
+#seller-tool-frame[hidden] { display:none; }
 [data-seller-panel="plan"] { display:grid; gap:14px; }
 #daily [data-seller-panel="plan"] #motivation { margin:0; min-width:0; }
 #seller-ranking {
@@ -712,6 +715,7 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
   <a data-panel-route href="#wyniki" data-seller-tab="wyniki">Wpisz działania</a>
   <a data-panel-route href="#plan" data-seller-tab="plan">Plan</a>
   <a data-panel-route href="#kalendarz-pracy" data-seller-tab="kalendarz-pracy">Kalendarz pracy</a>
+  <a data-panel-route href="#narzedzia" data-seller-tab="narzedzia">Narzędzia</a>
   <a data-panel-route href="#wiecej" data-seller-tab="wiecej">Więcej</a>
 </nav>
 <div data-seller-panel="dzisiaj">
@@ -821,6 +825,17 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 <section id="seller-more" data-seller-panel="wiecej" hidden>
   <h1 class="screen-title">Więcej</h1>
   <nav id="seller-more-links" class="module-menu" aria-label="Moduły handlowca"></nav>
+</section>
+<section id="seller-tools" data-seller-panel="narzedzia" hidden>
+  <h1 class="screen-title">Narzędzia</h1>
+  <label for="seller-tool">Wybierz kalkulator</label>
+  <select id="seller-tool">
+    <option value="">Wybierz narzędzie</option>
+    <option value="porownywarka-leasingu">Porównywarka leasingu</option>
+    <option value="kalkulator-transakcji-wiazanej">Kalkulator transakcji wiązanej</option>
+    <option value="kalkulator-oplacalnosci-napedow">Kalkulator opłacalności napędów</option>
+  </select>
+  <iframe id="seller-tool-frame" title="Kalkulator" sandbox="allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox" hidden></iframe>
 </section>
 <section id="seller-lesson" data-seller-panel="lekcja" hidden>
   <h1 class="screen-title">Lekcja na dziś</h1>

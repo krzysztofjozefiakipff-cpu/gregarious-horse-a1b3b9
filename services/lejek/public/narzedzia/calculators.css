@@ -1,0 +1,43 @@
+:root {
+  --primary: #52294f;
+  --line: #e3d7e0;
+  --tint: #f6edf4;
+  --ink: #2d2031;
+  --muted: #635563;
+  --bg: #fbf9f8;
+  --r: var(--primary);
+  --red: var(--primary);
+  --accent: var(--primary);
+  --accent-dark: var(--primary);
+  --navy: var(--primary);
+  --blue: var(--tint);
+  --blue2: var(--line);
+}
+.wrap { padding: 0; }
+header {
+  background: var(--tint);
+  color: var(--ink);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+  box-shadow: none;
+}
+header h1 { font-size: clamp(21px, 4vw, 28px); }
+.sub, .hint, .fine, .small, .footer { color: var(--muted); }
+.panelhead, .computed, .readonly { background: var(--tint); }
+.metric.main, .notice, .callout { background: #fff0e2; border-color: #ffc184; }
+.btn, .field :is(input, select) { border-color: #a998a6; }
+.btn.primary { color: white; background: var(--primary); border-color: var(--primary); }
+.btn:focus-visible, .field :is(input, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.head { justify-content: flex-end; }
+.actions { flex-wrap: wrap; }
+a { color: var(--primary); }
+@media (max-width: 480px) {
+  .fields { grid-template-columns: minmax(0,1fr); }
+  .field :is(input, select) { font-size: 16px; }
+}
+@media print {
+  [data-tool-print], [data-tool-reset] { display: none; }
+  body { background: white; }
+}

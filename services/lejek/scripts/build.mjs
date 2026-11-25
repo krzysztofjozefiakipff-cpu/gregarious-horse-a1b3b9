@@ -1,7 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const assets = Object.fromEntries(['zarzadzanie.html','quarter.js','panel-navigation.js','workbook-plan.js','work-calendar.js','reports.js','briefings.js','management.js','daily.html','daily.js','z-zycia-salonu.html','salon-life.js','account-header.js','communication.js'].map(name =>
   ['/'+name, readFileSync('public/'+name,'utf8')]));
+for (const file of readdirSync('public/narzedzia')) {
+  const path='narzedzia/'+file;
+  assets['/'+path]=readFileSync('public/'+path,'utf8');
+}
 const mascot=readFileSync('public/fox-mascot.html','utf8').trim();
 const accountHeader=readFileSync('public/account-header.html','utf8').replaceAll('<!-- FOX_MASCOT -->',mascot);
 const todayMotto=readFileSync('public/today-motto.html','utf8').trim();

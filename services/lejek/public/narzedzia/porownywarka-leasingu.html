@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porównywarka leasingu | Bieg Wyżej</title>
+<style>
+:root{--navy:#242424;--blue:#f7eeee;--blue2:#ead6d6;--green:#e8f2e8;--ink:#242424;--muted:#6b6666;--line:#ded8d8;--bg:#f6f5f5;--white:#fff;--accent:#9e1b32;--accent-dark:#741326}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.wrap{max-width:1440px;margin:0 auto;padding:24px}
+header{background:var(--white);color:var(--ink);padding:22px 28px;border-radius:16px;margin-bottom:18px;border:1px solid var(--line);border-top:5px solid var(--accent);box-shadow:0 2px 10px #2222220a}
+.brand{font-size:12px;letter-spacing:.14em;font-weight:800;color:var(--accent);opacity:1}.headerrow{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}.brandblock{min-width:0}.logo-link{display:inline-flex;align-items:center;margin-bottom:12px;text-decoration:none;min-height:38px}.grupalis-logo{display:block;width:auto;max-width:210px;height:auto;max-height:54px;object-fit:contain}.logo-fallback{display:none;font-weight:900;letter-spacing:.04em;font-size:24px;color:var(--accent)}h1{font-size:clamp(24px,3vw,34px);margin:5px 0 4px;line-height:1.15}.sub{color:var(--muted);margin:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn:hover{filter:brightness(.97)}
+.topgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 2px 8px #17365d0b}.panelhead{padding:15px 18px;background:#f5f0f1;border-bottom:1px solid var(--line);border-left:4px solid var(--accent);display:flex;justify-content:space-between;align-items:center;gap:10px}.panelhead h2{font-size:18px;margin:0;color:var(--ink)}.tag{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}.fields{padding:16px 18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(120px, .9fr);gap:12px 16px}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:5px}.field input{width:100%;min-width:0;border:1px solid #cbd7e2;border-radius:8px;padding:10px 11px;font:inherit;background:#fff;color:var(--ink)}.field input:focus{outline:2px solid #d9a5af;border-color:var(--accent)}.field input::placeholder{color:#9aa6b2}.section{grid-column:1/-1;border-top:1px solid var(--line);padding-top:12px;margin-top:2px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:var(--accent)}.field.full{grid-column:1/-1}.computed{background:#f0eeee!important;font-weight:700}.summary{margin-top:18px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px}.summary h2{margin:0 0 14px;color:var(--accent);font-size:20px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{padding:15px;border-radius:11px;background:#f5f2f2;border:1px solid #e6dddd}.metric.highlight{background:#f8e9ec;border-color:#e6c4cb}.metric .label{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:6px}.metric .value{font-size:clamp(20px,2.5vw,29px);font-weight:800;letter-spacing:-.03em}.metric .hint{font-size:12px;color:var(--muted);margin-top:4px}.results{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.resultbox{border:1px solid var(--line);border-radius:10px;padding:14px 16px}.resultbox h3{margin:0 0 8px;font-size:14px;color:var(--accent)}.resultline{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid #edf0f3}.resultline:last-child{border:0}.resultline strong{text-align:right}.note{color:var(--muted);font-size:12px;margin:14px 2px 0}.positive{color:#176b3a}.negative{color:#a52d2d}.footer{font-size:12px;color:var(--muted);text-align:center;padding:18px 0 4px}
+@media(max-width:850px){.wrap{padding:12px}.grupalis-logo{max-width:175px;max-height:44px}.topgrid{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.results{grid-template-columns:1fr}header{padding:20px}.fields{padding:14px}.headerrow{align-items:flex-start}}
+@media print{body{background:#fff}.wrap{max-width:none;padding:0}header{border-radius:0;margin:0 0 10px;padding:14px 18px}.actions{display:none}.panel,.summary{box-shadow:none;break-inside:avoid}.topgrid{gap:8px}.fields{gap:6px 10px;padding:10px}.field input{padding:5px}.summary{margin-top:10px;padding:12px}.footer{padding:8px}}
+</style>
+<link rel="stylesheet" href="/narzedzia/calculators.css">
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="headerrow">
+    <div class="brandblock">
+      
+      <h1>Porównywarka leasingu</h1>
+      <p class="sub">Porównaj całkowity koszt naszej oferty z ofertą konkurencji — razem z dodatkowymi opłatami i gratisami.</p>
+    </div>
+    <div class="actions">
+      <button class="btn primary" data-tool-print>Drukuj / Zapisz PDF</button>
+      <button class="btn" data-tool-reset>Wyczyść dane</button>
+    </div>
+  </div>
+</header>
+<div class="topgrid">
+  <section class="panel">
+    <div class="panelhead"><h2>Nasza oferta</h2><span class="tag">Wpisz dane</span></div>
+    <div class="fields" id="ourFields"></div>
+  </section>
+  <section class="panel">
+    <div class="panelhead"><h2>Oferta konkurencji</h2><span class="tag">Wpisz dane</span></div>
+    <div class="fields" id="compFields"></div>
+  </section>
+</div>
+<section class="summary">
+  <h2>Podsumowanie porównania</h2>
+  <div class="cards">
+    <div class="metric"><div class="label">Koszt naszej oferty po gratisach</div><div class="value" id="ourTotal">0,00 zł</div><div class="hint">Koszt umowy pomniejszony o wartość dodatków</div></div>
+    <div class="metric"><div class="label">Koszt konkurencji po gratisach</div><div class="value" id="compTotal">0,00 zł</div><div class="hint">Koszt umowy pomniejszony o wartość dodatków</div></div>
+    <div class="metric highlight"><div class="label">Przewaga kosztowa naszej oferty</div><div class="value" id="saving">0,00 zł</div><div class="hint" id="savingHint">Wynik dodatni oznacza, że nasza oferta jest tańsza</div></div>
+  </div>
+  <div class="results">
+    <div class="resultbox">
+      <h3>Nasza oferta — podsumowanie</h3>
+      <div class="resultline"><span>Łączny koszt leasingu</span><strong id="ourGross">0,00 zł</strong></div>
+      <div class="resultline"><span>Wartość gratisów</span><strong id="ourGifts">0,00 zł</strong></div>
+      <div class="resultline"><span>Koszt po odjęciu gratisów</span><strong id="ourNet">0,00 zł</strong></div>
+    </div>
+    <div class="resultbox">
+      <h3>Oferta konkurencji — podsumowanie</h3>
+      <div class="resultline"><span>Łączny koszt leasingu</span><strong id="compGross">0,00 zł</strong></div>
+      <div class="resultline"><span>Wartość gratisów</span><strong id="compGifts">0,00 zł</strong></div>
+      <div class="resultline"><span>Koszt po odjęciu gratisów</span><strong id="compNet">0,00 zł</strong></div>
+    </div>
+  </div>
+  <p class="note">Wynik jest orientacyjny i uwzględnia wyłącznie wprowadzone dane. Nie dubluj kosztów, które są już zawarte w racie. Porównuj kwoty na tej samej podstawie (brutto/brutto lub netto/netto).</p>
+</section>
+<div class="footer">Porównywarka leasingu · Dane pozostają w tej przeglądarce i nie są wysyłane na serwer.</div>
+</div>
+<script src="/narzedzia/porownywarka-leasingu.js"></script>
+</body>
+</html>

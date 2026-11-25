@@ -287,18 +287,19 @@ function validAccountPassword(password) {
 function serveAsset(path,method) {
     const asset = path==='/'?'/daily.html':path;
     if (method!=='GET' || !Object.hasOwn(assets,asset)) return new Response('Nie znaleziono',{status:404});
-    return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8',
+    return new Response(assets[asset],{headers:{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':asset.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8',
       'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.giphy.com https://giphy.com; connect-src 'self' https://api.giphy.com; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'"}});
 }
 
 async function handle(request, env, buildDailyReport=false, expectedDraft=undefined) {
   const url = new URL(request.url);
   const path = url.pathname;
+  const sellerToolPage=path.startsWith('/narzedzia/')&&path.endsWith('.html');
   const managementPage=path==='/zarzadzanie.html';
   if (path==='/index.html'&&request.method==='GET') {
     return new Response(null,{status:303,headers:{...headers,Location:'/daily.html'}});
   }
-  if (!path.startsWith('/api/')&&!managementPage) return serveAsset(path,request.method);
+  if (!path.startsWith('/api/')&&!managementPage&&!sellerToolPage) return serveAsset(path,request.method);
   const viewer = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
   if (!viewer || !request.headers.get('oai-authenticated-user-id')) return json({error:'Zaloguj się do konta CARVAMO.'},401);
   const verifiedAdmin=request.headers.get('x-lejek-verified-admin')==='1';
@@ -332,6 +333,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   const activeDepartmentGroups=[...new Set(activeDepartments.map(assignment=>assignment.groupName))];
   const activeDepartmentSalons=[...new Set(activeDepartments.map(assignment=>assignment.salon).filter(Boolean))];
   const departmentAdministration=isDepartmentRole(activeRole)&&activeRole.endsWith('_manager');
+  if (sellerToolPage) return role==='seller'?serveAsset(path,request.method):new Response('Brak dostępu',{status:403,headers});
   if (managementPage) {
     if (role==='staff') return new Response(null,{status:303,headers:{...headers,Location:'/z-zycia-salonu.html'}});
     return role==='seller'
