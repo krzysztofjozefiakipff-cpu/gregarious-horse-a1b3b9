@@ -3465,17 +3465,34 @@ function renderAdmin() {
   }
   selectManagementView();
 }
-const sellerTool=$('#seller-tool');
+const sellerToolMenu=$('#seller-tool-menu');
 const sellerToolFrame=$('#seller-tool-frame');
 let sellerToolResize;
-sellerTool.onchange=()=>{
-  sellerToolFrame.hidden=!sellerTool.value;
-  if (!sellerTool.value) return;
-  sellerToolFrame.title=sellerTool.selectedOptions[0].textContent;
-  const params=new URLSearchParams({role:'seller'});
-  if (previewTarget) params.set('podglad',previewTarget);
-  sellerToolFrame.src='/narzedzia/'+sellerTool.value+'.html?'+params;
-};
+for (const [tool,label,icon] of [
+  ['porownywarka-leasingu','Porównywarka leasingu','bars'],
+  ['kalkulator-transakcji-wiazanej','Kalkulator transakcji wiązanej','layers'],
+  ['kalkulator-oplacalnosci-napedow','Kalkulator opłacalności napędów','target']
+]) {
+  const button=document.createElement('button');
+  button.type='button';
+  button.setAttribute('aria-pressed','false');
+  button.setAttribute('aria-controls',sellerToolFrame.id);
+  const tile=document.createElement('span');
+  tile.className='module-menu-icon';
+  tile.innerHTML=panelIcon(icon);
+  button.append(tile,label);
+  button.onclick=()=>{
+    if (button.getAttribute('aria-pressed')==='true') return;
+    sellerToolMenu.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
+    button.setAttribute('aria-pressed','true');
+    sellerToolFrame.title=label;
+    const params=new URLSearchParams({role:'seller'});
+    if (previewTarget) params.set('podglad',previewTarget);
+    sellerToolFrame.src='/narzedzia/'+tool+'.html?'+params;
+    sellerToolFrame.hidden=false;
+  };
+  sellerToolMenu.append(button);
+}
 sellerToolFrame.onload=()=>{
   sellerToolResize?.disconnect();
   const body=sellerToolFrame.contentDocument?.body;

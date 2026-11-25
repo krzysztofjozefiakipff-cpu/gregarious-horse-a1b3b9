@@ -413,7 +413,10 @@ a{color:var(--primary)}#admin form{display:grid;gap:9px;border:1px solid var(--l
   .task-group ol { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .task-action { padding-block:3px; }
 }
-#seller-tools select { width:100%; max-width:30rem; }
+#seller-tool-menu { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#seller-tool-menu button { display:grid; justify-items:center; align-content:start; gap:8px; background:none; color:var(--primary); border:0; padding:6px 2px; font-size:.84rem; line-height:1.3; overflow-wrap:anywhere; }
+#seller-tool-menu button:hover .module-menu-icon { background:var(--highlight); }
+#seller-tool-menu button[aria-pressed="true"] .module-menu-icon { background:var(--primary); color:white; }
 #seller-tool-frame { display:block; width:100%; border:0; margin-top:14px; }
 #seller-tool-frame[hidden] { display:none; }
 [data-seller-panel="plan"] { display:grid; gap:14px; }
@@ -828,13 +831,7 @@ details > summary, .mobile-entry-picker, :has(> details[data-scroll-to-card]) { 
 </section>
 <section id="seller-tools" data-seller-panel="narzedzia" hidden>
   <h1 class="screen-title">Narzędzia</h1>
-  <label for="seller-tool">Wybierz kalkulator</label>
-  <select id="seller-tool">
-    <option value="">Wybierz narzędzie</option>
-    <option value="porownywarka-leasingu">Porównywarka leasingu</option>
-    <option value="kalkulator-transakcji-wiazanej">Kalkulator transakcji wiązanej</option>
-    <option value="kalkulator-oplacalnosci-napedow">Kalkulator opłacalności napędów</option>
-  </select>
+  <div id="seller-tool-menu" class="module-menu" role="group" aria-label="Kalkulatory"></div>
   <iframe id="seller-tool-frame" title="Kalkulator" sandbox="allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox" hidden></iframe>
 </section>
 <section id="seller-lesson" data-seller-panel="lekcja" hidden>
