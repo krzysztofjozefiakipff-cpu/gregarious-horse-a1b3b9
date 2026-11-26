@@ -378,7 +378,6 @@ function briefingForecast(person,report,canEdit,onDraftChange=()=>{}) {
   section.append(briefingMonthSummary(person));
   if (!canEdit) return section;
 
-  const editor=briefingFold('Zmień prognozę');
   const form=reportElement('form');
   const fields=briefingSalesLabels.map((label,i)=>briefingNumberField('Jeszcze w tym miesiącu · '+label,person.manual[i],person.automaticForecast[i]));
   const baseline=fields.map(field=>field.value);
@@ -394,8 +393,7 @@ function briefingForecast(person,report,canEdit,onDraftChange=()=>{}) {
   };
   fields.forEach(field=>field.oninput=update);
   update();
-  editor.append(form);
-  section.append(editor);
+  section.append(person.ownForecast?form:briefingFold('Zmień prognozę',form));
   return section;
 }
 
@@ -481,9 +479,19 @@ function renderBriefingSeller(person,report,open,salon) {
     heading.tabIndex=-1;
     details.append(workflow);
   }
-  if (!person.editable) details.append(
-    briefingFold(previousLabel,briefingReviewStep(person,report,false)),
-    briefingFold('Realizacja i prognoza miesiąca',briefingForecast(person,report,person.ownForecast&&!previewTarget)));
+  if (!person.editable) {
+    const previous=briefingFold(previousLabel,briefingReviewStep(person,report,false));
+    if (person.ownForecast) {
+      const forecast=reportElement('section');
+      forecast.className='briefing-step briefing-current-step';
+      const heading=reportElement('h3','Twoja prognoza na koniec miesiąca');
+      heading.tabIndex=-1;
+      forecast.append(heading,briefingForecast(person,report,!previewTarget));
+      details.append(forecast,previous);
+    } else {
+      details.append(previous,briefingFold('Realizacja i prognoza miesiąca',briefingForecast(person,report,false)));
+    }
+  }
   if (person.remainingPlan.length) {
     const schedule=reportElement('details');
     schedule.className='briefing-extra';
