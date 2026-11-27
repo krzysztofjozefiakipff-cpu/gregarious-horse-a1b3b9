@@ -36,11 +36,8 @@ function dailyCounters(rows) {
 const salesMetricIndexes=[7,8,10,9];
 function salesCounts(counters) {
   const sources=counters[5];
-  const counts=[counters[4]??0,0,0,0];
-  for (const source of Array.isArray(sources)?sources:[]) {
-    for (let i=1;i<salesMetricIndexes.length;i++) counts[i]+=source[salesMetricIndexes[i]]??0;
-  }
-  return counts;
+  if (!Array.isArray(sources)) return [counters[4]??0,0,0,0];
+  return salesMetricIndexes.map(index=>sources.reduce((sum,source)=>sum+(source[index]??0),0));
 }
 
 function compareSalesCounts(a,b) {
@@ -61,6 +58,7 @@ async function loadPlanActivity(db,first,last,scope,params,includeDrafts=true) {
       AND NOT EXISTS (SELECT 1 FROM daily_exceptions e WHERE e.person=d.person AND e.day=d.day AND e.kind<>'rejected')
       AND NOT EXISTS (SELECT 1 FROM work_calendar c WHERE c.person=d.person AND c.day=d.day AND c.status='approved')
       AND NOT EXISTS (SELECT 1 FROM archived_users a WHERE a.email=${resultAddress('d')})
+      AND ${inReportDay(resultAddress('d'),'d.day')}
     ORDER BY day,person`,...args,...args);
   return rows.flatMap(row=>{
     if (!row.draft) return [row];
@@ -1035,8 +1033,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
       const month=report.month;
       const [plan,records,adjustments]=await Promise.all([
         db.prepare('SELECT targets FROM seller_source_plans WHERE person=? AND month=?').bind(user.id,month).first(),
-        list(db,'SELECT counters FROM daily_results WHERE person=? AND substr(day,1,7)=? AND day<=? AND '+includedDailyResult,
-          user.id,month,report.today),
+        loadPlanActivity(db,month+'-01',report.today,'person=?',[user.id]),
         calendarAdjustments(db,[month],'person=?',user.id)
       ]);
       const sourceActuals=Array.from({length:sourceCount},()=>Array(5).fill(0));

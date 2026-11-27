@@ -231,7 +231,7 @@ async function buildManagementReport(db,{type,month,through,reportDay,sellers,sa
   const sameMonth=goalsMonth===month;
   const range='day BETWEEN ? AND ? AND '+scope;
   const [daily,drafts,calendar,exceptions,trackingRows,adjustments,planData,nextPlanData,goalPlanData,archives]=await Promise.all([
-    list(db,'SELECT person,day,counters FROM daily_results WHERE '+range+' AND '+includedDailyResult,first,through,...params),
+    loadPlanActivity(db,first,through,scope,params,type==='monthly'),
     type==='daily'?list(db,'SELECT person,day FROM daily_drafts WHERE '+range,first,through,...params):[],
     list(db,"SELECT person,day,kind,status FROM work_calendar WHERE substr(day,1,7) IN (?,?) AND "+scope,month,goalsMonth,...params),
     list(db,'SELECT person,day,kind FROM daily_exceptions WHERE substr(day,1,7) IN (?,?) AND '+scope,month,goalsMonth,...params),
