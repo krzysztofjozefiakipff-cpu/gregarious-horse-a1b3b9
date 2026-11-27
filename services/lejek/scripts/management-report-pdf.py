@@ -549,6 +549,9 @@ def render(report, output):
             story.extend(briefing_report(salon))
         else:
             story.extend(monthly_report(salon))
+    if report.get('conclusions'):
+        story.extend([PageBreak(), p('Wnioski', 'section'), p('Analiza Liska', 'hint')])
+        story.extend(p(line) for line in report['conclusions'].splitlines() if line.strip())
     doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
 
 

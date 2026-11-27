@@ -538,6 +538,8 @@ reportPdfExport.onclick=async ()=>{
   reportPdfExport.disabled=true;
   const revision=reportFilterRevision;
   const endpoint=path+'?'+query;
+  const label=reportPdfExport.textContent;
+  reportPdfExport.textContent='Analizuję raport…';
   try {
     const file=await requestManagementPdf(endpoint);
     if (revision!==reportFilterRevision||reportGet('#management-reports').hidden) return;
@@ -546,6 +548,7 @@ reportPdfExport.onclick=async ()=>{
   } catch (error) {
     if (revision===reportFilterRevision) reportStatus.textContent=error.message||'Nie udało się przygotować PDF.';
   } finally {
+    reportPdfExport.textContent=label;
     reportPdfExport.disabled=false;
   }
 };

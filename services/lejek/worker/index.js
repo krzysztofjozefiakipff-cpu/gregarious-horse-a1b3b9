@@ -1956,7 +1956,7 @@ async function handle(request, env, buildDailyReport=false, expectedDraft=undefi
   return json({error:'Brak uprawnień do tej operacji.'},403);
 }
 
-export default {reportClock,generateDailyReports,async fetch(request, env) {
+export default {reportClock,generateDailyReports,sourceLabels:foxSources,async fetch(request, env) {
   try {return await handle(request,env);}
   catch (error) {console.error(error.message);return json({error:'Nie udało się obsłużyć żądania. Spróbuj ponownie.'},500);}
 }};

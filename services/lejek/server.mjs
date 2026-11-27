@@ -248,6 +248,37 @@ async function reportPreviewPages(pdf) {
   }
 }
 
+async function reportConclusions(report) {
+  const unavailable='Lisek nie mógł przygotować wniosków. Wygeneruj raport ponownie, aby ponowić analizę.';
+  if (!assist) return unavailable;
+  const {type,month,through,today,reportDay,marketing}=report;
+  const salons=report.salons.map(({salon,totals,targets,expected,sources,actions,recommendations,plan,actual,forecast,missing,people})=>
+    type==='briefing'
+      ? {salon,plan,actual,remainingForecast:forecast,missingForecasts:missing,
+          completedBriefings:people.filter(person=>person.signoff.completed).length,
+          missingReviews:people.filter(person=>person.review.status==='missing').length}
+      : {salon,totals,targets,expected,sources,actions:actions?.slice(0,3),recommendations:recommendations?.slice(0,3)});
+  const facts={type,month,through:through??today,reportDay,marketing,salons,sourceLabels:worker.sourceLabels,
+    metrics:type==='briefing'?['Zamówienia','Faktury','Rejestracje','Opinie Google']:
+      ['Leady','Próby kontaktu','Spotkania','Jazdy próbne','Oferty','Follow-up','Zamówienia','Faktury','Rejestracje','Opinie Google']};
+  const started=Date.now();
+  try {
+    const text=await assist(
+      'Napisz do czterech krótkich akapitów wniosków na koniec raportu zarządczego. Nie dodawaj tytułu. '+
+      'Wskaż najistotniejsze odchylenia od planu lub tempa, ryzyka i działania dla kierownika. '+
+      'W raporcie marketingowym oceń konwersję według źródeł i uwzględnij liczebność prób. '+
+      'W odprawie prognoza pozostała dotyczy wyłącznie reszty miesiąca. Nie przypisuj przyczyn bez danych i nie porównuj z okresem, którego nie podano.',
+      facts);
+    return text||unavailable;
+  } catch (error) {
+    const reason=error.name==='TimeoutError'?'timeout'
+      :error.message==='Assistant busy'?'busy'
+      :error.message==='Assistant output missing'?'missing-output':'request-failed';
+    console.warn('Wnioski Liska do PDF:',{type,reason,elapsedMs:Date.now()-started});
+    return unavailable;
+  }
+}
+
 let activeReportPdfs=0;
 async function downloadReportPdf(response,url) {
   const report=await response.json();
@@ -258,6 +289,7 @@ async function downloadReportPdf(response,url) {
   if (activeReportPdfs>=4) return Response.json({error:'Eksport jest zajęty. Spróbuj ponownie za chwilę.'},{status:503,headers});
   activeReportPdfs++;
   try {
+    report.conclusions=await reportConclusions(report);
     const pdf=await new Promise((resolve,reject)=>{
       const child=spawn('python3',['scripts/management-report-pdf.py'],{stdio:['pipe','pipe','inherit'],timeout:20000});
       const chunks=[];
