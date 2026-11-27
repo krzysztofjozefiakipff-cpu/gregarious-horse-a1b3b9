@@ -87,7 +87,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
   const first=months[0]+'-01';
   const activeDays=[...new Set([...schedules.values()].map(({candidate})=>candidate))];
   const [results,drafts,settings,reviews,signoffs,adjustments,plans]=await Promise.all([
-    list(db,'SELECT person,day,counters FROM daily_results WHERE day BETWEEN ? AND ? AND '+scope+' AND '+includedDailyResult,first,today,...params),
+    loadPlanActivity(db,first,today,scope,params),
     list(db,`SELECT person,day,rows FROM daily_drafts WHERE day IN (SELECT value FROM json_each(?))
       AND ${scope} AND ${inReportDay(resultAddress('daily_drafts'),'daily_drafts.day')}`,JSON.stringify(activeDays),...params),
     list(db,'SELECT * FROM daily_briefing_settings WHERE day BETWEEN ? AND ? AND '+scope+' ORDER BY day DESC',first,today,...params),
@@ -117,7 +117,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const editable=!archived&&Boolean(seller.planEligible);
       const dates=personalCalendar.get(id)??[];
       const {off,candidate}=schedules.get(id);
-      const previousRow=rows.find(row=>row.day===candidate);
+      const previousRow=rows.find(row=>row.day===candidate&&!row.draft);
       const draft=draftByDay.get(id+'/'+candidate);
       const approvedZero=dates.some(row=>row.day===candidate&&row.kind==='zero');
       const pendingPrevious=dates.find(row=>row.day===candidate&&row.status==='pending');
@@ -130,7 +130,7 @@ async function buildDailyBriefing(db,{today,sellers,salons,scope,params,sellerTa
       const sales=monthlyGoals(month);
       const actuals=summarizeReportRows(current).actuals;
       const past=summarizeReportRows(current.filter(row=>row.day<today)).actuals;
-      const reviewPast=summarizeReportRows(rows.filter(row=>row.day.startsWith(reviewMonth)&&row.day<previousDay)).actuals;
+      const reviewPast=summarizeReportRows(rows.filter(row=>!row.draft&&row.day.startsWith(reviewMonth)&&row.day<previousDay)).actuals;
       const personSettings=personalSettings.get(id)??[];
       const todaySettings=personSettings.find(row=>row.day===today);
       const previousSettings=personSettings.find(row=>row.day===previousDay);

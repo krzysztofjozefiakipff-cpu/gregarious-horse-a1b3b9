@@ -519,7 +519,7 @@ def render(report, output):
         date_line += f'   ·   Wygenerowano {generated:%d.%m.%Y o %H:%M}'
     story = [p(TITLES[kind], 'title'), p(date_line, 'hint')]
     if kind == 'monthly':
-        story.append(p('Wyniki obejmują zatwierdzone wpisy do wskazanej daty włącznie.', 'hint'))
+        story.append(p('Wyniki obejmują zatwierdzone wpisy i zapisane szkice do wskazanej daty włącznie.', 'hint'))
         if len(report['salons']) > 1:
             story.extend(monthly_overview(report['salons']))
             story.append(PageBreak())
@@ -532,7 +532,7 @@ def render(report, output):
                        'Cele dzienne uwzględniają pozostały plan i dni pracy handlowca.', 'hint'))
     elif kind == 'briefing':
         story.extend([briefing_progress(report['salons']), Spacer(1, 8),
-                      p('Wyniki miesięczne obejmują zatwierdzone wpisy. Gwiazdka (*) oznacza prognozę częściową, '
+                      p('Wyniki miesięczne obejmują zatwierdzone wpisy i zapisane szkice. Gwiazdka (*) oznacza prognozę częściową, '
                         'kreska oznacza brak danych, a „korekta” wskazuje prognozę wpisaną przez kierownika.', 'hint')])
         if len(report['salons']) > 1:
             story.extend(briefing_overview(report['salons']))
